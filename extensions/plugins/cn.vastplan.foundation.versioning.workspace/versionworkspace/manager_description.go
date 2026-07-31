@@ -41,7 +41,7 @@ func (m *Manager) DescribeResource(scope Scope, request workspacev1.DescribeReso
 
 func resolvedMaxBytes(profile resourcev1.EnvironmentProfile, descriptor resourcev1.AdapterDescriptor, mode string) int64 {
 	maxBytes := profile.Limits.MaxSnapshotBytes
-	if mode != resourcev1.ModeSnapshot {
+	if descriptor.ContentKind == resourcev1.ContentFiles || mode != resourcev1.ModeSnapshot {
 		maxBytes = profile.Limits.MaxOverlayBytes
 	}
 	if descriptor.MaxSnapshotBytes < maxBytes {

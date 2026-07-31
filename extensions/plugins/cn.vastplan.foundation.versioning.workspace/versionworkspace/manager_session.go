@@ -37,6 +37,10 @@ func (m *Manager) WriteSnapshot(ctx context.Context, scope Scope, request worksp
 		m.mu.Unlock()
 		return workspacev1.Session{}, workspaceError(workspacev1.ErrorReadOnly, false, errors.New("只读 Version Workspace 不允许写入"))
 	}
+	if err := m.validateManifestContentLocked(record, request.ExpectedRevision, request.Snapshot); err != nil {
+		m.mu.Unlock()
+		return workspacev1.Session{}, err
+	}
 	session := cloneSession(record.session)
 	binding, adapter, maxBytes := cloneBinding(record.binding), record.adapter, record.maxBytes
 	m.mu.Unlock()

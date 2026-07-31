@@ -10,6 +10,7 @@ import (
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	versioningv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versioning/v1"
 	resourcev1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionresource/v1"
+	stagingv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionstaging/v1"
 	workspacev1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionworkspace/v1"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 	workspace "cdsoft.com.cn/VastPlan/extensions/sdk/go/versionworkspace"
@@ -147,5 +148,40 @@ func TestClientDescribesResourceCapabilities(t *testing.T) {
 	result, err := client.DescribeResource(context.Background(), &contractv1.CallContext{TenantId: "tenant-a"}, request)
 	if err != nil || !result.Capabilities.Diff || result.Resolution.EnvironmentDigest != description.Resolution.EnvironmentDigest {
 		t.Fatalf("DescribeResource SDK 失败: %+v err=%v", result, err)
+	}
+}
+
+func TestClientBeginsContentUploadThroughWorkspaceCapability(t *testing.T) {
+	now := time.Now().UTC()
+	request := workspacev1.BeginContentUploadRequest{
+		SessionID: "ws_1234567890abcdef", ExpectedRevision: 1, Path: "main.ts", MediaType: "text/typescript",
+		ExpectedDigest: strings.Repeat("a", 64), ExpectedSize: 128, LeaseSeconds: 300,
+	}
+	session := workspacev1.Session{
+		Protocol: workspacev1.Protocol, ID: request.SessionID, EnvironmentID: "content-development", EnvironmentDigest: strings.Repeat("b", 64),
+		Resource: resourcev1.ResourceKey{Type: "script.bundle", ID: "daily"}, Namespace: "script.bundle", Adapter: "version.resource.files.v1",
+		Mode: resourcev1.ModeSnapshot, State: workspacev1.StateClean, Revision: 1, CreatedAt: now, LeaseExpiresAt: now.Add(time.Hour),
+	}
+	host := &workspaceHost{call: func(target *contractv1.CallTarget, payload []byte) (*contractv1.CallResult, []byte, error) {
+		if target.GetOperation() != workspacev1.OperationBeginContentUpload {
+			t.Fatalf("错误 Workspace upload 目标: %+v", target)
+		}
+		if _, err := workspacev1.ParseRequest(target.GetOperation(), payload); err != nil {
+			t.Fatal(err)
+		}
+		response, _ := json.Marshal(workspacev1.ContentUploadResult{Session: session, Upload: stagingv1.UploadStatusResult{Upload: stagingv1.UploadLease{
+			Protocol: stagingv1.Protocol, ID: "stg_1234567890abcdef", SessionID: session.ID, EnvironmentDigest: session.EnvironmentDigest, Resource: session.Resource,
+			Path: request.Path, MediaType: request.MediaType, ExpectedDigest: request.ExpectedDigest, ExpectedSize: request.ExpectedSize,
+			State: stagingv1.StatePending, Revision: 1, CreatedAt: now, UpdatedAt: now, LeaseExpiresAt: now.Add(5 * time.Minute),
+		}}})
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, response, nil
+	}}
+	client, err := workspace.New(host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := client.BeginContentUpload(context.Background(), &contractv1.CallContext{TenantId: "tenant-a"}, request)
+	if err != nil || result.Upload.Upload.Path != request.Path {
+		t.Fatalf("BeginContentUpload SDK 失败: %+v %v", result, err)
 	}
 }

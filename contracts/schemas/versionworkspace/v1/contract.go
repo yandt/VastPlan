@@ -7,6 +7,7 @@ import (
 
 	versioningv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versioning/v1"
 	versionresourcev1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionresource/v1"
+	versionstagingv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionstaging/v1"
 )
 
 const (
@@ -14,17 +15,22 @@ const (
 	Protocol   = "version.workspace.v1"
 	Capability = "foundation.versioning.workspace"
 
-	OperationOpen             = "open"
-	OperationStatus           = "status"
-	OperationReadSnapshot     = "readSnapshot"
-	OperationWriteSnapshot    = "writeSnapshot"
-	OperationChanges          = "changes"
-	OperationCommit           = "commit"
-	OperationDiscard          = "discard"
-	OperationRenew            = "renew"
-	OperationDescribeResource = "describeResource"
-	OperationReadCommitted    = "readCommitted"
-	OperationCompareCommitted = "compareCommitted"
+	OperationOpen                  = "open"
+	OperationStatus                = "status"
+	OperationReadSnapshot          = "readSnapshot"
+	OperationWriteSnapshot         = "writeSnapshot"
+	OperationChanges               = "changes"
+	OperationCommit                = "commit"
+	OperationDiscard               = "discard"
+	OperationRenew                 = "renew"
+	OperationDescribeResource      = "describeResource"
+	OperationReadCommitted         = "readCommitted"
+	OperationCompareCommitted      = "compareCommitted"
+	OperationBeginContentUpload    = "beginContentUpload"
+	OperationContentUploadStatus   = "contentUploadStatus"
+	OperationRenewContentUpload    = "renewContentUpload"
+	OperationCompleteContentUpload = "completeContentUpload"
+	OperationAbortContentUpload    = "abortContentUpload"
 
 	ErrorInvalidRequest       = "version.workspace.invalid_request"
 	ErrorEnvironmentNotFound  = "version.workspace.environment_not_found"
@@ -38,6 +44,7 @@ const (
 	ErrorLimitExceeded        = "version.workspace.limit_exceeded"
 	ErrorBaseConflict         = "version.workspace.base_conflict"
 	ErrorVersionNotFound      = "version.workspace.version_not_found"
+	ErrorContentUnavailable   = "version.workspace.content_unavailable"
 	ErrorOperationUnsupported = "version.workspace.operation_unsupported"
 
 	StateClean      = "Clean"
@@ -47,14 +54,14 @@ const (
 	StateDiscarded  = "Discarded"
 	StateExpired    = "Expired"
 
-	MaxChangedPaths      = 10000
-	MaxWireSnapshotBytes = 64 << 20
+	MaxChangedPaths          = 10000
+	MaxWorkspaceContentBytes = versionstagingv1.MaximumDeclaredFileBytes
 )
 
 var knownErrorCodes = map[string]struct{}{
 	ErrorInvalidRequest: {}, ErrorEnvironmentNotFound: {}, ErrorResourceNotBound: {},
 	ErrorSessionNotFound: {}, ErrorSessionConflict: {}, ErrorLeaseExpired: {}, ErrorReadOnly: {},
-	ErrorAdapterUnavailable: {}, ErrorLedgerUnavailable: {}, ErrorLimitExceeded: {}, ErrorBaseConflict: {}, ErrorVersionNotFound: {}, ErrorOperationUnsupported: {},
+	ErrorAdapterUnavailable: {}, ErrorLedgerUnavailable: {}, ErrorLimitExceeded: {}, ErrorBaseConflict: {}, ErrorVersionNotFound: {}, ErrorContentUnavailable: {}, ErrorOperationUnsupported: {},
 }
 
 func KnownErrorCode(code string) bool { _, ok := knownErrorCodes[code]; return ok }
@@ -109,6 +116,39 @@ type WriteSnapshotRequest struct {
 	SessionID        string                     `json:"sessionId"`
 	ExpectedRevision uint64                     `json:"expectedRevision"`
 	Snapshot         versionresourcev1.Snapshot `json:"snapshot"`
+}
+
+type BeginContentUploadRequest struct {
+	SessionID        string `json:"sessionId"`
+	ExpectedRevision uint64 `json:"expectedRevision"`
+	Path             string `json:"path"`
+	MediaType        string `json:"mediaType"`
+	ExpectedDigest   string `json:"expectedDigest"`
+	ExpectedSize     int64  `json:"expectedSize"`
+	LeaseSeconds     int    `json:"leaseSeconds"`
+}
+
+type ContentUploadRequest struct {
+	SessionID string `json:"sessionId"`
+	UploadID  string `json:"uploadId"`
+}
+
+type ContentUploadRevisionRequest struct {
+	SessionID              string `json:"sessionId"`
+	UploadID               string `json:"uploadId"`
+	ExpectedUploadRevision uint64 `json:"expectedUploadRevision"`
+}
+
+type RenewContentUploadRequest struct {
+	SessionID              string `json:"sessionId"`
+	UploadID               string `json:"uploadId"`
+	ExpectedUploadRevision uint64 `json:"expectedUploadRevision"`
+	LeaseSeconds           int    `json:"leaseSeconds"`
+}
+
+type ContentUploadResult struct {
+	Session Session                             `json:"session"`
+	Upload  versionstagingv1.UploadStatusResult `json:"upload"`
 }
 
 type ChangeSummary = versionresourcev1.ChangeSummary

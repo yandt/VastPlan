@@ -142,7 +142,11 @@ func (c *Catalog) resolveEntry(environmentID, environmentDigest, resourceType st
 }
 
 func validateBindingAdapter(binding resourcev1.ResourceBinding, descriptor resourcev1.AdapterDescriptor, limits resourcev1.WorkspaceLimits) error {
-	if limits.MaxSnapshotBytes > descriptor.MaxSnapshotBytes {
+	configuredLimit := limits.MaxSnapshotBytes
+	if descriptor.ContentKind == resourcev1.ContentFiles {
+		configuredLimit = limits.MaxOverlayBytes
+	}
+	if configuredLimit > descriptor.MaxSnapshotBytes {
 		return fmt.Errorf("环境快照上限超过 Adapter %q 上限", descriptor.ID)
 	}
 	supported := make(map[string]struct{}, len(descriptor.SupportedModes))

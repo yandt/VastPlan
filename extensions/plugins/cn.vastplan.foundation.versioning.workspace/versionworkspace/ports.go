@@ -10,12 +10,16 @@ import (
 
 	versioningv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versioning/v1"
 	resourcev1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionresource/v1"
+	stagingv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionstaging/v1"
 )
 
 const (
-	PluginID      = "cn.vastplan.foundation.versioning.workspace"
-	PluginVersion = "0.3.0"
-	JSONAdapterID = "version.resource.json.v1"
+	PluginID       = "cn.vastplan.foundation.versioning.workspace"
+	PluginVersion  = "0.4.0"
+	JSONAdapterID  = "version.resource.json.v1"
+	TextAdapterID  = "version.resource.text.v1"
+	BlobAdapterID  = "version.resource.blob.v1"
+	FilesAdapterID = "version.resource.files.v1"
 )
 
 type Scope struct {
@@ -38,6 +42,16 @@ type Ledger interface {
 	GetHead(context.Context, versioningv1.GetHeadRequest) (versioningv1.GetHeadResult, error)
 	CreateHead(context.Context, versioningv1.CreateHeadRequest) (versioningv1.CreateHeadResult, error)
 	MoveHead(context.Context, versioningv1.MoveHeadRequest) (versioningv1.MoveHeadResult, error)
+}
+
+// Staging is the narrow lease control port. The separate byte stream never
+// crosses this interface or the JSON Capability Bus.
+type Staging interface {
+	BeginUpload(context.Context, stagingv1.BeginUploadRequest) (stagingv1.UploadStatusResult, error)
+	UploadStatus(context.Context, string) (stagingv1.UploadStatusResult, error)
+	RenewUpload(context.Context, stagingv1.RenewUploadRequest) (stagingv1.UploadStatusResult, error)
+	CompleteUpload(context.Context, stagingv1.UploadRevisionRequest) (stagingv1.UploadStatusResult, error)
+	AbortUpload(context.Context, stagingv1.UploadRevisionRequest) (stagingv1.UploadStatusResult, error)
 }
 
 // Adapter is deliberately the same semantic surface as version.resource.v1.

@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	versioningv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versioning/v1"
+	stagingv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionstaging/v1"
 	workspacev1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionworkspace/v1"
 )
 
@@ -12,6 +13,26 @@ type WorkspaceError struct {
 	Code      string
 	Retryable bool
 	Err       error
+}
+
+type StagingError struct {
+	Code      string
+	Retryable bool
+	Err       error
+}
+
+func (e *StagingError) Error() string {
+	if e == nil || e.Err == nil {
+		return "Version Staging 调用失败"
+	}
+	return e.Err.Error()
+}
+
+func (e *StagingError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
 }
 
 func (e *WorkspaceError) Error() string {
@@ -71,4 +92,19 @@ func mapLedgerFailure(err error, notFoundCode string) error {
 func isLedgerCode(err error, code string) bool {
 	var ledgerErr *LedgerError
 	return errors.As(err, &ledgerErr) && ledgerErr.Code == code
+}
+
+func mapStagingFailure(err error) error {
+	var stagingErr *StagingError
+	if !errors.As(err, &stagingErr) {
+		return workspaceError(workspacev1.ErrorContentUnavailable, true, err)
+	}
+	switch stagingErr.Code {
+	case stagingv1.ErrorInvalidRequest:
+		return workspaceError(workspacev1.ErrorInvalidRequest, false, err)
+	case stagingv1.ErrorLimitExceeded:
+		return workspaceError(workspacev1.ErrorLimitExceeded, false, err)
+	default:
+		return workspaceError(workspacev1.ErrorContentUnavailable, stagingErr.Retryable, err)
+	}
 }

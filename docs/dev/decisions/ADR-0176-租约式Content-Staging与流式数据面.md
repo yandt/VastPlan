@@ -49,3 +49,9 @@ Go 适合首个 Manager/File Provider：流式 I/O、SHA-256、文件权限、�
 2. **P2.4b（已完成）**：实现 Go Staging Manager、本地内容寻址 File Provider、`io.Reader` 流式写入、原子完成、启动/周期租约回收和文件/tenant/服务/并发容量配额。控制面只接受可信 Workspace，begin 通过 `CallContext.idempotencyKey` 防止响应丢失后重复预留；本地 Provider 使用 tenant 哈希分区、私有权限、严格持久状态、CAS 硬链接发布和 Ready 启动复核。内置 Admission 只提供完整性基线，不冒充恶意软件扫描。
 3. **P2.4c**：Workspace 接入 begin/complete/manifest 验证、临时保护转版本引用 outbox，并实现 Text/Blob/Files Adapter。
 4. **P2.4d**：增加浏览器 BFF 与 Backend/Runner streaming SDK、对象存储 Provider、安全扫描准入和跨节点故障矩阵。
+
+## 实施记录：P2.4c1（2026-07-31）
+
+P2.4c 拆为两个可独立失败关闭的子阶段。P2.4c1 已完成 Workspace begin/status/renew/complete/abort 内容上传代理，并按 Session revision 记录 Ready 绑定。Files Manifest 只接受同 tenant、Session、Environment、Resource、path、digest、size、mediaType 且 Lease 未过期的内容，或基线/当前已验证候选中仍受保护的相同内容。
+
+同时实现 `text.v1/blob.v1/files.v1` 标准 Adapter 和文件级确定性 diff。P2.4c1 显式阻止 Files commit，避免 durable reference 尚未建立时产生可提交但随后丢失对象的历史。P2.4c2 再增加提交前持久保护、Ledger 提交、版本引用确认与响应丢失恢复 outbox，完成后开放 Files commit。

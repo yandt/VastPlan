@@ -11,6 +11,7 @@ import (
 
 	versioningv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versioning/v1"
 	resourcev1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionresource/v1"
+	stagingv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionstaging/v1"
 	workspacev1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionworkspace/v1"
 )
 
@@ -39,6 +40,12 @@ type sessionRecord struct {
 	commitRequest  *workspacev1.CommitRequest
 	commitResult   *workspacev1.CommitResult
 	preCommitState string
+	uploads        map[string]stagedContent
+}
+
+type stagedContent struct {
+	sessionRevision uint64
+	status          stagingv1.UploadStatusResult
 }
 
 type Manager struct {

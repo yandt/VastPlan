@@ -66,6 +66,43 @@
         "snapshot": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/version-resource/v1/vastplan.version-resource.schema.json#/$defs/snapshot" }
       }
     },
+    "beginContentUploadRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sessionId", "expectedRevision", "path", "mediaType", "expectedDigest", "expectedSize", "leaseSeconds"],
+      "properties": {
+        "sessionId": { "type": "string", "pattern": "^ws_[A-Za-z0-9_-]{16,96}$" },
+        "expectedRevision": { "type": "integer", "minimum": 1 },
+        "path": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "mediaType": { "type": "string", "minLength": 3, "maxLength": 255 },
+        "expectedDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "expectedSize": { "type": "integer", "minimum": 0, "maximum": 1099511627776 },
+        "leaseSeconds": { "type": "integer", "minimum": 30, "maximum": 86400 }
+      }
+    },
+    "contentUploadRequest": {
+      "type": "object", "additionalProperties": false, "required": ["sessionId", "uploadId"],
+      "properties": {
+        "sessionId": { "type": "string", "pattern": "^ws_[A-Za-z0-9_-]{16,96}$" },
+        "uploadId": { "type": "string", "pattern": "^stg_[A-Za-z0-9_-]{16,96}$" }
+      }
+    },
+    "contentUploadRevisionRequest": {
+      "type": "object", "additionalProperties": false, "required": ["sessionId", "uploadId", "expectedUploadRevision"],
+      "properties": {
+        "sessionId": { "type": "string", "pattern": "^ws_[A-Za-z0-9_-]{16,96}$" },
+        "uploadId": { "type": "string", "pattern": "^stg_[A-Za-z0-9_-]{16,96}$" },
+        "expectedUploadRevision": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "renewContentUploadRequest": {
+      "type": "object", "additionalProperties": false, "required": ["sessionId", "uploadId", "expectedUploadRevision", "leaseSeconds"],
+      "properties": {
+        "sessionId": { "type": "string", "pattern": "^ws_[A-Za-z0-9_-]{16,96}$" },
+        "uploadId": { "type": "string", "pattern": "^stg_[A-Za-z0-9_-]{16,96}$" },
+        "expectedUploadRevision": { "type": "integer", "minimum": 1 },
+        "leaseSeconds": { "type": "integer", "minimum": 30, "maximum": 86400 }
+      }
+    },
     "commitRequest": {
       "type": "object", "additionalProperties": false, "required": ["sessionId", "expectedRevision", "operationId"],
       "properties": {
@@ -108,6 +145,13 @@
     "sessionResult": {
       "type": "object", "additionalProperties": false, "required": ["session"],
       "properties": { "session": { "$ref": "#/$defs/session" } }
+    },
+    "contentUploadResult": {
+      "type": "object", "additionalProperties": false, "required": ["session", "upload"],
+      "properties": {
+        "session": { "$ref": "#/$defs/session" },
+        "upload": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/version-staging/v1/vastplan.version-staging.schema.json#/$defs/uploadStatusResult" }
+      }
     },
     "snapshotResult": {
       "type": "object", "additionalProperties": false, "required": ["session", "snapshot", "digest"],

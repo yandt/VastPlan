@@ -1,12 +1,12 @@
 {
   "id": "cn.vastplan.foundation.versioning.workspace",
   "name": "VastPlan Version Workspace",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
-  "description": "提供受信版本环境、Snapshot 编辑会话、Lease、配额、CAS 和资源 Adapter 编排",
+  "description": "提供受信版本环境、Snapshot 编辑会话、内容上传代理、Lease、配额、CAS 和标准资源 Adapter 编排",
   "engines": { "backend": "^0.1" },
   "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
   "contextAccess": {
@@ -27,6 +27,15 @@
         "ready": "readiness",
         "failurePolicy": "fail",
         "logicalService": "foundation.versioning.ledger",
+        "routingDomain": "platform"
+      },
+      {
+        "capability": "foundation.versioning.content-staging",
+        "scope": "remote",
+        "kind": "soft",
+        "ready": "readiness",
+        "failurePolicy": "degrade",
+        "logicalService": "foundation.versioning.content-staging",
         "routingDomain": "platform"
       }
     ],
@@ -117,7 +126,12 @@
             { "name": "discard", "description": "丢弃编辑会话" },
             { "name": "renew", "description": "在环境配额内续租" },
             { "name": "readCommitted", "description": "读取并规范化精确已提交版本" },
-            { "name": "compareCommitted", "description": "比较摘要并按 Adapter 能力返回详细 diff" }
+            { "name": "compareCommitted", "description": "比较摘要并按 Adapter 能力返回详细 diff" },
+            { "name": "beginContentUpload", "description": "为当前 Session revision 创建内容上传 Lease" },
+            { "name": "contentUploadStatus", "description": "读取 Session 已绑定的内容上传状态" },
+            { "name": "renewContentUpload", "description": "续租 Session 已绑定的内容上传" },
+            { "name": "completeContentUpload", "description": "完成内容校验并记录 Ready 绑定" },
+            { "name": "abortContentUpload", "description": "终止 Session 已绑定的内容上传" }
           ]
         }
       ]

@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	versioningv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versioning/v1"
+	resourcev1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionresource/v1"
 	workspacev1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionworkspace/v1"
 )
 
@@ -26,6 +27,10 @@ func (m *Manager) Commit(ctx context.Context, scope Scope, ledger Ledger, reques
 	if record.session.ReadOnly {
 		m.mu.Unlock()
 		return workspacev1.CommitResult{}, workspaceError(workspacev1.ErrorReadOnly, false, errors.New("只读 Version Workspace 不允许提交"))
+	}
+	if record.adapter.Descriptor().ContentKind == resourcev1.ContentFiles {
+		m.mu.Unlock()
+		return workspacev1.CommitResult{}, workspaceError(workspacev1.ErrorOperationUnsupported, false, errors.New("Files 资源提交需等待 P2.4c2 持久版本引用保护"))
 	}
 	record.preCommitState = record.session.State
 	record.session.State = workspacev1.StateCommitting

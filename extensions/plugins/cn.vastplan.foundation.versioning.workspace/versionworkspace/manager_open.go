@@ -68,6 +68,7 @@ func (m *Manager) Open(ctx context.Context, scope Scope, ledger Ledger, request 
 	record := &sessionRecord{
 		session: session, owner: scope, binding: binding, adapter: adapter, maxBytes: maxBytes, maxLease: environment.profile.Limits.MaxLeaseSeconds,
 		base: cloneSnapshot(base), baseDigest: digest, current: cloneSnapshot(base), currentDigest: digest,
+		uploads: map[string]stagedContent{},
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -131,6 +132,9 @@ func resolveOpenReferences(ctx context.Context, ledger Ledger, stream versioning
 
 func loadBaseSnapshot(ctx context.Context, ledger Ledger, adapter Adapter, binding resourcev1.ResourceBinding, resource resourcev1.ResourceKey, mode string, baseRef *versioningv1.VersionRef, maxBytes int64) (resourcev1.Snapshot, string, error) {
 	snapshot := resourcev1.Snapshot{Kind: resourcev1.ContentJSON, MediaType: "application/json", JSON: json.RawMessage(`{}`)}
+	if adapter.Descriptor().ContentKind == resourcev1.ContentFiles {
+		snapshot = resourcev1.Snapshot{Kind: resourcev1.ContentFiles, MediaType: resourcev1.FilesManifestMediaType, Files: []resourcev1.FileEntry{}}
+	}
 	if baseRef != nil {
 		_, stored, digest, err := loadCommittedVersion(ctx, ledger, adapter, binding, resource, mode, *baseRef, maxBytes, workspacev1.ErrorBaseConflict)
 		return stored, digest, err

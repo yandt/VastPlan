@@ -112,6 +112,25 @@ func TestCommitRequiresStableOperationIdentity(t *testing.T) {
 	}
 }
 
+func TestContentUploadRequestsBindWorkspaceRevisionWithoutCarryingProvider(t *testing.T) {
+	request := workspacev1.BeginContentUploadRequest{
+		SessionID: "ws_1234567890abcdef", ExpectedRevision: 2, Path: "src/main.ts", MediaType: "text/typescript",
+		ExpectedDigest: strings.Repeat("a", 64), ExpectedSize: 128, LeaseSeconds: 300,
+	}
+	if err := workspacev1.ValidateBeginContentUploadRequest(request); err != nil {
+		t.Fatal(err)
+	}
+	request.Path = "../secret"
+	if err := workspacev1.ValidateBeginContentUploadRequest(request); err == nil {
+		t.Fatal("Workspace 上传路径不得逃逸资源根")
+	}
+	if err := workspacev1.ValidateRenewContentUploadRequest(workspacev1.RenewContentUploadRequest{
+		SessionID: "ws_1234567890abcdef", UploadID: "stg_1234567890abcdef", ExpectedUploadRevision: 1, LeaseSeconds: 300,
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestCommittedRequestsAndResultsBindOneResourceStream(t *testing.T) {
 	stream := versioningv1.StreamKey{Namespace: "portal.configuration", StreamID: "admin"}
 	left := versioningv1.VersionRef{Stream: stream, VersionID: strings.Repeat("a", 64), Sequence: 1, ContentDigest: strings.Repeat("b", 64)}

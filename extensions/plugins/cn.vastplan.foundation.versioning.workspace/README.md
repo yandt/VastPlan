@@ -4,7 +4,7 @@
 
 该基础插件在 Version Ledger 之上提供受信版本环境和有 Lease 的编辑会话。业务插件只选择 Environment、Resource 和可选 Head，不得选择 Ledger Provider、目录、数据库连接或凭证。
 
-## P2.2 能力
+## 当前能力
 
 - `version.workspace.v1`：describeResource/open/status/readSnapshot/writeSnapshot/changes/commit/discard/renew/readCommitted/compareCommitted；
 - `version.resource.json.v1`：JSON object 规范化、摘要、确定性变化路径和疑似秘密明文拒绝；
@@ -16,8 +16,14 @@
 - `changes/compareCommitted` 始终按摘要判断 dirty；Adapter 未声明 diff 时返回 `diffAvailable=false`，不会把未知差异伪装成 clean；
 - Head 写响应丢失时执行 read-after-error，区分已成功、真实冲突和暂时不可用；
 - Manager 每个服务宿主共享，当前 Session 仅保存在 leader 内存中。
+- P2.4c1 内容上传代理：业务插件经 Workspace 执行 begin/status/renew/complete/abort，只有 Workspace 调用 Staging；
+- Session 内 Ready 绑定和 Files Manifest 逐项校验，拒绝跨 revision、过期 Lease、路径或摘要声明不一致；
+- `version.resource.text.v1 / blob.v1 / files.v1` 标准 Adapter，支持大内容清单和确定性文件级 diff；
+- P2.4c2 durable reference outbox 完成前，Files commit 明确失败关闭，防止历史版本对象失去保护。JSON commit 不受影响。
 
 当前不包含 Overlay、Git、生产级 Session 恢复或 Portal 迁移。Leader 重启后未提交 Session 会丢失，因此调用方必须把 Workspace 当成临时编辑区，不能把它当作领域事实存储。生产级跨实例 Session 持久化要等真实故障恢复需求出现后再设计，避免提前建立第二套版本真相源。
+
+真实文件字节不进入 Workspace JSON 调用。P2.4c1 只建立控制代理和 Ready Manifest 校验；浏览器、Backend 与 Runner 的 Host streaming 数据入口属于 P2.4d。
 
 ## 配置示例
 

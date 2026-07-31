@@ -18,7 +18,7 @@
 
 ## 当前边界
 
-P2.4b 只建立可信插件内部的流式数据端口和本地 Provider，尚未把它接到浏览器、Runner 或 Backend Host。当前没有 `writeChunk` 或临时 HTTP 上传接口。P2.4c 将先接入 Workspace、Files Manifest 和版本引用 outbox；P2.4d 再提供同站 BFF、Host streaming SDK、对象存储 Provider 与恶意内容/DLP 扫描。
+P2.4c1 已由 Workspace 接入 Lease 控制面和 Files Manifest Ready 校验，但仍未把真实字节流接到浏览器、Runner 或 Backend Host。当前没有 `writeChunk` 或临时 HTTP 上传接口。P2.4c2 将补齐 durable version-reference outbox 并开放 Files commit；P2.4d 再提供同站 BFF、Host streaming SDK、对象存储 Provider 与恶意内容/DLP 扫描。
 
 内置 `IntegrityAdmission` 会再次顺序读取暂存内容，并配合 Manager 完成大小、SHA-256、mediaType 声明和 tenant/Lease 校验；它不是恶意软件扫描器。要求内容扫描的生产环境必须等待或配置 P2.4d 的 Admission Provider，不能把完整性校验误称为安全扫描。
 

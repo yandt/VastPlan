@@ -22,6 +22,14 @@ func ParseRequest(operation string, raw []byte) (any, error) {
 		target = &SessionRequest{}
 	case OperationWriteSnapshot:
 		target = &WriteSnapshotRequest{}
+	case OperationBeginContentUpload:
+		target = &BeginContentUploadRequest{}
+	case OperationContentUploadStatus:
+		target = &ContentUploadRequest{}
+	case OperationRenewContentUpload:
+		target = &RenewContentUploadRequest{}
+	case OperationCompleteContentUpload, OperationAbortContentUpload:
+		target = &ContentUploadRevisionRequest{}
 	case OperationCommit:
 		target = &CommitRequest{}
 	case OperationDiscard:
@@ -51,6 +59,8 @@ func ParseResult(operation string, raw []byte) (any, error) {
 		target = &ResourceDescription{}
 	case OperationOpen, OperationStatus, OperationWriteSnapshot, OperationDiscard, OperationRenew:
 		target = &SessionResult{}
+	case OperationBeginContentUpload, OperationContentUploadStatus, OperationRenewContentUpload, OperationCompleteContentUpload, OperationAbortContentUpload:
+		target = &ContentUploadResult{}
 	case OperationReadSnapshot:
 		target = &SnapshotResult{}
 	case OperationChanges:
@@ -91,7 +101,15 @@ func validateRequest(target any) error {
 		if !sessionPattern.MatchString(request.SessionID) || request.ExpectedRevision == 0 {
 			return errors.New("写入版本工作区快照请求无效")
 		}
-		return versionresourcev1.ValidateSnapshot(request.Snapshot, MaxWireSnapshotBytes)
+		return versionresourcev1.ValidateSnapshot(request.Snapshot, MaxWorkspaceContentBytes)
+	case *BeginContentUploadRequest:
+		return ValidateBeginContentUploadRequest(*request)
+	case *ContentUploadRequest:
+		return ValidateContentUploadRequest(*request)
+	case *ContentUploadRevisionRequest:
+		return ValidateContentUploadRevisionRequest(*request)
+	case *RenewContentUploadRequest:
+		return ValidateRenewContentUploadRequest(*request)
 	case *CommitRequest:
 		return ValidateCommitRequest(*request)
 	case *RenewRequest:
@@ -115,7 +133,9 @@ func validateResult(target any) error {
 	case *SessionResult:
 		return ValidateSession(result.Session)
 	case *SnapshotResult:
-		return ValidateSnapshotResult(*result, MaxWireSnapshotBytes)
+		return ValidateSnapshotResult(*result, MaxWorkspaceContentBytes)
+	case *ContentUploadResult:
+		return ValidateContentUploadResult(*result)
 	case *ChangesResult:
 		return ValidateChangesResult(*result)
 	case *CommitResult:
@@ -138,7 +158,7 @@ func validateResult(target any) error {
 			return errors.New("Version Workspace commit Head 无效")
 		}
 	case *CommittedSnapshotResult:
-		return ValidateCommittedSnapshotResult(*result, MaxWireSnapshotBytes)
+		return ValidateCommittedSnapshotResult(*result, MaxWorkspaceContentBytes)
 	case *CompareCommittedResult:
 		return ValidateCompareCommittedResult(*result)
 	default:

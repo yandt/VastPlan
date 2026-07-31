@@ -8,6 +8,7 @@ import (
 
 	versioningv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versioning/v1"
 	versionresourcev1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionresource/v1"
+	versionstagingv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionstaging/v1"
 )
 
 var (
@@ -74,6 +75,48 @@ func ValidateSnapshotResult(result SnapshotResult, maxBytes int64) error {
 	digest, err := versionresourcev1.SnapshotDigest(result.Snapshot, maxBytes)
 	if err != nil || digest != result.Digest {
 		return errors.New("版本工作区快照摘要不匹配")
+	}
+	return nil
+}
+
+func ValidateBeginContentUploadRequest(request BeginContentUploadRequest) error {
+	if !sessionPattern.MatchString(request.SessionID) || request.ExpectedRevision == 0 || versionresourcev1.ValidateFilePath(request.Path) != nil ||
+		versionresourcev1.ValidateMediaType(request.MediaType) != nil || !digestPattern.MatchString(request.ExpectedDigest) || request.ExpectedSize < 0 ||
+		request.ExpectedSize > versionstagingv1.MaximumDeclaredFileBytes || request.LeaseSeconds < versionstagingv1.MinimumLeaseSeconds || request.LeaseSeconds > versionstagingv1.MaximumLeaseSeconds {
+		return errors.New("开始 Workspace 内容上传请求无效")
+	}
+	return nil
+}
+
+func ValidateContentUploadRequest(request ContentUploadRequest) error {
+	if !sessionPattern.MatchString(request.SessionID) || versionstagingv1.ValidateUploadStatusRequest(versionstagingv1.UploadStatusRequest{UploadID: request.UploadID}) != nil {
+		return errors.New("Workspace 内容上传请求无效")
+	}
+	return nil
+}
+
+func ValidateContentUploadRevisionRequest(request ContentUploadRevisionRequest) error {
+	if ValidateContentUploadRequest(ContentUploadRequest{SessionID: request.SessionID, UploadID: request.UploadID}) != nil || request.ExpectedUploadRevision == 0 {
+		return errors.New("Workspace 内容上传 CAS 请求无效")
+	}
+	return nil
+}
+
+func ValidateRenewContentUploadRequest(request RenewContentUploadRequest) error {
+	if ValidateContentUploadRevisionRequest(ContentUploadRevisionRequest{SessionID: request.SessionID, UploadID: request.UploadID, ExpectedUploadRevision: request.ExpectedUploadRevision}) != nil ||
+		request.LeaseSeconds < versionstagingv1.MinimumLeaseSeconds || request.LeaseSeconds > versionstagingv1.MaximumLeaseSeconds {
+		return errors.New("Workspace 内容上传续租请求无效")
+	}
+	return nil
+}
+
+func ValidateContentUploadResult(result ContentUploadResult) error {
+	if ValidateSession(result.Session) != nil || versionstagingv1.ValidateUploadStatusResult(result.Upload) != nil {
+		return errors.New("Workspace 内容上传结果无效")
+	}
+	upload := result.Upload.Upload
+	if upload.SessionID != result.Session.ID || upload.EnvironmentDigest != result.Session.EnvironmentDigest || upload.Resource != result.Session.Resource {
+		return errors.New("Workspace 内容上传结果与 Session 不匹配")
 	}
 	return nil
 }

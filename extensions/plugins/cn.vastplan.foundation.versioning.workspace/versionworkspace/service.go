@@ -70,6 +70,32 @@ func (s *Service) handle(operation string) sdk.Handler {
 			var session workspacev1.Session
 			session, err = s.manager.WriteSnapshot(ctx, scope, *request)
 			value = workspacev1.SessionResult{Session: session}
+		case *workspacev1.BeginContentUploadRequest:
+			staging, callErr := newHostStaging(host, call)
+			if callErr == nil {
+				value, callErr = s.manager.BeginContentUpload(ctx, scope, staging, *request)
+			}
+			err = callErr
+		case *workspacev1.ContentUploadRequest:
+			staging, callErr := newHostStaging(host, call)
+			if callErr == nil {
+				value, callErr = s.manager.ContentUploadStatus(ctx, scope, staging, *request)
+			}
+			err = callErr
+		case *workspacev1.RenewContentUploadRequest:
+			staging, callErr := newHostStaging(host, call)
+			if callErr == nil {
+				value, callErr = s.manager.RenewContentUpload(ctx, scope, staging, *request)
+			}
+			err = callErr
+		case *workspacev1.ContentUploadRevisionRequest:
+			staging, callErr := newHostStaging(host, call)
+			if callErr == nil && operation == workspacev1.OperationCompleteContentUpload {
+				value, callErr = s.manager.CompleteContentUpload(ctx, scope, staging, *request)
+			} else if callErr == nil {
+				value, callErr = s.manager.AbortContentUpload(ctx, scope, staging, *request)
+			}
+			err = callErr
 		case *workspacev1.CommitRequest:
 			ledger, callErr := newHostLedger(host, call)
 			if callErr == nil {
@@ -135,10 +161,13 @@ func (s *Service) Contribution() sdk.Contribution {
 			workspacev1.OperationChanges: s.handle(workspacev1.OperationChanges), workspacev1.OperationCommit: s.handle(workspacev1.OperationCommit),
 			workspacev1.OperationDiscard: s.handle(workspacev1.OperationDiscard), workspacev1.OperationRenew: s.handle(workspacev1.OperationRenew),
 			workspacev1.OperationReadCommitted: s.handle(workspacev1.OperationReadCommitted), workspacev1.OperationCompareCommitted: s.handle(workspacev1.OperationCompareCommitted),
+			workspacev1.OperationBeginContentUpload: s.handle(workspacev1.OperationBeginContentUpload), workspacev1.OperationContentUploadStatus: s.handle(workspacev1.OperationContentUploadStatus),
+			workspacev1.OperationRenewContentUpload: s.handle(workspacev1.OperationRenewContentUpload), workspacev1.OperationCompleteContentUpload: s.handle(workspacev1.OperationCompleteContentUpload),
+			workspacev1.OperationAbortContentUpload: s.handle(workspacev1.OperationAbortContentUpload),
 		},
 	}
 }
 
 func serviceDescriptor() []byte {
-	return []byte(`{"title":"Version Workspace","subcommands":[{"name":"describeResource","description":"解析资源绑定与可选能力"},{"name":"open","description":"打开有 Lease 的版本编辑会话"},{"name":"status","description":"读取会话状态"},{"name":"readSnapshot","description":"读取隔离快照"},{"name":"writeSnapshot","description":"以 CAS 写入隔离快照"},{"name":"changes","description":"读取摘要变化与可选详细 diff"},{"name":"commit","description":"以稳定 operationId 幂等提交版本并可选更新 Head"},{"name":"discard","description":"丢弃编辑会话"},{"name":"renew","description":"在环境配额内续租"},{"name":"readCommitted","description":"读取并规范化精确已提交版本"},{"name":"compareCommitted","description":"比较摘要并按 Adapter 能力返回详细 diff"}]}`)
+	return []byte(`{"title":"Version Workspace","subcommands":[{"name":"describeResource","description":"解析资源绑定与可选能力"},{"name":"open","description":"打开有 Lease 的版本编辑会话"},{"name":"status","description":"读取会话状态"},{"name":"readSnapshot","description":"读取隔离快照"},{"name":"writeSnapshot","description":"以 CAS 写入隔离快照"},{"name":"changes","description":"读取摘要变化与可选详细 diff"},{"name":"commit","description":"以稳定 operationId 幂等提交版本并可选更新 Head"},{"name":"discard","description":"丢弃编辑会话"},{"name":"renew","description":"在环境配额内续租"},{"name":"readCommitted","description":"读取并规范化精确已提交版本"},{"name":"compareCommitted","description":"比较摘要并按 Adapter 能力返回详细 diff"},{"name":"beginContentUpload","description":"为当前 Session revision 创建内容上传 Lease"},{"name":"contentUploadStatus","description":"读取 Session 已绑定的内容上传状态"},{"name":"renewContentUpload","description":"续租 Session 已绑定的内容上传"},{"name":"completeContentUpload","description":"完成内容校验并记录 Ready 绑定"},{"name":"abortContentUpload","description":"终止 Session 已绑定的内容上传"}]}`)
 }

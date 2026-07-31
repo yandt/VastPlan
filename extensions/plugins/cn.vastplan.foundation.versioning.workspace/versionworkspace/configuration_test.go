@@ -28,9 +28,27 @@ func TestConfiguredServiceRegistersContractSurface(t *testing.T) {
 		workspacev1.OperationOpen, workspacev1.OperationStatus, workspacev1.OperationReadSnapshot, workspacev1.OperationWriteSnapshot,
 		workspacev1.OperationChanges, workspacev1.OperationCommit, workspacev1.OperationDiscard, workspacev1.OperationRenew,
 		workspacev1.OperationReadCommitted, workspacev1.OperationCompareCommitted,
+		workspacev1.OperationBeginContentUpload, workspacev1.OperationContentUploadStatus, workspacev1.OperationRenewContentUpload,
+		workspacev1.OperationCompleteContentUpload, workspacev1.OperationAbortContentUpload,
 	} {
 		if contribution.Handlers[operation] == nil {
 			t.Errorf("缺少 Workspace handler %s", operation)
+		}
+	}
+}
+
+func TestConfiguredServiceRegistersStandardFilesAdapters(t *testing.T) {
+	for _, adapterID := range []string{TextAdapterID, BlobAdapterID, FilesAdapterID} {
+		_, err := BuildConfiguredService(StartupConfiguration{Environments: []resourcev1.EnvironmentProfile{{
+			Protocol: resourcev1.Protocol, ID: "content-development", Revision: 1,
+			Bindings: []resourcev1.ResourceBinding{{
+				ResourceType: "script.bundle", Namespace: "script.bundle", Adapter: adapterID,
+				AllowedModes: []string{resourcev1.ModeSnapshot}, DefaultMode: resourcev1.ModeSnapshot, ProjectionPolicy: resourcev1.ProjectionNone,
+			}},
+			Limits: resourcev1.WorkspaceLimits{MaxSessionsPerTenant: 8, MaxLeaseSeconds: 3600, MaxSnapshotBytes: 1 << 20, MaxOverlayBytes: 64 << 20},
+		}}})
+		if err != nil {
+			t.Fatalf("标准 Adapter %s 未注册: %v", adapterID, err)
 		}
 	}
 }

@@ -19,6 +19,11 @@ func BuildConfiguredService(configuration StartupConfiguration) (*Service, error
 	if err := catalog.RegisterAdapter(NewJSONAdapter()); err != nil {
 		return nil, err
 	}
+	for _, adapter := range []Adapter{NewTextAdapter(), NewBlobAdapter(), NewFilesAdapter()} {
+		if err := catalog.RegisterAdapter(adapter); err != nil {
+			return nil, err
+		}
+	}
 	for _, environment := range configuration.Environments {
 		if err := catalog.RegisterEnvironment(environment); err != nil {
 			return nil, fmt.Errorf("注册 Version Environment %q: %w", environment.ID, err)
