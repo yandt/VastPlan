@@ -57,3 +57,5 @@ PortalRelease: Preparing → Current → Superseded
 2026-07-31：P2.3b/P2.3c 已实施。Portal Composer 通过中立端口接入 Workspace，并只确认聚合 CAS 已接纳的 VersionRef；BFF、TypeScript SDK、Workbench 和平台 apply 已统一到 WorkingCopy/Publication/Release。旧 `/versions`、PortalVersion 用户操作和 `Portal.versions` 投影已删除，Composer 能力版本提升至 4.0.0；`PortalVersion` 仅可作为插件内部迁移实现类型存在，不得重新进入外部契约。
 
 2026-07-31：P2.3d 已以确定性故障矩阵封板，Portal Composer 补丁版本提升至 4.0.1。测试证明 operationId 可跨 Leader 重启和响应丢失复用，聚合未确认的外部版本不可见，冷历史故障不影响 Published Publication、ReleaseHistory 与上线；能力投影不再默认伪造 read/restore，UI 只开放实时协商成功的版本动作。长期混沌和 soak 留待具备真实插件负载后执行。
+
+2026-07-31：P2.3e 增加 Portal Composer、Version Workspace、Version Ledger 与 Node Portal Kernel 的真实进程纵向 E2E，通过浏览器 BFF 验证两次提交、历史冷读、差异比较、上线与恢复。该验证确认 Portal 配置继续使用 JSON Snapshot，不依赖 P2.4 二进制 Content Staging；同时修复 Portal 标签命名和 Ledger 防御性复制丢失标签的问题，Portal Composer 提升至 4.0.2，Version Ledger 提升至 0.2.1。

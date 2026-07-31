@@ -173,5 +173,6 @@ P2.3d 使用确定性故障注入，不引入依赖计时的长时间混沌测�
 4. **P2.3b（已完成）**：实现中立 `PortalVersionControl` 端口和 Workspace Adapter，接通 detached commit、历史读取、比较与恢复。提交前先在 Portal Shared State 持久化 operation ID；聚合 CAS 只确认 Workspace 返回的精确 VersionRef。普通管理读取只对已绑定 Portal 按请求执行能力发现，不运行后台轮询。
 5. **P2.3c（已完成）**：BFF、TypeScript SDK 与 Workbench 已切换到 WorkingCopy/Publication/Release 和可选 history/read/compare/restore；删除 `/versions`、旧 PortalVersion 用户操作与 `Portal.versions` 兼容状态。Portal Composer 提升到 4.0.0。
 6. **P2.3d（已完成）**：已覆盖两种模式、能力差异、软依赖缺失、Leader 重启、响应丢失、聚合 CAS 冲突、历史冷读失败和 Release 不依赖 Ledger；采用确定性故障注入，未引入 soak 或依赖时序的混沌测试。
+7. **P2.3e（已完成）**：增加真实进程纵向 E2E，同时启动 Portal Composer、Version Workspace、Version Ledger 与 Node Portal Kernel，经浏览器 BFF 验证两次提交、精确 VersionRef、历史冷读、差异比较、Publication 上线与历史恢复；不再只依赖 fake 版本端口证明 Portal 接线正确。
 
 P2.3 不实施手工 checkpoint、branch、merge、在线 attach/detach、历史迁移、Head 镜像、生产 Session 持久化或 P2.4 的二进制 Content Staging。

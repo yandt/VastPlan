@@ -14,6 +14,8 @@ import (
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	versioningv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versioning/v1"
+	versionresourcev1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionresource/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/hostfactory"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/portaltrust"
@@ -23,6 +25,8 @@ import (
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
+	versionledger "cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.foundation.versioning.ledger/versionledger"
+	versionworkspace "cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.foundation.versioning.workspace/versionworkspace"
 )
 
 type portalComposerFixture struct {
@@ -40,6 +44,14 @@ func (v portalFixtureVerifier) Verify(_ context.Context, ref pluginv1.ArtifactRe
 }
 
 func startPortalComposerFixture(t *testing.T, root string, addressing *portalAddressingFixture) portalComposerFixture {
+	return startPortalComposerFixtureWithOptions(t, root, addressing, false)
+}
+
+func startVersionedPortalComposerFixture(t *testing.T, root string, addressing *portalAddressingFixture) portalComposerFixture {
+	return startPortalComposerFixtureWithOptions(t, root, addressing, true)
+}
+
+func startPortalComposerFixtureWithOptions(t *testing.T, root string, addressing *portalAddressingFixture, versionControl bool) portalComposerFixture {
 	t.Helper()
 	temporary := t.TempDir()
 	repository, err := artifactrepository.NewRepository(filepath.Join(temporary, "repository"))
@@ -49,6 +61,15 @@ func startPortalComposerFixture(t *testing.T, root string, addressing *portalAdd
 	composerRef := publishBuiltPlugin(t, repository,
 		"./extensions/plugins/cn.vastplan.platform.configuration.portal-composer/backend",
 		"extensions/plugins/cn.vastplan.platform.configuration.portal-composer/vastplan.plugin.json")
+	var ledgerRef, workspaceRef pluginv1.ArtifactRef
+	if versionControl {
+		ledgerRef = publishBuiltPlugin(t, repository,
+			"./extensions/plugins/cn.vastplan.foundation.versioning.ledger/backend",
+			"extensions/plugins/cn.vastplan.foundation.versioning.ledger/vastplan.plugin.json")
+		workspaceRef = publishBuiltPlugin(t, repository,
+			"./extensions/plugins/cn.vastplan.foundation.versioning.workspace/backend",
+			"extensions/plugins/cn.vastplan.foundation.versioning.workspace/vastplan.plugin.json")
+	}
 	for _, plugin := range portalPlatformBackendPlugins() {
 		publishBuiltPlugin(t, repository, plugin.packageDir, plugin.manifest)
 	}
@@ -60,9 +81,15 @@ func startPortalComposerFixture(t *testing.T, root string, addressing *portalAdd
 	installer := nodeagent.LocalInstaller{Root: filepath.Join(temporary, "installed")}
 	composer := installPortalFixturePlugin(t, repository, verifier, installer, composerRef)
 	platformCatalog := portalPlatformCatalogForTenant(t, root, "acme")
-	config, err := kernelspi.NewMapConfig(map[string]any{
+	configValues := map[string]any{
 		"platform.portal-composer.platformCatalog": string(platformCatalog),
-	})
+	}
+	if versionControl {
+		configValues["platform.portal-composer.versionControl"] = map[string]any{
+			"environmentId": "portal-e2e", "resourceType": "portal.configuration",
+		}
+	}
+	config, err := kernelspi.NewMapConfig(configValues)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,6 +114,37 @@ func startPortalComposerFixture(t *testing.T, root string, addressing *portalAdd
 	}
 	t.Cleanup(host.Stop)
 	allowAllPermissions(t, host)
+	if versionControl {
+		ledger := installPortalFixturePlugin(t, repository, verifier, installer, ledgerRef)
+		workspace := installPortalFixturePlugin(t, repository, verifier, installer, workspaceRef)
+		ledgerConfiguration, marshalErr := json.Marshal(versionledger.StartupConfiguration{
+			DefaultProvider: "portal-e2e",
+			Providers: []versionledger.ProviderInstanceConfiguration{{
+				ID: "portal-e2e", Protocol: versioningv1.StorageProtocolFile, Root: filepath.Join(temporary, "version-ledger"),
+			}},
+			Routes: []versionledger.ProviderRoute{{Namespace: "portal.configuration", Provider: "portal-e2e"}},
+		})
+		if marshalErr != nil {
+			t.Fatal(marshalErr)
+		}
+		workspaceConfiguration, marshalErr := json.Marshal(versionworkspace.StartupConfiguration{Environments: []versionresourcev1.EnvironmentProfile{{
+			Protocol: versionresourcev1.Protocol, ID: "portal-e2e", Revision: 1,
+			Bindings: []versionresourcev1.ResourceBinding{{
+				ResourceType: "portal.configuration", Namespace: "portal.configuration", Adapter: versionworkspace.JSONAdapterID,
+				AllowedModes: []string{versionresourcev1.ModeSnapshot}, DefaultMode: versionresourcev1.ModeSnapshot, ProjectionPolicy: versionresourcev1.ProjectionDomainHot,
+			}},
+			Limits: versionresourcev1.WorkspaceLimits{MaxSessionsPerTenant: 8, MaxLeaseSeconds: 3600, MaxSnapshotBytes: 1 << 20, MaxOverlayBytes: 1 << 20},
+		}}})
+		if marshalErr != nil {
+			t.Fatal(marshalErr)
+		}
+		if _, err := host.LaunchWithPolicy(context.Background(), ledger.EntryPath, portalFixtureLaunchPolicyWithConfiguration(ledger, ledgerConfiguration)); err != nil {
+			t.Fatalf("启动 Version Ledger: %v", err)
+		}
+		if _, err := host.LaunchWithPolicy(context.Background(), workspace.EntryPath, portalFixtureLaunchPolicyWithConfiguration(workspace, workspaceConfiguration)); err != nil {
+			t.Fatalf("启动 Version Workspace: %v", err)
+		}
+	}
 	if _, err := host.LaunchWithPolicy(context.Background(), composer.EntryPath, portalFixtureLaunchPolicy(composer)); err != nil {
 		t.Fatalf("启动 Portal Composer: %v", err)
 	}
@@ -104,6 +162,12 @@ func startPortalComposerFixture(t *testing.T, root string, addressing *portalAdd
 		return response.Result, response.Payload, nil
 	})
 	return portalComposerFixture{deliveryOrigin: deliveryOrigin}
+}
+
+func portalFixtureLaunchPolicyWithConfiguration(installed nodeagent.InstalledPlugin, configuration []byte) protocolbus.LaunchPolicy {
+	policy := portalFixtureLaunchPolicy(installed)
+	policy.Configuration = configuration
+	return policy
 }
 
 func registerPortalTrustServices(t *testing.T, host *protocolbus.Host, catalog *portaltrust.TrustedCatalog) {

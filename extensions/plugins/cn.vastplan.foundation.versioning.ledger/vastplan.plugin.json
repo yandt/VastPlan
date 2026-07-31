@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.foundation.versioning.ledger",
   "name": "VastPlan Version Ledger",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",

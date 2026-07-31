@@ -27,6 +27,7 @@ func TestServiceRoutesByTrustedNamespaceAndProjectsActor(t *testing.T) {
 	request := versioningv1.PutVersionRequest{
 		Stream:         versioningv1.StreamKey{Namespace: "portal.configuration", StreamID: "portal-main"},
 		IdempotencyKey: "portal-main:revision:0001", Content: json.RawMessage(`{"layout":"standard"}`),
+		Message: "Submit Portal publication", Labels: map[string]string{"domain": "portal", "portal.id": "portal-main"},
 	}
 	call := pluginCall("tenant-a")
 	result, raw := invokeService(t, service, versioningv1.OperationPutVersion, call, request)
@@ -40,6 +41,9 @@ func TestServiceRoutesByTrustedNamespaceAndProjectsActor(t *testing.T) {
 	version := parsed.(*versioningv1.PutVersionResult).Version
 	if version.ActorID != "plugin:cn.vastplan.platform.configuration.portal-composer" {
 		t.Fatalf("actor 未从可信 CallContext 投影: %s", version.ActorID)
+	}
+	if version.Labels["domain"] != "portal" || version.Labels["portal.id"] != "portal-main" {
+		t.Fatalf("Provider 返回记录丢失领域标签: %+v", version.Labels)
 	}
 	if _, err := portal.GetVersion(context.Background(), Scope{TenantID: "tenant-a"}, versioningv1.GetVersionRequest{Ref: version.Ref}); err != nil {
 		t.Fatalf("namespace 路由未写入 portal Provider: %v", err)

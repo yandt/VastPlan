@@ -112,8 +112,9 @@ func cloneRecord(record versioningv1.VersionRecord) versioningv1.VersionRecord {
 	record.Content = append([]byte(nil), record.Content...)
 	record.Parents = cloneRefs(record.Parents)
 	if record.Labels != nil {
-		record.Labels = make(map[string]string, len(record.Labels))
-		for key, value := range record.Labels {
+		labels := record.Labels
+		record.Labels = make(map[string]string, len(labels))
+		for key, value := range labels {
 			record.Labels[key] = value
 		}
 	}

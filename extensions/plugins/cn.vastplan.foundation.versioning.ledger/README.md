@@ -18,6 +18,8 @@ File Provider 会把 tenant 和 stream 标识哈希后写入目录；配置的 r
 
 `0.2.0` 将 File Provider 数据格式提升为 v2（`parent` 改为最多两个 `parents`，Head 增加删除墓碑）。项目尚处开发阶段，不读取 `0.1.x` 的 File Provider 数据；本地旧测试目录需要清空后重新生成，不能静默混用两种格式。
 
+`0.2.1` 修复 VersionRecord 防御性复制时标签丢失的问题；标签现在会完整保留，并在 Ledger 返回结果与候选一致性校验中得到真实验证。该修复不改变 File Provider 数据格式。
+
 ## 配置
 
 ```json

@@ -79,7 +79,7 @@ func (c *workspacePortalVersionControl) Commit(ctx context.Context, request Port
 	}
 	committed, err := c.client.Commit(ctx, c.callCtx, workspacev1.CommitRequest{
 		SessionID: session.ID, ExpectedRevision: session.Revision, OperationID: request.OperationID,
-		Message: "Submit Portal publication", Labels: map[string]string{"domain": "portal", "portalId": request.PortalID},
+		Message: "Submit Portal publication", Labels: map[string]string{"domain": "portal", "portal.id": request.PortalID},
 	})
 	if err != nil {
 		c.discard(ctx, session)

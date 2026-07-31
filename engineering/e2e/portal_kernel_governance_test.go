@@ -66,6 +66,89 @@ func TestNodePortalKernelGovernanceLifecycleWithRealPlugins(t *testing.T) {
 	assertPortalRuntime(t, process, reader, rollback.ID)
 }
 
+func TestNodePortalKernelVersionControlWithRealComposerWorkspaceAndLedger(t *testing.T) {
+	root := repoRoot(t)
+	buildPortalKernel(t, root)
+	addressing := startPortalAddressingFixture(t)
+	composer := startVersionedPortalComposerFixture(t, root, addressing)
+	identity := startPortalFileIdentityFixture(t)
+	process := startFilePortalKernel(t, root, addressing, identity, composer.deliveryOrigin)
+	probe := portalKernelBrowserClient(t)
+	waitForNodePortalKernel(t, process, probe)
+
+	author := loginPortalUser(t, process, identity, "version-author", "portal.compose", "portal.read")
+	approver := loginPortalUser(t, process, identity, "version-approver", "portal.approve")
+	publisher := loginPortalUser(t, process, identity, "version-publisher", "portal.publish")
+
+	first := createPublishedPortalPublication(t, process, author, approver, publisher, portalApplication(1, "Version one"))
+	if first.Source.Kind != portalapi.PortalPublicationSourceWorkspace || first.Source.VersionRef == nil {
+		t.Fatalf("版本化 Publication 未保存精确 Workspace VersionRef: %+v", first.Source)
+	}
+	firstRelease := releasePortalPublication(t, process, publisher, "operations", portalapi.PortalPublicationReleaseRequest{
+		PublicationID: first.ID, Reason: "version control E2E first release",
+	})
+	second := createPublishedPortalPublication(t, process, author, approver, publisher, portalApplication(2, "Version two"))
+	if second.Source.Kind != portalapi.PortalPublicationSourceWorkspace || second.Source.VersionRef == nil || second.Source.VersionRef.VersionID == first.Source.VersionRef.VersionID {
+		t.Fatalf("第二次提交未产生新的 Workspace VersionRef: first=%+v second=%+v", first.Source, second.Source)
+	}
+	releasePortalPublication(t, process, publisher, "operations", portalapi.PortalPublicationReleaseRequest{
+		PublicationID: second.ID, ExpectedCurrentReleaseID: firstRelease.ID, Reason: "version control E2E second release",
+	})
+
+	status, raw := portalJSON(t, author, process.baseURL(), http.MethodGet, "/v1/portals/operations/history", nil, false)
+	if status != http.StatusOK {
+		t.Fatalf("读取真实 Portal 版本历史失败: status=%d body=%s", status, raw)
+	}
+	var history portalapi.PortalVersionHistory
+	decodePortalJSON(t, raw, &history)
+	if len(history.Entries) != 2 || history.Entries[0].VersionRef.VersionID != second.Source.VersionRef.VersionID {
+		t.Fatalf("Portal 聚合未按提交顺序确认真实 VersionRef: %+v", history)
+	}
+
+	status, raw = portalJSON(t, author, process.baseURL(), http.MethodGet,
+		fmt.Sprintf("/v1/portals/operations/history/%s", first.Source.VersionRef.VersionID), nil, false)
+	if status != http.StatusOK {
+		t.Fatalf("冷读真实 Portal 历史版本失败: status=%d body=%s", status, raw)
+	}
+	var snapshot portalapi.PortalVersionSnapshot
+	decodePortalJSON(t, raw, &snapshot)
+	if snapshot.Configuration.Application.Branding["title"] != "Version one" {
+		t.Fatalf("历史快照内容错误: %+v", snapshot.Configuration.Application.Branding)
+	}
+
+	status, raw = portalJSON(t, author, process.baseURL(), http.MethodGet,
+		fmt.Sprintf("/v1/portals/operations/compare?left=%s&right=%s", first.Source.VersionRef.VersionID, second.Source.VersionRef.VersionID), nil, false)
+	if status != http.StatusOK {
+		t.Fatalf("比较真实 Portal 历史版本失败: status=%d body=%s", status, raw)
+	}
+	var comparison portalapi.PortalVersionComparison
+	decodePortalJSON(t, raw, &comparison)
+	if !comparison.Dirty || !comparison.DiffAvailable || len(comparison.ChangedPaths) == 0 {
+		t.Fatalf("真实 Portal 版本差异无效: %+v", comparison)
+	}
+
+	governance := readGovernance(t, process, author)
+	portal := governance.Portals[0]
+	configuration := *portal.PublishedPublication.Source.Configuration
+	configuration.Application = portalApplication(3, "Version three")
+	status, raw = portalJSON(t, author, process.baseURL(), http.MethodPost, "/v1/portals/operations/working-copy", map[string]any{"configuration": configuration}, true)
+	if status != http.StatusOK {
+		t.Fatalf("创建恢复目标 WorkingCopy 失败: status=%d body=%s", status, raw)
+	}
+	var workingCopy portalapi.PortalWorkingCopy
+	decodePortalJSON(t, raw, &workingCopy)
+	status, raw = portalJSON(t, author, process.baseURL(), http.MethodPost,
+		fmt.Sprintf("/v1/portals/operations/history/%s/restore", first.Source.VersionRef.VersionID),
+		map[string]any{"expectedWorkingRevision": workingCopy.Revision}, true)
+	if status != http.StatusOK {
+		t.Fatalf("恢复真实 Portal 历史版本失败: status=%d body=%s", status, raw)
+	}
+	decodePortalJSON(t, raw, &workingCopy)
+	if workingCopy.Configuration.Application.Branding["title"] != "Version one" {
+		t.Fatalf("历史恢复未覆盖当前 WorkingCopy: %+v", workingCopy.Configuration.Application.Branding)
+	}
+}
+
 func loginPortalUser(t *testing.T, process *portalKernelProcess, identity *portalFileIdentityFixture, subject string, roles ...string) *http.Client {
 	t.Helper()
 	client := identity.login(t, process, subject, "acme", roles...)
@@ -106,7 +189,7 @@ func createPublishedPortalPublication(t *testing.T, process *portalKernelProcess
 		workingCopy = *created.WorkingCopy
 	} else {
 		if portal.PublishedPublication == nil || portal.PublishedPublication.Source.Configuration == nil {
-			t.Fatalf("已发布 Portal 缺少可编辑的 inline Publication: %+v", portal)
+			t.Fatalf("已发布 Portal 缺少可编辑的热配置投影: %+v", portal)
 		}
 		configuration := *portal.PublishedPublication.Source.Configuration
 		configuration.Application = composition
