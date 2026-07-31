@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,12 +14,12 @@ import (
 // reconcilePlatformPortal is the retry-safe implementation behind the
 // explicit --apply-platform command. Every durable lifecycle state is a valid
 // resume point; a conflicting WorkingCopy or Publication is never overwritten.
-func reconcilePlatformPortal(client *http.Client, baseURL string, desired frontendcompositionv1.ApplicationComposition) error {
+func reconcilePlatformPortal(client *http.Client, baseURL string, desired portalapi.PortalConfiguration) error {
 	governance, err := readPortalGovernance(client, baseURL)
 	if err != nil {
 		return err
 	}
-	portal, err := selectPlatformPortal(client, baseURL, findPortal(governance.Portals, desired.ID), desired)
+	portal, err := selectPlatformPortal(client, baseURL, findPortal(governance.Portals, desired.Application.ID), desired)
 	if err != nil {
 		return err
 	}
@@ -31,7 +32,7 @@ func reconcilePlatformPortal(client *http.Client, baseURL string, desired fronte
 	if err != nil {
 		return err
 	}
-	current := findPortal(governance.Portals, desired.ID)
+	current := findPortal(governance.Portals, desired.Application.ID)
 	if current == nil {
 		return errors.New("发布后 Portal 聚合不存在")
 	}
@@ -47,7 +48,7 @@ func reconcilePlatformPortal(client *http.Client, baseURL string, desired fronte
 		}
 	}
 	request := portalapi.PortalPublicationReleaseRequest{PublicationID: publication.ID, ExpectedCurrentReleaseID: current.CurrentReleaseID, Reason: "platformdev explicit release"}
-	status, raw, err := portalRequest(client, baseURL, publisherToken, http.MethodPost, fmt.Sprintf("/v1/portals/%s/releases", desired.ID), request, true)
+	status, raw, err := portalRequest(client, baseURL, publisherToken, http.MethodPost, fmt.Sprintf("/v1/portals/%s/releases", desired.Application.ID), request, true)
 	if err != nil || status != http.StatusOK {
 		return fmt.Errorf("release status=%d body=%s: %w", status, raw, err)
 	}
@@ -61,9 +62,9 @@ func reconcilePlatformPortal(client *http.Client, baseURL string, desired fronte
 	return nil
 }
 
-func selectPlatformPortal(client *http.Client, baseURL string, portal *portalapi.Portal, desired frontendcompositionv1.ApplicationComposition) (*portalapi.Portal, error) {
+func selectPlatformPortal(client *http.Client, baseURL string, portal *portalapi.Portal, desired portalapi.PortalConfiguration) (*portalapi.Portal, error) {
 	if portal == nil {
-		status, raw, err := portalRequest(client, baseURL, authorToken, http.MethodPost, "/v1/portals", portalapi.CreatePortalRequest{PortalID: desired.ID, Configuration: portalapi.PortalConfiguration{Application: desired}}, true)
+		status, raw, err := portalRequest(client, baseURL, authorToken, http.MethodPost, "/v1/portals", portalapi.CreatePortalRequest{PortalID: desired.Application.ID, Configuration: desired}, true)
 		if err != nil || status != http.StatusOK {
 			return nil, fmt.Errorf("create Portal status=%d body=%s: %w", status, raw, err)
 		}
@@ -77,7 +78,7 @@ func selectPlatformPortal(client *http.Client, baseURL string, portal *portalapi
 	if configuration == nil {
 		return nil, errors.New("现有 Portal 没有可管理配置")
 	}
-	if samePortalApplication(configuration.Application, desired) {
+	if samePortalConfiguration(*configuration, desired) {
 		return portal, nil
 	}
 	if portal.WorkingCopy != nil || portal.PendingPublication != nil {
@@ -86,9 +87,7 @@ func selectPlatformPortal(client *http.Client, baseURL string, portal *portalapi
 	if portal.PublishedPublication == nil {
 		return nil, errors.New("现有 Portal 没有可复制的 Published Publication")
 	}
-	next := *configuration
-	next.Application = desired
-	statusCode, raw, err := portalRequest(client, baseURL, authorToken, http.MethodPost, fmt.Sprintf("/v1/portals/%s/working-copy", desired.ID), map[string]any{"configuration": next}, true)
+	statusCode, raw, err := portalRequest(client, baseURL, authorToken, http.MethodPost, fmt.Sprintf("/v1/portals/%s/working-copy", desired.Application.ID), map[string]any{"configuration": desired}, true)
 	if err != nil || statusCode != http.StatusOK {
 		return nil, fmt.Errorf("create WorkingCopy status=%d body=%s: %w", statusCode, raw, err)
 	}
@@ -184,4 +183,13 @@ func samePortalApplication(current, desired frontendcompositionv1.ApplicationCom
 	desired.Document = current.Document
 	desired.Target = current.Target
 	return current.Digest() == desired.Digest()
+}
+
+func samePortalConfiguration(current, desired portalapi.PortalConfiguration) bool {
+	if !samePortalApplication(current.Application, desired.Application) || current.Platform.Digest() != desired.Platform.Digest() {
+		return false
+	}
+	currentServices, currentErr := json.Marshal(current.Services)
+	desiredServices, desiredErr := json.Marshal(desired.Services)
+	return currentErr == nil && desiredErr == nil && bytes.Equal(currentServices, desiredServices)
 }

@@ -13,7 +13,7 @@ import (
 )
 
 func TestReconcilePlatformPortalResumesPendingApproval(t *testing.T) {
-	desired := reconcileTestApplication("/operations")
+	desired := reconcileTestConfiguration("/operations")
 	fixture := newPortalReconcileFixture(desired, portalapi.StatusPendingApproval)
 	server := httptest.NewServer(fixture)
 	defer server.Close()
@@ -30,10 +30,10 @@ func TestReconcilePlatformPortalResumesPendingApproval(t *testing.T) {
 }
 
 func TestReconcilePlatformPortalIsNoopWhenDesiredPublicationIsCurrent(t *testing.T) {
-	desired := reconcileTestApplication("/operations")
+	desired := reconcileTestConfiguration("/operations")
 	fixture := newPortalReconcileFixture(desired, portalapi.StatusPublished)
 	fixture.portal.CurrentReleaseID = 9
-	fixture.portal.Releases = []portalapi.PortalRelease{{ID: 9, PortalID: desired.ID, PublicationID: 7, Status: portalapi.ActivationCurrent}}
+	fixture.portal.Releases = []portalapi.PortalRelease{{ID: 9, PortalID: desired.Application.ID, PublicationID: 7, Status: portalapi.ActivationCurrent}}
 	server := httptest.NewServer(fixture)
 	defer server.Close()
 
@@ -45,9 +45,28 @@ func TestReconcilePlatformPortalIsNoopWhenDesiredPublicationIsCurrent(t *testing
 	}
 }
 
+func TestReconcilePlatformPortalReleasesNewVersionWhenPlatformProfileChanges(t *testing.T) {
+	current := reconcileTestConfiguration("/operations")
+	current.Platform.Document = compositioncommonv1.Document{Version: 1, Revision: 1, ID: "operations.platform"}
+	desired := current
+	desired.Platform.Document.Revision = 2
+	fixture := newPortalReconcileFixture(current, portalapi.StatusPublished)
+	fixture.portal.CurrentReleaseID = 9
+	fixture.portal.Releases = []portalapi.PortalRelease{{ID: 9, PortalID: desired.Application.ID, PublicationID: 7, Status: portalapi.ActivationCurrent}}
+	server := httptest.NewServer(fixture)
+	defer server.Close()
+
+	if err := reconcilePlatformPortal(server.Client(), server.URL, desired); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := fixture.writes, []string{"working-copy", "submit", "approve", "publish", "release"}; !equalStrings(got, want) {
+		t.Fatalf("Platform Profile 变化必须形成新的 Portal 版本和上线记录: got=%v want=%v", got, want)
+	}
+}
+
 func TestReconcilePlatformPortalDoesNotOverwriteDifferentWorkingCopy(t *testing.T) {
-	desired := reconcileTestApplication("/operations")
-	fixture := newPortalReconcileFixture(reconcileTestApplication("/other"), portalapi.StatusDraft)
+	desired := reconcileTestConfiguration("/operations")
+	fixture := newPortalReconcileFixture(reconcileTestConfiguration("/other"), portalapi.StatusDraft)
 	server := httptest.NewServer(fixture)
 	defer server.Close()
 
@@ -65,19 +84,18 @@ type portalReconcileFixture struct {
 	writes []string
 }
 
-func newPortalReconcileFixture(application frontendcompositionv1.ApplicationComposition, status portalapi.Status) *portalReconcileFixture {
+func newPortalReconcileFixture(configuration portalapi.PortalConfiguration, status portalapi.Status) *portalReconcileFixture {
 	now := "2026-07-30T00:00:00Z"
-	configuration := portalapi.PortalConfiguration{Application: application}
 	portal := portalapi.Portal{
-		ID: application.ID, TenantID: "local", Releases: []portalapi.PortalRelease{},
+		ID: configuration.Application.ID, TenantID: "local", Releases: []portalapi.PortalRelease{},
 		VersionControl: portalapi.PortalVersionControlStatus{Availability: portalapi.PortalVersionControlDisabled, Capabilities: []string{}},
 		CreatedAt:      now, UpdatedAt: now,
 	}
 	if status == portalapi.StatusDraft {
-		portal.WorkingCopy = &portalapi.PortalWorkingCopy{TenantID: "local", PortalID: application.ID, Revision: 1, Configuration: configuration, Digest: strings.Repeat("a", 64), CreatedAt: now, UpdatedAt: now}
+		portal.WorkingCopy = &portalapi.PortalWorkingCopy{TenantID: "local", PortalID: configuration.Application.ID, Revision: 1, Configuration: configuration, Digest: strings.Repeat("a", 64), CreatedAt: now, UpdatedAt: now}
 	} else {
 		publication := portalapi.PortalPublication{
-			ID: 7, TenantID: "local", PortalID: application.ID, WorkingRevision: 1, Status: status, Digest: strings.Repeat("a", 64),
+			ID: 7, TenantID: "local", PortalID: configuration.Application.ID, WorkingRevision: 1, Status: status, Digest: strings.Repeat("a", 64),
 			Source: portalapi.PortalPublicationSource{Kind: portalapi.PortalPublicationSourceInline, Configuration: &configuration}, SubmittedBy: "author", CreatedAt: now, UpdatedAt: now,
 		}
 		if status == portalapi.StatusPublished {
@@ -100,9 +118,24 @@ func (f *portalReconcileFixture) ServeHTTP(response http.ResponseWriter, request
 		return
 	}
 	switch {
+	case request.Method == http.MethodPost && strings.HasSuffix(request.URL.Path, "/working-copy"):
+		var payload struct {
+			Configuration portalapi.PortalConfiguration `json:"configuration"`
+		}
+		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+			http.Error(response, "invalid body", http.StatusBadRequest)
+			return
+		}
+		f.writes = append(f.writes, "working-copy")
+		f.portal.WorkingCopy = &portalapi.PortalWorkingCopy{TenantID: "local", PortalID: f.portal.ID, Revision: 2, Configuration: payload.Configuration}
+		_ = json.NewEncoder(response).Encode(f.portal.WorkingCopy)
 	case request.Method == http.MethodPost && strings.HasSuffix(request.URL.Path, "/publications"):
 		f.writes = append(f.writes, "submit")
-		publication := portalapi.PortalPublication{ID: 7, PortalID: f.portal.ID, WorkingRevision: f.portal.WorkingCopy.Revision, Status: portalapi.StatusPendingApproval, Source: portalapi.PortalPublicationSource{Kind: portalapi.PortalPublicationSourceInline, Configuration: &f.portal.WorkingCopy.Configuration}}
+		publicationID := uint64(7)
+		if f.portal.PublishedPublication != nil {
+			publicationID = f.portal.PublishedPublication.ID + 1
+		}
+		publication := portalapi.PortalPublication{ID: publicationID, PortalID: f.portal.ID, WorkingRevision: f.portal.WorkingCopy.Revision, Status: portalapi.StatusPendingApproval, Source: portalapi.PortalPublicationSource{Kind: portalapi.PortalPublicationSourceInline, Configuration: &f.portal.WorkingCopy.Configuration}}
 		f.portal.WorkingCopy, f.portal.PendingPublication = nil, &publication
 		_ = json.NewEncoder(response).Encode(publication)
 	case strings.HasSuffix(request.URL.Path, "/approve"):
@@ -131,6 +164,10 @@ func reconcileTestApplication(route string) frontendcompositionv1.ApplicationCom
 		Target:   compositioncommonv1.Target{Kernel: compositioncommonv1.KernelFrontend},
 		Route:    route, Plugins: []frontendcompositionv1.PluginRef{}, Config: map[string]any{},
 	}
+}
+
+func reconcileTestConfiguration(route string) portalapi.PortalConfiguration {
+	return portalapi.PortalConfiguration{Application: reconcileTestApplication(route)}
 }
 
 func equalStrings(left, right []string) bool {

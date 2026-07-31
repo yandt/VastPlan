@@ -79,7 +79,18 @@ func (r *runtime) writeFixtures(ctx context.Context) error {
 		return err
 	}
 	r.backendInputDigest = backendDigest
-	sourceDigest, err := platformManagementSourceDigest(template, application, portalCatalog, repositoryProfile, backendDigest)
+	dynamicFingerprint := digestStrings("dynamic-go-not-selected-v1")
+	selection, err := r.seedSelection()
+	if err != nil {
+		return err
+	}
+	if selection.contains("cn.vastplan.foundation.security.bootstrap-policy") {
+		dynamicFingerprint, err = r.dynamicGoFingerprint(ctx, filepath.Join(r.options.stateRoot, "go-cache"))
+		if err != nil {
+			return fmt.Errorf("计算开发平台 dynamic-go 制品指纹: %w", err)
+		}
+	}
+	sourceDigest, err := platformManagementSourceDigest(template, application, portalCatalog, repositoryProfile, backendDigest, dynamicFingerprint)
 	if err != nil {
 		return err
 	}

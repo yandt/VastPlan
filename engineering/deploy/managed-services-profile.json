@@ -9,7 +9,7 @@
       "id": "application-authorization",
       "serviceClass": "application.backend",
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.3", "channel": "stable" }
+        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.4", "channel": "stable" }
       ],
       "config": {
         "environment_allowlist": {

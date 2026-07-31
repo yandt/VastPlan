@@ -10,20 +10,33 @@ import (
 	"time"
 
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
-func publishPortal(baseURL, applicationPath string) error {
+func publishPortal(baseURL, applicationPath, platformCatalogPath string) error {
 	client := &http.Client{Transport: &http.Transport{TLSClientConfig: insecureLocalTLS()}, Timeout: 10 * time.Second}
-	spec, err := frontendcompositionv1.ParseApplicationCompositionFile(applicationPath)
+	application, err := frontendcompositionv1.ParseApplicationCompositionFile(applicationPath)
 	if err != nil {
 		return fmt.Errorf("读取初始 Portal Application Composition: %w", err)
 	}
-	if err := reconcilePlatformPortal(client, baseURL, spec); err != nil {
+	catalog, err := frontendcompositionv1.ParsePortalPlatformCatalogFile(platformCatalogPath)
+	if err != nil {
+		return fmt.Errorf("读取初始 Portal Platform Catalog: %w", err)
+	}
+	profile, binding, err := catalog.Resolve("local", application.ID)
+	if err != nil {
+		return fmt.Errorf("解析初始 Portal 平台绑定: %w", err)
+	}
+	desired := portalapi.PortalConfiguration{Platform: profile, Application: application, Services: binding.Services}
+	if err := reconcilePlatformPortal(client, baseURL, desired); err != nil {
 		return err
 	}
 	status, raw, err := portalRequest(client, baseURL, devAdminToken, http.MethodGet, "/v1/portal-runtime?path=/operations", nil, false)
-	if err != nil || status != http.StatusOK {
-		return fmt.Errorf("runtime status=%d body=%s: %w", status, raw, err)
+	if err != nil {
+		return fmt.Errorf("读取 Portal Runtime: %w", err)
+	}
+	if status != http.StatusOK {
+		return fmt.Errorf("runtime status=%d body=%s", status, raw)
 	}
 	return verifyPortalColdStart(client, baseURL, devAdminToken)
 }

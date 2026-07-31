@@ -70,15 +70,15 @@
         { "id": "cn.vastplan.foundation.frontend.structure.layout.top-navigation", "version": "5.2.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.workflow.workbench", "version": "5.2.5", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.identity.account-center", "version": "0.2.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "4.1.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.8.12", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.plugin-settings", "version": "0.13.9", "channel": "stable" },
-        { "id": "cn.vastplan.platform.security.credentials", "version": "0.12.11", "channel": "stable" },
-        { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.9.11", "channel": "stable" },
+        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "4.1.1", "channel": "stable" },
+        { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.8.13", "channel": "stable" },
+        { "id": "cn.vastplan.platform.configuration.plugin-settings", "version": "0.13.10", "channel": "stable" },
+        { "id": "cn.vastplan.platform.security.credentials", "version": "0.12.12", "channel": "stable" },
+        { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.9.12", "channel": "stable" },
         { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.37.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.integration.api-exposure", "version": "0.5.11", "channel": "stable" },
-        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.21.8", "channel": "stable" },
-        { "id": "cn.vastplan.platform.security.authorization-policy", "version": "0.5.6", "channel": "stable" }
+        { "id": "cn.vastplan.platform.integration.api-exposure", "version": "0.5.12", "channel": "stable" },
+        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.21.9", "channel": "stable" },
+        { "id": "cn.vastplan.platform.security.authorization-policy", "version": "0.5.7", "channel": "stable" }
       ],
       "security": { "firstPartyOnly": true, "requireIntegrity": true }
     }
@@ -90,7 +90,7 @@
       "platformProfile": {
         "id": "portal-default",
         "revision": 90,
-        "digest": "7310dc336ac1f3971b10e114f6e60c4bd8f852be33734290ba8e933db66db167"
+        "digest": "582cb2ee03b6fa82c5eb341ead5f220ecc24ed926fb4261973f1ac641e04e278"
       },
       "services": [
         {

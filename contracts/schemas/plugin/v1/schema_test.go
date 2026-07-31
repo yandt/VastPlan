@@ -160,6 +160,20 @@ func TestParseManifest_RenderAdapterContributionIsClosedAndComplete(t *testing.T
 	}
 }
 
+func TestParseManifest_AcceptsLegacyShellLibraryListForImmutableV1Artifacts(t *testing.T) {
+	raw := []byte(`{
+  "id":"cn.vastplan.foundation.frontend.structure.shell.test","name":"test","description":"test","version":"1.0.0","publisher":"vastplan",
+  "engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},
+  "contributes":{"frontend":{"shells":[{
+    "id":"ui.structure.shell","uiContract":"^8.0.0","engineFamily":"react",
+    "libraries":[{"id":"standard","module":{"id":"cn.vastplan.foundation.frontend.structure.layout.standard","version":"1.0.0","channel":"stable"}}]
+  }]}}
+}`)
+	if _, err := ParseManifest(raw); err != nil {
+		t.Fatalf("不可变 v1 Shell 制品的旧 libraries 字段必须保持可验证: %v", err)
+	}
+}
+
 func TestParseManifest_RuntimeEngineContributionRequiresLifecycleBaseline(t *testing.T) {
 	base := `{
   "id":"cn.vastplan.foundation.frontend.runtime.engine.test","name":"test","description":"test","version":"1.0.0","publisher":"vastplan",

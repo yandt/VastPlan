@@ -359,7 +359,8 @@ func (r *runtime) start(ctx context.Context) error {
 			return fmt.Errorf("显式发布的平台控制面未收敛: %w", err)
 		}
 		if err := publishPortal("https://"+r.options.portalListen,
-			filepath.Join(r.options.root, "engineering", "deploy", "portal-application-composition.json")); err != nil {
+			filepath.Join(r.options.root, "engineering", "deploy", "portal-application-composition.json"),
+			filepath.Join(r.options.root, "engineering", "deploy", "portal-platform-catalog.json")); err != nil {
 			return fmt.Errorf("显式发布初始 Portal 组合: %w", err)
 		}
 		if err := r.waitForRecoveryStage(ctx, recoveryv1.StagePlatform, platformNodeStartedAt, 120*time.Second); err != nil {

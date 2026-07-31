@@ -41,9 +41,12 @@ func prepareDevelopmentPlatformProfile(rendered []byte, sourceDigest, stateFile 
 // platformManagementSourceDigest fingerprints the stable inputs that produce
 // the local platform Deployment. Runtime paths are normalized, while the
 // selected repository protocol remains part of the desired configuration.
-func platformManagementSourceDigest(template, application, portalCatalog []byte, repositoryProfile artifactrepositoryv1.Profile, backendBuildDigest string) (string, error) {
+func platformManagementSourceDigest(template, application, portalCatalog []byte, repositoryProfile artifactrepositoryv1.Profile, backendBuildDigest, dynamicGoFingerprint string) (string, error) {
 	if err := validateDevelopmentSourceDigest(backendBuildDigest); err != nil {
 		return "", fmt.Errorf("Backend 构建摘要无效: %w", err)
+	}
+	if err := validateDevelopmentSourceDigest(dynamicGoFingerprint); err != nil {
+		return "", fmt.Errorf("dynamic-go 制品指纹无效: %w", err)
 	}
 	normalizedProfile := repositoryProfile
 	artifactListen := "127.0.0.1:18443"
@@ -79,7 +82,7 @@ func platformManagementSourceDigest(template, application, portalCatalog []byte,
 	if err != nil {
 		return "", fmt.Errorf("规范化开发平台种子 Application Composition: %w", err)
 	}
-	return digestStrings(string(canonical), string(canonicalApplication), backendBuildDigest, "platform-management-deployment-v3"), nil
+	return digestStrings(string(canonical), string(canonicalApplication), backendBuildDigest, dynamicGoFingerprint, "platform-management-deployment-v4"), nil
 }
 
 // materializeDevelopmentDeploymentRevision gives each distinct local desired

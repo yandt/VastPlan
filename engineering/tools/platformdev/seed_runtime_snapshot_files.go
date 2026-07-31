@@ -115,7 +115,10 @@ func validateSeedRuntimeSnapshotVersion(root string, schema int, requireCapsule 
 	for _, item := range inventory.Seed {
 		ref := artifactrepository.Ref{PluginID: item.Ref.PluginID, Version: item.Ref.Version, Channel: item.Ref.Channel}
 		artifact, _, err := repository.Read(ref)
-		if err != nil || artifact.SHA256 != item.SHA256 {
+		if err != nil {
+			return nil, fmt.Errorf("复验 Seed Runtime 快照制品 %s@%s/%s: %w", ref.PluginID, ref.Version, ref.Channel, err)
+		}
+		if artifact.SHA256 != item.SHA256 {
 			return nil, fmt.Errorf("Seed Runtime 快照制品与 inventory 不匹配: %s@%s/%s", ref.PluginID, ref.Version, ref.Channel)
 		}
 		packageDigests[artifact.SHA256] = struct{}{}

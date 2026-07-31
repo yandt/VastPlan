@@ -15,7 +15,7 @@ import (
 
 const (
 	PluginID      = databasev1.RuntimePluginID
-	PluginVersion = "0.7.6"
+	PluginVersion = "0.7.7"
 )
 
 // CredentialMaterial exists only during MaterialSource.WithMaterial. Provider

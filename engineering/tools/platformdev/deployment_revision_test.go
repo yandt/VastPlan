@@ -79,8 +79,9 @@ func TestPlatformManagementSourceDigestIncludesPortalCatalog(t *testing.T) {
 		t.Fatal(err)
 	}
 	backendDigest := strings.Repeat("a", 64)
+	dynamicFingerprint := strings.Repeat("c", 64)
 	profile := artifactrepositoryv1.Profile{Version: 1, ID: "local-testing", Protocol: artifactrepositoryv1.ProtocolLocalTest, Endpoint: "unix:///tmp/vastplan/repository.sock", Channels: []string{"testing"}, DevelopmentOnly: true}
-	first, err := platformManagementSourceDigest(template, application, catalog, profile, backendDigest)
+	first, err := platformManagementSourceDigest(template, application, catalog, profile, backendDigest, dynamicFingerprint)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,14 +94,14 @@ func TestPlatformManagementSourceDigestIncludesPortalCatalog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := platformManagementSourceDigest(template, application, changedRaw, profile, backendDigest)
+	second, err := platformManagementSourceDigest(template, application, changedRaw, profile, backendDigest, dynamicFingerprint)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if first == second {
 		t.Fatal("嵌入的 Portal Catalog 变化必须改变开发平台部署指纹")
 	}
-	third, err := platformManagementSourceDigest(template, application, catalog, profile, strings.Repeat("b", 64))
+	third, err := platformManagementSourceDigest(template, application, catalog, profile, strings.Repeat("b", 64), dynamicFingerprint)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,12 +117,19 @@ func TestPlatformManagementSourceDigestIncludesPortalCatalog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fourth, err := platformManagementSourceDigest(template, changedApplicationRaw, catalog, profile, backendDigest)
+	fourth, err := platformManagementSourceDigest(template, changedApplicationRaw, catalog, profile, backendDigest, dynamicFingerprint)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if first == fourth {
 		t.Fatal("种子 Application Composition 变化必须改变开发平台部署指纹")
+	}
+	fifth, err := platformManagementSourceDigest(template, application, catalog, profile, backendDigest, strings.Repeat("d", 64))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == fifth {
+		t.Fatal("dynamic-go 制品 ABI 指纹变化必须改变开发平台部署指纹")
 	}
 }
 

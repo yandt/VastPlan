@@ -64,14 +64,33 @@ process_command() {
   ps -p "$1" -o command= 2>/dev/null || true
 }
 
+platform_process_executable() {
+  local pid="$1"
+  if ! command -v lsof >/dev/null 2>&1; then
+    return 1
+  fi
+  lsof -a -p "$pid" -d txt -Fn 2>/dev/null | awk '/^n/ { print substr($0, 2); exit }'
+}
+
 is_platform_process() {
   local pid="$1"
-  local command
+  local command executable
   command="$(process_command "$pid")"
-  case "$command" in
-    "$BIN"|"$BIN "*) return 0 ;;
-    *) return 1 ;;
-  esac
+  if [ -n "$command" ]; then
+    case "$command" in
+      "$BIN"|"$BIN "*) return 0 ;;
+      *) return 1 ;;
+    esac
+  fi
+  # Some managed/sandboxed shells allow signalling the process but deny ps.
+  # Verify the executable through its open text image before trusting the PID.
+  executable="$(platform_process_executable "$pid" || true)"
+  [ "$executable" = "$BIN" ]
+}
+
+platform_process_alive() {
+  local pid="$1"
+  kill -0 "$pid" 2>/dev/null || is_platform_process "$pid"
 }
 
 discover_platform_pid() {
@@ -82,10 +101,18 @@ discover_platform_pid() {
         if kill -0 "$pid" 2>/dev/null; then
           printf '%s' "$pid"
           return 0
-        fi
-        ;;
+      fi
+      ;;
     esac
   done < <(ps -axo pid=,command= 2>/dev/null || true)
+  if command -v lsof >/dev/null 2>&1; then
+    while read -r pid; do
+      if [ -n "$pid" ] && is_platform_process "$pid"; then
+        printf '%s' "$pid"
+        return 0
+      fi
+    done < <(lsof -nP -iTCP:"$GATEWAY_PORT" -sTCP:LISTEN -t 2>/dev/null | unique_pids || true)
+  fi
   return 1
 }
 
@@ -100,7 +127,7 @@ running_pid() {
         pid=""
         ;;
     esac
-    if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
+    if [ -n "$pid" ] && ! platform_process_alive "$pid"; then
       rm -f "$PID_FILE"
       pid=""
     fi
