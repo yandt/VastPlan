@@ -260,6 +260,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [ADR-0177 Portal 外观本地偏好与账户入口](decisions/ADR-0177-Portal外观本地偏好与账户入口.md)
 - [ADR-0178 插件专属扩展点与可信扩展图](decisions/ADR-0178-插件专属扩展点与可信扩展图.md)
 - [ADR-0179 Ant Design 单实现与 Renderer 协议保留](decisions/ADR-0179-Ant-Design单实现与Renderer协议保留.md)
+- [ADR-0180 Catalog 驱动的统一插件自发现与本地插件库](decisions/ADR-0180-Catalog驱动的统一插件自发现与本地插件库.md)
 
 ### 通用版本账本
 
@@ -273,7 +274,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 
 ### 制品仓库与测试发布
 
-- [制品仓库与测试发布](architecture/制品仓库与测试发布.md) —— Seed/托管仓库边界、目录与包解析、测试发布、Provider 迁移和生命周期治理
+- [制品仓库与测试发布](architecture/制品仓库与测试发布.md) —— Seed/托管仓库边界、Local Plugin Library、统一自发现、目录与包解析、测试发布、Provider 迁移和生命周期治理
 
 ### 插件（具体插件文档）
 - [说明](plugins/README.md) —— 具体插件文档规则
