@@ -54,7 +54,7 @@ func (r *reconcileRecovery) start(options reconcileOptions, lease *nodeLeaseGuar
 	if err != nil {
 		return err
 	}
-	if err := r.controller.Observe(actual); err != nil {
+	if err := r.observe(actual); err != nil {
 		return err
 	}
 	if options.recoveryListen != "" {

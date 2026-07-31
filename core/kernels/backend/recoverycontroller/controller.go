@@ -14,7 +14,6 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 
 	recoveryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/recovery/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 )
 
@@ -71,21 +70,15 @@ func (c *Controller) AttachLease(lease LeasePublisher) error {
 	return nil
 }
 
-// Observe is suitable for Reconciler.StateObserver. It never reads desired
+// Observe accepts only the bounded recovery contract. It never reads desired
 // configuration and cannot cause publication or plugin lifecycle changes.
-func (c *Controller) Observe(actual nodeagent.ActualState) error {
+func (c *Controller) Observe(observation recoveryv1.RuntimeObservation) error {
 	if c == nil {
 		return errors.New("Recovery Controller 未配置")
 	}
 	now := c.now()
-	units := make(map[string]recoveryv1.UnitObservation, len(actual.Units))
-	for id, unit := range actual.Units {
-		units[id] = recoveryv1.UnitObservation{Phase: string(unit.Phase), Readiness: unit.Readiness, Candidate: unit.Candidate != nil}
-	}
-	report := recoveryv1.BuildNodeReport(c.Capsule, recoveryv1.RuntimeObservation{
-		NodeID: c.NodeID, ObservedRevision: actual.ObservedRevision, AppliedRevision: actual.AppliedRevision,
-		UpdatedAt: actual.UpdatedAt, Units: units, ReconcileFailed: len(actual.Errors) > 0,
-	}, recoveryv1.EvaluationPolicy{Now: now, MaxAge: c.maxAge()})
+	observation.NodeID = c.NodeID
+	report := recoveryv1.BuildNodeReport(c.Capsule, observation, recoveryv1.EvaluationPolicy{Now: now, MaxAge: c.maxAge()})
 	status := recoveryv1.Aggregate(c.Capsule, []recoveryv1.NodeReport{report}, now, c.maxAge())
 	if err := writeStatusFile(c.StatusFile, status); err != nil {
 		return err

@@ -33,3 +33,4 @@
 ## 补充记录
 
 - 2026-07-21：发布者 `Attestation` 证明 DTO 从 `pluginservice` 实现包下沉到 `core/shared/go/artifacttrust`，`pluginservice` 仅保留兼容别名。它不是新的制品身份真相源，而是跨可信制品源和 Bootstrap Upgrade 传递的签名证明 wire value；验签能力仍只属于可信宿主。这消除了 `bootstrapupgrade -> pluginservice` 的同级实现依赖。
+- 2026-07-31：Recovery Controller 不再直接接收 `nodeagent.ActualState`。Backend 组合根负责将实际态裁剪为 `recovery/v1.RuntimeObservation`，Controller 只消费中立有界契约；PID、错误文本、路径和制品实现状态不会越过恢复边界，也不需要新增 `recoverycontroller -> nodeagent` 同级依赖例外。

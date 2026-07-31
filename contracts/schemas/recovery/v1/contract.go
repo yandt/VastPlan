@@ -1,3 +1,5 @@
+// Package recoveryv1 defines bounded Seed Recovery Capsule, runtime
+// observation, signed node report and aggregate status contracts.
 package recoveryv1
 
 import pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"

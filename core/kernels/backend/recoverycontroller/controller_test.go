@@ -17,7 +17,6 @@ import (
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	recoveryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/recovery/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
 	"cdsoft.com.cn/VastPlan/core/shared/go/bootstrapinventory"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 )
@@ -29,7 +28,7 @@ func (l *recordingLease) UpdateRecovery(report recoveryv1.NodeReport) error {
 	return nil
 }
 
-func TestControllerProjectsActualStateToFileLeaseAndHTTP(t *testing.T) {
+func TestControllerProjectsRuntimeObservationToFileLeaseAndHTTP(t *testing.T) {
 	now := time.Now().UTC()
 	statusFile := filepath.Join(t.TempDir(), "recovery-status.json")
 	controller, err := New(testCapsule(1), "node-a", "acme", "platform", statusFile)
@@ -41,7 +40,7 @@ func TestControllerProjectsActualStateToFileLeaseAndHTTP(t *testing.T) {
 	if err := controller.AttachLease(lease); err != nil {
 		t.Fatal(err)
 	}
-	if err := controller.Observe(readyActualState("node-a", now)); err != nil {
+	if err := controller.Observe(readyRuntimeObservation("node-a", now)); err != nil {
 		t.Fatal(err)
 	}
 	if lease.report.Units["repository"].Status != recoveryv1.UnitReady {
@@ -119,7 +118,7 @@ func TestControllerFallsBackToExplicitLocalScopeWhenClusterUnavailable(t *testin
 	controller.Nodes = buckets.Nodes
 	controller.Verify = func(record controlplane.NodeRecord) error { return record.ValidateBasic() }
 	controller.Now = func() time.Time { return now }
-	if err := controller.Observe(readyActualState("node-a", now)); err != nil {
+	if err := controller.Observe(readyRuntimeObservation("node-a", now)); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -171,13 +170,13 @@ func testCapsule(minReady uint16) recoveryv1.Capsule {
 	}
 }
 
-func readyActualState(nodeID string, now time.Time) nodeagent.ActualState {
-	return nodeagent.ActualState{
-		Version: 4, NodeID: nodeID, ObservedRevision: 2, AppliedRevision: 2, UpdatedAt: now,
-		Units: map[string]nodeagent.UnitState{
-			"repository": {Phase: nodeagent.PhaseActive, Readiness: "ready"},
-			"deployment": {Phase: nodeagent.PhaseActive, Readiness: "ready"},
-			"database":   {Phase: nodeagent.PhaseActive, Readiness: "ready"},
+func readyRuntimeObservation(nodeID string, now time.Time) recoveryv1.RuntimeObservation {
+	return recoveryv1.RuntimeObservation{
+		NodeID: nodeID, ObservedRevision: 2, AppliedRevision: 2, UpdatedAt: now,
+		Units: map[string]recoveryv1.UnitObservation{
+			"repository": {Phase: "active", Readiness: "ready"},
+			"deployment": {Phase: "active", Readiness: "ready"},
+			"database":   {Phase: "active", Readiness: "ready"},
 		},
 	}
 }

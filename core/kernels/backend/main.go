@@ -262,7 +262,7 @@ func runReconcile(args []string) (runErr error) {
 		return err
 	}
 	if recovery != nil {
-		reconciler.StateObserver = recovery.controller.Observe
+		reconciler.StateObserver = recovery.observe
 		defer func() { runErr = errors.Join(runErr, recovery.close()) }()
 	}
 	liveness := &servicewatchdog.Liveness{}
