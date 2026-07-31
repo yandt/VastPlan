@@ -48,6 +48,7 @@ export function StandardShell(props: UIShellProps) {
   const activeGroup = allGroups.find((group) => group.id === composition.activeNavigationPath?.rootGroupID);
   const groupKey = allGroups.map((group) => group.id).join("\u0000");
   const [selectedGroupID, setSelectedGroupID] = useState(activeGroup?.id ?? allGroups[0]?.id);
+  const [pendingGroupNavigationID, setPendingGroupNavigationID] = useState<string>();
   useEffect(() => {
     setSelectedGroupID((selected) => activeGroup?.id ?? (allGroups.some((group) => group.id === selected) ? selected : allGroups[0]?.id));
   }, [activeGroup?.id, groupKey]);
@@ -71,6 +72,17 @@ export function StandardShell(props: UIShellProps) {
     onNavigate(page.id);
     setMobileOpen(false);
   };
+  const selectGroup = (id: string) => {
+    if (id === selectedGroup?.id) return;
+    setSelectedGroupID(id);
+    setPendingGroupNavigationID(id);
+  };
+  useEffect(() => {
+    if (pendingGroupNavigationID === undefined || selectedGroup?.id !== pendingGroupNavigationID) return;
+    setPendingGroupNavigationID(undefined);
+    const firstPageID = firstNavigablePageID(selectedGroup);
+    if (firstPageID !== undefined) navigate(firstPageID);
+  }, [pendingGroupNavigationID, selectedGroup]);
 
   const page = composition.activePage;
   const pageHeader = page === undefined ? null : <header className="vp-page-header">
@@ -107,8 +119,8 @@ export function StandardShell(props: UIShellProps) {
         mainGroups={mainGroups}
         settingsGroups={settingsGroups}
         selectedGroup={selectedGroup}
-        account={accountGroup === undefined ? null : <PortalAccountControl account={props.account} selected={selectedGroup?.id === accountGroup.id} onSelect={() => setSelectedGroupID(accountGroup.id)} />}
-        onSelectGroup={setSelectedGroupID}
+        account={accountGroup === undefined ? null : <PortalAccountControl account={props.account} selected={selectedGroup?.id === accountGroup.id} onSelect={() => selectGroup(accountGroup.id)} />}
+        onSelectGroup={selectGroup}
         onNavigate={navigate}
       /> : null}
       <div className="vp-shell-content">
@@ -264,6 +276,11 @@ function moveRailFocus(event: KeyboardEvent<HTMLElement>) {
 
 export function groups(composition: UIShellProps["composition"], zones: readonly NavigationZone[]): readonly PortalNavigationGroup[] {
   return zones.flatMap((zone) => composition.navigation[zone]);
+}
+
+/** Returns the first routeable leaf in the same order as the second-level menu. */
+export function firstNavigablePageID(group: PortalNavigationGroup): string | undefined {
+  return group.pages[0]?.id ?? group.children.flatMap((child) => child.pages)[0]?.id;
 }
 
 function pagePath(composition: UIShellProps["composition"], navigationID: string): string | undefined {

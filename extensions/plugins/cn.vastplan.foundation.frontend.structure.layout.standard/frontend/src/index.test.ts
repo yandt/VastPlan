@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { uiContractVersion } from "@vastplan/ui-contract";
 import type { PortalSlotContribution, ShellCompositionModel } from "@vastplan/ui-primitives";
-import adapter, { groups, standardShellCSS } from "./index";
+import adapter, { firstNavigablePageID, groups, standardShellCSS } from "./index";
 import { hasRegionContent } from "./region-visibility";
 
 function composition(overrides: Partial<ShellCompositionModel> = {}): ShellCompositionModel {
@@ -74,5 +74,11 @@ describe("standard shell layout", () => {
       settings: [{ id: "settings", label: "设置", zone: "settings", icon: "settings", pages: [], children: [] }],
     } });
     expect(groups(model, ["primary", "secondary", "settings"]).map((group) => group.id)).toEqual(["operations", "reports", "settings"]);
+  });
+
+  it("enters the first direct page, then the first nested page, after a main-menu switch", () => {
+    expect(firstNavigablePageID({ id: "direct", label: "Direct", zone: "primary", icon: "menu", pages: [{ id: "first", label: "First", zone: "primary" }], children: [{ id: "nested", parentID: "direct", label: "Nested", zone: "primary", icon: "menu", pages: [{ id: "later", label: "Later", zone: "primary" }] }] })).toBe("first");
+    expect(firstNavigablePageID({ id: "nested", label: "Nested", zone: "primary", icon: "menu", pages: [], children: [{ id: "child", parentID: "nested", label: "Child", zone: "primary", icon: "menu", pages: [{ id: "first-child", label: "First child", zone: "primary" }] }] })).toBe("first-child");
+    expect(firstNavigablePageID({ id: "empty", label: "Empty", zone: "primary", icon: "menu", pages: [], children: [] })).toBeUndefined();
   });
 });
