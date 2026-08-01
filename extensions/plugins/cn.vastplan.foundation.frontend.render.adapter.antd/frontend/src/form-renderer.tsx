@@ -18,6 +18,8 @@ const emptyFormContext: Readonly<Record<string, unknown>> = Object.freeze({});
 const antdWidgets = generateWidgets();
 const compactFormTheme = { components: { Form: { itemMarginBottom: 0 } } };
 const controlAlignmentCSS = `
+.vp-antd-form-controls-start,.vp-antd-form-controls-end,.vp-antd-form-controls-start>.rjsf,.vp-antd-form-controls-end>.rjsf{width:100%;min-width:0}
+.vp-antd-form-object{width:100%;min-width:0}
 .vp-antd-form-controls-start .ant-form-item-control-input-content,.vp-antd-form-controls-end .ant-form-item-control-input-content{display:flex;min-width:0}
 .vp-antd-form-controls-start .ant-form-item-control-input-content{justify-content:flex-start}
 .vp-antd-form-controls-end .ant-form-item-control-input-content{justify-content:flex-end}
@@ -68,10 +70,10 @@ type PresentedObjectProps = ObjectFieldTemplateProps & { presentation?: FormPres
 function PresentedObject({ presentation, activeSection, onSectionChange, ...props }: PresentedObjectProps) {
   const i18n = usePortalI18n();
   const compactRoot = props.fieldPathId.path.length === 0 && presentation?.layout === "compact";
-  if (props.fieldPathId.path.length !== 0) return <section>{props.title === "" ? null : <Typography.Title level={5}>{props.title}</Typography.Title>}{props.description}{props.properties.filter((property) => !property.hidden).map((property) => <div key={property.name}>{property.content}</div>)}</section>;
+  if (props.fieldPathId.path.length !== 0) return <section className="vp-antd-form-object">{props.title === "" ? null : <Typography.Title level={5}>{props.title}</Typography.Title>}{props.description}{props.properties.filter((property) => !property.hidden).map((property) => <div key={property.name}>{property.content}</div>)}</section>;
   if (presentation?.sections === undefined || presentation.sections.length === 0) {
     const columns = formGridColumns(presentation);
-    return <section>{compactRoot || props.title === "" ? null : <Typography.Title level={5}>{props.title}</Typography.Title>}{props.description}<div className={formGridClassName} style={formGridStyle(presentation)}>{props.properties.filter((property) => !property.hidden).map((property) => {
+    return <section className="vp-antd-form-object">{compactRoot || props.title === "" ? null : <Typography.Title level={5}>{props.title}</Typography.Title>}{props.description}<div className={formGridClassName} style={formGridStyle(presentation)}>{props.properties.filter((property) => !property.hidden).map((property) => {
       const span = presentation?.fields?.find((field) => formFieldName(field.pointer) === property.name)?.span ?? 1;
       return <div key={property.name} style={{ gridColumn: `span ${Math.min(Math.max(1, span), columns)}` }}>{property.content}</div>;
     })}</div></section>;

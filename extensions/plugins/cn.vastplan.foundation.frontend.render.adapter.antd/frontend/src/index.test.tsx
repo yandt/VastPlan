@@ -153,6 +153,9 @@ describe("Ant Design portal UI renderer", () => {
     /></PortalI18nProvider>);
     expect(markup).toContain("vp-antd-inside-inline-field");
     expect(markup).toContain("ant-select-outlined");
+    expect(markup).toContain(".vp-antd-form-controls-start&gt;.rjsf,.vp-antd-form-controls-end&gt;.rjsf{width:100%;min-width:0}");
+    expect(markup).toContain(".vp-antd-form-object{width:100%;min-width:0}");
+    expect(markup).toContain('class="vp-antd-form-object"');
     expect(markup).toContain(".vp-inside-inline-control&gt;.ant-select{width:100%;border:0!important");
     expect(markup).toContain('aria-label="Status"');
     expect(markup).toContain("ant-select-clear");
