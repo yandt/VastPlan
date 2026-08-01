@@ -15,18 +15,6 @@ export function filterPanelColumns(panel: FilterPanelSpec): ResponsiveColumnCoun
   return panel.layout?.columns ?? defaultFilterColumns;
 }
 
-/**
- * A direct-query row has no action cell to preserve, so it should use all available
- * width instead of leaving unused default-grid columns after the final field.
- */
-export function effectiveFilterPanelColumns(panel: FilterPanelSpec): ResponsiveColumnCount {
-  const configured = filterPanelColumns(panel);
-  if (!shouldAutoApplyFilterPanel(panel, configured)) return configured;
-  const fieldCount = Math.max(1, panel.fields.length);
-  if (typeof configured === "number") return Math.min(configured, fieldCount);
-  return Object.freeze(Object.fromEntries(Object.entries(configured).map(([breakpoint, count]) => [breakpoint, Math.min(count, fieldCount)]))) as Exclude<ResponsiveColumnCount, number>;
-}
-
 /** 单行筛选直接响应；超过当前桌面列数时使用查询草稿模式。 */
 export function shouldAutoApplyFilterPanel(panel: FilterPanelSpec, columns: ResponsiveColumnCount = defaultFilterColumns): boolean {
   return panel.apply?.mode !== "explicit" && panel.fields.length <= largestColumnCount(columns);
@@ -70,9 +58,8 @@ export function FilterPanel({ panel, value, querying, size = "md", onApply, inse
   const ui = usePortalUI();
   const i18n = usePortalI18n();
   const fields = panel.fields;
-  const configuredColumns = filterPanelColumns(panel);
-  const autoApply = shouldAutoApplyFilterPanel(panel, configuredColumns);
-  const columns = effectiveFilterPanelColumns(panel);
+  const columns = filterPanelColumns(panel);
+  const autoApply = shouldAutoApplyFilterPanel(panel, columns);
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
   const clear = () => { setDraft({}); onApply({}); };
