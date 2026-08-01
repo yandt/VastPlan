@@ -62,6 +62,16 @@ describe("Portal aggregate workspace", () => {
     expect(result).toMatchObject({ total: 1, items: [{ id: "operations", workingRevision: 2, status: "Draft", releaseAvailable: false }] });
   });
 
+  it("defines the Portal status as a plain responsive two-column summary", async () => {
+    const page = createPortalPage(new PortalControlClient({ fetch: async () => response({ portals: [] }) }));
+    await expect(page.loadSummary?.(new AbortController().signal)).resolves.toMatchObject({
+      title: "Portal 状态",
+      appearance: "plain",
+      columns: { xs: 1, sm: 1, md: 2, lg: 2, xl: 2 },
+      metrics: [{ id: "portals" }, { id: "online" }],
+    });
+  });
+
   it("shows only negotiated version actions and hides all of them while unavailable", () => {
     const workingCopy = { tenantId: "tenant-a", portalId: "operations", revision: 2, configuration: configuration(), digest: "a".repeat(64), createdAt: "2026-07-30T00:00:00Z", updatedAt: "2026-07-30T00:00:00Z" };
     const portal: Portal = {

@@ -1,6 +1,6 @@
 # UI 工作台组合框架
 
-> 状态：FilterPanel、Collection、RecordDetail/MasterDetail/TreeDetail、WorkspacePage、表单、Overlay、Table 行虚拟化、统一拖拽与延迟 Dashboard Grid 基础均已实施｜最后更新：2026-07-31
+> 状态：FilterPanel、Collection、RecordDetail/MasterDetail/TreeDetail、WorkspacePage、表单、Overlay、Table 行虚拟化、统一拖拽与延迟 Dashboard Grid 基础均已实施｜最后更新：2026-08-02
 >
 > 本文是 Portal 列表、卡片、动作、表单与 Overlay 工作流组合规范的单一真相源。架构取舍见 [ADR-0082](../decisions/ADR-0082-前端工作台组合框架.md)；命名边界见 [ADR-0083](../decisions/ADR-0083-前端UI分层术语与插件命名空间.md) 与 [ADR-0104](../decisions/ADR-0104-Frontend-Runtime-Engine与React单实现.md)；Portal 装载与基础插件边界见《[前端门户内核](前端门户内核.md)》，视觉基线见《[Portal 设计系统](../design/DESIGN.md)》。
 
@@ -89,6 +89,8 @@ CollectionLoader(query, signal) -> CollectionResult
 ├── nextCursor?                    # 仅 cursor 查询允许
 └── facets? / permittedActions?    # 服务端事实，不是浏览器猜测
 ```
+
+Collection 可选的状态摘要由 `CollectionSummary` 数据驱动定义。`columns` 使用与 Grid 相同的 `xs…xl` 响应式列数，单项 `span` 可在各断点跨列；功能插件不能传 CSS Grid、Ant Design `Descriptions.Item` 或 React 节点。`appearance` 默认 `panel` 以兼容现有页面，信息已经拥有明确页面语境时可选择 `plain`，由 Workbench 去掉装饰性外层 Panel，但标题、标签、状态色和响应式行为仍由统一 Descriptions 语义负责。
 
 表格行操作由 Workbench 统一投影：功能插件只声明 `placement: record.row` 的语义动作，Workbench 自动追加不可隐藏的末列“操作”，在横向滚动时固定在右侧并保持内容居中；每行先按 `visibleWhen` 过滤，最多两个动作以图标 + Tooltip 直接显示，剩余动作进入每行一个“图标 + 标签”的紧凑“更多行操作”浮层。直接动作、更多触发器和更多菜单内图标均使用同一 `sm` 操作配方（12px 图标），不能由渲染适配器默认尺寸漂移。`ActionMenuPopover` 是 Workbench 内部通用组合，统一记录级和页面级溢出动作的数据投影、内容宽度、截断、危险/禁用态、初始焦点和选择后关闭；具体 Pattern 不再自行拼装 Popover + Menu。页面级操作使用独立 `PageActionSpec` 并只挂载至 `page.header.end`，不得与行操作混用来规避这一布局规则。
 
@@ -183,7 +185,7 @@ Record Foundation 使用 TypeScript + React：代码直接运行在现有浏览�
 ## 5. 实施顺序与验收
 
 1. 已完成：`ui.workflow.workbench` descriptor、Platform Profile/Catalog 单例校验、`@vastplan/workbench-sdk` 与当前 `@vastplan/ui-contract` Collection 类型，以及 Ant Design 行选择语义。
-2. 已完成：一级 `FilterPanel` 契约、独立目录、紧凑表单、响应式提交策略，以及 Collection/MasterDetail 组合；`CollectionWorkbench` 的表格、数据概览、工具栏、分页、列偏好、行/批量操作均复用该面板。
+2. 已完成：一级 `FilterPanel` 契约、独立目录、紧凑表单、响应式提交策略，以及 Collection/MasterDetail 组合；`CollectionWorkbench` 的表格、支持响应式多列/跨列及 plain/panel 呈现的数据概览、工具栏、分页、列偏好、行/批量操作均复用统一契约。
 3. 已完成：Card cursor 模式、共享查询状态、稳定键去重、重复 cursor 防护、手动/视口增量加载，以及 Ant Design `DataCard` 语义组件。
 4. 已完成：`FormPresentation`、`FormWorkflow`、默认 FormDialog 与显式 Page 表单，以及 Ant Design 的分区、标签、步骤、分栏和条件字段语义；全局设置是非敏感 fixture，凭证和数据库连接验证 `secretMaterial` 一次性秘密边界。
 5. 已完成：首方功能插件已迁移到当前 4.x 契约；Portal 治理按 Profile/Application/Binding/Activation 分页，部署管理复用动态 Form 和预览/审计 Overlay。生产构建与 `engineering/arch` 同时拒绝遗留基础组件 import、UI 框架 import 和裸页面注册。

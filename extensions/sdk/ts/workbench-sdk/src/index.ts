@@ -1,4 +1,4 @@
-import type { ActionSpec, CollectionDensity, CollectionSpec, ColumnSpec, ComponentSize, FilterPanelSpec, FormPresentation, FormSchema, FormWorkflow, JSONValue, LocalizedText, PageActionSpec, PageBodyLayout, RecordDetailSpec, RecordMasterSpec, RecordTreeSpec } from "@vastplan/ui-contract";
+import type { ActionSpec, CollectionDensity, CollectionSpec, ColumnSpec, ComponentSize, FilterPanelSpec, FormPresentation, FormSchema, FormWorkflow, JSONValue, LocalizedText, PageActionSpec, PageBodyLayout, RecordDetailSpec, RecordMasterSpec, RecordTreeSpec, ResponsiveColumnCount } from "@vastplan/ui-contract";
 import { formControlAlignments } from "@vastplan/ui-contract";
 import { pageBodyLayouts } from "@vastplan/ui-contract";
 import type { PluginExtensionAccess } from "@vastplan/plugin-extension-contract";
@@ -51,10 +51,14 @@ export interface CollectionSummaryMetric {
   label: LocalizedText;
   value: string | number;
   tone?: "neutral" | "info" | "success" | "warning" | "error";
+  span?: ResponsiveColumnCount;
 }
 
 export interface CollectionSummary {
   title?: LocalizedText;
+  /** 默认保留 Panel 兼容现有页面；plain 仅移除装饰性外框。 */
+  appearance?: "panel" | "plain";
+  columns?: ResponsiveColumnCount;
   metrics: readonly CollectionSummaryMetric[];
 }
 

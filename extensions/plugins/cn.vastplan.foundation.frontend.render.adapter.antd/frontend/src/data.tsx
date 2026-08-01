@@ -1,7 +1,7 @@
 import { Card, Checkbox, Descriptions as AntdDescriptions, Pagination as AntdPagination, Select as AntdSelect, Table as AntdTable, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { ReactNode } from "react";
-import type { DataCardProps, PaginationProps, ResponsiveColumns, SelectProps, StatusTone, TableProps } from "@vastplan/ui-primitives";
+import type { DataCardProps, DescriptionsProps, PaginationProps, SelectProps, StatusTone, TableProps } from "@vastplan/ui-primitives";
 import { componentSizeRecipes } from "@vastplan/ui-primitives";
 import { antdComponentSize } from "./component-size";
 
@@ -69,9 +69,8 @@ export function Pagination({ page, pageSize, pageSizeOptions, total, disabled, a
   /></div>;
 }
 
-export function Descriptions({ title, items, columns = 2 }: { title?: ReactNode; items: Array<{ id: string; label: ReactNode; value: ReactNode }>; columns?: ResponsiveColumns }) {
-  const column = typeof columns === "number" ? columns : columns.xs ?? columns.sm ?? columns.md ?? columns.lg ?? columns.xl ?? 2;
-  return <AntdDescriptions title={title} bordered column={column} items={items.map((item) => ({ key: item.id, label: item.label, children: item.value }))} />;
+export function Descriptions({ title, items, columns = 2 }: DescriptionsProps) {
+  return <AntdDescriptions title={title} bordered column={columns} items={items.map((item) => ({ key: item.id, label: item.label, children: item.value, span: item.span }))} />;
 }
 
 const statusColors: Record<StatusTone, string | undefined> = { neutral: undefined, info: "blue", success: "green", warning: "orange", error: "red" };

@@ -258,7 +258,19 @@ export interface PaginationProps {
   onChange(page: number, pageSize: number): void;
 }
 
-export interface DescriptionItem { id: string; label: ReactNode; value: ReactNode; }
+export interface DescriptionItem {
+  id: string;
+  label: ReactNode;
+  value: ReactNode;
+  /** 允许一个语义描述项在不同断点占用不同列数。 */
+  span?: ResponsiveColumns;
+}
+
+export interface DescriptionsProps {
+  title?: ReactNode;
+  items: DescriptionItem[];
+  columns?: ResponsiveColumns;
+}
 export type StatusTone = "neutral" | "info" | "success" | "warning" | "error";
 export interface SemanticThemeTokens {
   color: {
@@ -302,7 +314,7 @@ export interface PortalUI {
   RecordNavigationList: ComponentType<RecordNavigationListProps>;
   RecordTree: ComponentType<RecordTreeProps>;
   Pagination: ComponentType<PaginationProps>;
-  Descriptions: ComponentType<{ title?: ReactNode; items: DescriptionItem[]; columns?: ResponsiveColumns }>;
+  Descriptions: ComponentType<DescriptionsProps>;
   Status: ComponentType<{ tone?: StatusTone; children: ReactNode }>;
   Icon: ComponentType<import("./icon.js").VastPlanIconProps>;
   theme: { mode: "light" | "dark" | "system"; tokens: SemanticThemeTokens };

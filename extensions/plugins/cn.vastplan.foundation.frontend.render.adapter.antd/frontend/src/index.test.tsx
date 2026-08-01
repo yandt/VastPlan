@@ -76,6 +76,20 @@ describe("Ant Design portal UI renderer", () => {
     expect(markup).toContain("ant-col-xl-8");
   });
 
+  it("preserves responsive description columns and item spans", () => {
+    const Descriptions = antdPortalUIComponents.Descriptions;
+    const markup = renderToStaticMarkup(<Descriptions
+      columns={{ xs: 1, md: 3 }}
+      items={[
+        { id: "identity", label: "Identity", value: "Portal A", span: { xs: 1, md: 2 } },
+        { id: "status", label: "Status", value: "Ready" },
+      ]}
+    />);
+    expect(markup).toContain("Identity");
+    expect(markup).toContain("Portal A");
+    expect(markup).toContain("Status");
+  });
+
   it("keeps links and accessible record navigation semantics", () => {
     const Menu = antdPortalUIComponents.Menu;
     const List = antdPortalUIComponents.RecordNavigationList;

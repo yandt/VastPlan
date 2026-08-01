@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ActionSpec, CollectionDensity } from "@vastplan/ui-contract";
 import { usePortalI18n, usePortalUI, type PageRefreshSignal, type WorkbenchPreferencePort } from "@vastplan/ui-primitives";
-import type { CollectionActionContext, CollectionPageDefinition, CollectionSummary, WorkbenchPresentationConfig } from "@vastplan/workbench-sdk";
+import type { CollectionActionContext, CollectionPageDefinition, CollectionSummary as CollectionSummaryDefinition, WorkbenchPresentationConfig } from "@vastplan/workbench-sdk";
 import { CollectionCards } from "./CollectionCards.js";
 import { FilterPanel } from "../filter/FilterPanel.js";
 import { CollectionPreferencesPopover } from "./CollectionPreferencesPopover.js";
 import { CollectionTable } from "./CollectionTable.js";
 import { CollectionToolbar } from "./CollectionToolbar.js";
+import { CollectionSummary } from "./CollectionSummary.js";
 import { collectionDensity, collectionDensityOptions } from "./density.js";
 import { collectionSelectionMode, type CollectionRow } from "./model.js";
 import { collectionPreferenceFromColumns, readCollectionColumns, writeCollectionColumns } from "./preferences.js";
@@ -28,7 +29,7 @@ export function CollectionPage({ page, preferenceScope, preferences, presentatio
   const [pageNumber, setPageNumber] = useState(1);
   const [pageSize, setPageSize] = useState(() => validPageSize(collection, initialPreference?.pageSize));
   const [density, setDensity] = useState(() => collectionDensity(collection, presentation, initialPreference?.density));
-  const [summary, setSummary] = useState<CollectionSummary>();
+  const [summary, setSummary] = useState<CollectionSummaryDefinition>();
   const [summaryFailure, setSummaryFailure] = useState<string>();
   const [selectedKeys, setSelectedKeys] = useState<readonly string[]>([]);
   const [columns, setColumns] = useState(() => readCollectionColumns(preferenceScope, collection, initialPreference));
@@ -113,7 +114,7 @@ export function CollectionPage({ page, preferenceScope, preferences, presentatio
   const hasFilters = collection.filterPanel !== undefined;
 
   return <WorkbenchPageFlow>
-    {summary === undefined ? null : <div style={{ width: "100%", minWidth: 0 }}><ui.Panel title={summary.title === undefined ? undefined : i18n.text(summary.title)}><ui.Descriptions columns={{ xs: 1, sm: 1, md: 2, lg: 2, xl: 3 }} items={summary.metrics.map((metric) => ({ id: metric.id, label: i18n.text(metric.label), value: metric.tone === undefined ? metric.value : <ui.Status tone={metric.tone}>{metric.value}</ui.Status> }))} /></ui.Panel></div>}
+    {summary === undefined ? null : <CollectionSummary summary={summary} />}
     {hasFilters ? <ui.Stack gap="sm">
       <div style={{ width: "100%", minWidth: 0 }}><FilterPanel panel={collection.filterPanel!} value={filters} querying={data.loading || data.refreshing || data.loadingMore} size="sm" onApply={(value) => { setFilters(value); setPageNumber(1); }} /></div>
       <div style={{ width: "100%", minWidth: 0 }}><CollectionToolbar hasFilters={hasFilters} refreshing={data.refreshing} selectedCount={selected.length} toolbarActions={toolbarActions} bulkActions={bulkActions} onRefresh={refresh} preferences={collection.view === "table" && collection.preferences !== undefined ? <CollectionPreferencesPopover collection={collection} columns={columns} density={density} densityOptions={densityOptions} onChange={updatePreferences} /> : undefined} onRunAction={(action) => void runAction(action, selected)} /></div>
