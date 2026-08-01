@@ -454,7 +454,7 @@ manage_seed_admin() {
     fi
     password_file="$temporary_password_file"
   fi
-  local args=(-state-file "$STATE_ROOT/state/authentication/seed-access.json")
+  local args=(-state-file "$STATE_ROOT/state/authentication/seed-access.json" -output human)
   [ -z "$operator" ] || args+=(-operator "$operator")
   [ -z "$password_file" ] || args+=(-password-file "$password_file")
   local status=0
@@ -464,6 +464,9 @@ manage_seed_admin() {
     status=$?
   fi
   [ -z "$temporary_password_file" ] || rm -f -- "$temporary_password_file"
+  if [ "$status" -eq 0 ] && [ "$action" = init ]; then
+    printf '\n下一步，发布并启动平台基础组合：\n  %s bootstrap --rebuild-seed\n' "$ROOT/engineering/tools/platform-dev.sh"
+  fi
   return "$status"
 }
 

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -19,6 +20,7 @@ func main() {
 	operator := flag.String("operator", "", "首次初始化的 Seed Operator ID")
 	passwordFile := flag.String("password-file", "", "owner-only 密码文件；初始化时必填")
 	proofFile := flag.String("proof-file", "", "owner-only 本机恢复证明文件")
+	output := flag.String("output", "json", "输出格式：json 或 human")
 	ttl := flag.Duration("ttl", 10*time.Minute, "恢复租约有效期，最长 15 分钟")
 	flag.Parse()
 	if flag.NArg() != 1 || *stateFile == "" {
@@ -26,6 +28,9 @@ func main() {
 	}
 	store := seedaccess.FileStore{Path: *stateFile}
 	command := flag.Arg(0)
+	if *output != "json" && *output != "human" {
+		fatal(errors.New("输出格式只支持 json 或 human"))
+	}
 	var verifier seedaccess.LocalRecoveryVerifier
 	if *proofFile != "" {
 		verifier = seedaccess.FileRecoveryProofVerifier{Path: *proofFile}
@@ -45,13 +50,13 @@ func main() {
 		if err != nil {
 			fatal(err)
 		}
-		printState(state)
+		printState(state, *output, "初始化成功")
 	case "status":
 		state, err := store.Load()
 		if err != nil {
 			fatal(err)
 		}
-		printState(state)
+		printState(state, *output, "当前状态")
 	case "open-recovery":
 		proof, err := readOwnerOnly(*proofFile)
 		if err != nil {
@@ -68,7 +73,7 @@ func main() {
 		if err != nil {
 			fatal(err)
 		}
-		printState(state)
+		printState(state, *output, "恢复租约已关闭")
 	default:
 		fatal(fmt.Errorf("未知命令 %q", command))
 	}
@@ -97,7 +102,15 @@ func mustState(store seedaccess.FileStore) seedaccess.State {
 	return state
 }
 
-func printState(state seedaccess.State) {
+func printState(state seedaccess.State, output, title string) {
+	writeState(os.Stdout, state, output, title)
+}
+
+func writeState(destination io.Writer, state seedaccess.State, output, title string) {
+	if output == "human" {
+		fmt.Fprintf(destination, "✓ Seed 管理员%s\n  generation: %d\n  phase: %s\n  updatedAt: %s\n", title, state.Generation, state.Phase, state.UpdatedAt.UTC().Format(time.RFC3339))
+		return
+	}
 	projection := struct {
 		Version    int              `json:"version"`
 		Generation uint64           `json:"generation"`
@@ -105,7 +118,7 @@ func printState(state seedaccess.State) {
 		UpdatedAt  time.Time        `json:"updatedAt"`
 	}{state.Version, state.Generation, state.Phase, state.UpdatedAt}
 	raw, _ := json.Marshal(projection)
-	fmt.Println(string(raw))
+	fmt.Fprintln(destination, string(raw))
 }
 
 func fatal(err error) {
