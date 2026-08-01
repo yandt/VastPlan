@@ -78,7 +78,7 @@ function AppearanceSection({ title, description, children }: { title: string; de
 function AppearanceInlineField({ label, children }: { label: string; children: ReactNode }) {
   return <div style={{ display: "grid", gridTemplateColumns: "minmax(112px, 180px) minmax(0, 1fr)", alignItems: "center", columnGap: 16, minHeight: 32, width: "100%" }}>
     <span title={label} style={{ overflow: "hidden", color: "inherit", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
-    <div style={{ display: "flex", minWidth: 0 }}>{children}</div>
+    <div style={{ display: "flex", justifyContent: "flex-end", minWidth: 0 }}>{children}</div>
   </div>;
 }
 
