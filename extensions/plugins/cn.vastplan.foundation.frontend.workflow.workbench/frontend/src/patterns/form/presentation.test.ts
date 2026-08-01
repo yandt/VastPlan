@@ -3,11 +3,12 @@ import { evaluateFormCondition, projectFormPresentation, resolveWorkbenchFormPre
 
 describe("FormPresentation", () => {
   it("keeps every Workbench business form inline unless explicitly overridden", () => {
-    expect(resolveWorkbenchFormPresentation(undefined).labelPlacement).toBe("inline");
+    expect(resolveWorkbenchFormPresentation(undefined)).toMatchObject({ labelPlacement: "inline", controlAlignment: "end" });
     expect(resolveWorkbenchFormPresentation({ layout: "vertical" }).labelPlacement).toBe("inline");
     expect(resolveWorkbenchFormPresentation({ preset: "guided" }).labelPlacement).toBe("inline");
     expect(resolveWorkbenchFormPresentation({ labelPlacement: "stacked" }).labelPlacement).toBe("stacked");
     expect(resolveWorkbenchFormPresentation({ layout: "compact", labelPlacement: "inside-inline" }).labelPlacement).toBe("inside-inline");
+    expect(resolveWorkbenchFormPresentation({ controlAlignment: "start" }).controlAlignment).toBe("start");
   });
 
   it("evaluates the bounded condition DSL against values and read-only context", () => {

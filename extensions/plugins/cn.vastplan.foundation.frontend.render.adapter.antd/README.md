@@ -1,6 +1,6 @@
 # Ant Design Renderer Plugin
 
-`cn.vastplan.foundation.frontend.render.adapter.antd` 是统一 Render Adapter 的内部 Ant Design Renderer 模块。它实现完整 `@vastplan/ui-primitives` 语义组件面，并通过 `@rjsf/antd` 与 VastPlan CSP Validator 渲染动态表单。
+`cn.vastplan.foundation.frontend.render.adapter.antd` 是统一 Render Adapter 的内部 Ant Design Renderer 模块。它实现完整 `@vastplan/ui-primitives` 语义组件面，包括统一 `BodySections` 正文分区，并通过 `@rjsf/antd` 与 VastPlan CSP Validator 渲染动态表单及 `controlAlignment` 控件对齐语义。
 
 Portal 只会在 Adapter 目录选中 `antd` 时下载本模块；当前产品 Catalog 仅交付该 Renderer。深浅主题使用 Ant Design 原生 Algorithm，弹层统一挂载到 Portal Shadow DOM 内，功能插件不能直接导入 `antd`。
 

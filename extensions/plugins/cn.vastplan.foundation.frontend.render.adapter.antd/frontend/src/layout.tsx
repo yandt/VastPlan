@@ -1,6 +1,6 @@
 import { Card, Col, Divider as AntdDivider, Flex, Layout, Row, Typography } from "antd";
 import { createContext, useContext, type ReactNode } from "react";
-import type { FilterBarProps, GridItemProps, GridProps, PageProps, PanelProps, PortalShellProps, ResponsiveColumns, SplitViewProps, StackProps } from "@vastplan/ui-primitives";
+import type { BodySectionsProps, FilterBarProps, GridItemProps, GridProps, PageProps, PanelProps, PortalShellProps, ResponsiveColumns, SplitViewProps, StackProps } from "@vastplan/ui-primitives";
 import { gaps } from "./theme";
 
 export function PortalShell({ header, navigation, inspector, statusBar, children }: PortalShellProps) {
@@ -22,6 +22,18 @@ export function Page({ title, actions, children }: PageProps) {
 }
 
 export function Panel({ title, children }: PanelProps) { return <Card title={title}>{children}</Card>; }
+
+export function BodySections({ sections }: BodySectionsProps) {
+  return <div data-vastplan-body-sections style={{ display: "grid", gap: 24, width: "100%", minWidth: 0 }}>
+    {sections.map((section, index) => <section key={section.id} data-body-section={section.id} style={{ display: "grid", gap: 16, minWidth: 0, paddingBottom: index === sections.length - 1 ? 0 : 24, borderBottom: index === sections.length - 1 ? undefined : "1px solid var(--ant-color-border-secondary)" }}>
+      {section.title === undefined && section.description === undefined ? null : <div style={{ display: "grid", gap: 4 }}>
+        {section.title === undefined ? null : <Typography.Title level={5} style={{ margin: 0, fontSize: 16 }}>{section.title}</Typography.Title>}
+        {section.description === undefined ? null : <Typography.Text type="secondary">{section.description}</Typography.Text>}
+      </div>}
+      {section.content}
+    </section>)}
+  </div>;
+}
 
 export function Stack({ direction = "column", gap = "md", align = "stretch", justify = "start", wrap = false, children }: StackProps) {
   const justifyContent = justify === "between" ? "space-between" : justify === "start" || justify === "end" ? `flex-${justify}` : justify;

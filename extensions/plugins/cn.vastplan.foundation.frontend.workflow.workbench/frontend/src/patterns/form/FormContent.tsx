@@ -3,11 +3,11 @@ import type { FormWorkflowController } from "./useFormWorkflow.js";
 
 const namespace = "cn.vastplan.foundation.frontend.workflow.workbench";
 
-export function FormContent({ form }: { form: FormWorkflowController }) {
+export function FormContent({ form, showDescription = true }: { form: FormWorkflowController; showDescription?: boolean }) {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
   return <ui.Stack gap={form.presentation.preset === "compact" ? "sm" : "md"}>
-    {form.definition?.workflow.description === undefined ? null : <p>{i18n.text(form.definition.workflow.description)}</p>}
+    {!showDescription || form.definition?.workflow.description === undefined ? null : <p>{i18n.text(form.definition.workflow.description)}</p>}
     {form.failure === undefined ? null : <ui.ErrorState title={form.failure} />}
     {form.validation.errors.$form === undefined ? null : <ui.ErrorState title={form.validation.errors.$form} />}
     {form.loading || form.schema === undefined ? <ui.Skeleton rows={5} /> : <ui.FormRenderer

@@ -3,12 +3,13 @@ import { formControlSize, formGridTemplate, resolveFormPresentation } from "./fo
 
 describe("form presentation", () => {
   it("defaults to the standard inline form recipe", () => {
-    expect(resolveFormPresentation(undefined)).toMatchObject({ preset: "standard", layout: "horizontal", labelPlacement: "inline" });
+    expect(resolveFormPresentation(undefined)).toMatchObject({ preset: "standard", layout: "horizontal", labelPlacement: "inline", controlAlignment: "end" });
   });
 
   it("maps governed presets without overriding explicit choices", () => {
     expect(resolveFormPresentation({ preset: "guided" })).toMatchObject({ layout: "vertical", labelPlacement: "stacked", navigation: "steps" });
     expect(resolveFormPresentation({ preset: "guided", labelPlacement: "inline", navigation: "tabs" })).toMatchObject({ labelPlacement: "inline", navigation: "tabs" });
+    expect(resolveFormPresentation({ controlAlignment: "start" })).toMatchObject({ controlAlignment: "start" });
     expect(formControlSize({ preset: "compact" })).toBe("sm");
   });
 

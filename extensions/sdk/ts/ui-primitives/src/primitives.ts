@@ -60,6 +60,19 @@ export interface PanelProps {
   children: ReactNode;
 }
 
+/** One semantic region inside a configuration or management page body. */
+export interface BodySectionItem {
+  id: string;
+  title?: ReactNode;
+  description?: ReactNode;
+  content: ReactNode;
+}
+
+/** Renderer-owned section rhythm and separators; callers only provide semantics. */
+export interface BodySectionsProps {
+  sections: readonly BodySectionItem[];
+}
+
 export interface ButtonProps {
   children: ReactNode;
   onClick?(): void;
@@ -266,6 +279,7 @@ export interface PortalUI {
   PortalShell: ComponentType<PortalShellProps>;
   Page: ComponentType<PageProps>;
   Panel: ComponentType<PanelProps>;
+  BodySections: ComponentType<BodySectionsProps>;
   Stack: ComponentType<StackProps>;
   Grid: ComponentType<GridProps>;
   GridItem: ComponentType<GridItemProps>;

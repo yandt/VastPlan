@@ -1,8 +1,9 @@
 import type { ActionSpec, CollectionDensity, CollectionSpec, ColumnSpec, ComponentSize, FilterPanelSpec, FormPresentation, FormSchema, FormWorkflow, JSONValue, LocalizedText, PageActionSpec, PageBodyLayout, RecordDetailSpec, RecordMasterSpec, RecordTreeSpec } from "@vastplan/ui-contract";
+import { formControlAlignments } from "@vastplan/ui-contract";
 import { pageBodyLayouts } from "@vastplan/ui-contract";
 import type { PluginExtensionAccess } from "@vastplan/plugin-extension-contract";
 
-export type { ActionSpec, CollectionSpec, CollectionCardSpec, CollectionCardValueFormat, CollectionCardFieldSpec, ComponentSize, DashboardBreakpoint, DashboardCompaction, DashboardGridItem, DashboardGridLayouts, DashboardGridSpec, FilterPanelApplyMode, FilterPanelLayout, FilterPanelSpec, ColumnSpec, DataValueFormat, FilterSpec, FilterFieldKind, CollectionQueryMode, CollectionSelectionMode, CollectionView, FormCondition, FormFieldPresentation, FormLabelPlacement, FormLayout, FormPresentation, FormPresentationPreset, FormSchema, FormSectionPresentation, FormWidget, FormWorkflow, JSONValue, PageActionDisplay, PageActionOverflow, PageActionSpec, PageBodyLayout, RecordDetailSpec, RecordFieldSpec, RecordMasterSpec, RecordSectionSpec, RecordTreeSpec, ResponsiveColumnCount } from "@vastplan/ui-contract";
+export type { ActionSpec, CollectionSpec, CollectionCardSpec, CollectionCardValueFormat, CollectionCardFieldSpec, ComponentSize, DashboardBreakpoint, DashboardCompaction, DashboardGridItem, DashboardGridLayouts, DashboardGridSpec, FilterPanelApplyMode, FilterPanelLayout, FilterPanelSpec, ColumnSpec, DataValueFormat, FilterSpec, FilterFieldKind, CollectionQueryMode, CollectionSelectionMode, CollectionView, FormCondition, FormControlAlignment, FormFieldPresentation, FormLabelPlacement, FormLayout, FormPresentation, FormPresentationPreset, FormSchema, FormSectionPresentation, FormWidget, FormWorkflow, JSONValue, PageActionDisplay, PageActionOverflow, PageActionSpec, PageBodyLayout, RecordDetailSpec, RecordFieldSpec, RecordMasterSpec, RecordSectionSpec, RecordTreeSpec, ResponsiveColumnCount } from "@vastplan/ui-contract";
 export { dashboardBreakpointOrder, dashboardDefaultBreakpoints, dashboardDefaultColumns, jsonSchemaDialect, message } from "@vastplan/ui-contract";
 export { defineDashboardGrid } from "./dashboard.js";
 export type { LocalizedText, MessageDescriptor, MessageValues } from "@vastplan/ui-contract";
@@ -485,6 +486,7 @@ export function validateFormPresentation(presentation: FormPresentation | undefi
   if (presentation === undefined) return;
   if (presentation.preset !== undefined && !["compact", "standard", "comfortable", "guided"].includes(presentation.preset)) throw new Error(`表单 ${formID} 的 preset 无效`);
   if (presentation.labelPlacement !== undefined && !["inline", "stacked", "inside-inline"].includes(presentation.labelPlacement)) throw new Error(`表单 ${formID} 的 labelPlacement 无效`);
+  if (presentation.controlAlignment !== undefined && !formControlAlignments.includes(presentation.controlAlignment)) throw new Error(`表单 ${formID} 的 controlAlignment 无效`);
   if (presentation.navigation !== undefined && !["sections", "tabs", "steps"].includes(presentation.navigation)) throw new Error(`表单 ${formID} 的 navigation 无效`);
   validateFormColumns(formID, presentation.columns, presentation.columnWidths, "presentation");
   const sections = presentation.sections ?? [];

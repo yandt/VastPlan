@@ -2,7 +2,7 @@ import { VastPlanIcon } from "@vastplan/ui-primitives";
 import type { PortalUI } from "@vastplan/ui-primitives";
 import { Button, Busy, Dialog, Drawer, EmptyState, ErrorState, IconButton, Skeleton } from "./feedback";
 import { DataCard, Descriptions, Pagination, Select, Status, Table } from "./data";
-import { Divider, FilterBar, Grid, GridItem, Page, Panel, PortalShell, SplitView, Stack } from "./layout";
+import { BodySections, Divider, FilterBar, Grid, GridItem, Page, Panel, PortalShell, SplitView, Stack } from "./layout";
 import { Breadcrumb, CommandPalette, Menu, Popover, RecordNavigationList, RecordTree, Tabs } from "./navigation";
 import { FormRenderer } from "./form-renderer";
 import { semanticTokens } from "./theme";
@@ -13,6 +13,7 @@ export const antdPortalUIComponents: AntdComponents = {
   PortalShell,
   Page,
   Panel,
+  BodySections,
   Stack,
   Grid,
   GridItem,

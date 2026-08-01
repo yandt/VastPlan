@@ -14,7 +14,7 @@
 
 ## 2. 基础 Token
 
-UI Contract 8.3 暴露语义 token、账户外观契约与 `ComponentSize`，适配器映射到具体框架。布局插件不得读取 Ant Design 私有 token。列表、卡片、表单和操作区的一致性交给《[UI 工作台组合框架](../architecture/UI工作台组合框架.md)》；布局只决定它们所在区域的视觉位置。
+UI Contract 8.5 暴露语义 token、账户外观契约与 `ComponentSize`，适配器映射到具体框架。布局插件不得读取 Ant Design 私有 token。列表、卡片、表单和操作区的一致性交给《[UI 工作台组合框架](../architecture/UI工作台组合框架.md)》；布局只决定它们所在区域的视觉位置。
 
 | Token | 基线 | 用途 |
 |---|---:|---|
@@ -61,6 +61,8 @@ UI Contract 8.3 暴露语义 token、账户外观契约与 `ComponentSize`，适
 - Shell Header、Aside、Footer 等没有内建内容且全部 Slot 为空时不创建 DOM 和占位；Page Header 因承担页面定位始终存在。
 - Page Header 位于 Page Body 滚动容器之外。正文滚动时保持可见，不依赖多层 `position: sticky`。Page Body 使用设计系统 `surface` 语义色：浅色主题为白色，深色主题由当前 Renderer 的深色表面色接管。
 - Page Body 支持页面级 `fluid / large / medium / small` 语义尺寸，唯一最大宽度分别为“不限制 / 1280px / 960px / 720px”。两种 Shell 必须统一居中整个正文 Slot 区域；移动端始终占满可用宽度。模板级 `contained` 是平台上限，和页面尺寸同时存在时取更窄值。插件不得传入任意像素或 CSS。
+- 配置与管理页面的一级正文分区统一使用 `BodySections`：每个区域只声明稳定 ID、标题、说明和内容，Renderer 统一绘制标题层级、16px 内部间距、24px 区域间距及相邻区域分隔线；最后一个区域不显示多余分隔线。插件不得自行复制 Section 边框、标题样式或外间距。
+- 动态表单控件在字段区域内默认使用 `controlAlignment=end`；仅特殊页面可显式选择 `start`。该语义不改变控件尺寸、列宽、Label 位置或输入文本方向，全宽控件继续占满可用宽度。
 - 页面间距使用唯一 `portalPageRhythm`：Shell 从 Page Header 底边到 Workbench 根容器统一保留 16px `contentStart`；Workbench 根容器固定 `margin: 0; padding: 0`，并按 compact/standard/comfortable 使用 8/16/24px `sectionGap` 管理一级组件间距。一级组件不得用外部 margin 改写位置；FilterPanel 等可通过 Workbench 内部的 `flush=0` 或 `compact=8px` inset 管理自身内容，但 inset 不得反向补偿 Shell。Collection 顶部 FilterPanel 默认 `flush`；三个 Renderer 的 compact Form 必须隐藏根 Object Schema 标题并清除根外边距，嵌套对象标题不受影响，从而使第一行控件与页面起始节奏可预测。
 - FilterPanel 使用 `inside-inline` 持久 Label：Label 与输入控件共同消费一个筛选单元格宽度，Label 按内容取宽但桌面最多占 40%、移动端最多占 45%，始终单行；超长文案省略并由 Tooltip 与可访问名称提供全文。输入区域必须 `flex: 1; min-width: 0`，输入后 Label 不消失。Ant Design 实现必须遵守该语义，功能插件不能配置像素宽度或注入框架样式。
 - Page Header 右侧的页面功能动作使用 VastPlan 语义图标、Tooltip 和 `aria-label`，点击区至少 44px；桌面最多直接显示 4 个，超出后进入“更多”，不得在 Table 工具栏重复显示新增、导入或发布。

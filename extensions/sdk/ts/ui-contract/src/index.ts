@@ -30,6 +30,8 @@ export interface FormSchema {
 
 export type FormLayout = "compact" | "horizontal" | "vertical";
 export type FormLabelPlacement = "inline" | "stacked" | "inside-inline";
+export const formControlAlignments = Object.freeze(["start", "end"] as const);
+export type FormControlAlignment = (typeof formControlAlignments)[number];
 export type FormPresentationPreset = "compact" | "standard" | "comfortable" | "guided";
 export type FormWidget = "text" | "textarea" | "number" | "select" | "boolean" | "date" | "datetime" | "credentialRef" | "secretMaterial" | "hidden";
 export type FormCondition =
@@ -63,6 +65,8 @@ export interface FormPresentation {
   layout?: FormLayout;
   /** Defaults to inline. inside-inline is reserved for compact filter-like fields. */
   labelPlacement?: FormLabelPlacement;
+  /** Aligns controls within their governed field area. Defaults to end. */
+  controlAlignment?: FormControlAlignment;
   /** Root object grid used when sections are not declared. */
   columns?: number;
   /** Relative percentage weights. Length must equal columns and total 100. */

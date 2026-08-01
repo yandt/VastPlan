@@ -37,17 +37,24 @@ export function PortalAppearanceSettingsPage() {
     applyAppearanceChange(next, props.onAppearanceChange);
   };
   return <div style={{ display: "grid", gap: 24 }}>
-      <AppearanceSection title={i18n.text(message(namespace, "appearance.theme", "主题与颜色"))} description={i18n.text(message(namespace, "appearance.themeHint", "分别配置浅色与深色模式"))}>
-        <AppearanceModeField draft={draft} onDraft={changeDraft} />
-        <ui.Tabs activeID={scheme} onChange={(next) => setScheme(next as AppearanceScheme)} items={(["light", "dark"] as const).map((itemScheme) => ({
-          id: itemScheme,
-          label: i18n.text(message(namespace, `appearance.${itemScheme}`, itemScheme === "light" ? "浅色" : "深色")),
-          content: <SchemeEditor scheme={itemScheme} value={draft} onChange={changeDraft} />,
-        }))} />
-      </AppearanceSection>
-      <AppearanceSection title={i18n.text(message(namespace, "appearance.preferences", "偏好设置"))} description={i18n.text(message(namespace, "appearance.preferencesHint", "切换后立即生效"))}>
-        <ChoiceFields {...props} />
-      </AppearanceSection>
+      <ui.BodySections sections={[
+        {
+          id: "theme",
+          title: i18n.text(message(namespace, "appearance.theme", "主题与颜色")),
+          description: i18n.text(message(namespace, "appearance.themeHint", "分别配置浅色与深色模式")),
+          content: <><AppearanceModeField draft={draft} onDraft={changeDraft} /><ui.Tabs activeID={scheme} onChange={(next) => setScheme(next as AppearanceScheme)} items={(["light", "dark"] as const).map((itemScheme) => ({
+            id: itemScheme,
+            label: i18n.text(message(namespace, `appearance.${itemScheme}`, itemScheme === "light" ? "浅色" : "深色")),
+            content: <SchemeEditor scheme={itemScheme} value={draft} onChange={changeDraft} />,
+          }))} /></>,
+        },
+        {
+          id: "preferences",
+          title: i18n.text(message(namespace, "appearance.preferences", "偏好设置")),
+          description: i18n.text(message(namespace, "appearance.preferencesHint", "切换后立即生效")),
+          content: <ChoiceFields {...props} />,
+        },
+      ]} />
       {issue === undefined ? null : <ui.Status tone="error">{issue}</ui.Status>}
       <small style={{ color: ui.theme.tokens.color.mutedText }}>{i18n.text(message(namespace, "appearance.localOnly", "外观只保存在当前浏览器，修改后即时生效且不会上传到服务器。"))}</small>
     </div>;
@@ -62,17 +69,6 @@ export function applyAppearanceChange(next: PortalAppearanceSettings, onChange?:
 
 function appearanceIssue(appearance: PortalAppearanceSettings): string | undefined {
   return appearanceContrastIssue(appearance.light.templateID, appearance.light.colors) ?? appearanceContrastIssue(appearance.dark.templateID, appearance.dark.colors);
-}
-
-function AppearanceSection({ title, description, children }: { title: string; description: string; children: ReactNode }) {
-  const ui = usePortalUI();
-  return <section style={{ display: "grid", gap: 16, paddingBottom: 24, borderBottom: `1px solid ${ui.theme.tokens.color.border}` }}>
-    <div style={{ display: "grid", gap: 4 }}>
-      <strong style={{ color: ui.theme.tokens.color.text, fontSize: 16 }}>{title}</strong>
-      <small style={{ color: ui.theme.tokens.color.mutedText }}>{description}</small>
-    </div>
-    {children}
-  </section>;
 }
 
 function AppearanceInlineField({ label, children }: { label: string; children: ReactNode }) {

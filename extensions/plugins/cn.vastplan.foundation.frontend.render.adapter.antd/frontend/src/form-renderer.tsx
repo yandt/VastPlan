@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { cspJSONSchemaValidator } from "@vastplan/rjsf-csp-validator";
 import type { FormPresentation, FormRendererProps, FormSectionPresentation } from "@vastplan/ui-primitives";
-import { formGridClassName, formGridColumns, formGridCSS, formGridStyle, formLabelPlacement, localizeJSONSchema, message, usePortalI18n } from "@vastplan/ui-primitives";
+import { formControlAlignment, formGridClassName, formGridColumns, formGridCSS, formGridStyle, formLabelPlacement, localizeJSONSchema, message, usePortalI18n } from "@vastplan/ui-primitives";
 import { namespace } from "./theme";
 import { safeAntdTemplates } from "./safe-rjsf-theme";
 import { PresentedField, antdInsideInlineCSS } from "./inside-inline-field";
@@ -17,6 +17,12 @@ const validator = cspJSONSchemaValidator;
 const emptyFormContext: Readonly<Record<string, unknown>> = Object.freeze({});
 const antdWidgets = generateWidgets();
 const compactFormTheme = { components: { Form: { itemMarginBottom: 0 } } };
+const controlAlignmentCSS = `
+.vp-antd-form-controls-start .ant-form-item-control-input-content,.vp-antd-form-controls-end .ant-form-item-control-input-content{display:flex;min-width:0}
+.vp-antd-form-controls-start .ant-form-item-control-input-content{justify-content:flex-start}
+.vp-antd-form-controls-end .ant-form-item-control-input-content{justify-content:flex-end}
+.vp-antd-form-controls-start .ant-form-item-control-input-content>*,.vp-antd-form-controls-end .ant-form-item-control-input-content>*{max-width:100%}
+`;
 
 function SecretRefWidget({ value, disabled, readonly, required, onChange, onBlur, onFocus, id, label }: WidgetProps) {
   const i18n = usePortalI18n();
@@ -128,6 +134,7 @@ export function FormRenderer({ schema, value, onChange, size = "md", presentatio
   const templates = useMemo(() => ({ ...safeAntdTemplates, FieldTemplate: (props: FieldTemplateProps) => <PresentedField {...props} placement={formLabelPlacement(presentation)} />, ObjectFieldTemplate: (props: ObjectFieldTemplateProps) => <PresentedObject {...props} presentation={presentation} activeSection={presentationSection} onSectionChange={onPresentationSectionChange} />, ButtonTemplates: { ...safeAntdTemplates.ButtonTemplates, SubmitButton: () => null } }), [onPresentationSectionChange, presentation, presentationSection]);
   const widgets = useMemo(() => ({ ...antdWidgets, SelectWidget, secretRef: SecretRefWidget }), []);
   const compact = presentation?.layout === "compact";
+  const controlAlignment = formControlAlignment(presentation);
   const form = <RJSFForm
     schema={localizedSchema}
     uiSchema={localizedUISchema}
@@ -146,8 +153,8 @@ export function FormRenderer({ schema, value, onChange, size = "md", presentatio
     widgets={widgets}
   ><></></RJSFForm>;
   return <ConfigProvider componentSize={antdComponentSize[size]} theme={compact ? compactFormTheme : undefined}>
-    <style>{formGridCSS}{formLabelPlacement(presentation) === "inside-inline" ? antdInsideInlineCSS : ""}</style>
-    {form}
+    <style>{formGridCSS}{controlAlignmentCSS}{formLabelPlacement(presentation) === "inside-inline" ? antdInsideInlineCSS : ""}</style>
+    <div className={`vp-antd-form-controls-${controlAlignment}`} data-form-control-alignment={controlAlignment}>{form}</div>
   </ConfigProvider>;
 }
 

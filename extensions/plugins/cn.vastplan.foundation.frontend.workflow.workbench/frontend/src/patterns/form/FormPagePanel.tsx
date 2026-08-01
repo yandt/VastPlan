@@ -8,7 +8,10 @@ export function FormPagePanel({ form }: { form: FormWorkflowController }) {
   const i18n = usePortalI18n();
   const definition = form.definition;
   if (definition === undefined) return null;
-  return <ui.Panel title={i18n.text(definition.workflow.title)}>
-    <ui.Stack gap="md"><FormContent form={form} /><FormActions form={form} /></ui.Stack>
-  </ui.Panel>;
+  return <ui.BodySections sections={[{
+    id: definition.id,
+    title: i18n.text(definition.workflow.title),
+    description: definition.workflow.description === undefined ? undefined : i18n.text(definition.workflow.description),
+    content: <ui.Stack gap="md"><FormContent form={form} showDescription={false} /><FormActions form={form} /></ui.Stack>,
+  }]} />;
 }

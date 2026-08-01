@@ -1,4 +1,4 @@
-import type { ComponentSize, FormLabelPlacement, FormPresentation, FormSectionPresentation } from "@vastplan/ui-contract";
+import type { ComponentSize, FormControlAlignment, FormLabelPlacement, FormPresentation, FormSectionPresentation } from "@vastplan/ui-contract";
 import type { CSSProperties } from "react";
 
 const defaultColumns = 1;
@@ -6,9 +6,10 @@ const defaultColumns = 1;
 export function resolveFormPresentation(source: FormPresentation | undefined): FormPresentation {
   const preset = source?.preset ?? "standard";
   const labelPlacement = source?.labelPlacement ?? legacyOrPresetLabel(source, preset);
+  const controlAlignment = source?.controlAlignment ?? "end";
   const layout = source?.layout ?? (preset === "compact" ? "compact" : preset === "comfortable" || preset === "guided" ? "vertical" : "horizontal");
   const navigation = source?.navigation ?? (preset === "guided" ? "steps" : undefined);
-  return Object.freeze({ ...source, preset, layout, labelPlacement, ...(navigation === undefined ? {} : { navigation }) });
+  return Object.freeze({ ...source, preset, layout, labelPlacement, controlAlignment, ...(navigation === undefined ? {} : { navigation }) });
 }
 
 export function formControlSize(presentation: FormPresentation | undefined): ComponentSize {
@@ -21,6 +22,10 @@ export function formControlSize(presentation: FormPresentation | undefined): Com
 
 export function formLabelPlacement(presentation: FormPresentation | undefined): FormLabelPlacement {
   return resolveFormPresentation(presentation).labelPlacement ?? "inline";
+}
+
+export function formControlAlignment(presentation: FormPresentation | undefined): FormControlAlignment {
+  return resolveFormPresentation(presentation).controlAlignment ?? "end";
 }
 
 export function formGridColumns(presentation: FormPresentation | undefined, section?: FormSectionPresentation): number {

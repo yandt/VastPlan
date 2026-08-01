@@ -6,7 +6,7 @@ import { antdIconForTheme, antdPortalUIComponents, antdRenderer } from "./index"
 describe("Ant Design portal UI renderer", () => {
   it("implements the complete framework-neutral component surface", () => {
     const required: Array<keyof Omit<PortalUI, "notify" | "confirm" | "theme">> = [
-      "PortalShell", "Page", "Panel", "Stack", "Grid", "GridItem", "Divider", "Button", "IconButton", "Select", "Menu", "Breadcrumb", "Tabs", "CommandPalette", "Popover", "Dialog", "Drawer", "FormRenderer", "FilterBar", "Table", "DataCard", "SplitView", "RecordNavigationList", "RecordTree", "Pagination", "Descriptions", "Status", "Icon", "EmptyState", "ErrorState", "Skeleton", "Busy",
+      "PortalShell", "Page", "Panel", "BodySections", "Stack", "Grid", "GridItem", "Divider", "Button", "IconButton", "Select", "Menu", "Breadcrumb", "Tabs", "CommandPalette", "Popover", "Dialog", "Drawer", "FormRenderer", "FilterBar", "Table", "DataCard", "SplitView", "RecordNavigationList", "RecordTree", "Pagination", "Descriptions", "Status", "Icon", "EmptyState", "ErrorState", "Skeleton", "Busy",
     ];
     expect(antdRenderer).toMatchObject({ id: "antd", framework: "antd" });
     expect(required.every((name) => typeof antdPortalUIComponents[name] === "function")).toBe(true);
@@ -34,6 +34,18 @@ describe("Ant Design portal UI renderer", () => {
     expect(markup).toContain("ant-btn-primary");
     expect(markup).toContain("ant-card");
     expect(markup).toContain("Select Node A");
+  });
+
+  it("renders governed body sections with separators only between regions", () => {
+    const BodySections = antdPortalUIComponents.BodySections;
+    const markup = renderToStaticMarkup(<BodySections sections={[
+      { id: "theme", title: "Theme", description: "Choose colors", content: <span>Theme controls</span> },
+      { id: "preferences", title: "Preferences", content: <span>Preference controls</span> },
+    ]} />);
+    expect(markup).toContain("data-vastplan-body-sections");
+    expect(markup).toContain('data-body-section="theme"');
+    expect(markup).toContain('data-body-section="preferences"');
+    expect(markup.match(/border-bottom/g)).toHaveLength(1);
   });
 
   it("does not turn a one-row table into a vertical scroll container", () => {
@@ -113,8 +125,22 @@ describe("Ant Design portal UI renderer", () => {
     expect(markup).toContain("minmax(0, 35fr) minmax(0, 65fr)");
     expect(markup).toContain("Name is already used");
     expect(markup).toContain("flex:0 0 112px");
+    expect(markup).toContain('data-form-control-alignment="end"');
+    expect(markup).toContain("vp-antd-form-controls-end");
     expect(markup.match(/Name is already used/g)).toHaveLength(1);
     expect(markup).not.toContain("Submit");
+  });
+
+  it("allows a form to opt out of the default end control alignment", () => {
+    const Form = antdPortalUIComponents.FormRenderer;
+    const markup = renderToStaticMarkup(<PortalI18nProvider policy={{ defaultLocale: "en-US", supportedLocales: ["en-US"] }} catalogs={{}} candidates={["en-US"]}><Form
+      schema={{ id: "start-aligned", schema: { $schema: "http://json-schema.org/draft-07/schema#", type: "object", properties: { name: { type: "string", title: "Name" } } } }}
+      value={{}}
+      onChange={() => undefined}
+      presentation={{ controlAlignment: "start" }}
+    /></PortalI18nProvider>);
+    expect(markup).toContain('data-form-control-alignment="start"');
+    expect(markup).toContain("vp-antd-form-controls-start");
   });
 
   it("renders persistent collection labels inside the shared field width", () => {

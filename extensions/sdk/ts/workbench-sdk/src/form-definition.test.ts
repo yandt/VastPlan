@@ -35,6 +35,11 @@ describe("Workbench form definition", () => {
     expect(() => validateFormPresentation({ columns: 2, columnWidths: [20, 80, 0] }, "prepared")).toThrow("匹配列数");
   });
 
+  it("accepts governed form control alignment and rejects unknown values", () => {
+    expect(() => validateFormPresentation({ controlAlignment: "end" }, "aligned")).not.toThrow();
+    expect(() => validateFormPresentation({ controlAlignment: "center" as never }, "aligned")).toThrow("controlAlignment");
+  });
+
   it("defaults modal forms to dialog and rejects the removed drawer form surface", () => {
     expect(resolveFormWorkflowSurface({ title: "Create" })).toBe("dialog");
     expect(resolveFormWorkflowSurface({ surface: "page", title: "Edit" })).toBe("page");
