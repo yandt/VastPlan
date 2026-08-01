@@ -56,9 +56,10 @@ export function StandardShell(props: UIShellProps) {
   const selectedGroup = allGroups.find((group) => group.id === selectedGroupID) ?? allGroups[0];
   const shellHeaderVisible = hasRegionContent(composition, { shellSlots: shellHeaderSlots });
   const navigationVisible = hasRegionContent(composition, { intrinsic: branding.name !== "", navigationGroups: true, shellSlots: shellNavigationSlots });
-  const settingsGroups = composition.navigation.settings;
   const accountGroup = composition.navigation.secondary.find((group) => group.id === accountNavigationGroupID);
-  const mainGroups = [...composition.navigation.primary, ...composition.navigation.secondary.filter((group) => group.id !== accountNavigationGroupID)];
+  // 系统管理仍保留 settings 语义区，便于权限裁剪与其他 Shell 使用同一组合模型；
+  // 标准侧栏仅改变其视觉位置，使其成为图标主轨中最后一个一级入口。
+  const mainGroups = navigationRailGroups(composition);
   const brand = <Brand name={branding.name} shortName={branding.shortName} logoURL={branding.logoURL} compact />;
 
   const header = shellHeaderVisible ? <header className="vp-shell-header">
@@ -119,7 +120,6 @@ export function StandardShell(props: UIShellProps) {
         branding={brand}
         composition={composition}
         mainGroups={mainGroups}
-        settingsGroups={settingsGroups}
         selectedGroup={selectedGroup}
         account={accountGroup === undefined ? null : <PortalAccountControl account={props.account} selected={selectedGroup?.id === accountGroup.id} onSelect={() => selectGroup(accountGroup.id)} />}
         onSelectGroup={selectGroup}
@@ -138,11 +138,10 @@ export function StandardShell(props: UIShellProps) {
   </div>;
 }
 
-function DesktopNavigation({ branding, composition, mainGroups, settingsGroups, selectedGroup, account, onSelectGroup, onNavigate }: {
+function DesktopNavigation({ branding, composition, mainGroups, selectedGroup, account, onSelectGroup, onNavigate }: {
   branding: ReactNode;
   composition: UIShellProps["composition"];
   mainGroups: readonly PortalNavigationGroup[];
-  settingsGroups: readonly PortalNavigationGroup[];
   selectedGroup: PortalNavigationGroup | undefined;
   account: ReactNode;
   onSelectGroup(id: string): void;
@@ -166,7 +165,7 @@ function DesktopNavigation({ branding, composition, mainGroups, settingsGroups, 
     <aside className="vp-navigation-rail" aria-label={i18n.text(message(namespace, "navigation.groups", "主菜单分组"))} onKeyDown={moveRailFocus}>
       <div className="vp-navigation-start">{branding}{shellSlot(composition.shellSlots, "shell.navigation.start")}</div>
       <div className="vp-navigation-center">{shellSlot(composition.shellSlots, "shell.navigation.center")}{mainGroups.map(groupButton)}</div>
-      <div className="vp-navigation-end">{shellSlot(composition.shellSlots, "shell.navigation.end")}{settingsGroups.map(groupButton)}<div className="vp-navigation-account">{account}</div></div>
+      <div className="vp-navigation-end">{shellSlot(composition.shellSlots, "shell.navigation.end")}<div className="vp-navigation-account">{account}</div></div>
     </aside>
     {selectedGroup === undefined ? null : <aside id={panelID} ref={panelRef} className="vp-navigation-panel" aria-label={i18n.text(message(namespace, "navigation.secondaryLabel", "{group}二级导航", { group: i18n.text(selectedGroup.label) }))} onKeyDown={(event) => returnToRail(event, selectedButtonRef)}>
       <header className="vp-navigation-panel-header"><span className="vp-navigation-panel-icon"><IconForGroup group={selectedGroup} /></span><strong>{i18n.text(selectedGroup.label)}</strong></header>
@@ -278,6 +277,15 @@ function moveRailFocus(event: KeyboardEvent<HTMLElement>) {
 
 export function groups(composition: UIShellProps["composition"], zones: readonly NavigationZone[]): readonly PortalNavigationGroup[] {
   return zones.flatMap((zone) => composition.navigation[zone]);
+}
+
+/** Visual ordering for the standard side rail; the account remains the fixed bottom control. */
+export function navigationRailGroups(composition: UIShellProps["composition"]): readonly PortalNavigationGroup[] {
+  return [
+    ...composition.navigation.primary,
+    ...composition.navigation.secondary.filter((group) => group.id !== accountNavigationGroupID),
+    ...composition.navigation.settings,
+  ];
 }
 
 /** Returns the first routeable leaf in the same order as the second-level menu. */

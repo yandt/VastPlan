@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { uiContractVersion } from "@vastplan/ui-contract";
 import type { PortalSlotContribution, ShellCompositionModel } from "@vastplan/ui-primitives";
-import adapter, { firstNavigablePageID, groups, standardShellCSS } from "./index";
+import adapter, { firstNavigablePageID, groups, navigationRailGroups, standardShellCSS } from "./index";
 import { hasRegionContent } from "./region-visibility";
 
 function composition(overrides: Partial<ShellCompositionModel> = {}): ShellCompositionModel {
@@ -74,6 +74,18 @@ describe("standard shell layout", () => {
       settings: [{ id: "settings", label: "设置", zone: "settings", icon: "settings", pages: [], children: [] }],
     } });
     expect(groups(model, ["primary", "secondary", "settings"]).map((group) => group.id)).toEqual(["operations", "reports", "settings"]);
+  });
+
+  it("places system settings in the main rail while keeping the account control fixed at the bottom", () => {
+    const model = composition({ navigation: {
+      primary: [{ id: "operations", label: "运行", zone: "primary", icon: "menu", pages: [], children: [] }],
+      secondary: [
+        { id: "reports", label: "报表", zone: "secondary", icon: "info", pages: [], children: [] },
+        { id: "account", label: "用户", zone: "secondary", icon: "info", pages: [], children: [] },
+      ],
+      settings: [{ id: "settings", label: "系统管理", zone: "settings", icon: "settings", pages: [], children: [] }],
+    } });
+    expect(navigationRailGroups(model).map((group) => group.id)).toEqual(["operations", "reports", "settings"]);
   });
 
   it("enters the first direct page, then the first nested page, after a main-menu switch", () => {
