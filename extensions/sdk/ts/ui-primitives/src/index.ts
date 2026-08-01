@@ -7,6 +7,7 @@ export { uiContractVersion as portalUIContractVersion } from "@vastplan/ui-contr
 export { message } from "@vastplan/ui-contract";
 export { PortalI18nProvider, localizeJSONSchema, translate, usePortalI18n, usePortalMessages } from "./i18n.js";
 export * from "./appearance.js";
+export * from "./appearance-template-select.js";
 export * from "./portal-account-pages.js";
 export * from "./portal-personalization.js";
 export type { PortalI18n, PortalI18nProviderProps, PortalMessageCatalogs } from "./i18n.js";

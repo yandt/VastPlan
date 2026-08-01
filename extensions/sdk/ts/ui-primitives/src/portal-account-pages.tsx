@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { message } from "@vastplan/ui-contract";
 import { appearanceContrastIssue, builtinAppearanceTemplates, resolveAppearanceColors, type AppearanceScheme, type PortalAppearanceSettings } from "./appearance.js";
+import { AppearanceTemplateSelect } from "./appearance-template-select.js";
 import { usePortalI18n } from "./i18n.js";
 import { usePortalUI } from "./portal-ui-context.js";
 import { usePortalPersonalization, type PortalPersonalization } from "./portal-personalization.js";
@@ -98,7 +99,7 @@ function SchemeEditor({ scheme, value, onChange }: { scheme: AppearanceScheme; v
   const templates = builtinAppearanceTemplates.filter((item) => item.scheme === scheme);
   const updateColors = (key: typeof colorFields[number], color: string) => onChange({ ...value, [scheme]: { ...current, colors: { ...current.colors, [key]: color } } });
   return <div style={{ display: "grid", gap: 24, paddingTop: 8 }}>
-    <div style={{ display: "grid", gap: 8 }}>{templates.map((item) => <button key={item.id} type="button" aria-pressed={item.id === current.templateID} onClick={() => onChange({ ...value, [scheme]: { ...current, templateID: item.id, colors: undefined } })} style={{ display: "grid", gridTemplateColumns: "12px minmax(0,1fr)", alignItems: "center", columnGap: 10, minHeight: 40, padding: "8px 12px", border: item.id === current.templateID ? `${ui.theme.tokens.focus.width}px solid ${item.preview.accent}` : `1px solid ${ui.theme.tokens.color.border}`, borderRadius: ui.theme.tokens.radius.sm, background: item.preview.background, color: resolveAppearanceColors(item.id).text, textAlign: "left", cursor: "pointer" }}><span aria-hidden style={{ width: 10, height: 10, borderRadius: "50%", background: item.preview.accent }} />{i18n.text(message(namespace, `theme.${item.id}`, themeLabel(item.id)))}</button>)}</div>
+    <label style={{ display: "grid", gap: 8 }}><span>{i18n.text(message(namespace, "appearance.template", "主题模板"))}</span><AppearanceTemplateSelect ariaLabel={i18n.text(message(namespace, "appearance.template", "主题模板"))} value={current.templateID} templates={templates} labelFor={(item) => i18n.text(message(namespace, `theme.${item.id}`, themeLabel(item.id)))} onChange={(templateID) => onChange({ ...value, [scheme]: { ...current, templateID, colors: undefined } })} /></label>
     <div style={{ display: "grid", gap: 12 }}>{colorFields.map((key) => <label key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: 32, gap: 16, paddingBottom: 8, borderBottom: `1px solid ${ui.theme.tokens.color.border}` }}><span>{i18n.text(message(namespace, `color.${key}`, colorLabel(key)))}</span><input aria-label={i18n.text(message(namespace, `color.${key}`, colorLabel(key)))} type="color" value={colors[key]} onChange={(event) => updateColors(key, event.currentTarget.value)} /></label>)}</div>
   </div>;
 }
