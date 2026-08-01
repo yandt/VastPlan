@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { AppearanceThemeTemplate } from "./appearance.js";
+import { resolveAppearanceColors, type AppearanceThemeTemplate } from "./appearance.js";
 import { usePortalUI } from "./portal-ui-context.js";
 
 export interface AppearanceTemplateSelectProps {
@@ -16,10 +16,24 @@ export function AppearanceTemplateSelect({ ariaLabel, value, templates, labelFor
   return <ui.Select ariaLabel={ariaLabel} value={value} options={templates.map((template) => ({
     value: template.id,
     label: <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-      <span aria-hidden style={{ width: 10, height: 10, borderRadius: "50%", background: template.preview.accent, boxShadow: `0 0 0 1px ${ui.theme.tokens.color.border}` }} />
+      <AppearanceTemplatePreview template={template} borderColor={ui.theme.tokens.color.border} />
       <span>{labelFor(template)}</span>
     </span>,
   }))} onChange={(next) => {
     if (next !== undefined && templates.some((template) => template.id === next)) onChange(next);
   }} />;
+}
+
+function AppearanceTemplatePreview({ template, borderColor }: { template: AppearanceThemeTemplate; borderColor: string }) {
+  const colors = resolveAppearanceColors(template.id);
+  return <span aria-hidden style={{ display: "grid", gridTemplateRows: "4px minmax(0,1fr)", width: 42, height: 24, overflow: "hidden", border: `1px solid ${borderColor}`, borderRadius: 3, background: colors.canvas, boxSizing: "border-box" }}>
+    <span style={{ background: colors.primary }} />
+    <span style={{ display: "grid", gridTemplateColumns: "11px minmax(0,1fr)", gap: 2, padding: 3 }}>
+      <span style={{ borderRadius: 1, background: colors.surface }} />
+      <span style={{ display: "grid", gap: 2 }}>
+        <span style={{ width: "76%", height: 3, borderRadius: 1, background: colors.text }} />
+        <span style={{ width: "52%", height: 3, borderRadius: 1, background: colors.mutedText }} />
+      </span>
+    </span>
+  </span>;
 }
