@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { message } from "@vastplan/ui-contract";
 import { appearanceContrastIssue, builtinAppearanceTemplates, resolveAppearanceColors, type AppearanceScheme, type PortalAppearanceSettings } from "./appearance.js";
+import { AppearanceModeSelector } from "./appearance-mode-selector.js";
 import { AppearanceTemplateSelect } from "./appearance-template-select.js";
 import { usePortalI18n } from "./i18n.js";
 import { usePortalUI } from "./portal-ui-context.js";
@@ -35,8 +36,7 @@ export function PortalAppearanceSettingsPage() {
     setDraft(next);
     applyAppearanceChange(next, props.onAppearanceChange);
   };
-  return <ui.Panel title={i18n.text(message(namespace, "appearance.summary", "外观设置"))}>
-    <div style={{ display: "grid", gap: 24, maxWidth: 720 }}>
+  return <div style={{ display: "grid", gap: 24, maxWidth: 720 }}>
       <AppearanceSection title={i18n.text(message(namespace, "appearance.preferences", "偏好设置"))} description={i18n.text(message(namespace, "appearance.preferencesHint", "切换后立即生效"))}>
         <ChoiceFields {...props} draft={draft} onDraft={changeDraft} />
       </AppearanceSection>
@@ -49,8 +49,7 @@ export function PortalAppearanceSettingsPage() {
       </AppearanceSection>
       {issue === undefined ? null : <ui.Status tone="error">{issue}</ui.Status>}
       <small style={{ color: ui.theme.tokens.color.mutedText }}>{i18n.text(message(namespace, "appearance.localOnly", "外观只保存在当前浏览器，修改后即时生效且不会上传到服务器。"))}</small>
-    </div>
-  </ui.Panel>;
+    </div>;
 }
 
 /** Applies only readable themes; invalid color drafts remain visible for correction. */
@@ -78,7 +77,7 @@ function AppearanceSection({ title, description, children }: { title: string; de
 function AppearanceInlineField({ label, children }: { label: string; children: ReactNode }) {
   return <div style={{ display: "grid", gridTemplateColumns: "minmax(112px, 180px) minmax(0, 1fr)", alignItems: "center", columnGap: 16, minHeight: 32, width: "100%" }}>
     <span title={label} style={{ overflow: "hidden", color: "inherit", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
-    <span style={{ display: "flex", minWidth: 0 }}>{children}</span>
+    <div style={{ display: "flex", minWidth: 0 }}>{children}</div>
   </div>;
 }
 
@@ -86,11 +85,7 @@ function ChoiceFields({ availableTemplates, template, onTemplateChange, renderer
   const ui = usePortalUI();
   const i18n = usePortalI18n();
   return <div style={{ display: "grid", gap: 16, width: "100%" }}>
-    <AppearanceInlineField label={i18n.text(message(namespace, "appearance.mode", "主题模式"))}><ui.Select ariaLabel={i18n.text(message(namespace, "appearance.mode", "主题模式"))} value={draft.mode} options={[
-      { value: "system", label: i18n.text(message(namespace, "appearance.system", "跟随系统")) },
-      { value: "light", label: i18n.text(message(namespace, "appearance.light", "浅色")) },
-      { value: "dark", label: i18n.text(message(namespace, "appearance.dark", "深色")) },
-    ]} onChange={(mode) => { if (mode) onDraft({ ...draft, mode: mode as PortalAppearanceSettings["mode"] }); }} /></AppearanceInlineField>
+    <AppearanceInlineField label={i18n.text(message(namespace, "appearance.mode", "主题模式"))}><AppearanceModeSelector ariaLabel={i18n.text(message(namespace, "appearance.mode", "主题模式"))} value={draft.mode} appearance={draft} labels={{ system: i18n.text(message(namespace, "appearance.system", "跟随系统")), light: i18n.text(message(namespace, "appearance.light", "浅色")), dark: i18n.text(message(namespace, "appearance.dark", "深色")) }} onChange={(mode) => onDraft({ ...draft, mode })} /></AppearanceInlineField>
     {renderers.length <= 1 ? null : <AppearanceInlineField label={i18n.text(message(namespace, "appearance.framework", "UI 框架"))}><ui.Select ariaLabel={i18n.text(message(namespace, "appearance.framework", "UI 框架"))} value={renderer?.id} options={renderers.map((item) => ({ value: item.id, label: i18n.text(item.label) }))} onChange={(value) => { if (value) onRendererChange?.(value); }} /></AppearanceInlineField>}
     {availableTemplates.length <= 1 ? null : <AppearanceInlineField label={i18n.text(message(namespace, "appearance.layout", "页面布局"))}><ui.Select ariaLabel={i18n.text(message(namespace, "appearance.layout", "页面布局"))} value={template.id} options={availableTemplates.map((item) => ({ value: item.id, label: i18n.text(item.label) }))} onChange={(value) => { if (value) onTemplateChange?.(value); }} /></AppearanceInlineField>}
     {iconThemes.length <= 1 ? null : <AppearanceInlineField label={i18n.text(message(namespace, "appearance.icons", "图标风格"))}><ui.Select ariaLabel={i18n.text(message(namespace, "appearance.icons", "图标风格"))} value={iconThemeID} options={iconThemes.map((item) => ({ value: item.id, label: i18n.text(item.label) }))} onChange={(value) => { if (value) onIconThemeChange?.(value); }} /></AppearanceInlineField>}
