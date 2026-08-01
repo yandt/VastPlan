@@ -1,6 +1,7 @@
 package seedaccess
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
@@ -23,6 +24,7 @@ func NewPasswordVerifier(password []byte) (PasswordVerifier, error) {
 }
 
 func newPasswordVerifier(password []byte, rounds, memory uint32, threads uint8) (PasswordVerifier, error) {
+	password = bytes.TrimSpace(password)
 	if len(password) < 12 || len(password) > 1024 {
 		return PasswordVerifier{}, errors.New("Seed Operator 密码长度必须为 12-1024 字节")
 	}
@@ -46,6 +48,6 @@ func (v PasswordVerifier) Verify(password []byte) bool {
 	if err != nil || len(want) != 32 {
 		return false
 	}
-	got := argon2.IDKey(password, salt, v.Time, v.MemoryKiB, v.Threads, uint32(len(want)))
+	got := argon2.IDKey(bytes.TrimSpace(password), salt, v.Time, v.MemoryKiB, v.Threads, uint32(len(want)))
 	return subtle.ConstantTimeCompare(got, want) == 1
 }

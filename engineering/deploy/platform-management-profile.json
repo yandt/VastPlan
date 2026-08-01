@@ -221,7 +221,7 @@
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.6", "channel": "stable" },
         { "id": "cn.vastplan.foundation.security.authentication-broker", "version": "0.4.8", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.security.seed-access", "version": "0.1.3", "channel": "stable" }
+        { "id": "cn.vastplan.foundation.security.seed-access", "version": "0.1.4", "channel": "stable" }
       ]
     },
     {
