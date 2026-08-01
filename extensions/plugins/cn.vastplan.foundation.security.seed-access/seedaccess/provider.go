@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	authenticationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authentication/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	authenticationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authentication/v1"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
@@ -94,6 +94,10 @@ func (p *Provider) begin(request authenticationv1.BeginRequest) authenticationv1
 	if request.MethodID != MethodID {
 		return authenticationv1.BeginResult{Result: authenticationv1.MethodResult{State: authenticationv1.StateRejected, ReasonCode: authenticationv1.ReasonMethodUnavailable}}
 	}
+	state, err := p.authority.Status()
+	if err != nil {
+		return authenticationv1.BeginResult{Result: authenticationv1.MethodResult{State: authenticationv1.StateRejected, ReasonCode: authenticationv1.ReasonMethodUnavailable}}
+	}
 	stepID, err := randomID()
 	if err != nil {
 		return authenticationv1.BeginResult{Result: authenticationv1.MethodResult{State: authenticationv1.StateRejected, ReasonCode: authenticationv1.ReasonMethodUnavailable}}
@@ -111,16 +115,19 @@ func (p *Provider) begin(request authenticationv1.BeginRequest) authenticationv1
 	}
 	p.txns[request.TransactionID] = providerTransaction{stepID: stepID, expiresAt: expires}
 	p.mu.Unlock()
+	fields := []authenticationv1.AuthenticationField{
+		{ID: "operator", Kind: authenticationv1.FieldIdentifier, Label: authenticationv1.LocalizedText{"zh-CN": "种子操作员", "en-US": "Seed operator"}, Help: authenticationv1.LocalizedText{"zh-CN": "首次设置的种子操作员标识", "en-US": "Seed operator configured during setup"}, Autocomplete: "username", Required: true, MinLength: 1, MaxLength: 256, Choices: []authenticationv1.FieldChoice{}},
+		{ID: "password", Kind: authenticationv1.FieldPassword, Label: authenticationv1.LocalizedText{"zh-CN": "密码", "en-US": "Password"}, Help: authenticationv1.LocalizedText{"zh-CN": "不会写入日志或会话", "en-US": "Never stored in logs or sessions"}, Autocomplete: "current-password", Required: true, MinLength: 12, MaxLength: 1024, Choices: []authenticationv1.FieldChoice{}},
+	}
+	if state.Phase == RecoveryLease && state.Recovery != nil && p.now().Before(state.Recovery.ExpiresAt) {
+		fields = append(fields, authenticationv1.AuthenticationField{ID: "recovery-token", Kind: authenticationv1.FieldOneTimeCode, Label: authenticationv1.LocalizedText{"zh-CN": "恢复租约", "en-US": "Recovery lease"}, Help: authenticationv1.LocalizedText{"zh-CN": "由本机恢复操作短时签发", "en-US": "Short-lived token issued by local recovery operation"}, Autocomplete: "one-time-code", Required: true, MinLength: 4, MaxLength: 32, Choices: []authenticationv1.FieldChoice{}})
+	}
 	return authenticationv1.BeginResult{Result: authenticationv1.MethodResult{State: authenticationv1.StateChallenge, Step: &authenticationv1.AuthenticationStep{
 		StepID: stepID, Kind: authenticationv1.StepPassword,
 		Title:       authenticationv1.LocalizedText{"zh-CN": "平台种子访问", "en-US": "Platform seed access"},
 		Description: authenticationv1.LocalizedText{"zh-CN": "仅用于首次配置或本机授权的灾难恢复", "en-US": "Only for initial setup or locally authorized recovery"},
 		SubmitLabel: authenticationv1.LocalizedText{"zh-CN": "验证", "en-US": "Verify"}, ExpiresAt: expires,
-		Fields: []authenticationv1.AuthenticationField{
-			{ID: "operator", Kind: authenticationv1.FieldIdentifier, Label: authenticationv1.LocalizedText{"zh-CN": "种子操作员", "en-US": "Seed operator"}, Help: authenticationv1.LocalizedText{"zh-CN": "首次设置的种子操作员标识", "en-US": "Seed operator configured during setup"}, Autocomplete: "username", Required: true, MinLength: 1, MaxLength: 256, Choices: []authenticationv1.FieldChoice{}},
-			{ID: "password", Kind: authenticationv1.FieldPassword, Label: authenticationv1.LocalizedText{"zh-CN": "密码", "en-US": "Password"}, Help: authenticationv1.LocalizedText{"zh-CN": "不会写入日志或会话", "en-US": "Never stored in logs or sessions"}, Autocomplete: "current-password", Required: true, MinLength: 12, MaxLength: 1024, Choices: []authenticationv1.FieldChoice{}},
-			{ID: "recovery-token", Kind: authenticationv1.FieldOneTimeCode, Label: authenticationv1.LocalizedText{"zh-CN": "恢复租约", "en-US": "Recovery lease"}, Help: authenticationv1.LocalizedText{"zh-CN": "正常首次配置时留空", "en-US": "Leave empty during initial setup"}, Autocomplete: "one-time-code", Required: false, MinLength: 4, MaxLength: 32, Choices: []authenticationv1.FieldChoice{}},
-		},
+		Fields: fields,
 	}}}
 }
 

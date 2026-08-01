@@ -65,6 +65,9 @@ func TestSeedProviderUsesGenericAuthenticationMethod(t *testing.T) {
 		t.Fatal(err)
 	}
 	step := parsed.(*authenticationv1.BeginResult).Result.Step
+	if len(step.Fields) != 2 {
+		t.Fatalf("正常 Seed 登录不应下发恢复租约字段: %+v", step.Fields)
+	}
 
 	continuation := authenticationv1.ContinueRequest{TransactionID: begin.TransactionID, StepID: step.StepID, Responses: []authenticationv1.FieldResponse{{FieldID: "operator", Value: "owner"}, {FieldID: "password", Value: "correct horse battery staple"}, {FieldID: "recovery-token", Value: ""}}}
 	continueRaw, _ := json.Marshal(continuation)
@@ -85,6 +88,50 @@ func TestSeedProviderUsesGenericAuthenticationMethod(t *testing.T) {
 	parsed, _ = authenticationv1.ParseMethodResult(authenticationv1.OperationContinue, response)
 	if result.GetStatus() != contractv1.CallResult_STATUS_OK || parsed.(*authenticationv1.ContinueResult).Result.State != authenticationv1.StateExpired {
 		t.Fatal("Provider transaction 必须一次性消费")
+	}
+}
+
+func TestSeedProviderExposesRecoveryTokenOnlyForActiveLease(t *testing.T) {
+	store := FileStore{Path: filepath.Join(t.TempDir(), "seed.json")}
+	authority, err := NewAuthority(store, localProof{valid: "console-proof"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	authority.now = func() time.Time { return now }
+	state, err := authority.Initialize("owner", []byte("correct horse battery staple"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := testRef("corporate-oidc", "a")
+	state, err = authority.ConfigureProvider(state.Generation, profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	subject := authenticationv1.SubjectIdentity{ID: "owner", Issuer: "https://identity.example.test"}
+	state, err = authority.VerifyProvider(state.Generation, profile, subject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err = authority.PrepareHandoff(state.Generation, HandoffSeal{ProviderProfile: profile, Subject: subject, PolicySnapshot: testRef("root-policy", "b"), SessionID: "session.1", AuthenticatedAt: now, ExpiresAt: now.Add(time.Minute), RecoveryReady: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err = authority.CompleteHandoff(state.Generation, state.Handoff.Digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := authority.OpenRecovery(state.Generation, []byte("console-proof"), time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	provider, err := NewProvider(authority)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider.now = authority.now
+	result := provider.begin(authenticationv1.BeginRequest{TransactionID: strings.Repeat("r", 32), MethodID: MethodID})
+	if result.Result.Step == nil || len(result.Result.Step.Fields) != 3 || result.Result.Step.Fields[2].ID != "recovery-token" || !result.Result.Step.Fields[2].Required {
+		t.Fatalf("有效恢复租约时必须下发必填恢复字段: %+v", result)
 	}
 }
 

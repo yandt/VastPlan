@@ -12,6 +12,7 @@
 - `VASTPLAN_AUTHENTICATION_ASSERTION_TRUST` 指向 Broker Ed25519 公钥信任文件；`VASTPLAN_AUTHORIZATION_POLICY_SNAPSHOT` 与 `VASTPLAN_AUTHORIZATION_POLICY_TRUST` 指向已签名授权快照及其信任文件。
 - 状态文件只保存 Argon2id verifier、精确 Provider/Policy 引用和交接/恢复摘要，不保存明文密码、企业用户目录、Token、角色或 Client Secret。
 - 企业交接后 `seed-password` 自动不可用。恢复必须先由本机运维证明打开最长 15 分钟的 Recovery Lease。
+- 登录表单仅在有效 Recovery Lease 期间下发必填的恢复租约字段；首次配置、普通 Seed 登录和过期租约均不会显示该字段。
 
 ## 当前实现
 
