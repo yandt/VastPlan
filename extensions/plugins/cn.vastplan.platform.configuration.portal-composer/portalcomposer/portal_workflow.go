@@ -293,7 +293,7 @@ func (s *Service) ReleasePortalVersion(ctx context.Context, principal portalapi.
 		return portalapi.PortalRelease{}, ErrInvalidState
 	}
 	s.mu.Unlock()
-	activation, err := s.Activate(ctx, principal, portalapi.ActivationRequest{
+	activation, err := s.activatePortalVersion(ctx, principal, portalapi.ActivationRequest{
 		PortalID: portalID, ApplicationRevisionID: revision.ID, ProfileRevisionID: revision.ProfileRevisionID,
 		BindingRevisionID: revision.BindingRevisionID, ExpectedCurrentID: request.ExpectedCurrentReleaseID, Reason: request.Reason,
 	})
@@ -313,7 +313,7 @@ func (s *Service) RollbackPortalRelease(ctx context.Context, principal portalapi
 	if !valid {
 		return portalapi.PortalRelease{}, ErrNotFound
 	}
-	release, err := s.RollbackActivation(ctx, principal, sourceID, expectedCurrentID, reason)
+	release, err := s.rollbackPortalActivation(ctx, principal, sourceID, expectedCurrentID, reason)
 	return projectRelease(release), err
 }
 

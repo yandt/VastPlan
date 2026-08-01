@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.platform.configuration.portal-composer`
 
-当前制品版本：`4.0.7`
+当前制品版本：`4.1.3`
 
 该平台基础插件以 `active-active + external-shared + queue` 方式治理 Portal。每个 `portalId` 只有一个聚合，内部包含 WorkingCopy、Publication、Release 和版本控制语义状态。
 
@@ -11,7 +11,7 @@
 - WorkingCopy revision CAS 保存，不产生业务版本或历史；
 - 提交时冻结完整配置和 digest，形成 `PendingApproval → Approved → Published` Publication；
 - `PortalRelease` 上线、历史回滚、制品物化、引用保护和 CAS；普通上线只接受最近且从未上线的 Published Publication；
-- Frontend Test Release 在完整 Portal 配置上替换一个获授权插件，并形成带原子归属的隔离候选；候选与 Activation 不进入正式 Publication/PortalRelease 谱系，不能由普通上线入口晋级；
+- Frontend Test Release 在完整 Portal 配置上替换一个获授权插件，并形成带原子归属的隔离候选；候选与 Activation 不进入正式 Publication/PortalRelease 谱系，不能由普通上线入口晋级；正式上线以正式 Release 基线做 CAS，同时校验当前测试覆盖未并发变化，并在成功后将其标记为 `Superseded`；
 - 只通过 `kernel.portal.catalog.*` 窄服务取得可信校验与已验签制品引用；
 - `referencePending` outbox 在管理读取和进程重启后幂等收敛；
 - Portal 用户偏好按 tenant、subject 与 Portal scope 独立保存。

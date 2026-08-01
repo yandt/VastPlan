@@ -412,7 +412,7 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.6", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "4.1.1", "channel": "stable" }
+        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "4.1.3", "channel": "stable" }
       ]
     },
     {

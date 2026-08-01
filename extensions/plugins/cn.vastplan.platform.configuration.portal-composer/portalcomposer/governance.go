@@ -16,21 +16,32 @@ import (
 )
 
 func (s *Service) Activate(ctx context.Context, principal portalapi.Principal, request portalapi.ActivationRequest) (portalapi.PortalActivation, error) {
+	return s.activate(ctx, principal, request, s.currentActivationIDLocked, false)
+}
+
+type activationCurrentResolver func(tenantID, portalID string) uint64
+
+func (s *Service) activatePortalVersion(ctx context.Context, principal portalapi.Principal, request portalapi.ActivationRequest) (portalapi.PortalActivation, error) {
+	return s.activate(ctx, principal, request, s.currentPortalActivationIDLocked, true)
+}
+
+func (s *Service) activate(ctx context.Context, principal portalapi.Principal, request portalapi.ActivationRequest, currentResolver activationCurrentResolver, supersedeTestRelease bool) (portalapi.PortalActivation, error) {
 	if err := requireTrustedPrincipal(principal); err != nil {
 		return portalapi.PortalActivation{}, err
 	}
 	s.mu.Lock()
-	currentID := s.currentActivationIDLocked(principal.TenantID, request.PortalID)
+	currentID := currentResolver(principal.TenantID, request.PortalID)
 	if currentID != request.ExpectedCurrentID {
 		s.mu.Unlock()
 		return portalapi.PortalActivation{}, fmt.Errorf("%w: 当前 Activation 已从 %d 变为 %d", ErrInvalidState, request.ExpectedCurrentID, currentID)
 	}
+	liveID := s.currentActivationIDLocked(principal.TenantID, request.PortalID)
 	s.state.NextActivation++
 	now := s.now().UTC().Format(time.RFC3339Nano)
 	activation := portalapi.PortalActivation{ID: s.state.NextActivation, TenantID: principal.TenantID, PortalID: request.PortalID, Status: portalapi.ActivationPreparing, ApplicationRevisionID: request.ApplicationRevisionID, ProfileRevisionID: request.ProfileRevisionID, BindingRevisionID: request.BindingRevisionID, PreviousActivationID: currentID, ActorID: principal.ID, Reason: request.Reason, CreatedAt: now}
 	var previousReferences []pluginv1.ArtifactReference
 	for _, candidate := range s.state.Activations {
-		if candidate.TenantID == principal.TenantID && candidate.ID == currentID {
+		if candidate.TenantID == principal.TenantID && candidate.ID == liveID {
 			previousReferences = append([]pluginv1.ArtifactReference(nil), candidate.ArtifactReferences...)
 			break
 		}
@@ -67,8 +78,14 @@ func (s *Service) Activate(ctx context.Context, principal portalapi.Principal, r
 	// governance mutex. Re-enter the critical section and revalidate the exact
 	// tuple plus current Activation before the single live-state commit.
 	s.mu.Lock()
-	if current := s.currentActivationIDLocked(principal.TenantID, request.PortalID); current != request.ExpectedCurrentID {
+	if current := currentResolver(principal.TenantID, request.PortalID); current != request.ExpectedCurrentID {
 		value, err := s.persistFailedActivationLocked(activation, "cas-activate", fmt.Errorf("%w: 当前 Activation 已从 %d 变为 %d", ErrInvalidState, request.ExpectedCurrentID, current))
+		s.mu.Unlock()
+		_ = s.restorePortalActiveReferences(ctx, activation.ID, activation.PortalID, previousReferences)
+		return value, err
+	}
+	if current := s.currentActivationIDLocked(principal.TenantID, request.PortalID); current != liveID {
+		value, err := s.persistFailedActivationLocked(activation, "cas-activate", fmt.Errorf("%w: 运行中 Activation 已从 %d 变为 %d", ErrInvalidState, liveID, current))
 		s.mu.Unlock()
 		_ = s.restorePortalActiveReferences(ctx, activation.ID, activation.PortalID, previousReferences)
 		return value, err
@@ -89,6 +106,9 @@ func (s *Service) Activate(ctx context.Context, principal portalapi.Principal, r
 	activation.Status = portalapi.ActivationCurrent
 	activation.ReferencePending = true
 	s.state.Activations = append(s.state.Activations, activation)
+	if supersedeTestRelease {
+		s.supersedeCurrentTestReleaseLocked(principal.TenantID, request.PortalID, liveID, now)
+	}
 	s.auditResourceLocked(principal.TenantID, request.PortalID, activation.ID, "activation.current", principal)
 	if err := s.save(); err != nil {
 		s.mu.Unlock()
@@ -134,12 +154,24 @@ func (s *Service) persistFailedActivationLocked(activation portalapi.PortalActiv
 }
 
 func (s *Service) RollbackActivation(ctx context.Context, principal portalapi.Principal, sourceID, expectedCurrentID uint64, reason string) (portalapi.PortalActivation, error) {
+	return s.rollbackActivation(ctx, principal, sourceID, expectedCurrentID, reason, false)
+}
+
+func (s *Service) rollbackPortalActivation(ctx context.Context, principal portalapi.Principal, sourceID, expectedCurrentID uint64, reason string) (portalapi.PortalActivation, error) {
+	return s.rollbackActivation(ctx, principal, sourceID, expectedCurrentID, reason, true)
+}
+
+func (s *Service) rollbackActivation(ctx context.Context, principal portalapi.Principal, sourceID, expectedCurrentID uint64, reason string, portalLineage bool) (portalapi.PortalActivation, error) {
 	if strings.TrimSpace(reason) == "" {
 		return portalapi.PortalActivation{}, errors.New("Activation 回滚必须说明原因")
 	}
 	s.mu.Lock()
+	project := s.projectActivationsLocked
+	if portalLineage {
+		project = s.projectPortalActivationsLocked
+	}
 	var source portalapi.PortalActivation
-	for _, candidate := range s.projectActivationsLocked(principal.TenantID) {
+	for _, candidate := range project(principal.TenantID) {
 		if candidate.ID == sourceID {
 			source = candidate
 			break
@@ -149,7 +181,11 @@ func (s *Service) RollbackActivation(ctx context.Context, principal portalapi.Pr
 	if source.ID == 0 || source.Status != portalapi.ActivationSuperseded {
 		return portalapi.PortalActivation{}, ErrInvalidState
 	}
-	return s.Activate(ctx, principal, portalapi.ActivationRequest{PortalID: source.PortalID, ApplicationRevisionID: source.ApplicationRevisionID, ProfileRevisionID: source.ProfileRevisionID, BindingRevisionID: source.BindingRevisionID, ExpectedCurrentID: expectedCurrentID, Reason: reason})
+	request := portalapi.ActivationRequest{PortalID: source.PortalID, ApplicationRevisionID: source.ApplicationRevisionID, ProfileRevisionID: source.ProfileRevisionID, BindingRevisionID: source.BindingRevisionID, ExpectedCurrentID: expectedCurrentID, Reason: reason}
+	if portalLineage {
+		return s.activatePortalVersion(ctx, principal, request)
+	}
+	return s.Activate(ctx, principal, request)
 }
 
 func (s *Service) ListActivations(ctx context.Context, principal portalapi.Principal) ([]portalapi.PortalActivation, error) {
@@ -270,6 +306,30 @@ func (s *Service) currentActivationIDLocked(tenantID, portalID string) uint64 {
 		}
 	}
 	return current
+}
+
+func (s *Service) currentPortalActivationIDLocked(tenantID, portalID string) uint64 {
+	var current uint64
+	for _, activation := range s.state.Activations {
+		if activation.TenantID == tenantID && activation.PortalID == portalID && activation.Status == portalapi.ActivationCurrent && !s.isTestVersionLocked(activation.ApplicationRevisionID) && activation.ID > current {
+			current = activation.ID
+		}
+	}
+	return current
+}
+
+func (s *Service) supersedeCurrentTestReleaseLocked(tenantID, portalID string, activationID uint64, now string) {
+	if activationID == 0 {
+		return
+	}
+	for i := range s.state.TestReleases {
+		release := &s.state.TestReleases[i]
+		binding, ok := s.state.TestBindings[testBindingKey(tenantID, release.BindingID)]
+		if release.TenantID == tenantID && ok && binding.PortalID == portalID && release.Status == portalapi.TestReleaseReady && release.CandidateReleaseID == activationID {
+			release.Status = portalapi.TestReleaseSuperseded
+			release.UpdatedAt = now
+		}
+	}
 }
 
 func (s *Service) profileIndexLocked(tenantID string, id uint64) (int, error) {

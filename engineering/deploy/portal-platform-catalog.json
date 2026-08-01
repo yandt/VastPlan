@@ -70,7 +70,7 @@
         { "id": "cn.vastplan.foundation.frontend.structure.layout.top-navigation", "version": "5.2.1", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.workflow.workbench", "version": "5.2.5", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.identity.account-center", "version": "0.2.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "4.1.1", "channel": "stable" },
+        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "4.1.3", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.8.13", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.plugin-settings", "version": "0.13.10", "channel": "stable" },
         { "id": "cn.vastplan.platform.security.credentials", "version": "0.12.12", "channel": "stable" },
@@ -90,7 +90,7 @@
       "platformProfile": {
         "id": "portal-default",
         "revision": 90,
-        "digest": "78b43d2b91da7b8f3f1a5f16d07800a922afa8be3e7cf95e356815d54a12d67c"
+        "digest": "f3fa2f0be71f28e264a2fc15320f6f2169517cfc8b51321b01867040603dff83"
       },
       "services": [
         {

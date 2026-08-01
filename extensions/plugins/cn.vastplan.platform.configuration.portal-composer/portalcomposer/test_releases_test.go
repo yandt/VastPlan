@@ -155,6 +155,43 @@ func TestFrontendTestReleaseReusesImmutableApplicationAndActivation(t *testing.T
 	if err != nil || next.Number != 2 {
 		t.Fatalf("隔离的测试候选不得占用正式版本号或阻塞新草稿: %+v err=%v", next, err)
 	}
+	for _, step := range []struct {
+		principal portalapi.Principal
+		action    string
+	}{{author, "submit"}, {approver, "approve"}, {publisher, "publish"}} {
+		next, err = service.TransitionPortalVersion(context.Background(), step.principal, portal.ID, next.ID, step.action)
+		if err != nil {
+			t.Fatalf("正式版本推进失败: action=%s err=%v", step.action, err)
+		}
+	}
+	stable, err := service.ReleasePortalVersion(context.Background(), publisher, portal.ID, portalapi.PortalReleaseRequest{
+		PortalVersionID: next.ID, ExpectedCurrentReleaseID: first.ID, Reason: "replace test overlay with stable release",
+	})
+	if err != nil || stable.Status != portalapi.ActivationCurrent || stable.PreviousReleaseID != first.ID {
+		t.Fatalf("正式上线必须基于正式基线 CAS 并替换测试覆盖: release=%+v err=%v", stable, err)
+	}
+	updated, err := service.portalTestRelease(publisher, release.ID)
+	if err != nil || updated.Status != portalapi.TestReleaseSuperseded {
+		t.Fatalf("被正式上线替换的测试发布必须标记为 Superseded: release=%+v err=%v", updated, err)
+	}
+	if current := service.currentActivationIDLocked(author.TenantID, portal.ID); current != stable.ID {
+		t.Fatalf("正式上线后运行态必须指向新 Release: got=%d want=%d", current, stable.ID)
+	}
+	secondTest, err := service.CreateTestRelease(context.Background(), publisher, portalapi.CreateTestReleaseRequest{
+		BindingID: binding.ID,
+		Receipt:   portalTestReceipt(pluginv1.ArtifactRef{PluginID: binding.PluginID, Version: "1.1.0-dev.20260721.2.abcdef0", Channel: "testing"}, strings.Repeat("b", 64), 17),
+	})
+	if err != nil || secondTest.Status != portalapi.TestReleaseReady {
+		t.Fatalf("第二次 Frontend Test Release 未完成: release=%+v err=%v", secondTest, err)
+	}
+	rolledBack, err := service.RollbackPortalRelease(context.Background(), publisher, portal.ID, first.ID, stable.ID, "restore stable baseline")
+	if err != nil || rolledBack.Status != portalapi.ActivationCurrent || rolledBack.PreviousReleaseID != stable.ID {
+		t.Fatalf("正式回滚必须基于正式基线 CAS 并替换测试覆盖: release=%+v err=%v", rolledBack, err)
+	}
+	updated, err = service.portalTestRelease(publisher, secondTest.ID)
+	if err != nil || updated.Status != portalapi.TestReleaseSuperseded {
+		t.Fatalf("被正式回滚替换的测试发布必须标记为 Superseded: release=%+v err=%v", updated, err)
+	}
 }
 
 func TestFrontendTestReleaseCandidateAssociationIsAtomic(t *testing.T) {
