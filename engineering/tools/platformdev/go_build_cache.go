@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -261,6 +262,30 @@ func (r *runtime) refreshDevelopmentBackendKernel(ctx context.Context) (bool, er
 		filepath.Join(cached.Path, "bin", build.ID),
 		filepath.Join(r.runDir, "dynamic", build.ID),
 	)
+}
+
+// pairPreparedBackendKernel makes the runtime entry point an exact projection
+// of the dependency-aware Backend Kernel build. The dynamic-go cache owns the
+// Go ABI host and .so bundle; its convenience kernel copy must never override
+// a newer kernel produced from the full Backend dependency closure.
+func (r *runtime) pairPreparedBackendKernel() error {
+	source := filepath.Join(r.runDir, "bin", "backend-kernel")
+	target := filepath.Join(r.runDir, "dynamic", "backend-kernel")
+	changed, err := replaceCachedFileIfChanged(source, target)
+	if err != nil {
+		return fmt.Errorf("配对 Backend Kernel 运行入口: %w", err)
+	}
+	equal, err := regularFilesEqual(source, target)
+	if err != nil {
+		return fmt.Errorf("复核 Backend Kernel 运行入口: %w", err)
+	}
+	if !equal {
+		return errors.New("Backend Kernel 运行入口与依赖闭包构建不一致")
+	}
+	if changed {
+		log.Printf("已用本次 Backend 依赖闭包构建刷新实际 Kernel 运行入口")
+	}
+	return nil
 }
 
 func replaceCachedFileIfChanged(source, target string) (bool, error) {

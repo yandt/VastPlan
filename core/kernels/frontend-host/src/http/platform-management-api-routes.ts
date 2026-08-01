@@ -9,6 +9,7 @@ import type { PlatformManagementTarget } from "../capabilities/platform-manageme
 import type { Principal } from "../identity/identity-provider";
 import { sendAPIError, sendJSON } from "./json-response";
 import { resourceName } from "./platform-route-contract";
+import { reportCapabilityFailure } from "../observability/capability-failure";
 
 const maximumBodyBytes = 1 << 20;
 const maximumResponseBytes = 8 << 20;
@@ -65,6 +66,7 @@ export class PlatformManagementAPIRoutes {
       sendJSON(response, matched.route.successStatus, value, method === "HEAD");
       return true;
     } catch (error) {
+      reportCapabilityFailure({ operation: matched.route.target.operation, capability: matched.route.target.capability, logicalService: target.service.logicalService }, error);
       if (error instanceof ManagementAuthorizationError) return reject(response, 403, "management_binding_forbidden", method);
       if (error instanceof CapabilityApplicationError) {
         if (error.code === "permission.denied") return reject(response, 403, "forbidden", method);

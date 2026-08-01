@@ -318,6 +318,8 @@ func allowedKernelCallback(c *v1.CallContext, request extpoint.PermissionRequest
 		return request.Capability == configurationauthority.KernelIssueService || sharedStateKernelService(request.Capability)
 	case configurationauthority.CustodianPluginID:
 		return request.Capability == configurationauthority.KernelConsumeService || credentialsSharedStateKernelService(request.Capability)
+	case "cn.vastplan.platform.security.authorization-policy":
+		return authorizationPolicySharedStateKernelService(request.Capability)
 	case databasev1.RuntimePluginID:
 		return request.Capability == "kernel.credential.material-lease"
 	case "cn.vastplan.platform.infrastructure.deployment-manager":
@@ -325,6 +327,12 @@ func allowedKernelCallback(c *v1.CallContext, request extpoint.PermissionRequest
 	default:
 		return false
 	}
+}
+
+func authorizationPolicySharedStateKernelService(capability string) bool {
+	return capability == sharedstatev1.KernelService(sharedstatev1.OperationGet) ||
+		capability == sharedstatev1.FencedKernelService(sharedstatev1.OperationCreate) ||
+		capability == sharedstatev1.FencedKernelService(sharedstatev1.OperationUpdate)
 }
 
 func sharedStateKernelService(capability string) bool {

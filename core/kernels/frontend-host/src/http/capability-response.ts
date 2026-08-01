@@ -24,7 +24,7 @@ export async function sendCapabilityResponse(
     catch { return sendAPIError(response, 502, "invalid_capability_response", head); }
     sendJSON(response, 200, value, head);
   } catch (error) {
-    reportCapabilityFailure(operation, error);
+    reportCapabilityFailure({ operation }, error);
 	if (error instanceof CapabilityApplicationError && error.code === "permission.denied") sendAPIError(response, 403, "forbidden", head);
     else sendAPIError(response, 400, "request_rejected", head);
   }

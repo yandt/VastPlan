@@ -57,6 +57,8 @@ type ProtocolRuntime struct {
 	GrantPolicy     KernelServiceGrantPolicy
 	dynamicGoDriver PluginExecutionDriver
 	PlacementPolicy PlacementPolicy
+	lifecycleCtx    context.Context
+	lifecycleCancel context.CancelFunc
 }
 
 // AttachRouter 在首个 unit 启动前接入全局能力寻址。运行中切换 Router 会让已经发布的
@@ -78,6 +80,7 @@ func (r *ProtocolRuntime) AttachRouter(router *addressing.Router) error {
 }
 
 func NewProtocolRuntime(kernelVersion string, logf func(string, ...any)) *ProtocolRuntime {
+	lifecycleCtx, lifecycleCancel := context.WithCancel(context.Background())
 	return &ProtocolRuntime{
 		KernelVersion:     kernelVersion,
 		Logf:              logf,
@@ -89,6 +92,8 @@ func NewProtocolRuntime(kernelVersion string, logf func(string, ...any)) *Protoc
 		GrantPolicy:       DefaultKernelServiceGrantPolicy(),
 		units:             map[string]*runningUnit{},
 		events:            make(chan RuntimeEvent, 64),
+		lifecycleCtx:      lifecycleCtx,
+		lifecycleCancel:   lifecycleCancel,
 	}
 }
 
@@ -213,6 +218,10 @@ func (r *ProtocolRuntime) Status(unitID string) (RuntimeStatus, bool) {
 		RestartCount:        unit.restarts,
 		KernelServiceGrants: cloneStringSlices(unit.spec.KernelServiceGrants),
 	}
+	if ready, issue := leadershipReadiness(unit); !ready {
+		status.Healthy = false
+		status.DependencyIssues = append(status.DependencyIssues, issue)
+	}
 	seenPIDs := map[int]struct{}{}
 	for _, instance := range unit.instances {
 		if instance.PID > 0 {
@@ -265,7 +274,11 @@ func (r *ProtocolRuntime) Close() error {
 	r.closed = true
 	units := r.units
 	r.units = map[string]*runningUnit{}
+	lifecycleCancel := r.lifecycleCancel
 	r.mu.Unlock()
+	if lifecycleCancel != nil {
+		lifecycleCancel()
+	}
 	for _, unit := range units {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		closeRegistrations(ctx, unit.registrations)

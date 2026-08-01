@@ -112,7 +112,13 @@ func (r *ProtocolRuntime) monitorLeadership(unitID string, generation uint64, le
 			return
 		}
 	case <-leadership.Done():
-		return
+		r.mu.RLock()
+		closed := r.closed
+		r.mu.RUnlock()
+		if closed {
+			return
+		}
+		err = fmt.Errorf("leader renewal lifecycle ended")
 	}
 	r.mu.RLock()
 	unit, current := r.units[unitID]

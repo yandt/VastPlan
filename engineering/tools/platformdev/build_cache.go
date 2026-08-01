@@ -386,6 +386,9 @@ func (r *runtime) prepareCachedBuilds(ctx context.Context) error {
 		if err := materializeCachedDirectory(filepath.Join(dynamic.Path, "dynamic"), filepath.Join(r.runDir, "dynamic")); err != nil {
 			return fmt.Errorf("装配 dynamic-go 构建缓存: %w", err)
 		}
+		if err := r.pairPreparedBackendKernel(); err != nil {
+			return err
+		}
 	}
 
 	packageInputs := []string{

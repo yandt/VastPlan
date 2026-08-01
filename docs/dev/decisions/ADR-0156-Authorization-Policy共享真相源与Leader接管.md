@@ -37,3 +37,8 @@
 - Shared State 或 leader fence 不可用时，管理写入 fail-closed；已部署 Enforcer 仍按自身未过期 LKG 规则判定。
 - 开发环境已有文件不会被持续双写，也不能成为灾难恢复副本；正式备份必须使用 Shared State 备份流程。
 - A3 封闭的是治理账本高可用，不宣称已完成跨节点 Snapshot 分发。
+
+## 2026-08-02 实施澄清
+
+- `authorization-policy` 对 Shared State 的调用由平台管理 Enforcer Bundle 精确放行 `get/fenced.create/fenced.update`；普通非 fenced 写入、删除和未声明操作仍 fail-closed。Manifest、Platform Profile Grant 与 workload Policy 必须三层同时成立。
+- Node Agent 将一次 reconcile 的选主获取期限与 Runtime 所有的续租生命周期分离。已提交 unit 不再因 reconcile 返回而丢失 fencing；运行期 fencing 失效会使 unit 非 Ready 并触发停止，不允许以假 Ready 继续服务。

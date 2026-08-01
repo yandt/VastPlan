@@ -8,8 +8,8 @@ import (
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/addressing"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/operationfence"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/operationfence"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/servicemodel"
 )
 
@@ -23,6 +23,12 @@ func deploymentUnitForRuntime(unit RuntimeUnit) deploymentv1.Unit {
 func (r *ProtocolRuntime) acquireUnitLeaderships(ctx context.Context, unit RuntimeUnit, policy servicemodel.Policy) (RuntimeUnit, []*controlplane.Leadership, error) {
 	if r.LeaderKV == nil {
 		return unit, nil, errors.New("leader unit 未配置控制面 lease KV")
+	}
+	r.mu.RLock()
+	lifecycleCtx, closed := r.lifecycleCtx, r.closed
+	r.mu.RUnlock()
+	if closed || lifecycleCtx == nil {
+		return unit, nil, errors.New("leader unit 的 Runtime 生命周期不可用")
 	}
 	logicalService := unit.LogicalService
 	if logicalService == "" {
@@ -49,7 +55,7 @@ func (r *ProtocolRuntime) acquireUnitLeaderships(ctx context.Context, unit Runti
 			election += "/partition/" + partitionKey
 		}
 		elector := controlplane.LeaderElector{KV: r.LeaderKV, Election: election, Identity: identity + "/" + unit.ID + "/" + partitionKey, Options: controlplane.LeaderElectionOptions{Logf: r.Logf}}
-		leadership, err := elector.Acquire(ctx)
+		leadership, err := elector.AcquireWithLifetime(ctx, lifecycleCtx)
 		if err != nil {
 			for _, previous := range leaderships {
 				_ = previous.Close(context.Background())
@@ -68,6 +74,33 @@ func (r *ProtocolRuntime) acquireUnitLeaderships(ctx context.Context, unit Runti
 		}
 	}
 	return unit, leaderships, nil
+}
+
+func leadershipReadiness(unit *runningUnit) (bool, string) {
+	if unit == nil {
+		return false, "leader runtime 不存在"
+	}
+	expected := 0
+	switch unit.spec.InstancePolicy {
+	case servicemodel.PolicyLeader:
+		expected = 1
+	case servicemodel.PolicyPartitioned:
+		expected = len(unit.spec.PartitionKeys)
+	default:
+		return true, ""
+	}
+	if expected == 0 || len(unit.leaderships) != expected {
+		return false, "leader fencing 数量与运行策略不一致"
+	}
+	for _, leadership := range unit.leaderships {
+		if leadership == nil {
+			return false, "leader fencing 不可用"
+		}
+		if _, current := leadership.Current(); !current {
+			return false, "leader fencing 已失效"
+		}
+	}
+	return true, ""
 }
 
 func (r *ProtocolRuntime) restoreOwnership(ctx context.Context, unitID string, old *runningUnit) error {

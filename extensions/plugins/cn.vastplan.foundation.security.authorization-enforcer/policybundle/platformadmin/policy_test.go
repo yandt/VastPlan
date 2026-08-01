@@ -88,6 +88,17 @@ func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
 			t.Fatalf("Credentials 不得回退无 fence mutation %s: %s", capability, got)
 		}
 	}
+	authorizationPolicy := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.vastplan.platform.security.authorization-policy"}}
+	for _, capability := range []string{"kernel.state.shared.get", "kernel.state.shared.fenced.create", "kernel.state.shared.fenced.update"} {
+		if got, _ := decide(authorizationPolicy, extpoint.PermissionRequest{Capability: capability}); got != extpoint.DecisionAllow {
+			t.Fatalf("Authorization Policy 的 Shared State 回调 %s 应允许: %s", capability, got)
+		}
+	}
+	for _, capability := range []string{"kernel.state.shared.create", "kernel.state.shared.update", "kernel.state.shared.delete", "kernel.state.shared.fenced.delete"} {
+		if got, _ := decide(authorizationPolicy, extpoint.PermissionRequest{Capability: capability}); got == extpoint.DecisionAllow {
+			t.Fatalf("Authorization Policy 不得获得未声明的 Shared State 回调 %s: %s", capability, got)
+		}
+	}
 	if got, _ := decide(businessPlugin, extpoint.PermissionRequest{Capability: "kernel.state.shared.get"}); got == extpoint.DecisionAllow {
 		t.Fatalf("普通插件不得继承平台 Shared State 授权: %s", got)
 	}

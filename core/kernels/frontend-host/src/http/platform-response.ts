@@ -5,6 +5,7 @@ import type { PlatformManagementTarget } from "../capabilities/platform-manageme
 import type { Principal } from "../identity/identity-provider";
 import { sendAPIError, sendJSON } from "./json-response";
 import { encodeCapabilityPayload } from "./revision-route-contract";
+import { reportCapabilityFailure } from "../observability/capability-failure";
 
 export async function sendPlatformResponse(options: {
   client: PlatformCapabilityPort; principal: Principal; target: PlatformManagementTarget;
@@ -18,6 +19,7 @@ export async function sendPlatformResponse(options: {
     catch { return sendAPIError(options.response, 502, "platform_service_unavailable", options.head); }
     sendJSON(options.response, 200, options.transform?.(value) ?? value, options.head);
   } catch (error) {
+    reportCapabilityFailure({ operation: options.operation, capability: options.capability, logicalService: options.target.service.logicalService }, error);
     if (error instanceof ManagementAuthorizationError) return sendAPIError(options.response, 403, "management_binding_forbidden", options.head);
     if (error instanceof CapabilityApplicationError) return mapCapabilityError(options.response, error.code, options.head);
     sendAPIError(options.response, 502, "platform_service_unavailable", options.head);

@@ -54,39 +54,54 @@ type Leadership struct {
 }
 
 func (e LeaderElector) Acquire(ctx context.Context) (*Leadership, error) {
+	return e.AcquireWithLifetime(ctx, ctx)
+}
+
+// AcquireWithLifetime uses acquireCtx only to bound election acquisition and
+// lifetimeCtx to own the returned leadership renewal loop. Runtime callers use
+// this split so a completed reconcile cannot cancel an already committed unit.
+func (e LeaderElector) AcquireWithLifetime(acquireCtx, lifetimeCtx context.Context) (*Leadership, error) {
 	if e.KV == nil || e.Election == "" || e.Identity == "" {
 		return nil, errors.New("leader election 的 KV、election 和 identity 必须配置")
+	}
+	if acquireCtx == nil || lifetimeCtx == nil {
+		return nil, errors.New("leader election 的获取与运行期 context 必须配置")
+	}
+	if err := lifetimeCtx.Err(); err != nil {
+		return nil, fmt.Errorf("leader election 运行期已结束: %w", err)
 	}
 	options := normalizeLeaderOptions(e.Options)
 	ticker := time.NewTicker(options.RetryEvery)
 	defer ticker.Stop()
 	for {
-		leadership, acquired, err := e.tryAcquire(ctx, options)
+		leadership, acquired, err := e.tryAcquire(acquireCtx, lifetimeCtx, options)
 		if err != nil {
 			options.Logf("controller 选主失败 election=%s identity=%s: %v", e.Election, e.Identity, err)
 		} else if acquired {
 			return leadership, nil
 		}
 		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
+		case <-acquireCtx.Done():
+			return nil, acquireCtx.Err()
+		case <-lifetimeCtx.Done():
+			return nil, fmt.Errorf("leader election 运行期已结束: %w", lifetimeCtx.Err())
 		case <-ticker.C:
 		}
 	}
 }
 
-func (e LeaderElector) tryAcquire(parent context.Context, options LeaderElectionOptions) (*Leadership, bool, error) {
+func (e LeaderElector) tryAcquire(acquireCtx, lifetimeCtx context.Context, options LeaderElectionOptions) (*Leadership, bool, error) {
 	key := "leaders." + keyToken(e.Election)
 	record := LeaderRecord{
 		SchemaVersion: 1, Election: e.Election, Holder: e.Identity,
 		Token: randomLeaderToken(), Epoch: 1, UpdatedAt: time.Now().UTC(),
 	}
 	raw, _ := json.Marshal(record)
-	revision, err := e.KV.Create(parent, key, raw)
+	revision, err := e.KV.Create(acquireCtx, key, raw)
 	if err == nil {
-		return startLeadership(parent, e.KV, key, record, revision, options), true, nil
+		return startLeadership(lifetimeCtx, e.KV, key, record, revision, options), true, nil
 	}
-	entry, getErr := e.KV.Get(parent, key)
+	entry, getErr := e.KV.Get(acquireCtx, key)
 	if errors.Is(getErr, jetstream.ErrKeyNotFound) {
 		return nil, false, nil
 	}
@@ -102,11 +117,11 @@ func (e LeaderElector) tryAcquire(parent context.Context, options LeaderElection
 	}
 	record.Epoch = current.Epoch + 1
 	raw, _ = json.Marshal(record)
-	revision, err = e.KV.Update(parent, key, raw, entry.Revision())
+	revision, err = e.KV.Update(acquireCtx, key, raw, entry.Revision())
 	if err != nil {
 		return nil, false, nil // 另一候选者先完成 CAS；回到等待循环。
 	}
-	return startLeadership(parent, e.KV, key, record, revision, options), true, nil
+	return startLeadership(lifetimeCtx, e.KV, key, record, revision, options), true, nil
 }
 
 func startLeadership(parent context.Context, kv jetstream.KeyValue, key string, record LeaderRecord, revision uint64, options LeaderElectionOptions) *Leadership {

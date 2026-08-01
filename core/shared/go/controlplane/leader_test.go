@@ -73,6 +73,34 @@ func TestLeaderElection_SingleWriterFailoverAndFencing(t *testing.T) {
 	}
 }
 
+func TestLeaderElection_ExplicitLifetimeOutlivesAcquisitionContext(t *testing.T) {
+	_, buckets := startControlplaneNATS(t)
+	acquireCtx, cancelAcquire := context.WithTimeout(context.Background(), time.Second)
+	lifetimeCtx, cancelLifetime := context.WithCancel(context.Background())
+	leadership, err := (LeaderElector{
+		KV: buckets.Controllers, Election: "plugin/platform.credentials/platform", Identity: "node-a/platform-credentials/",
+		Options: LeaderElectionOptions{LeaseDuration: 400 * time.Millisecond, RenewEvery: 50 * time.Millisecond, RetryEvery: 20 * time.Millisecond},
+	}).AcquireWithLifetime(acquireCtx, lifetimeCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cancelAcquire()
+	defer func() { _ = leadership.Close(context.Background()) }()
+	time.Sleep(120 * time.Millisecond)
+	if _, current := leadership.Current(); !current {
+		t.Fatal("获取 context 结束后，显式运行期内的 leadership 必须继续续租")
+	}
+	cancelLifetime()
+	select {
+	case <-leadership.Done():
+	case <-time.After(time.Second):
+		t.Fatal("运行期结束后 leadership 未停止")
+	}
+	if _, current := leadership.Current(); current {
+		t.Fatal("运行期结束后 fencing evidence 必须立即失效")
+	}
+}
+
 func TestOpenBucketsRejectsSharedStateWithoutCapacityPolicy(t *testing.T) {
 	server, buckets := startControlplaneNATS(t)
 	nc, err := nats.Connect(server.ClientURL())
