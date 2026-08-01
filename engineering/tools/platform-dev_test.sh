@@ -26,6 +26,7 @@ assert_contains() {
 }
 
 bash -n "$SCRIPT"
+bash -n "$ROOT/engineering/tools/create-seed-password-file.sh"
 case "$(<"$SCRIPT")" in
   *'pid=$pid）'*) fail "set -u 下变量后紧邻多字节字符必须使用花括号" ;;
 esac
@@ -34,6 +35,13 @@ help_output="$(NO_COLOR=1 "$SCRIPT" help)"
 assert_contains "$help_output" "up [--debug] [--fresh]"
 assert_contains "$help_output" "doctor"
 assert_contains "$help_output" "logs [--follow]"
+assert_contains "$help_output" "seed-admin init --operator 账号 [--password-file"
+
+noninteractive_seed_output="$TEMP_ROOT/noninteractive-seed.log"
+if NO_COLOR=1 VASTPLAN_DEV_STATE_ROOT="$STATE_ROOT" "$SCRIPT" seed-admin init --operator test-admin </dev/null >"$noninteractive_seed_output" 2>&1; then
+  fail "非交互 Seed 初始化缺少 password-file 时应被拒绝"
+fi
+assert_contains "$(<"$noninteractive_seed_output")" "非交互环境必须显式提供 --password-file"
 
 invalid_output="$TEMP_ROOT/invalid-timeout.log"
 if NO_COLOR=1 VASTPLAN_DEV_STATE_ROOT="$STATE_ROOT" "$SCRIPT" up --timeout invalid >"$invalid_output" 2>&1; then

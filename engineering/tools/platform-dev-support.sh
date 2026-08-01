@@ -435,17 +435,36 @@ manage_seed_admin() {
     esac
     shift
   done
-  if [ "$action" = init ] && { [ -z "$operator" ] || [ -z "$password_file" ]; }; then
-    fail "seed-admin init 必须提供 --operator 与 --password-file"
+  if [ "$action" = init ] && [ -z "$operator" ]; then
+    fail "seed-admin init 必须提供 --operator"
+    return 2
+  fi
+  if [ "$action" = init ] && [ -z "$password_file" ] && [ ! -t 0 ]; then
+    fail "非交互环境必须显式提供 --password-file"
     return 2
   fi
   ensure_state_dirs
   mkdir -p "$STATE_ROOT/state/authentication"
   build_seedaccessctl
+  local temporary_password_file=""
+  if [ "$action" = init ] && [ -z "$password_file" ]; then
+    if ! temporary_password_file="$("$ROOT/engineering/tools/create-seed-password-file.sh")"; then
+      fail "创建临时 Seed 密码文件失败"
+      return 1
+    fi
+    password_file="$temporary_password_file"
+  fi
   local args=(-state-file "$STATE_ROOT/state/authentication/seed-access.json")
   [ -z "$operator" ] || args+=(-operator "$operator")
   [ -z "$password_file" ] || args+=(-password-file "$password_file")
-  "$STATE_ROOT/seedaccessctl" "${args[@]}" "$action"
+  local status=0
+  if "$STATE_ROOT/seedaccessctl" "${args[@]}" "$action"; then
+    status=0
+  else
+    status=$?
+  fi
+  [ -z "$temporary_password_file" ] || rm -f -- "$temporary_password_file"
+  return "$status"
 }
 
 show_recent_log() {

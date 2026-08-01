@@ -58,7 +58,7 @@ VastPlan 本地平台管理中心
   $0 up [--debug] [--fresh] [--no-hot] [--auto-login] [--timeout 秒]
   $0 restart [--debug] [--fresh] [--no-hot] [--auto-login] [--timeout 秒]
   $0 bootstrap [--rebuild-seed] [--debug] [--fresh] [--no-hot] [--auto-login] [--timeout 秒]
-  $0 seed-admin init --operator 账号 --password-file owner-only文件
+  $0 seed-admin init --operator 账号 [--password-file owner-only文件]
   $0 seed-admin status
   $0 down
   $0 status
@@ -76,7 +76,7 @@ VastPlan 本地平台管理中心
   up         只启动内核并恢复已有期望态，不执行任何发布（默认命令）
   restart    优雅停止后按无发布模式重新启动
   bootstrap  显式发布/更新平台基础组合后启动；默认复用 stable LKG，不发布示例业务服务
-  seed-admin 在本机初始化或查看数据库无关的 Seed 管理员；密码只从 owner-only 文件读取
+  seed-admin 在本机初始化或查看数据库无关的 Seed 管理员；未指定密码文件时安全交互输入
   down       优雅停止当前平台及其受管子进程
   status     显示编排器与开发网关状态
   logs       显示最近日志；加 --follow/-f 持续跟踪
