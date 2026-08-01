@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.platform.configuration.portal-composer`
 
-当前制品版本：`4.2.0`
+当前制品版本：`4.2.1`
 
 该平台基础插件以 `active-active + external-shared + queue` 方式治理 Portal。每个 `portalId` 只有一个聚合，内部包含 WorkingCopy、Publication、Release 和版本控制语义状态。
 
@@ -20,7 +20,7 @@
 
 静态 `portal-platform-catalog.json` 仅为首个 Portal WorkingCopy 提供种子配置，不再形成可在线编辑的 Platform Profile 或 PortalBinding。治理读取会返回可信 `creationTemplate`，因此租户尚无 Portal 时也能创建第一条记录；空上线历史统一编码为 `[]`。内核 Recovery Baseline 继续独立于 Portal，确保错误配置不能破坏最小管理与恢复入口。
 
-管理中心只注册 `/settings/portals` 一个 Workbench Collection。一行代表一个 Portal；编辑表单一次修改完整配置，版本历史、上线历史、审计和完整配置通过该行的子视图打开。页面顶部的 Portal 状态使用无装饰外框的响应式两列 Descriptions 摘要；独立 Profile、Binding 和 Activation 菜单及浏览器 API 已删除。
+管理中心只注册 `/settings/portals` 一个 Workbench Collection。一行代表一个 Portal；编辑表单一次修改完整配置，版本历史、上线历史、审计和完整配置通过该行的子视图打开。页面顶部直接使用无标题、无装饰外框的响应式两列 Descriptions 摘要，避免重复说明当前页面语境；独立 Profile、Binding 和 Activation 菜单及浏览器 API 已删除。
 
 可信 BFF API：
 

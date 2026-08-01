@@ -64,12 +64,13 @@ describe("Portal aggregate workspace", () => {
 
   it("defines the Portal status as a plain responsive two-column summary", async () => {
     const page = createPortalPage(new PortalControlClient({ fetch: async () => response({ portals: [] }) }));
-    await expect(page.loadSummary?.(new AbortController().signal)).resolves.toMatchObject({
-      title: "Portal 状态",
+    const summary = await page.loadSummary?.(new AbortController().signal);
+    expect(summary).toMatchObject({
       appearance: "plain",
       columns: { xs: 1, sm: 1, md: 2, lg: 2, xl: 2 },
       metrics: [{ id: "portals" }, { id: "online" }],
     });
+    expect(summary).not.toHaveProperty("title");
   });
 
   it("shows only negotiated version actions and hides all of them while unavailable", () => {
