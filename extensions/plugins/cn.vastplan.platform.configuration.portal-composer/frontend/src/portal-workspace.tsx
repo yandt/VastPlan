@@ -40,7 +40,7 @@ export function createPortalPage(client: PortalControlClient): CollectionPageDef
     async load(query, signal) { return loadPortals(client, query, signal); },
     async loadSummary() {
       const { portals } = await client.governance();
-      return { appearance: "plain", columns: { xs: 1, sm: 1, md: 2, lg: 2, xl: 2 }, metrics: [
+      return { appearance: "plain", size: "xs", columns: { xs: 1, sm: 1, md: 2, lg: 2, xl: 2 }, metrics: [
         { id: "portals", label: "Portal", value: portals.length },
         { id: "online", label: "已上线", value: portals.filter((portal) => portal.currentReleaseId !== undefined).length, tone: "success" },
       ] };
