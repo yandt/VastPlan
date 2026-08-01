@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -10,9 +11,10 @@ import (
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
 
-func TestStablePackageIdentityLedgerRejectsSameRefWithDifferentBytes(t *testing.T) {
+func TestStablePackageIdentityLedgerReusesSameRefInsteadOfRebuilding(t *testing.T) {
 	ledgerPath := filepath.Join(t.TempDir(), "identity", "stable.json")
 	first := writeStableIdentityTestRepository(t, "1.0.0", "first")
+	firstBytes := readStableIdentityPackage(t, first, "cn.vastplan.test.identity", "1.0.0")
 	if err := reconcileStablePackageIdentities(first, ledgerPath); err != nil {
 		t.Fatal(err)
 	}
@@ -20,9 +22,11 @@ func TestStablePackageIdentityLedgerRejectsSameRefWithDifferentBytes(t *testing.
 		t.Fatalf("相同制品必须幂等: %v", err)
 	}
 	conflict := writeStableIdentityTestRepository(t, "1.0.0", "changed")
-	err := reconcileStablePackageIdentities(conflict, ledgerPath)
-	if err == nil || !strings.Contains(err.Error(), "建议升级清单") || !strings.Contains(err.Error(), "cn.vastplan.test.identity@1.0.0/stable -> cn.vastplan.test.identity@1.0.1/stable") {
-		t.Fatalf("同一 stable ref 的不同字节必须提前失败: %v", err)
+	if err := reconcileStablePackageIdentities(conflict, ledgerPath); err != nil {
+		t.Fatalf("同一 stable ref 必须复用已登记对象: %v", err)
+	}
+	if got := readStableIdentityPackage(t, conflict, "cn.vastplan.test.identity", "1.0.0"); !bytes.Equal(got, firstBytes) {
+		t.Fatal("未提升 SemVer 的工作区构建不得进入 stable 仓库")
 	}
 	upgraded := writeStableIdentityTestRepository(t, "1.0.1", "changed")
 	if err := reconcileStablePackageIdentities(upgraded, ledgerPath); err != nil {
@@ -45,6 +49,44 @@ func TestStablePackageIdentityLedgerRejectsSameRefWithDifferentBytes(t *testing.
 	}
 }
 
+func TestHydrateRecordedStablePackagesSkipsSourcePackagingForKnownRef(t *testing.T) {
+	ledgerPath := filepath.Join(t.TempDir(), "identity", "stable.json")
+	first := writeStableIdentityTestRepository(t, "1.0.0", "first")
+	firstBytes := readStableIdentityPackage(t, first, "cn.vastplan.test.identity", "1.0.0")
+	if err := reconcileStablePackageIdentities(first, ledgerPath); err != nil {
+		t.Fatal(err)
+	}
+	repositoryRoot := t.TempDir()
+	ref := artifactrepository.Ref{PluginID: "cn.vastplan.test.identity", Version: "1.0.0", Channel: "stable"}
+	hydrated, err := hydrateRecordedStablePackages(repositoryRoot, ledgerPath, []artifactrepository.Ref{ref})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hydrated[ref.PluginID] {
+		t.Fatal("已登记的普通 stable 精确引用必须在源码打包前装入仓库")
+	}
+	if got := readStableIdentityPackage(t, repositoryRoot, ref.PluginID, ref.Version); !bytes.Equal(got, firstBytes) {
+		t.Fatal("预装仓库的 stable 包必须保持原始字节")
+	}
+}
+
+func TestHydrateRecordedStablePackagesLeavesDynamicGoForVariantValidation(t *testing.T) {
+	ledgerPath := filepath.Join(t.TempDir(), "identity", "stable.json")
+	fingerprint := strings.Repeat("a", 64)
+	first := writeStableIdentityDynamicRepository(t, fingerprint, "first")
+	if err := reconcileStablePackageIdentities(first, ledgerPath); err != nil {
+		t.Fatal(err)
+	}
+	ref := artifactrepository.Ref{PluginID: "cn.vastplan.test.identity", Version: "1.0.0", Channel: "stable"}
+	hydrated, err := hydrateRecordedStablePackages(t.TempDir(), ledgerPath, []artifactrepository.Ref{ref})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hydrated[ref.PluginID] {
+		t.Fatal("dynamic-go 必须先由当前 Host ABI 生成 variant，再走复用核验")
+	}
+}
+
 func TestStablePackageIdentityLedgerFailsClosedWhenCorrupted(t *testing.T) {
 	root := t.TempDir()
 	ledgerPath := filepath.Join(root, "stable.json")
@@ -57,7 +99,7 @@ func TestStablePackageIdentityLedgerFailsClosedWhenCorrupted(t *testing.T) {
 	}
 }
 
-func TestStablePackageIdentityLedgerReportsAllDrifts(t *testing.T) {
+func TestStablePackageIdentityLedgerReusesAllRecordedRefs(t *testing.T) {
 	ledgerPath := filepath.Join(t.TempDir(), "stable.json")
 	first := writeStableIdentityMultiRepository(t, map[string]string{
 		"cn.vastplan.test.alpha": "alpha-first",
@@ -66,13 +108,17 @@ func TestStablePackageIdentityLedgerReportsAllDrifts(t *testing.T) {
 	if err := reconcileStablePackageIdentities(first, ledgerPath); err != nil {
 		t.Fatal(err)
 	}
+	alphaBytes := readStableIdentityPackage(t, first, "cn.vastplan.test.alpha", "1.0.0")
+	betaBytes := readStableIdentityPackage(t, first, "cn.vastplan.test.beta", "1.0.0")
 	changed := writeStableIdentityMultiRepository(t, map[string]string{
 		"cn.vastplan.test.alpha": "alpha-changed",
 		"cn.vastplan.test.beta":  "beta-changed",
 	})
-	err := reconcileStablePackageIdentities(changed, ledgerPath)
-	if err == nil || !strings.Contains(err.Error(), "共 2 项") || !strings.Contains(err.Error(), "cn.vastplan.test.alpha@1.0.0/stable -> cn.vastplan.test.alpha@1.0.1/stable") || !strings.Contains(err.Error(), "cn.vastplan.test.beta@1.0.0/stable -> cn.vastplan.test.beta@1.0.1/stable") {
-		t.Fatalf("必须一次报告全部稳定制品漂移: %v", err)
+	if err := reconcileStablePackageIdentities(changed, ledgerPath); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(readStableIdentityPackage(t, changed, "cn.vastplan.test.alpha", "1.0.0"), alphaBytes) || !bytes.Equal(readStableIdentityPackage(t, changed, "cn.vastplan.test.beta", "1.0.0"), betaBytes) {
+		t.Fatal("所有已登记 stable 精确引用都必须复用旧对象")
 	}
 }
 
@@ -83,12 +129,54 @@ func TestStablePackageIdentityLedgerScopesDynamicGoByBuildFingerprint(t *testing
 	if err := reconcileStablePackageIdentities(writeStableIdentityDynamicRepository(t, firstFingerprint, "first"), ledgerPath); err != nil {
 		t.Fatal(err)
 	}
-	if err := reconcileStablePackageIdentities(writeStableIdentityDynamicRepository(t, secondFingerprint, "second"), ledgerPath); err != nil {
+	secondOriginal := writeStableIdentityDynamicRepository(t, secondFingerprint, "second")
+	if err := reconcileStablePackageIdentities(secondOriginal, ledgerPath); err != nil {
 		t.Fatalf("不同 Backend 共同构建指纹是不同 dynamic-go variant: %v", err)
 	}
-	err := reconcileStablePackageIdentities(writeStableIdentityDynamicRepository(t, secondFingerprint, "changed"), ledgerPath)
-	if err == nil || !strings.Contains(err.Error(), "variant="+secondFingerprint) {
-		t.Fatalf("同一 dynamic-go variant 的不同字节仍必须拒绝: %v", err)
+	secondBytes := readStableIdentityPackage(t, secondOriginal, "cn.vastplan.test.identity", "1.0.0")
+	second := writeStableIdentityDynamicRepository(t, secondFingerprint, "changed")
+	if err := reconcileStablePackageIdentities(second, ledgerPath); err != nil {
+		t.Fatalf("同一 dynamic-go variant 必须复用已登记对象: %v", err)
+	}
+	if got := readStableIdentityPackage(t, second, "cn.vastplan.test.identity", "1.0.0"); !bytes.Equal(got, secondBytes) {
+		t.Fatal("同一 dynamic-go variant 的工作区变化不得覆盖 stable")
+	}
+}
+
+func TestStablePackageIdentityLedgerFailsClosedWhenRecordedObjectIsMissing(t *testing.T) {
+	root := t.TempDir()
+	ledgerPath := filepath.Join(root, "identity", "stable.json")
+	first := writeStableIdentityTestRepository(t, "1.0.0", "first")
+	if err := reconcileStablePackageIdentities(first, ledgerPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(filepath.Join(filepath.Dir(ledgerPath), "stable-packages")); err != nil {
+		t.Fatal(err)
+	}
+	changed := writeStableIdentityTestRepository(t, "1.0.0", "changed")
+	if err := reconcileStablePackageIdentities(changed, ledgerPath); err == nil || !strings.Contains(err.Error(), "缓存缺失") {
+		t.Fatalf("已登记对象缺失时不得用当前源码覆盖: %v", err)
+	}
+}
+
+func TestStablePackageIdentityLedgerFailsClosedWhenRecordedObjectIsCorrupted(t *testing.T) {
+	root := t.TempDir()
+	ledgerPath := filepath.Join(root, "identity", "stable.json")
+	first := writeStableIdentityTestRepository(t, "1.0.0", "first")
+	if err := reconcileStablePackageIdentities(first, ledgerPath); err != nil {
+		t.Fatal(err)
+	}
+	ledger, err := loadStablePackageIdentityLedger(ledgerPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cacheFile := stablePackageCacheObject(stablePackageCacheRoot(ledgerPath), ledger.Artifacts[0].SHA256)
+	if err := os.WriteFile(cacheFile, []byte("corrupted"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	changed := writeStableIdentityTestRepository(t, "1.0.0", "changed")
+	if err := reconcileStablePackageIdentities(changed, ledgerPath); err == nil || !strings.Contains(err.Error(), "验证 stable 缓存对象") {
+		t.Fatalf("缓存对象损坏时必须 fail closed: %v", err)
 	}
 }
 
@@ -159,4 +247,17 @@ func publishStableIdentityTestArtifact(t *testing.T, repositoryRoot, pluginID, v
 	if _, err := repository.Publish("stable", packageBytes); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func readStableIdentityPackage(t *testing.T, repositoryRoot, pluginID, version string) []byte {
+	t.Helper()
+	repository, err := artifactrepository.NewRepository(repositoryRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, packageBytes, err := repository.Read(artifactrepository.Ref{PluginID: pluginID, Version: version, Channel: "stable"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return packageBytes
 }

@@ -357,7 +357,7 @@ func (r *runtime) prepareCachedBuilds(ctx context.Context) error {
 
 	supplyChainToolingDigest, err := digestBuildInputs(r.options.root, []string{
 		"LICENSE", "NOTICE", "engineering/internal/cyclonedx", "engineering/internal/pluginsbom", "engineering/tools/pluginpackage",
-	}, []string{"plugin-supply-chain-tooling-v1"}, packageBuildInput)
+	}, []string{"plugin-supply-chain-tooling-v2"}, packageBuildInput)
 	if err != nil {
 		return fmt.Errorf("计算插件供应链工具摘要: %w", err)
 	}
@@ -395,7 +395,7 @@ func (r *runtime) prepareCachedBuilds(ctx context.Context) error {
 		packageInputs = append(packageInputs, filepath.ToSlash(filepath.Join("extensions", "plugins", ref.PluginID)))
 	}
 	packageSourceDigest, err := digestBuildInputs(r.options.root, packageInputs,
-		[]string{backendDigest, frontendDigest, dynamicDigest, supplyChainToolingDigest, strings.Join(selection.pluginIDs(), ","), "package-build-v4"}, packageBuildInput)
+		[]string{backendDigest, frontendDigest, dynamicDigest, supplyChainToolingDigest, strings.Join(selection.pluginIDs(), ","), "package-build-v6"}, packageBuildInput)
 	if err != nil {
 		return fmt.Errorf("计算插件制品摘要: %w", err)
 	}

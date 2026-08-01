@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -37,10 +38,11 @@ func stablePackageIdentityLedgerPath(root string) string {
 }
 
 // reconcileStablePackageIdentities records every stable exact ref observed in
-// this worktree and rejects later bytes for the same ref. This catches a missed
-// SemVer bump at build time, before an Activation or Deployment sees an
-// ambiguous ref. The ledger intentionally lives outside dev-platform so
-// --fresh cannot turn an immutable stable version into a mutable one.
+// this worktree. A known ref is always hydrated from its verified immutable
+// object instead of being rebuilt from the current source tree. This mirrors a
+// real package repository: workspace changes require a new SemVer before they
+// can enter stable. The ledger and object cache intentionally live outside
+// dev-platform so --fresh cannot turn an immutable version into a mutable one.
 func reconcileStablePackageIdentities(repositoryRoot, ledgerPath string) error {
 	current, err := readStablePackageIdentities(repositoryRoot)
 	if err != nil {
@@ -67,21 +69,44 @@ func reconcileStablePackageIdentities(repositoryRoot, ledgerPath string) error {
 		}
 		known[key] = identity
 	}
-	drifts := make([]string, 0)
-	upgrades := make([]string, 0)
+	cacheRoot := stablePackageCacheRoot(ledgerPath)
+	workspaceStateRoot := filepath.Dir(ledgerPath)
+	reused := make([]string, 0)
 	for _, identity := range current {
 		key := stablePackageIdentityKey(identity)
-		if previous, ok := known[key]; ok && previous.SHA256 != identity.SHA256 {
-			drifts = append(drifts, fmt.Sprintf("%s 已记录 sha256=%s，本次为 sha256=%s",
-				stablePackageIdentityLabel(identity), previous.SHA256, identity.SHA256))
-			upgrades = append(upgrades, stablePackageUpgradeSuggestion(identity))
+		previous, exists := known[key]
+		if exists && previous.SHA256 != identity.SHA256 {
+			packageBytes, err := loadRecordedStablePackage(workspaceStateRoot, cacheRoot, previous)
+			if err != nil {
+				return err
+			}
+			if err := replaceCandidateStablePackage(repositoryRoot, previous, packageBytes); err != nil {
+				return err
+			}
+			reused = append(reused, fmt.Sprintf("%s 保留 sha256=%s；当前工作区构建 sha256=%s 未晋级；建议升级：%s",
+				stablePackageIdentityLabel(previous), previous.SHA256, identity.SHA256, stablePackageUpgradeSuggestion(identity)))
 			continue
 		}
-		known[key] = identity
+		if err := cacheCurrentStablePackage(repositoryRoot, cacheRoot, identity); err != nil {
+			return err
+		}
+		if !exists {
+			known[key] = identity
+		}
 	}
-	if len(drifts) > 0 {
-		return fmt.Errorf("稳定制品身份漂移（共 %d 项）:\n- %s\n建议升级清单:\n- %s\nstable 精确引用不可覆盖；请同步 Manifest、运行常量和 Seed 精确引用后重试",
-			len(drifts), strings.Join(drifts, "\n- "), strings.Join(upgrades, "\n- "))
+	if len(reused) > 0 {
+		log.Printf("已复用 %d 个不可变 stable 精确制品；未提升 SemVer 的工作区变化不会进入 Seed:\n- %s", len(reused), strings.Join(reused, "\n- "))
+	}
+	current, err = readStablePackageIdentities(repositoryRoot)
+	if err != nil {
+		return err
+	}
+	for _, identity := range current {
+		key := stablePackageIdentityKey(identity)
+		if previous, exists := known[key]; exists && previous.SHA256 != identity.SHA256 {
+			return fmt.Errorf("stable 精确制品复用后身份仍漂移: %s", stablePackageIdentityLabel(identity))
+		}
+		known[key] = identity
 	}
 	merged := make([]stablePackageIdentity, 0, len(known))
 	for _, identity := range known {
@@ -171,8 +196,11 @@ func loadStablePackageIdentityLedger(path string) (stablePackageIdentityLedger, 
 }
 
 func validateStablePackageIdentity(identity stablePackageIdentity) error {
-	if strings.TrimSpace(identity.PluginID) == "" || strings.TrimSpace(identity.Version) == "" || identity.Channel != "stable" {
+	if !stableCachePluginIDPattern.MatchString(identity.PluginID) || identity.Channel != "stable" {
 		return errors.New("稳定制品身份账本包含非法精确引用")
+	}
+	if _, err := semver.StrictNewVersion(identity.Version); err != nil {
+		return fmt.Errorf("稳定制品身份 %s 版本无效", identity.PluginID)
 	}
 	decoded, err := hex.DecodeString(identity.SHA256)
 	if err != nil || len(decoded) != sha256.Size {

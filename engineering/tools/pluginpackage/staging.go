@@ -52,7 +52,11 @@ func stagePackage(options stagingOptions) (string, func()) {
 	if err != nil {
 		fatalf("Python 完整依赖锁无效: %v", err)
 	}
-	if backendBin == "" && backendModule == "" && frontendBundle == "" && frontendGraph == "" && frontendServerGraph == "" && dynamicGoBin == "" && sbomSource == "" && !pythonLockChanged && licensePresent && noticePresent {
+	hasFrontendMetafiles, err := hasPackagedFrontendMetafiles(source)
+	if err != nil {
+		fatalf("检查非运行期前端构建证据失败: %v", err)
+	}
+	if backendBin == "" && backendModule == "" && frontendBundle == "" && frontendGraph == "" && frontendServerGraph == "" && dynamicGoBin == "" && sbomSource == "" && !pythonLockChanged && licensePresent && noticePresent && !hasFrontendMetafiles {
 		return source, func() {}
 	}
 
@@ -98,10 +102,6 @@ func stagePackage(options stagingOptions) (string, func()) {
 		cleanup()
 		fatalf("复制插件目录失败: %v", err)
 	}
-	if err := normalizePackagedFrontendMetafiles(staging); err != nil {
-		cleanup()
-		fatalf("规范化前端构建证据失败: %v", err)
-	}
 	copyBuildInput(staging, backendEntry, backendBin, 0o755, "backend 入口")
 	copyBuildInput(staging, backendModuleEntry, backendModule, 0o644, "node-worker backend bundle")
 	copyBuildInput(staging, frontendEntry, frontendBundle, 0o644, "frontend bundle")
@@ -112,6 +112,10 @@ func stagePackage(options stagingOptions) (string, func()) {
 			cleanup()
 			fatalf("写入 frontend Module Graph 节点失败: %v", err)
 		}
+	}
+	if err := removePackagedFrontendMetafiles(staging); err != nil {
+		cleanup()
+		fatalf("清理非运行期前端构建证据失败: %v", err)
 	}
 	injectDeclaredFile(staging, manifest.LicenseFile, licensePresent, licenseSource, "许可证")
 	injectDeclaredFile(staging, manifest.NoticeFile, noticePresent, noticeSource, "归属告示")

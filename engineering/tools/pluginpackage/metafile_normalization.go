@@ -1,22 +1,25 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 )
 
-var (
-	projectVirtualStorePrefix   = []byte(`.vastplan/cache/node/virtual-store/`)
-	canonicalVirtualStorePrefix = []byte(`node_modules/.pnpm/`)
-)
+func hasPackagedFrontendMetafiles(root string) (bool, error) {
+	filenames, err := filepath.Glob(filepath.Join(root, "frontend", "dist", "vastplan.*-metafile.json"))
+	if err != nil {
+		return false, fmt.Errorf("枚举前端构建 metafile: %w", err)
+	}
+	return len(filenames) > 0, nil
+}
 
-// normalizePackagedFrontendMetafiles removes the workspace-specific pnpm
-// layout from build evidence after SBOM generation has consumed the original
-// metafile. Stable package bytes must not depend on where pnpm stores packages.
-func normalizePackagedFrontendMetafiles(root string) error {
+// removePackagedFrontendMetafiles drops esbuild's diagnostic metafiles after
+// SBOM generation and Module Graph verification have consumed them. They
+// include non-runtime source byte counts and physical dependency paths, so
+// shipping them would make stable package identity depend on irrelevant build
+// evidence. The signed Module Graph remains the runtime loading truth.
+func removePackagedFrontendMetafiles(root string) error {
 	pattern := filepath.Join(root, "frontend", "dist", "vastplan.*-metafile.json")
 	filenames, err := filepath.Glob(pattern)
 	if err != nil {
@@ -30,19 +33,8 @@ func normalizePackagedFrontendMetafiles(root string) error {
 		if !info.Mode().IsRegular() {
 			return fmt.Errorf("前端构建 metafile 必须是普通文件: %s", filename)
 		}
-		raw, err := os.ReadFile(filename)
-		if err != nil {
-			return fmt.Errorf("读取前端构建 metafile %s: %w", filename, err)
-		}
-		if !json.Valid(raw) {
-			return fmt.Errorf("前端构建 metafile 不是有效 JSON: %s", filename)
-		}
-		normalized := bytes.ReplaceAll(raw, projectVirtualStorePrefix, canonicalVirtualStorePrefix)
-		if bytes.Equal(raw, normalized) {
-			continue
-		}
-		if err := os.WriteFile(filename, normalized, info.Mode().Perm()); err != nil {
-			return fmt.Errorf("写入规范化前端构建 metafile %s: %w", filename, err)
+		if err := os.Remove(filename); err != nil {
+			return fmt.Errorf("移除非运行期前端 metafile %s: %w", filename, err)
 		}
 	}
 	return nil

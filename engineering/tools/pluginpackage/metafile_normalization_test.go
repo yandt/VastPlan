@@ -9,7 +9,7 @@ import (
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
 
-func TestStagePackageNormalizesPnpmVirtualStoreWithoutChangingStableBytes(t *testing.T) {
+func TestStagePackageExcludesDiagnosticMetafilesWithoutChangingStableBytes(t *testing.T) {
 	legacy := writeMetafilePackage(t, "node_modules/.pnpm/react@18.3.1/node_modules/react/index.js")
 	projectCache := writeMetafilePackage(t, ".vastplan/cache/node/virtual-store/react@18.3.1/node_modules/react/index.js")
 
@@ -20,17 +20,25 @@ func TestStagePackageNormalizesPnpmVirtualStoreWithoutChangingStableBytes(t *tes
 	}
 }
 
+func TestStagePackageDoesNotBypassMetafileRemovalForSourceOnlyPackage(t *testing.T) {
+	source := writeMetafilePackage(t, "node_modules/.pnpm/react@18.3.1/node_modules/react/index.js")
+	staged, cleanup := stagePackage(stagingOptions{Source: source})
+	defer cleanup()
+	if staged == source {
+		t.Fatal("含 diagnostic metafile 的源码目录必须进入隔离 staging")
+	}
+	if _, err := os.Stat(filepath.Join(staged, "frontend", "dist", "vastplan.server-metafile.json")); !os.IsNotExist(err) {
+		t.Fatalf("source-only 正式包不得保留 diagnostic metafile: %v", err)
+	}
+}
+
 func packageStagedMetafileFixture(t *testing.T, source string) []byte {
 	t.Helper()
 	bundle := filepath.Join(source, "frontend", "dist", "index.js")
 	staged, cleanup := stagePackage(stagingOptions{Source: source, FrontendBundle: bundle})
 	defer cleanup()
-	raw, err := os.ReadFile(filepath.Join(staged, "frontend", "dist", "vastplan.server-metafile.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if bytes.Contains(raw, projectVirtualStorePrefix) || !bytes.Contains(raw, canonicalVirtualStorePrefix) {
-		t.Fatalf("staging 中的 metafile 未规范化: %s", raw)
+	if _, err := os.Stat(filepath.Join(staged, "frontend", "dist", "vastplan.server-metafile.json")); !os.IsNotExist(err) {
+		t.Fatalf("正式插件 staging 不得包含 esbuild diagnostic metafile: %v", err)
 	}
 	packageBytes, _, err := artifactrepository.PackageDirectory(staged)
 	if err != nil {

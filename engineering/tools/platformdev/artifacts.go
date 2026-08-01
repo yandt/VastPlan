@@ -23,11 +23,21 @@ func (r *runtime) packageArtifacts(ctx context.Context, repository, binDir, node
 	if err != nil {
 		return err
 	}
+	hydrated, err := hydrateRecordedStablePackages(repository, stablePackageIdentityLedgerPath(r.options.root), selection.references())
+	if err != nil {
+		return err
+	}
+	if len(hydrated) > 0 {
+		log.Printf("已从不可变对象缓存装入 %d 个 stable 精确制品；仅新 SemVer 从源码打包", len(hydrated))
+	}
 	specs, err := r.seedPackageSpecs()
 	if err != nil {
 		return err
 	}
 	for _, spec := range specs {
+		if hydrated[spec.id] {
+			continue
+		}
 		args := []string{"run", "./engineering/tools/pluginpackage", "-source", filepath.Join("extensions", "plugins", spec.id), "-repository", repository}
 		if spec.backend {
 			args = append(args, "-backend-bin", filepath.Join(binDir, spec.id))
