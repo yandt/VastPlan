@@ -29,22 +29,34 @@ export function PortalAppearanceSettingsPage() {
   const [draft, setDraft] = useState(appearance);
   const [scheme, setScheme] = useState<AppearanceScheme>(appearance.mode === "dark" ? "dark" : "light");
   useEffect(() => setDraft(appearance), [appearance]);
-  const issue = appearanceContrastIssue(draft.light.templateID, draft.light.colors) ?? appearanceContrastIssue(draft.dark.templateID, draft.dark.colors);
+  const issue = appearanceIssue(draft);
+  const changeDraft = (next: PortalAppearanceSettings) => {
+    setDraft(next);
+    applyAppearanceChange(next, props.onAppearanceChange);
+  };
   return <ui.Panel title={i18n.text(message(namespace, "appearance.summary", "外观设置"))}>
     <div style={{ display: "grid", gap: 18 }}>
-      <ChoiceFields {...props} draft={draft} onDraft={setDraft} />
+      <ChoiceFields {...props} draft={draft} onDraft={changeDraft} />
       <ui.Tabs activeID={scheme} onChange={(next) => setScheme(next as AppearanceScheme)} items={(["light", "dark"] as const).map((itemScheme) => ({
         id: itemScheme,
         label: i18n.text(message(namespace, `appearance.${itemScheme}`, itemScheme === "light" ? "浅色" : "深色")),
-        content: <SchemeEditor scheme={itemScheme} value={draft} onChange={setDraft} />,
+        content: <SchemeEditor scheme={itemScheme} value={draft} onChange={changeDraft} />,
       }))} />
       {issue === undefined ? null : <ui.Status tone="error">{issue}</ui.Status>}
-      <ui.Stack direction="row" justify="between" align="center" gap="sm">
-        <small style={{ color: ui.theme.tokens.color.mutedText }}>{i18n.text(message(namespace, "appearance.localOnly", "外观只保存在当前浏览器，不会上传到服务器。"))}</small>
-        <ui.Button kind="primary" disabled={issue !== undefined} onClick={() => props.onAppearanceChange?.(draft)}>{i18n.text(message(namespace, "common.apply", "应用"))}</ui.Button>
-      </ui.Stack>
+      <small style={{ color: ui.theme.tokens.color.mutedText }}>{i18n.text(message(namespace, "appearance.localOnly", "外观只保存在当前浏览器，修改后即时生效且不会上传到服务器。"))}</small>
     </div>
   </ui.Panel>;
+}
+
+/** Applies only readable themes; invalid color drafts remain visible for correction. */
+export function applyAppearanceChange(next: PortalAppearanceSettings, onChange?: (appearance: PortalAppearanceSettings) => void): boolean {
+  if (appearanceIssue(next) !== undefined) return false;
+  onChange?.(next);
+  return true;
+}
+
+function appearanceIssue(appearance: PortalAppearanceSettings): string | undefined {
+  return appearanceContrastIssue(appearance.light.templateID, appearance.light.colors) ?? appearanceContrastIssue(appearance.dark.templateID, appearance.dark.colors);
 }
 
 function ChoiceFields({ availableTemplates, template, onTemplateChange, renderers = [], renderer, onRendererChange, iconThemes = [], iconThemeID, onIconThemeChange, draft, onDraft }: PortalPersonalization & { draft: PortalAppearanceSettings; onDraft(value: PortalAppearanceSettings): void }) {
