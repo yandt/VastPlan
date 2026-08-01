@@ -157,6 +157,8 @@ describe("Ant Design portal UI renderer", () => {
     expect(markup).toContain('aria-label="Status"');
     expect(markup).toContain("ant-select-clear");
     expect(markup).toContain("white-space:nowrap");
+    expect(markup).toContain("max-width:clamp(48px,18%,112px)");
+    expect(markup).toContain("padding:0 6px");
     expect(markup).not.toContain("Filter root");
   });
 
