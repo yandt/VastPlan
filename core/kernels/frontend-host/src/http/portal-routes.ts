@@ -29,8 +29,9 @@ export class PortalRoutes {
     if (parts[1] === "releases") return this.releases(portalId, parts.slice(2), method, principal, request, response, signal);
     if (parts[1] === "history") return this.history(portalId, parts.slice(2), method, principal, request, response, signal);
     if (parts[1] === "compare") return this.compare(portalId, parts.slice(2), method, principal, request, response, signal);
-    sendAPIError(response, 404, "not_found", method === "HEAD");
-    return true;
+    // `/v1/portals/{id}` 也是平台管理等宿主协议的共享父前缀。
+    // 只认领 Portal 治理拥有的子资源，未知子资源交回组合路由器继续分发。
+    return false;
   }
 
   private async collection(method: string, principal: Principal, request: IncomingMessage, response: ServerResponse, signal: AbortSignal): Promise<true> {

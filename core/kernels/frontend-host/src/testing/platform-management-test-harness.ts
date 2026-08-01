@@ -42,7 +42,9 @@ export async function startPlatformManagementTestServer(invoker: TrustedCapabili
     async authenticationTestProof() { return authenticationTestProof; },
   };
   const platform = { resolver: new PlatformManagementResolver(composer), client: new AddressingPlatformManagementClient(invoker), ...(contractCatalog === undefined ? {} : { contractCatalog }) };
-  const server = createServer(createPortalHandler({ assets, identity, platform, secureCookies: false }));
+  // 生产 Portal 同时装配治理路由和平台管理路由；测试也必须保留这层
+  // 组合，防止共享 `/v1/portals` 前缀的路由器错误吞掉下游请求。
+  const server = createServer(createPortalHandler({ assets, identity, composer, platform, secureCookies: false }));
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const sessionCookie = "vastplan_session=browser-token";
