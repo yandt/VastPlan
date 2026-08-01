@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterPanelActionSpan, filterPanelColumns, shouldAutoApplyFilterPanel } from "./FilterPanel.js";
+import { effectiveFilterPanelColumns, filterPanelActionSpan, filterPanelColumns, shouldAutoApplyFilterPanel } from "./FilterPanel.js";
 import { filterPanelSchema } from "./filter-schema.js";
 
 describe("FilterPanel", () => {
@@ -25,6 +25,13 @@ describe("FilterPanel", () => {
     expect(shouldAutoApplyFilterPanel({ fields }, { xs: 1, md: 2, xl: 3 })).toBe(true);
     expect(shouldAutoApplyFilterPanel({ fields, apply: { mode: "explicit" } }, 4)).toBe(false);
     expect(filterPanelColumns({ fields, layout: { columns: 2 } })).toBe(2);
+  });
+
+  it("fills the available row width when direct-query filters use fewer fields than the configured grid", () => {
+    expect(effectiveFilterPanelColumns({ fields: [{ id: "a", label: "A", kind: "text" }] })).toEqual({ xs: 1, md: 1, xl: 1 });
+    expect(effectiveFilterPanelColumns({ fields: [{ id: "a", label: "A", kind: "text" }, { id: "b", label: "B", kind: "text" }] })).toEqual({ xs: 1, md: 2, xl: 2 });
+    expect(effectiveFilterPanelColumns({ fields: [{ id: "a", label: "A", kind: "text" }, { id: "b", label: "B", kind: "text" }, { id: "c", label: "C", kind: "text" }] })).toEqual({ xs: 1, md: 2, xl: 3 });
+    expect(effectiveFilterPanelColumns({ fields: [{ id: "a", label: "A", kind: "text" }], apply: { mode: "explicit" } })).toEqual({ xs: 1, md: 2, xl: 4 });
   });
 
   it("spans the remaining row so actions end in the final column at every breakpoint", () => {

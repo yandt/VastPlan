@@ -42,4 +42,4 @@ const form: WorkbenchFormDefinition = {
 
 其中 Schema、布局、容器和成功行为是声明数据；四个生命周期函数只连接插件自己的能力客户端，不返回组件、CSS、URL 或框架对象。
 
-FilterPanel 默认采用 `xs=1 / md=2 / xl=4` 列，功能插件可通过 `filterPanel.layout.columns` 覆盖为固定或响应式列数。筛选 Label 使用跨 Renderer 的 `inside-inline` 持久布局，与输入控件共享当前列宽；Label 单行，桌面最大宽度为 `clamp(48px, 18%, 112px)`、移动端为 `clamp(56px, 32%, 128px)`，超长时省略并保留 Tooltip/可访问全文，从而优先保障输入区。默认 `auto-single-row`：字段未超过桌面列数时不显示查询或清除按钮，文本 Enter 后提交、选择类字段直接提交；达到两行时使用查询草稿，操作固定在末行末列。`explicit` 可要求单行也显式提交。FilterPanel 不加载数据，Collection/MasterDetail 等上级工作流接收提交值并发起查询。
+FilterPanel 默认采用 `xs=1 / md=2 / xl=4` 列，功能插件可通过 `filterPanel.layout.columns` 覆盖为固定或响应式列数。默认 `auto-single-row` 会把实际列数收窄到单行字段数：1、2、3、4 个字段分别占满 1、2、3、4 列，避免空余网格列；达到两行或使用 `explicit` 查询时保留声明列数，以确保操作固定在末行末列。筛选 Label 使用跨 Renderer 的 `inside-inline` 持久布局，与输入控件共享当前列宽；Label 单行，桌面最大宽度为 `clamp(48px, 18%, 112px)`、移动端为 `clamp(56px, 32%, 128px)`，超长时省略并保留 Tooltip/可访问全文，从而优先保障输入区。文本 Enter 后提交、选择类字段直接提交。FilterPanel 不加载数据，Collection/MasterDetail 等上级工作流接收提交值并发起查询。
