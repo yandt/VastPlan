@@ -36,7 +36,7 @@ export function PortalAppearanceSettingsPage() {
     setDraft(next);
     applyAppearanceChange(next, props.onAppearanceChange);
   };
-  return <div style={{ display: "grid", gap: 24, maxWidth: 720 }}>
+  return <div style={{ display: "grid", gap: 24 }}>
       <AppearanceSection title={i18n.text(message(namespace, "appearance.preferences", "偏好设置"))} description={i18n.text(message(namespace, "appearance.preferencesHint", "切换后立即生效"))}>
         <ChoiceFields {...props} draft={draft} onDraft={changeDraft} />
       </AppearanceSection>

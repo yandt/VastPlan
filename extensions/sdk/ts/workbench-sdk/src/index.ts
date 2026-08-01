@@ -1,7 +1,8 @@
-import type { ActionSpec, CollectionDensity, CollectionSpec, ColumnSpec, ComponentSize, FilterPanelSpec, FormPresentation, FormSchema, FormWorkflow, JSONValue, LocalizedText, PageActionSpec, RecordDetailSpec, RecordMasterSpec, RecordTreeSpec } from "@vastplan/ui-contract";
+import type { ActionSpec, CollectionDensity, CollectionSpec, ColumnSpec, ComponentSize, FilterPanelSpec, FormPresentation, FormSchema, FormWorkflow, JSONValue, LocalizedText, PageActionSpec, PageBodyLayout, RecordDetailSpec, RecordMasterSpec, RecordTreeSpec } from "@vastplan/ui-contract";
+import { pageBodyLayouts } from "@vastplan/ui-contract";
 import type { PluginExtensionAccess } from "@vastplan/plugin-extension-contract";
 
-export type { ActionSpec, CollectionSpec, CollectionCardSpec, CollectionCardValueFormat, CollectionCardFieldSpec, ComponentSize, DashboardBreakpoint, DashboardCompaction, DashboardGridItem, DashboardGridLayouts, DashboardGridSpec, FilterPanelApplyMode, FilterPanelLayout, FilterPanelSpec, ColumnSpec, DataValueFormat, FilterSpec, FilterFieldKind, CollectionQueryMode, CollectionSelectionMode, CollectionView, FormCondition, FormFieldPresentation, FormLabelPlacement, FormLayout, FormPresentation, FormPresentationPreset, FormSchema, FormSectionPresentation, FormWidget, FormWorkflow, JSONValue, PageActionDisplay, PageActionOverflow, PageActionSpec, RecordDetailSpec, RecordFieldSpec, RecordMasterSpec, RecordSectionSpec, RecordTreeSpec, ResponsiveColumnCount } from "@vastplan/ui-contract";
+export type { ActionSpec, CollectionSpec, CollectionCardSpec, CollectionCardValueFormat, CollectionCardFieldSpec, ComponentSize, DashboardBreakpoint, DashboardCompaction, DashboardGridItem, DashboardGridLayouts, DashboardGridSpec, FilterPanelApplyMode, FilterPanelLayout, FilterPanelSpec, ColumnSpec, DataValueFormat, FilterSpec, FilterFieldKind, CollectionQueryMode, CollectionSelectionMode, CollectionView, FormCondition, FormFieldPresentation, FormLabelPlacement, FormLayout, FormPresentation, FormPresentationPreset, FormSchema, FormSectionPresentation, FormWidget, FormWorkflow, JSONValue, PageActionDisplay, PageActionOverflow, PageActionSpec, PageBodyLayout, RecordDetailSpec, RecordFieldSpec, RecordMasterSpec, RecordSectionSpec, RecordTreeSpec, ResponsiveColumnCount } from "@vastplan/ui-contract";
 export { dashboardBreakpointOrder, dashboardDefaultBreakpoints, dashboardDefaultColumns, jsonSchemaDialect, message } from "@vastplan/ui-contract";
 export { defineDashboardGrid } from "./dashboard.js";
 export type { LocalizedText, MessageDescriptor, MessageValues } from "@vastplan/ui-contract";
@@ -131,6 +132,7 @@ export interface CollectionPageDefinition<Row extends Record<string, unknown> = 
   path: string;
   title: LocalizedText;
   description?: LocalizedText;
+  bodyLayout?: PageBodyLayout;
   /** Hides the page when the trusted session projection lacks a permission. */
   requiredPermissions?: readonly string[];
   /** At least one permission is sufficient to expose a shared governance page. */
@@ -157,6 +159,7 @@ export interface WorkspacePageDefinition {
   path: string;
   title: LocalizedText;
   description?: LocalizedText;
+  bodyLayout?: PageBodyLayout;
   requiredPermissions?: readonly string[];
   requiredAnyPermissions?: readonly string[];
   navigation?: { id: string; label: LocalizedText; zone: "primary" | "settings" | "secondary"; groupID?: string; order?: number };
@@ -168,6 +171,7 @@ export interface FormPageDefinition {
   path: string;
   title: LocalizedText;
   description?: LocalizedText;
+  bodyLayout?: PageBodyLayout;
   requiredPermissions?: readonly string[];
   requiredAnyPermissions?: readonly string[];
   navigation?: { id: string; label: LocalizedText; zone: "primary" | "settings" | "secondary"; groupID?: string; order?: number };
@@ -196,6 +200,7 @@ interface RecordPageCommon<Row extends Record<string, unknown>> {
   path: string;
   title: LocalizedText;
   description?: LocalizedText;
+  bodyLayout?: PageBodyLayout;
   requiredPermissions?: readonly string[];
   requiredAnyPermissions?: readonly string[];
   navigation?: { id: string; label: LocalizedText; zone: "primary" | "settings" | "secondary"; groupID?: string; order?: number };
@@ -259,6 +264,7 @@ export function managementServicesFor(portal: Readonly<WorkbenchPortalRuntime>, 
 
 /** Makes page definitions discoverable and prevents a future arbitrary component escape hatch. */
 export function defineCollectionPage<Row extends Record<string, unknown>>(definition: CollectionPageDefinition<Row>): CollectionPageDefinition<Row> {
+	validatePageBodyLayout(definition.bodyLayout, `Collection page ${definition.id}`);
 	validatePermissionRequirements(definition.requiredPermissions, "Collection page requiredPermissions");
 	validatePermissionRequirements(definition.requiredAnyPermissions, "Collection page requiredAnyPermissions");
   if (definition.collection.view === "cards" && definition.collection.query.mode !== "cursor") {
@@ -293,6 +299,7 @@ export function defineCollectionPage<Row extends Record<string, unknown>>(defini
 }
 
 export function defineWorkspacePage(definition: WorkspacePageDefinition): WorkspacePageDefinition {
+  validatePageBodyLayout(definition.bodyLayout, `Workspace page ${definition.id}`);
   validatePermissionRequirements(definition.requiredPermissions, "Workspace page requiredPermissions");
   validatePermissionRequirements(definition.requiredAnyPermissions, "Workspace page requiredAnyPermissions");
   if (!validIdentifier(definition.id) || definition.sections.length === 0) throw new Error(`Workspace 页面定义无效: ${definition.id}`);
@@ -308,6 +315,7 @@ export function defineWorkspacePage(definition: WorkspacePageDefinition): Worksp
 }
 
 export function defineFormPage(definition: FormPageDefinition): FormPageDefinition {
+	validatePageBodyLayout(definition.bodyLayout, `Form page ${definition.id}`);
 	validatePermissionRequirements(definition.requiredPermissions, "Form page requiredPermissions");
 	validatePermissionRequirements(definition.requiredAnyPermissions, "Form page requiredAnyPermissions");
   if (definition.form.workflow.surface !== "page") throw new Error("Form Page 的 workflow.surface 必须为 page");
@@ -344,6 +352,7 @@ function validatePermissionRequirements(values: readonly string[] | undefined, l
 }
 
 function validateRecordPage(definition: RecordPageDefinition): void {
+  validatePageBodyLayout(definition.bodyLayout, `Record page ${definition.id}`);
   validatePermissionRequirements(definition.requiredPermissions, `Record page ${definition.id} requiredPermissions`);
   validatePermissionRequirements(definition.requiredAnyPermissions, `Record page ${definition.id} requiredAnyPermissions`);
   if (!validIdentifier(definition.id) || !definition.path.startsWith("/") || !validFieldKey(definition.detail.titleKey) || definition.detail.sections.length === 0) {
@@ -384,6 +393,10 @@ function validateRecordPage(definition: RecordPageDefinition): void {
     if (action.form !== undefined && action.overlay !== undefined) throw new Error(`Action ${action.id} 不能同时打开表单和 Overlay`);
   }
   validatePageActions(definition.pageActions, forms, overlays, definition.runPageAction !== undefined, definition.id);
+}
+
+function validatePageBodyLayout(value: PageBodyLayout | undefined, label: string): void {
+  if (value !== undefined && !pageBodyLayouts.includes(value)) throw new Error(`${label} 的 bodyLayout 无效: ${String(value)}`);
 }
 
 function validatePageActions(

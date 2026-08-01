@@ -21,8 +21,12 @@ describe("Workbench form definition", () => {
       async submit() { return { data: { revision: 2 } }; },
       async afterSubmit() { /* application callback */ },
     };
-    expect(defineCollectionPage(page(form)).forms?.[0]?.workflow).toMatchObject({ dialogHeight: 640 });
+    expect(defineCollectionPage({ ...page(form), bodyLayout: "medium" })).toMatchObject({ bodyLayout: "medium", forms: [{ workflow: { dialogHeight: 640 } }] });
     expect(resolveFormWorkflowSurface(form.workflow)).toBe("dialog");
+  });
+
+  it("rejects arbitrary page body widths", () => {
+    expect(() => defineCollectionPage({ ...page({ id: "edit", schema, workflow: { title: "Edit" }, async submit() {} }), bodyLayout: "840px" as never })).toThrow("bodyLayout 无效");
   });
 
   it("rejects invalid percentage column definitions", () => {

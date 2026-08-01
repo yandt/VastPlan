@@ -78,6 +78,17 @@ describe("PortalRuntime shell", () => {
     expect(prepared.pages[0]?.slots.at(-1)).toMatchObject({ id: "system.page.help", slot: "page.header.end", order: 1_000_000 });
   });
 
+  it("preserves governed page body layouts and rejects arbitrary values", async () => {
+    const small = await new PortalRuntime(loader({ [featureRef.id]: { register(context: FrontendPluginContext) {
+      context.addPage({ id: "settings", path: "/settings", title: "Settings", bodyLayout: "small", slots: [{ id: "body", slot: "page.body.main", component: () => null }] });
+    } } })).prepare(portal);
+    expect(small.pages[0]?.bodyLayout).toBe("small");
+
+    await expect(new PortalRuntime(loader({ [featureRef.id]: { register(context: FrontendPluginContext) {
+      context.addPage({ id: "settings", path: "/settings", title: "Settings", bodyLayout: "840px" as never, slots: [{ id: "body", slot: "page.body.main", component: () => null }] });
+    } } })).prepare(portal)).rejects.toMatchObject({ code: "PAGE_BODY_LAYOUT_REJECTED" });
+  });
+
   it("selects only an allowed user Renderer and keeps the Adapter singleton", async () => {
     const prepared = await new PortalRuntime(loader()).prepare(portal, { rendererID: "alternate" });
     expect(prepared.renderAdapter.id).toBe("alternate");
@@ -157,7 +168,7 @@ describe("PortalRuntime shell", () => {
   it("accepts governed Card/Cursor and standalone Form pages through the Workbench only", async () => {
     const prepared = await new PortalRuntime(loader({ [featureRef.id]: { register(context: FrontendPluginContext) {
       context.addCollectionPage({
-        id: "cards", path: "/cards", title: "Cards",
+        id: "cards", path: "/cards", title: "Cards", bodyLayout: "medium",
         collection: { id: "cards", title: "Cards", view: "cards", query: { mode: "cursor", defaultPageSize: 20, pageSizeOptions: [20] }, columns: [], card: { titleKey: "name" } },
         pageActions: [{ id: "publish", label: "Publish", icon: "publish" }],
         async runPageAction() {},
@@ -170,6 +181,7 @@ describe("PortalRuntime shell", () => {
       });
     } } })).prepare(portal);
     expect(prepared.pages.map((page) => page.id)).toEqual(["cards", "profile"]);
+    expect(prepared.pages[0]?.bodyLayout).toBe("medium");
     expect(prepared.pages[0]?.slots.map((slot) => [slot.id, slot.slot, slot.order ?? 0])).toEqual([
       ["page.actions", "page.header.end", 100],
       ["workbench.collection", "page.body.main", 0],

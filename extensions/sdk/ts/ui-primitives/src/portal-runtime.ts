@@ -1,7 +1,7 @@
 import type { ComponentType, ReactNode } from "react";
 import type { CollectionPreference } from "@vastplan/frontend-engine-contract";
 import type { PluginExtensionAccess } from "@vastplan/plugin-extension-contract";
-import type { DashboardGridLayouts, DashboardGridSpec, JSONValue, LocalizedText, MessageDescriptor, MessageValues, PluginLocalization } from "@vastplan/ui-contract";
+import type { DashboardGridLayouts, DashboardGridSpec, JSONValue, LocalizedText, MessageDescriptor, MessageValues, PageBodyLayout, PluginLocalization } from "@vastplan/ui-contract";
 import type { CollectionPageDefinition, FormPageDefinition, PageActionHostDefinition, RecordPageDefinition, WorkspacePageDefinition } from "@vastplan/workbench-sdk";
 import type { SemanticIconName } from "./icon.js";
 
@@ -80,6 +80,8 @@ export interface PortalPageDefinition {
   path: string;
   title: LocalizedText;
   description?: LocalizedText;
+  /** Semantic content width. The Shell owns centering and the executable width recipe. */
+  bodyLayout?: PageBodyLayout;
   navigation?: PortalPageNavigation;
   slots: readonly PortalPageSlotContribution[];
 }

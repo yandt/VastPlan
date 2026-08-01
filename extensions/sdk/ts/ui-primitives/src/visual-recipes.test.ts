@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { componentSizeRecipes, componentVariantRecipes } from "./visual-recipes.js";
+import { componentSizeRecipes, componentVariantRecipes, pageBodyLayoutRecipes, resolvePageBodyMaxWidth } from "./visual-recipes.js";
 
 describe("visual recipes", () => {
   it("keeps all three component sizes governed by immutable recipes", () => {
@@ -14,5 +14,14 @@ describe("visual recipes", () => {
     expect(Object.isFrozen(componentSizeRecipes.menu.lg)).toBe(true);
     expect(componentVariantRecipes.menu.action).toEqual({ borderInlineEnd: 0, width: "max-content", minWidth: 112, maxWidth: 280, overflow: "hidden", padding: "4px" });
     expect(componentVariantRecipes.menu.actionItem).toEqual({ display: "flex", alignItems: "center", width: "100%", gap: "6px", paddingInline: "12px 6px" });
+  });
+
+  it("governs page body widths and lets the narrower page or Shell limit win", () => {
+    expect(pageBodyLayoutRecipes).toEqual({ fluid: {}, large: { maxWidth: 1280 }, medium: { maxWidth: 960 }, small: { maxWidth: 720 } });
+    expect(resolvePageBodyMaxWidth(undefined, false)).toBeUndefined();
+    expect(resolvePageBodyMaxWidth("fluid", true)).toBe(1280);
+    expect(resolvePageBodyMaxWidth("small", false)).toBe(720);
+    expect(resolvePageBodyMaxWidth("medium", true)).toBe(960);
+    expect(Object.isFrozen(pageBodyLayoutRecipes.small)).toBe(true);
   });
 });

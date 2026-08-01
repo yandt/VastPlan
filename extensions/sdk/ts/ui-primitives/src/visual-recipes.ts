@@ -1,4 +1,4 @@
-import type { ComponentSize } from "@vastplan/ui-contract";
+import type { ComponentSize, PageBodyLayout } from "@vastplan/ui-contract";
 
 type SizeRecipe<T> = Readonly<Record<ComponentSize, Readonly<T>>>;
 
@@ -41,3 +41,20 @@ export const componentVariantRecipes = Object.freeze({
     actionItem: Object.freeze({ display: "flex", alignItems: "center", width: "100%", gap: "6px", paddingInline: "12px 6px" }),
   }),
 });
+
+/** Shell-owned width scale. Pages select semantics and never provide arbitrary CSS or pixels. */
+export const pageBodyLayoutRecipes: Readonly<Record<PageBodyLayout, Readonly<{ maxWidth?: number }>>> = Object.freeze({
+  fluid: Object.freeze({}),
+  large: Object.freeze({ maxWidth: 1280 }),
+  medium: Object.freeze({ maxWidth: 960 }),
+  small: Object.freeze({ maxWidth: 720 }),
+});
+
+/** Combines a page request with an optional Shell-wide cap. The narrower limit always wins. */
+export function resolvePageBodyMaxWidth(layout: PageBodyLayout | undefined, shellContained: boolean): number | undefined {
+  const pageMaxWidth = pageBodyLayoutRecipes[layout ?? "fluid"].maxWidth;
+  const shellMaxWidth = shellContained ? pageBodyLayoutRecipes.large.maxWidth : undefined;
+  if (pageMaxWidth === undefined) return shellMaxWidth;
+  if (shellMaxWidth === undefined) return pageMaxWidth;
+  return Math.min(pageMaxWidth, shellMaxWidth);
+}

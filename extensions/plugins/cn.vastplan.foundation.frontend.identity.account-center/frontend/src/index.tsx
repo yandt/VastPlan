@@ -53,6 +53,7 @@ export default {
       id: "account.settings.appearance",
       path: "/account/settings/appearance",
       title: context.i18n.message("appearance.title", "外观"),
+      bodyLayout: "small",
       navigation: {
         id: "account.settings.appearance",
         label: context.i18n.message("appearance.navigation", "外观"),

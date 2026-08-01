@@ -263,6 +263,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [ADR-0180 Catalog 驱动的统一插件自发现与本地插件库](decisions/ADR-0180-Catalog驱动的统一插件自发现与本地插件库.md)
 - [ADR-0181 权限 Glob 选择器与 Catalog 绑定编译](decisions/ADR-0181-权限Glob选择器与Catalog绑定编译.md)
 - [ADR-0182 Stable 精确制品复用与诊断 Metafile 外置](decisions/ADR-0182-Stable精确制品复用与诊断Metafile外置.md)
+- [ADR-0183 页面正文语义尺寸与 Shell 统一居中](decisions/ADR-0183-页面正文语义尺寸与Shell统一居中.md)
 
 ### 通用版本账本
 

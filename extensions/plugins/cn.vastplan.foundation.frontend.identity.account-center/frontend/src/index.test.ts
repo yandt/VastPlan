@@ -14,5 +14,6 @@ describe("account center plugin", () => {
       expect.objectContaining({ id: "account.profile", groupID: "account", zone: "secondary" }),
       expect.objectContaining({ id: "account.settings.appearance", groupID: "account.settings", zone: "secondary" }),
     ]);
+    expect(addPage.mock.calls[1]?.[0]).toMatchObject({ id: "account.settings.appearance", bodyLayout: "small" });
   });
 });

@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import { message, semanticIconNames } from "@vastplan/ui-primitives";
+import { message, pageBodyLayouts, semanticIconNames } from "@vastplan/ui-primitives";
 import { defineCollectionPage, defineMasterDetailPage, defineRecordDetailPage, defineTreeDetailPage, defineWorkspacePage } from "@vastplan/workbench-sdk";
 import type {
   FrontendPluginContext,
@@ -200,7 +200,7 @@ function createPluginContext(input: ContextInput): FrontendPluginContext {
       const refresh = createPageRefreshController();
       const Page = () => createElement(workbench.CollectionPage, { page: projectedPage, preferenceScope: `${portal.tenantId}/${portal.id}`, preferences, presentation: portal.workbench.config, refreshSignal: refresh });
       const PageActions = () => createElement(workbench.PageActionHost, { definition: pageActionDefinition(projectedPage), onRefresh: refresh.invalidate });
-      context.addPage({ id: projectedPage.id, path: projectedPage.path, title: projectedPage.title, description: projectedPage.description, navigation: projectedPage.navigation, slots: [
+      context.addPage({ id: projectedPage.id, path: projectedPage.path, title: projectedPage.title, description: projectedPage.description, bodyLayout: projectedPage.bodyLayout, navigation: projectedPage.navigation, slots: [
         ...((projectedPage.pageActions?.length ?? 0) === 0 ? [] : [{ id: "page.actions", slot: "page.header.end" as const, component: PageActions, order: 100 }]),
         { id: "workbench.collection", slot: "page.body.main", component: Page },
       ] });
@@ -221,7 +221,7 @@ function createPluginContext(input: ContextInput): FrontendPluginContext {
       const Page = () => createElement(workbench.WorkspacePage, { page: projected, preferenceScope: `${portal.tenantId}/${portal.id}`, preferences, presentation: portal.workbench.config, refreshSignal: refresh });
       const definition = workspacePageActionDefinition(projected);
       const PageActions = () => createElement(workbench.PageActionHost, { definition, onRefresh: refresh.invalidate });
-      context.addPage({ id: projected.id, path: projected.path, title: projected.title, description: projected.description, navigation: projected.navigation, slots: [
+      context.addPage({ id: projected.id, path: projected.path, title: projected.title, description: projected.description, bodyLayout: projected.bodyLayout, navigation: projected.navigation, slots: [
         ...(definition.actions.length === 0 ? [] : [{ id: "page.actions", slot: "page.header.end" as const, component: PageActions, order: 100 }]),
         { id: "workbench.workspace", slot: "page.body.main", component: Page },
       ] });
@@ -235,7 +235,7 @@ function createPluginContext(input: ContextInput): FrontendPluginContext {
       const refresh = createPageRefreshController();
       const Page = () => createElement(workbench.FormPage, { page: projected });
       const PageActions = () => createElement(workbench.PageActionHost, { definition: pageActionDefinition(projected), onRefresh: refresh.invalidate });
-      context.addPage({ id: projected.id, path: projected.path, title: projected.title, description: projected.description, navigation: projected.navigation, slots: [
+      context.addPage({ id: projected.id, path: projected.path, title: projected.title, description: projected.description, bodyLayout: projected.bodyLayout, navigation: projected.navigation, slots: [
         ...((projected.pageActions?.length ?? 0) === 0 ? [] : [{ id: "page.actions", slot: "page.header.end" as const, component: PageActions, order: 100 }]),
         { id: "workbench.form", slot: "page.body.main", component: Page },
       ] });
@@ -246,7 +246,7 @@ function createPluginContext(input: ContextInput): FrontendPluginContext {
       const refresh = createPageRefreshController();
       const Page = () => createElement(workbench.RecordPage, { page: projected, refreshSignal: refresh });
       const PageActions = () => createElement(workbench.PageActionHost, { definition: pageActionDefinition(projected), onRefresh: refresh.invalidate });
-      context.addPage({ id: projected.id, path: projected.path, title: projected.title, description: projected.description, navigation: projected.navigation, slots: [
+      context.addPage({ id: projected.id, path: projected.path, title: projected.title, description: projected.description, bodyLayout: projected.bodyLayout, navigation: projected.navigation, slots: [
         ...((projected.pageActions?.length ?? 0) === 0 ? [] : [{ id: "page.actions", slot: "page.header.end" as const, component: PageActions, order: 100 }]),
         { id: "workbench.record", slot: "page.body.main", component: Page },
       ] });
@@ -335,6 +335,9 @@ function registerPage(
   const mountedPath = mountPortalPagePath(portal.route, page.path);
   if (!page.id || mountedPath === undefined || !validLocalizedText(page.title) || (page.description !== undefined && !validLocalizedText(page.description)) || state.pageIDs.has(page.id) || state.paths.has(mountedPath) || !Array.isArray(page.slots)) {
     throw new PortalAssemblyError("PAGE_REJECTED", `页面 ID/路径非法或重复: ${page.id || page.path}`);
+  }
+  if (page.bodyLayout !== undefined && !pageBodyLayouts.includes(page.bodyLayout)) {
+    throw new PortalAssemblyError("PAGE_BODY_LAYOUT_REJECTED", `页面 bodyLayout 无效: ${page.id}/${String(page.bodyLayout)}`);
   }
   if (!page.slots.some((slot) => slot.slot === "page.body.main")) throw new PortalAssemblyError("PAGE_MAIN_MISSING", `页面必须填充 page.body.main: ${page.id}`);
   if (page.navigation !== undefined && (!managementName(page.navigation.id) || !validLocalizedText(page.navigation.label) || state.navigationIDs.has(page.navigation.id) ||

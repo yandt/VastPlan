@@ -26,6 +26,8 @@ Portal Platform Profile 必须分别固定三个相互独立、已签名的第�
 
 功能插件改用 `addPage`，只能声明页面 ID/路径/标题、`primary|settings|secondary` 导航语义区，并向现有 Slot 填充组件。它不能创建全局 Slot、决定菜单位于顶部还是侧栏、放置 LOGO、设置页面宽度或绘制 Page Shell。每个页面必须至少填充 `page.body.main`。
 
+2026-08-01 后续修订：页面仍不得传入任意宽度、CSS 或自行绘制 Page Shell；[ADR-0183](ADR-0183-页面正文语义尺寸与Shell统一居中.md) 允许页面从 `fluid / large / medium / small` 封闭语义集合中选择正文尺寸，具体像素、居中与平台上限继续由 Shell 统一拥有。
+
 布局私有配置由 Platform Profile 的 `layout.config` 提供；Application Composition 不能选择或覆盖设计系统、组合插件和布局插件。
 
 ## 结果

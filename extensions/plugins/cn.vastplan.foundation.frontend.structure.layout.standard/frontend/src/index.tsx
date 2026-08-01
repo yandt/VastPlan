@@ -5,6 +5,7 @@ import {
   message,
   portalPageRhythm,
   PortalAccountControl,
+  resolvePageBodyMaxWidth,
   usePortalI18n,
   usePortalUI,
   type MenuItem,
@@ -43,7 +44,7 @@ export function StandardShell(props: UIShellProps) {
     "--vp-shell-motion-fast": `${ui.theme.tokens.motion.fast}ms`,
     "--vp-page-content-start": `${portalPageRhythm.contentStart}px`,
   } as CSSProperties;
-  const pageWidth = template.options.pageBodyWidth === "contained" ? 1280 : undefined;
+  const shellPageContained = template.options.pageBodyWidth === "contained";
   const allGroups = useMemo(() => groups(composition, ["primary", "secondary", "settings"]), [composition]);
   const activeGroup = allGroups.find((group) => group.id === composition.activeNavigationPath?.rootGroupID);
   const groupKey = allGroups.map((group) => group.id).join("\u0000");
@@ -85,12 +86,13 @@ export function StandardShell(props: UIShellProps) {
   }, [pendingGroupNavigationID, selectedGroup]);
 
   const page = composition.activePage;
+  const pageWidth = resolvePageBodyMaxWidth(page?.bodyLayout, shellPageContained);
   const pageHeader = page === undefined ? null : <header className="vp-page-header">
     <div className="vp-page-header-side">{pageSlot(composition.pageSlots, "page.header.start")}<div className="vp-page-title-copy"><h1 className="vp-page-title" tabIndex={-1}>{i18n.text(page.title)}</h1>{page.description === undefined ? null : <p className="vp-page-description">{i18n.text(page.description)}</p>}</div></div>
     <div className="vp-page-header-center">{pageSlot(composition.pageSlots, "page.header.center")}</div>
     <div className="vp-page-header-side vp-page-header-end">{pageSlot(composition.pageSlots, "page.header.end")}</div>
   </header>;
-  const pageBody = <div className="vp-page-scroller"><main className="vp-page" style={{ maxWidth: pageWidth }}>
+  const pageBody = <div className="vp-page-scroller"><main className="vp-page" data-page-body-layout={page?.bodyLayout ?? "fluid"} style={{ maxWidth: pageWidth }}>
     {recoveryNotice}
     {page === undefined ? <ui.EmptyState title={i18n.text(message(namespace, "page.notFound", "页面不存在"))} description={i18n.text(message(namespace, "page.pathMissing", "Portal 没有注册路径 {path}", { path: pathname }))} /> : <>
       {pageSlot(composition.pageSlots, "page.body.before")}

@@ -8,6 +8,9 @@ export * from "./dashboard.js";
 export type UICapability = "layout" | "menu" | "overlay" | "form" | "data" | "feedback" | "theme" | "approval" | "navigation";
 /** Shared three-step size language for framework-neutral interactive components. */
 export type ComponentSize = "sm" | "md" | "lg";
+/** Governed page-body width selected by a page and enforced by the active Shell. */
+export const pageBodyLayouts = Object.freeze(["fluid", "large", "medium", "small"] as const);
+export type PageBodyLayout = (typeof pageBodyLayouts)[number];
 
 export type JSONPrimitive = string | number | boolean | null;
 export type JSONValue = JSONPrimitive | readonly JSONValue[] | { readonly [key: string]: JSONValue };
