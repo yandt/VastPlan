@@ -354,8 +354,18 @@ export interface AuthorizationStatement {
   resource?: { type: string; ids: string[]; labels: Record<string, string[]>; ownership: string };
   constraints: Array<{ source: string; key: string; operator: "eq" | "in" | "prefix"; values: string[] }>;
 }
+export type AuthorizationPermissionSelectorKind = "exact" | "glob";
+export interface AuthorizationPermissionSelector { kind: AuthorizationPermissionSelectorKind; value: string; }
+export interface AuthorizationStatementInput {
+  id: string; effect: "allow" | "deny"; permissionSelectors: AuthorizationPermissionSelector[];
+  resource?: AuthorizationStatement["resource"]; constraints: AuthorizationStatement["constraints"];
+}
+export interface AuthorizationStatementPermissionSelectors {
+  statementId: string; selectors: AuthorizationPermissionSelector[];
+}
 export interface AuthorizationRoleRevision {
   id: string; revision: number; domainId: string; title: string; description?: string; statements: AuthorizationStatement[];
+  selectorCatalogDigest: string; permissionSelectors: AuthorizationStatementPermissionSelectors[];
   state: AuthorizationLifecycleState; createdBy: string; approvedBy?: string; createdAt: string; updatedAt: string;
 }
 export interface AuthorizationBindingRevision {
@@ -371,7 +381,7 @@ export interface AuthorizationPolicyState {
   revocations: Array<{ id: string; revision: number; kind: string; targetId: string; effectiveAt: string; reasonCode: string }>;
   audit: AuthorizationAuditEvent[]; currentSnapshot?: { snapshotId: string; revision: number; audience: string[]; issuedAt: string; expiresAt: string };
 }
-export interface CreateAuthorizationRoleRequest { expectedGeneration: number; id: string; domainId: string; title: string; description?: string; statements: AuthorizationStatement[]; }
+export interface CreateAuthorizationRoleRequest { expectedGeneration: number; id: string; domainId: string; title: string; description?: string; statements: AuthorizationStatementInput[]; }
 export interface CreateAuthorizationBindingRequest { expectedGeneration: number; id: string; domainId: string; subject: AuthorizationBindingRevision["subject"]; roleId: string; roleRevision: number; notBefore: string; expiresAt: string; }
 export type UpdateAuthorizationBindingRequest = Omit<CreateAuthorizationBindingRequest, "id">;
 

@@ -2,6 +2,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -30,8 +31,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("加载 Authorization Policy 首次导入状态: %v", err)
 	}
+	bootstrapReconciliation, err := loadBootstrapReconciliation(os.Getenv("VASTPLAN_AUTHORIZATION_POLICY_BOOTSTRAP_RECONCILIATION"))
+	if err != nil {
+		log.Fatalf("加载 Authorization Policy Bootstrap 协调策略: %v", err)
+	}
 	service, err := policy.NewService(policy.ServiceOptions{
-		StoreFactory: policy.SharedStateStoreFactory, BootstrapState: bootstrapState, Signer: signer,
+		StoreFactory: policy.SharedStateStoreFactory, BootstrapState: bootstrapState, BootstrapReconciliation: bootstrapReconciliation, Signer: signer,
 		SnapshotWriter: policy.FileSnapshotWriter{Path: os.Getenv("VASTPLAN_AUTHORIZATION_POLICY_SNAPSHOT")},
 		Catalog:        catalog, ProviderProfile: profile, Domains: []authorizationv1.PolicyDomain{root},
 		DefaultAudience: splitAudience(os.Getenv("VASTPLAN_AUTHORIZATION_POLICY_AUDIENCE")), DefaultTTL: 5 * time.Minute,
@@ -43,6 +48,17 @@ func main() {
 	plugin.Contribute(service.Contribution())
 	if err := plugin.Serve(); err != nil {
 		log.Fatalf("Authorization Policy 退出: %v", err)
+	}
+}
+
+func loadBootstrapReconciliation(value string) (policy.BootstrapReconciliationPolicy, error) {
+	switch strings.TrimSpace(value) {
+	case "":
+		return policy.DisabledBootstrapReconciliation{}, nil
+	case "seed-owned":
+		return policy.SeedOwnedBootstrapReconciliation{}, nil
+	default:
+		return nil, fmt.Errorf("未知 Bootstrap 协调策略 %q", value)
 	}
 }
 

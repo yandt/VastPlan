@@ -26,8 +26,9 @@ func (s *Service) createRole(store Store, subject string, request CreateRoleRequ
 	if err != nil {
 		return nil, err
 	}
-	role := RoleRevision{ID: request.ID, Revision: revision, DomainID: request.DomainID, Title: request.Title, Description: request.Description, Statements: cloneStatements(request.Statements), State: StateDraft, CreatedBy: subject, CreatedAt: s.now().UTC(), UpdatedAt: s.now().UTC()}
-	if err := validateRole(role, state.Domains, catalogPermissions(state.Catalog)); err != nil {
+	role := RoleRevision{ID: request.ID, Revision: revision, DomainID: request.DomainID, Title: request.Title, Description: request.Description, State: StateDraft, CreatedBy: subject, CreatedAt: s.now().UTC(), UpdatedAt: s.now().UTC()}
+	role, err = materializeRoleRevision(role, request.Statements, state)
+	if err != nil {
 		return nil, err
 	}
 	state.Roles = append(state.Roles, role)
@@ -57,8 +58,9 @@ func (s *Service) updateRole(store Store, subject string, request UpdateRoleRequ
 		return nil, errors.New("只能修改 Draft Role revision")
 	}
 	role := state.Roles[index]
-	role.Title, role.Description, role.Statements, role.UpdatedAt = request.Title, request.Description, cloneStatements(request.Statements), s.now().UTC()
-	if err := validateRole(role, state.Domains, catalogPermissions(state.Catalog)); err != nil {
+	role.Title, role.Description, role.UpdatedAt = request.Title, request.Description, s.now().UTC()
+	role, err = materializeRoleRevision(role, request.Statements, state)
+	if err != nil {
 		return nil, err
 	}
 	state.Roles[index] = role
@@ -70,6 +72,20 @@ func (s *Service) updateRole(store Store, subject string, request UpdateRoleRequ
 		Role       RoleRevision `json:"role"`
 		Generation uint64       `json:"generation"`
 	}{role, committed.Generation}, nil
+}
+
+func materializeRoleRevision(role RoleRevision, inputs []RoleStatementInput, state State) (RoleRevision, error) {
+	statements, selectors, err := compileRoleStatements(role.ID, role.DomainID, inputs, state.Domains, state.Catalog)
+	if err != nil {
+		return RoleRevision{}, err
+	}
+	role.SelectorCatalogDigest = state.Catalog.Digest
+	role.PermissionSelectors = selectors
+	role.Statements = statements
+	if err := validateRole(role, state.Domains, catalogPermissions(state.Catalog)); err != nil {
+		return RoleRevision{}, err
+	}
+	return role, nil
 }
 
 func (s *Service) transitionRole(store Store, subject, operation string, request TransitionRequest, decodeErr error) (any, error) {

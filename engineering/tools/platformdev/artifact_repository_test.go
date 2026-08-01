@@ -101,6 +101,13 @@ func TestManagedArtifactSourceUsesSeedBootstrapAndPersistentRepository(t *testin
 	if environment["VASTPLAN_AUTHORIZATION_POLICY_STATE"] != environment["VASTPLAN_AUTHORIZATION_POLICY_BOOTSTRAP_STATE"] {
 		t.Fatalf("Seed Runtime Snapshot v1 必须同时支持旧 Policy Store 与新 Bootstrap State 宿主契约: %#v", environment)
 	}
+	if _, enabled := environment["VASTPLAN_AUTHORIZATION_POLICY_BOOTSTRAP_RECONCILIATION"]; enabled {
+		t.Fatal("普通 up/restart 不得启用 Bootstrap 授权协调")
+	}
+	r.options.applyPlatform = true
+	if got := r.serviceEnv()["VASTPLAN_AUTHORIZATION_POLICY_BOOTSTRAP_RECONCILIATION"]; got != "seed-owned" {
+		t.Fatalf("只有显式 bootstrap 可选择 Seed-owned 协调策略: %q", got)
+	}
 	if r.persistentStateRoot() != wantStateRoot {
 		t.Fatalf("Node ActualState、Portal 交付快照与治理插件必须共享同一持久开发状态根: %s", r.persistentStateRoot())
 	}

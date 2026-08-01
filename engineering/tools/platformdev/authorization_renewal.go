@@ -63,7 +63,9 @@ func renewPublishedDevelopmentAuthorization(root string, catalog pluginv1.Permis
 			break
 		}
 	}
-	reconcileDevelopmentGrants(&state, developmentGrants(catalog, seedSubjectID), now)
+	if err := reconcileDevelopmentGrants(&state, developmentGrants(catalog, seedSubjectID), now); err != nil {
+		return false, err
+	}
 	state.PolicyRevision++
 	snapshot, err := policy.CompileSnapshot(state, developmentAuthorizationAudiences, now, developmentAuthorizationTTL)
 	if err != nil {

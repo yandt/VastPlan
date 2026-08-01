@@ -26,32 +26,34 @@ func (w FileSnapshotWriter) Write(snapshot authorizationv1.SignedPolicySnapshot)
 }
 
 type ServiceOptions struct {
-	Store           Store
-	StoreFactory    StoreFactory
-	BootstrapState  *State
-	Signer          SnapshotSigner
-	SnapshotWriter  SnapshotWriter
-	Catalog         pluginv1.PermissionCatalog
-	ProviderProfile authorizationv1.ProviderProfile
-	Domains         []authorizationv1.PolicyDomain
-	DefaultAudience []string
-	DefaultTTL      time.Duration
-	Now             func() time.Time
+	Store                   Store
+	StoreFactory            StoreFactory
+	BootstrapState          *State
+	BootstrapReconciliation BootstrapReconciliationPolicy
+	Signer                  SnapshotSigner
+	SnapshotWriter          SnapshotWriter
+	Catalog                 pluginv1.PermissionCatalog
+	ProviderProfile         authorizationv1.ProviderProfile
+	Domains                 []authorizationv1.PolicyDomain
+	DefaultAudience         []string
+	DefaultTTL              time.Duration
+	Now                     func() time.Time
 }
 
 type Service struct {
-	store           Store
-	storeFactory    StoreFactory
-	bootstrapState  *State
-	catalog         pluginv1.PermissionCatalog
-	providerProfile authorizationv1.ProviderProfile
-	domains         []authorizationv1.PolicyDomain
-	signer          SnapshotSigner
-	snapshotWriter  SnapshotWriter
-	defaultAudience []string
-	defaultTTL      time.Duration
-	now             func() time.Time
-	mu              sync.Mutex
+	store                   Store
+	storeFactory            StoreFactory
+	bootstrapState          *State
+	bootstrapReconciliation BootstrapReconciliationPolicy
+	catalog                 pluginv1.PermissionCatalog
+	providerProfile         authorizationv1.ProviderProfile
+	domains                 []authorizationv1.PolicyDomain
+	signer                  SnapshotSigner
+	snapshotWriter          SnapshotWriter
+	defaultAudience         []string
+	defaultTTL              time.Duration
+	now                     func() time.Time
+	mu                      sync.Mutex
 }
 
 func NewService(options ServiceOptions) (*Service, error) {
@@ -73,12 +75,15 @@ func NewService(options ServiceOptions) (*Service, error) {
 	if options.Now == nil {
 		options.Now = func() time.Time { return time.Now().UTC() }
 	}
+	if options.BootstrapReconciliation == nil {
+		options.BootstrapReconciliation = DisabledBootstrapReconciliation{}
+	}
 	bootstrapState, err := cloneState(options.BootstrapState)
 	if err != nil {
 		return nil, fmt.Errorf("复制 Authorization Policy bootstrap state: %w", err)
 	}
 	service := &Service{
-		store: options.Store, storeFactory: options.StoreFactory, bootstrapState: bootstrapState,
+		store: options.Store, storeFactory: options.StoreFactory, bootstrapState: bootstrapState, bootstrapReconciliation: options.BootstrapReconciliation,
 		catalog: options.Catalog, providerProfile: options.ProviderProfile, domains: append([]authorizationv1.PolicyDomain(nil), options.Domains...),
 		signer: options.Signer, snapshotWriter: options.SnapshotWriter,
 		defaultAudience: append([]string(nil), options.DefaultAudience...), defaultTTL: options.DefaultTTL, now: options.Now,

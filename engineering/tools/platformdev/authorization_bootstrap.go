@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	authorizationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authorization/v1"
@@ -158,7 +159,9 @@ func (r *runtime) writeAuthorizationBootstrap(repository *artifactrepository.Rep
 		if loadErr != nil {
 			return loadErr
 		}
-		reconcileDevelopmentGrants(&state, grants, transitionTime)
+		if err := reconcileDevelopmentGrants(&state, grants, transitionTime); err != nil {
+			return err
+		}
 		state.PolicyRevision++
 		snapshot, compileErr := policy.CompileSnapshot(state, developmentAuthorizationAudiences, time.Now().UTC(), 24*time.Hour)
 		if compileErr != nil {
@@ -196,7 +199,14 @@ func reconcileDevelopmentGrantsBeforeCatalogUpdate(store *policy.FileStore, cata
 		return nil
 	}
 	previousGeneration := state.Generation
-	reconcileDevelopmentGrants(&state, grants, now)
+	profile := policy.NativeProviderProfile(catalog)
+	domain, err := policy.RootDomain(catalog, profile)
+	if err != nil {
+		return err
+	}
+	if err := reconcileDevelopmentGrantsAgainst(&state, catalog, profile, []authorizationv1.PolicyDomain{domain}, grants, now); err != nil {
+		return err
+	}
 	state.Generation++
 	state.Audit = append(state.Audit, policy.AuditEvent{
 		ID: fmt.Sprintf("audit.dev.catalog-transition.%d", now.UnixNano()), Action: "developmentSeedGrantReconcile",
@@ -206,39 +216,26 @@ func reconcileDevelopmentGrantsBeforeCatalogUpdate(store *policy.FileStore, cata
 	return err
 }
 
-func reconcileDevelopmentGrants(state *policy.State, grants []policy.BootstrapGrant, now time.Time) {
-	byRole := make(map[string]policy.BootstrapGrant, len(grants))
-	for _, grant := range grants {
-		byRole[grant.RoleID] = grant
+func reconcileDevelopmentGrants(state *policy.State, grants []policy.BootstrapGrant, now time.Time) error {
+	return reconcileDevelopmentGrantsAgainst(state, state.Catalog, state.ProviderProfile, state.Domains, grants, now)
+}
+
+func reconcileDevelopmentGrantsAgainst(state *policy.State, catalog pluginv1.PermissionCatalog, profile authorizationv1.ProviderProfile, domains []authorizationv1.PolicyDomain, grants []policy.BootstrapGrant, now time.Time) error {
+	canonical, err := policy.BuildBootstrapState(catalog, profile, domains, grants, now)
+	if err != nil {
+		return fmt.Errorf("构建开发授权基线: %w", err)
 	}
-	for index := range state.Roles {
-		grant, ok := byRole[state.Roles[index].ID]
-		if !ok || state.Roles[index].Revision != 1 || state.Roles[index].CreatedBy != "seed-authority" {
-			continue
-		}
-		state.Roles[index].Statements = []authorizationv1.PolicyStatement{{ID: "bootstrap-allow", Effect: authorizationv1.EffectAllow, Permissions: append([]string(nil), grant.Permissions...), Constraints: []authorizationv1.AttributeConstraint{}}}
-		state.Roles[index].UpdatedAt = now
-	}
-	for index := range state.Bindings {
-		if _, ok := byRole[state.Bindings[index].RoleID]; !ok || state.Bindings[index].Revision != 1 || state.Bindings[index].CreatedBy != "seed-authority" {
-			continue
-		}
-		state.Bindings[index].NotBefore = now.Add(-time.Minute)
-		state.Bindings[index].ExpiresAt = now.Add(24 * time.Hour)
-		state.Bindings[index].UpdatedAt = now
-	}
+	_, err = (policy.SeedOwnedBootstrapReconciliation{}).Reconcile(state, &canonical, catalog.Digest, now)
+	return err
 }
 
 func developmentGrants(catalog pluginv1.PermissionCatalog, seedSubjectID string) []policy.BootstrapGrant {
-	all := []string{}
 	known := map[string]struct{}{}
 	for _, permission := range catalog.Permissions {
 		if permission.Assignable {
-			all = append(all, permission.Code)
 			known[permission.Code] = struct{}{}
 		}
 	}
-	sort.Strings(all)
 	filter := func(values ...string) []string {
 		result := []string{}
 		for _, value := range values {
@@ -248,16 +245,52 @@ func developmentGrants(catalog pluginv1.PermissionCatalog, seedSubjectID string)
 		}
 		return result
 	}
-	grants := []policy.BootstrapGrant{
-		{RoleID: "platform.owner", Title: "Development Platform Owner", SubjectID: "local-admin", Permissions: all},
-		{RoleID: "platform.deployment-author", Title: "Development Deployment Author", SubjectID: "local-author", Permissions: filter("platform.deployment.read", "platform.deployment.compose", "platform.portal.read", "platform.portal.compose")},
-		{RoleID: "platform.deployment-approver", Title: "Development Deployment Approver", SubjectID: "local-approver", Permissions: filter("platform.deployment.read", "platform.deployment.approve", "platform.portal.read", "platform.portal.approve")},
-		{RoleID: "platform.deployment-publisher", Title: "Development Deployment Publisher", SubjectID: "local-publisher", Permissions: filter("platform.deployment.read", "platform.deployment.publish", "platform.portal.read", "platform.portal.publish")},
+	grants := []policy.BootstrapGrant{{RoleID: "platform.owner", Title: "Development Platform Owner", SubjectID: "local-admin", PermissionSelectors: developmentOwnerPermissionSelectors(catalog)}}
+	appendExactGrant := func(roleID, title, subjectID string, permissions ...string) {
+		selectors := exactSelectors(filter(permissions...))
+		if len(selectors) == 0 {
+			return
+		}
+		grants = append(grants, policy.BootstrapGrant{RoleID: roleID, Title: title, SubjectID: subjectID, PermissionSelectors: selectors})
 	}
+	appendExactGrant("platform.deployment-author", "Development Deployment Author", "local-author", "platform.deployment.read", "platform.deployment.compose", "platform.portal.read", "platform.portal.compose")
+	appendExactGrant("platform.deployment-approver", "Development Deployment Approver", "local-approver", "platform.deployment.read", "platform.deployment.approve", "platform.portal.read", "platform.portal.approve")
+	appendExactGrant("platform.deployment-publisher", "Development Deployment Publisher", "local-publisher", "platform.deployment.read", "platform.deployment.publish", "platform.portal.read", "platform.portal.publish")
 	if seedSubjectID != "" {
-		grants = append(grants, policy.BootstrapGrant{RoleID: "platform.seed-owner", Title: "Development Seed Platform Owner", SubjectID: seedSubjectID, Permissions: all})
+		grants = append(grants, policy.BootstrapGrant{RoleID: "platform.seed-owner", Title: "Development Seed Platform Owner", SubjectID: seedSubjectID, PermissionSelectors: developmentOwnerPermissionSelectors(catalog)})
 	}
 	return grants
+}
+
+func developmentOwnerPermissionSelectors(catalog pluginv1.PermissionCatalog) []policy.PermissionSelector {
+	roots := map[string]struct{}{}
+	for _, permission := range catalog.Permissions {
+		if !permission.Assignable {
+			continue
+		}
+		root, _, found := strings.Cut(permission.Code, ".")
+		if found {
+			roots[root] = struct{}{}
+		}
+	}
+	ordered := make([]string, 0, len(roots))
+	for root := range roots {
+		ordered = append(ordered, root)
+	}
+	sort.Strings(ordered)
+	selectors := make([]policy.PermissionSelector, 0, len(ordered))
+	for _, root := range ordered {
+		selectors = append(selectors, policy.PermissionSelector{Kind: policy.PermissionSelectorGlob, Value: root + ".**"})
+	}
+	return selectors
+}
+
+func exactSelectors(values []string) []policy.PermissionSelector {
+	selectors := make([]policy.PermissionSelector, 0, len(values))
+	for _, value := range values {
+		selectors = append(selectors, policy.PermissionSelector{Kind: policy.PermissionSelectorExact, Value: value})
+	}
+	return selectors
 }
 
 func ensureAuthorizationSigner(root string) (policy.Ed25519Signer, error) {

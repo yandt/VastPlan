@@ -57,7 +57,7 @@ func TestServiceImportsBootstrapOnlyIntoEmptySharedState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bootstrap, err := BuildBootstrapState(catalog, profile, []authorizationv1.PolicyDomain{root}, []BootstrapGrant{{RoleID: "seed.owner", Title: "Owner", SubjectID: "owner", Permissions: []string{"platform.demo.read"}}}, time.Now().UTC())
+	bootstrap, err := BuildBootstrapState(catalog, profile, []authorizationv1.PolicyDomain{root}, []BootstrapGrant{{RoleID: "seed.owner", Title: "Owner", SubjectID: "owner", PermissionSelectors: exactPermissionSelectors([]string{"platform.demo.read"})}}, time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -9,21 +9,21 @@ import (
 type ListRequest struct{}
 
 type CreateRoleRequest struct {
-	ExpectedGeneration uint64                            `json:"expectedGeneration"`
-	ID                 string                            `json:"id"`
-	DomainID           string                            `json:"domainId"`
-	Title              string                            `json:"title"`
-	Description        string                            `json:"description,omitempty"`
-	Statements         []authorizationv1.PolicyStatement `json:"statements"`
+	ExpectedGeneration uint64               `json:"expectedGeneration"`
+	ID                 string               `json:"id"`
+	DomainID           string               `json:"domainId"`
+	Title              string               `json:"title"`
+	Description        string               `json:"description,omitempty"`
+	Statements         []RoleStatementInput `json:"statements"`
 }
 
 type UpdateRoleRequest struct {
-	ExpectedGeneration uint64                            `json:"expectedGeneration"`
-	ID                 string                            `json:"id"`
-	Revision           uint64                            `json:"revision"`
-	Title              string                            `json:"title"`
-	Description        string                            `json:"description,omitempty"`
-	Statements         []authorizationv1.PolicyStatement `json:"statements"`
+	ExpectedGeneration uint64               `json:"expectedGeneration"`
+	ID                 string               `json:"id"`
+	Revision           uint64               `json:"revision"`
+	Title              string               `json:"title"`
+	Description        string               `json:"description,omitempty"`
+	Statements         []RoleStatementInput `json:"statements"`
 }
 
 type CreateBindingRequest struct {

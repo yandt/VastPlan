@@ -11,12 +11,14 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.platform.security.authorization-policy"
-	PluginVersion = "0.5.7"
+	PluginVersion = "0.6.0"
 	Capability    = "platform.authorization"
 	stateVersion  = 1
 )
 
 type LifecycleState string
+
+type PermissionSelectorKind string
 
 const (
 	StateDraft           LifecycleState = "Draft"
@@ -26,18 +28,43 @@ const (
 	StateRetired         LifecycleState = "Retired"
 )
 
+const (
+	PermissionSelectorExact PermissionSelectorKind = "exact"
+	PermissionSelectorGlob  PermissionSelectorKind = "glob"
+)
+
+type PermissionSelector struct {
+	Kind  PermissionSelectorKind `json:"kind"`
+	Value string                 `json:"value"`
+}
+
+type RoleStatementInput struct {
+	ID                  string                                `json:"id"`
+	Effect              authorizationv1.StatementEffect       `json:"effect"`
+	PermissionSelectors []PermissionSelector                  `json:"permissionSelectors"`
+	Resource            *authorizationv1.ResourceSelector     `json:"resource,omitempty"`
+	Constraints         []authorizationv1.AttributeConstraint `json:"constraints"`
+}
+
+type StatementPermissionSelectors struct {
+	StatementID string               `json:"statementId"`
+	Selectors   []PermissionSelector `json:"selectors"`
+}
+
 type RoleRevision struct {
-	ID          string                            `json:"id"`
-	Revision    uint64                            `json:"revision"`
-	DomainID    string                            `json:"domainId"`
-	Title       string                            `json:"title"`
-	Description string                            `json:"description,omitempty"`
-	Statements  []authorizationv1.PolicyStatement `json:"statements"`
-	State       LifecycleState                    `json:"state"`
-	CreatedBy   string                            `json:"createdBy"`
-	ApprovedBy  string                            `json:"approvedBy,omitempty"`
-	CreatedAt   time.Time                         `json:"createdAt"`
-	UpdatedAt   time.Time                         `json:"updatedAt"`
+	ID                    string                            `json:"id"`
+	Revision              uint64                            `json:"revision"`
+	DomainID              string                            `json:"domainId"`
+	Title                 string                            `json:"title"`
+	Description           string                            `json:"description,omitempty"`
+	SelectorCatalogDigest string                            `json:"selectorCatalogDigest"`
+	PermissionSelectors   []StatementPermissionSelectors    `json:"permissionSelectors"`
+	Statements            []authorizationv1.PolicyStatement `json:"statements"`
+	State                 LifecycleState                    `json:"state"`
+	CreatedBy             string                            `json:"createdBy"`
+	ApprovedBy            string                            `json:"approvedBy,omitempty"`
+	CreatedAt             time.Time                         `json:"createdAt"`
+	UpdatedAt             time.Time                         `json:"updatedAt"`
 }
 
 type BindingRevision struct {

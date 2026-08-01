@@ -63,7 +63,7 @@ func TestRoleBindingApprovalAndSignedSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	statement := authorizationv1.PolicyStatement{ID: "allow-read", Effect: authorizationv1.EffectAllow, Permissions: []string{"platform.demo.read"}, Constraints: []authorizationv1.AttributeConstraint{}}
-	if _, err := service.createRole(store, "alice", CreateRoleRequest{ExpectedGeneration: 1, ID: "platform.reader", DomainID: "platform.root", Title: "Reader", Statements: []authorizationv1.PolicyStatement{statement}}, nil); err != nil {
+	if _, err := service.createRole(store, "alice", CreateRoleRequest{ExpectedGeneration: 1, ID: "platform.reader", DomainID: "platform.root", Title: "Reader", Statements: []RoleStatementInput{{ID: statement.ID, Effect: statement.Effect, PermissionSelectors: exactPermissionSelectors(statement.Permissions), Constraints: statement.Constraints}}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := service.transitionRole(store, "alice", "submitRole", TransitionRequest{ExpectedGeneration: 2, ID: "platform.reader", Revision: 1}, nil); err != nil {

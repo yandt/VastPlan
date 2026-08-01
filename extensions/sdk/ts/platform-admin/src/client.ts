@@ -7,7 +7,7 @@ import type {
 	ArtifactQuotaUsage, ArtifactRef, ArtifactReference, ArtifactReferencePage, ArtifactReferenceSnapshot, ArtifactReferenceSnapshotValue,
 	ArtifactRepositoryMigration, ArtifactRepositoryReceipt, ArtifactRepositoryStatus, ArtifactRequirement, ArtifactSecurityAdmissionDeclaration, ArtifactSecurityStatusEvidence,
 	ArtifactSupplyChainEvidence, AuthenticationProviderManagementState, AuthenticationProviderProfile, AuthenticationProviderReadiness, AuthenticationProviderState, AuthorizationAuditEvent,
-	AuthorizationBindingRevision, AuthorizationLifecycleState, AuthorizationPermission, AuthorizationPolicyState, AuthorizationRoleRevision, AuthorizationStatement,
+	AuthorizationBindingRevision, AuthorizationLifecycleState, AuthorizationPermission, AuthorizationPolicyState, AuthorizationRoleRevision,
 	BackendApplicationComposition, BackendPluginRef, BackendServiceUnit, BootstrapJob, BootstrapJobState, CompositionRef,
 	CreateAuthorizationBindingRequest, CreateAuthorizationRoleRequest, CreateTestReleaseRequest, CredentialMetadata, DataPlaneExposureDraftRequest, DataPlaneExposureRevision,
 	DataPlaneTicketGrant, DatabaseConnection, DatabasePoolPolicy, DatabaseProbe, DeploymentTarget, ManagedAuthenticationProvider,

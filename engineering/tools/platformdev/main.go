@@ -413,7 +413,7 @@ func (r *runtime) platformManagementDeployment() (string, int, error) {
 
 func (r *runtime) serviceEnv() map[string]string {
 	authorizationRoot := filepath.Join(r.persistentStateRoot(), "authorization")
-	return map[string]string{
+	environment := map[string]string{
 		"VASTPLAN_VAULT_ADDR":                       "http://" + r.options.vaultListen,
 		"VASTPLAN_VAULT_TRANSIT_KEY":                "vastplan-local",
 		"VASTPLAN_VAULT_TOKEN_FILE":                 filepath.Join(r.runDir, "secrets", "vault-token"),
@@ -448,6 +448,10 @@ func (r *runtime) serviceEnv() map[string]string {
 		"VASTPLAN_AUTHENTICATION_ASSERTION_TRUST":       r.authenticationAssertionTrustPath(),
 		"VASTPLAN_SEED_ACCESS_STATE_FILE":               r.seedAccessStatePath(),
 	}
+	if r.options.applyPlatform {
+		environment["VASTPLAN_AUTHORIZATION_POLICY_BOOTSTRAP_RECONCILIATION"] = "seed-owned"
+	}
+	return environment
 }
 
 // persistentStateRoot holds governed plugin state across ordinary platformdev

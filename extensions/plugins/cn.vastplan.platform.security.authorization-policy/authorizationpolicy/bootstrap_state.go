@@ -10,10 +10,10 @@ import (
 )
 
 type BootstrapGrant struct {
-	RoleID      string
-	Title       string
-	SubjectID   string
-	Permissions []string
+	RoleID              string
+	Title               string
+	SubjectID           string
+	PermissionSelectors []PermissionSelector
 }
 
 func BuildBootstrapState(catalog pluginv1.PermissionCatalog, profile authorizationv1.ProviderProfile, domains []authorizationv1.PolicyDomain, grants []BootstrapGrant, now time.Time) (State, error) {
@@ -21,23 +21,14 @@ func BuildBootstrapState(catalog pluginv1.PermissionCatalog, profile authorizati
 		return State{}, fmt.Errorf("Authorization Bootstrap 至少需要一个安全管理员")
 	}
 	state := State{Version: stateVersion, Generation: 1, PolicyRevision: 1, Catalog: catalog, ProviderProfile: profile, Domains: append([]authorizationv1.PolicyDomain(nil), domains...), Roles: []RoleRevision{}, Bindings: []BindingRevision{}, Revocations: []authorizationv1.Revocation{}, Audit: []AuditEvent{}}
-	known := catalogPermissions(catalog)
 	now = now.UTC()
 	for _, grant := range grants {
-		permissions := []string{}
-		for _, code := range grant.Permissions {
-			entry, exists := known[code]
-			if exists && entry.Assignable {
-				permissions = append(permissions, code)
-			}
-		}
-		if len(permissions) == 0 {
-			continue
-		}
-		role := RoleRevision{ID: grant.RoleID, Revision: 1, DomainID: rootDomainID(domains), Title: grant.Title, Statements: []authorizationv1.PolicyStatement{{ID: "bootstrap-allow", Effect: authorizationv1.EffectAllow, Permissions: permissions, Constraints: []authorizationv1.AttributeConstraint{}}}, State: StatePublished, CreatedBy: "seed-authority", ApprovedBy: "trusted-host", CreatedAt: now, UpdatedAt: now}
-		if err := validateRole(role, domains, known); err != nil {
+		role := RoleRevision{ID: grant.RoleID, Revision: 1, DomainID: rootDomainID(domains), Title: grant.Title, State: StatePublished, CreatedBy: "seed-authority", ApprovedBy: "trusted-host", CreatedAt: now, UpdatedAt: now}
+		statements, selectors, err := compileRoleStatements(role.ID, role.DomainID, []RoleStatementInput{{ID: "bootstrap-allow", Effect: authorizationv1.EffectAllow, PermissionSelectors: grant.PermissionSelectors, Constraints: []authorizationv1.AttributeConstraint{}}}, domains, catalog)
+		if err != nil {
 			return State{}, err
 		}
+		role.SelectorCatalogDigest, role.PermissionSelectors, role.Statements = catalog.Digest, selectors, statements
 		state.Roles = append(state.Roles, role)
 		state.Bindings = append(state.Bindings, BindingRevision{ID: grant.RoleID + ".binding", Revision: 1, DomainID: role.DomainID, Subject: authorizationv1.Subject{Kind: authorizationv1.SubjectUser, ID: grant.SubjectID, Issuer: authenticationv1.StableSubjectIssuer}, RoleID: role.ID, RoleRevision: role.Revision, NotBefore: now.Add(-time.Minute), ExpiresAt: now.Add(24 * time.Hour), State: StatePublished, CreatedBy: "seed-authority", ApprovedBy: "trusted-host", CreatedAt: now, UpdatedAt: now})
 	}
