@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { AccessAuthenticationClient, accessBrandAssetURL, accessLocaleDirection, accessReturnTo, localizeAccessText as localized, providerTestSelection, type AccessBootstrap, type AuthenticationMethod, type AuthenticationStep } from "./access-authentication-client";
 import { accessAppearance } from "./access-appearance";
+import { AccessLocaleSelector } from "./access-locale-selector";
 import type { ModuleFetcher } from "./module-loader";
 
 type MessageKey = keyof typeof messages["zh-CN"];
@@ -81,8 +82,9 @@ export function AccessLoginPage({ fetcher }: { fetcher: ModuleFetcher }) {
   const product = access === undefined ? "VastPlan" : localized(access.branding.productName, locale, "VastPlan");
   const logo = access === undefined ? undefined : accessBrandAssetURL(access, returnTo);
   return <main style={styles.canvas} lang={locale} dir={accessLocaleDirection(locale)}>
+    {access === undefined || access.localization.supportedLocales.length <= 1 ? null : <AccessLocaleSelector locale={locale} supportedLocales={access.localization.supportedLocales} label={copy.language} styles={styles} onChange={setLocale} />}
     <section aria-labelledby="access-title" style={styles.card}>
-      <header style={styles.header}>{logo === undefined ? <div aria-hidden="true" style={styles.logo}>V</div> : <img src={logo} alt="" style={styles.logoImage} />}<strong>{product}</strong>{access !== undefined && access.localization.supportedLocales.length > 1 ? <select aria-label={copy.language} value={locale} onChange={(event) => setLocale(event.currentTarget.value)} style={styles.locale}>{access.localization.supportedLocales.map((value) => <option key={value} value={value}>{value}</option>)}</select> : null}</header>
+      <header style={styles.header}>{logo === undefined ? <div aria-hidden="true" style={styles.logo}>V</div> : <img src={logo} alt="" style={styles.logoImage} />}<strong>{product}</strong></header>
       <h1 id="access-title" style={styles.title}>{localized(step?.title, locale, copy.login)}</h1>
       <p style={styles.description}>{localized(step?.description, locale, copy.chooseMethod)}</p>
       {methods.length > 1 ? <nav aria-label={copy.methods} style={styles.methods}>{methods.map((method) => <button key={method.methodId} type="button" aria-pressed={method.methodId === methodId} disabled={busy} onClick={() => void switchMethod(method.methodId)} style={method.methodId === methodId ? styles.methodActive : styles.method}>{localized(method.displayName, locale, method.methodId)}</button>)}</nav> : null}

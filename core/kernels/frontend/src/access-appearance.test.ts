@@ -8,6 +8,8 @@ describe("Access visual adapter facade", () => {
     expect(Number(appearance.primary.minHeight)).toBeGreaterThanOrEqual(40);
 		expect(appearance.card.minWidth).toBe(0);
 		expect(appearance.footer.flexWrap).toBe("wrap");
+		expect(appearance.localePicker.position).toBe("absolute");
+		expect(appearance.localeMenu.minWidth).toBe(128);
   });
   it("fails closed to the Ant facade for unknown templates", () => { expect(accessAppearance("third-party-injected").primary.background).toBe("#1677ff"); });
 });
