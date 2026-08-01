@@ -107,9 +107,9 @@ func (r *runtime) startProxy() error {
 		// Page requests must always cross the Portal Host identity boundary. HMR
 		// owns immutable development assets only; it must never become a second,
 		// unauthenticated page server.
-		mux.Handle("/", proxy)
+		mux.Handle("/", developmentPortalProxy(proxy))
 	} else {
-		mux.Handle("/", proxy)
+		mux.Handle("/", developmentPortalProxy(proxy))
 	}
 	r.proxy = &http.Server{Addr: r.options.listen, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	listener, err := net.Listen("tcp", r.options.listen)
@@ -118,6 +118,22 @@ func (r *runtime) startProxy() error {
 	}
 	go func() { _ = r.proxy.Serve(listener) }()
 	return nil
+}
+
+// developmentPortalProxy gives the local Seed one canonical entry path. The
+// access profile intentionally covers the whole loopback host, while its only
+// governed Portal is mounted at /operations. Redirecting before authentication
+// prevents a valid login from preserving returnTo=/ and then requesting a
+// RuntimeSpec for a route that no Portal owns.
+func developmentPortalProxy(upstream http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/" && (request.Method == http.MethodGet || request.Method == http.MethodHead) {
+			w.Header().Set("Cache-Control", "no-store")
+			http.Redirect(w, request, "/operations", http.StatusTemporaryRedirect)
+			return
+		}
+		upstream.ServeHTTP(w, request)
+	})
 }
 
 func isPortalKernelRoute(path string) bool {
