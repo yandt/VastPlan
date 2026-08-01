@@ -9,6 +9,7 @@ export function CollectionSummary({ summary }: { summary: CollectionSummaryDefin
   const i18n = usePortalI18n();
   const title = summary.title === undefined ? undefined : i18n.text(summary.title);
   const descriptions = <ui.Descriptions
+    size={summary.size}
     title={summary.appearance === "plain" ? title : undefined}
     columns={summary.columns ?? defaultColumns}
     items={summary.metrics.map((metric) => ({
@@ -20,6 +21,6 @@ export function CollectionSummary({ summary }: { summary: CollectionSummaryDefin
   />;
 
   return <div style={{ width: "100%", minWidth: 0 }}>
-    {summary.appearance === "plain" ? descriptions : <ui.Panel title={title}>{descriptions}</ui.Panel>}
+    {summary.appearance === "plain" ? descriptions : <ui.Panel size={summary.size} title={title}>{descriptions}</ui.Panel>}
   </div>;
 }

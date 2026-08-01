@@ -14,7 +14,7 @@ export interface ActionMenuEntry {
  * Governed overflow menu shared by Workbench patterns. Callers provide action
  * data only; the component owns compact layout, focus, closing, and truncation.
  */
-export function ActionMenuPopover({ label, items, triggerSize = "sm", menuSize = "sm", iconSize = menuSize, placement = "bottom-end", onSelect }: {
+export function ActionMenuPopover({ label, items, triggerSize = "xs", menuSize = "xs", iconSize = menuSize, placement = "bottom-end", onSelect }: {
   label: string;
   items: readonly ActionMenuEntry[];
   triggerSize?: ComponentSize;

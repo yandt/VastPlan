@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PageActionSpec } from "@vastplan/ui-contract";
-import { message, usePortalI18n, usePortalUI } from "@vastplan/ui-primitives";
+import { ComponentSizeProvider, message, usePortalI18n, usePortalUI } from "@vastplan/ui-primitives";
 import type { PageActionHostDefinition } from "@vastplan/workbench-sdk";
 import { ActionMenuPopover } from "./ActionMenuPopover.js";
 import { CollectionFormWorkflow } from "../form/CollectionFormWorkflow.js";
@@ -42,7 +42,7 @@ export function PageActionHost({ definition, onRefresh }: { definition: PageActi
     }
   };
 
-  return <>
+  return <ComponentSizeProvider size={definition.size}>
     <div data-vastplan-page-actions style={{ width: "100%", minWidth: 0, display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 4 }}>
       {layout.direct.map((action) => <PageActionButton key={action.id} action={action} loading={running === action.id} disabled={running !== undefined && running !== action.id} onRun={() => void run(action)} />)}
       <ActionMenuPopover
@@ -56,7 +56,7 @@ export function PageActionHost({ definition, onRefresh }: { definition: PageActi
     </div>
     <CollectionFormWorkflow definition={definition.forms?.find((form) => form.id === activeForm)} selected={emptySelection} open={activeForm !== undefined} onClose={() => setActiveForm(undefined)} onRefresh={onRefresh} />
     <CollectionOverlayWorkflow definition={definition.overlays?.find((overlay) => overlay.id === activeOverlay)} selected={emptySelection} open={activeOverlay !== undefined} onClose={() => setActiveOverlay(undefined)} />
-  </>;
+  </ComponentSizeProvider>;
 }
 
 function PageActionButton({ action, loading, disabled, onRun }: { action: PageActionSpec; loading: boolean; disabled: boolean; onRun(): void }) {

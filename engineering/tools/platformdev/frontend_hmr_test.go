@@ -137,11 +137,11 @@ func TestOverlayFrontendHMRContributionsReplacesActivePluginDescriptors(t *testi
 	packageSHA := strings.Repeat("a", 64)
 	document := map[string]json.RawMessage{
 		"modules":       json.RawMessage(fmt.Sprintf(`[{"id":"cn.vastplan.renderer","version":"1.0.0","channel":"stable","packageSha256":%q}]`, packageSHA)),
-		"contributions": json.RawMessage(fmt.Sprintf(`{"schemaVersion":1,"generation":7,"inventoryDigest":%q,"digest":%q,"contributions":[{"kind":"frontend.rendererModules","surface":"frontend","id":"old","contract":"^8.0.0","owner":{"ref":{"pluginId":"cn.vastplan.renderer","version":"1.0.0","channel":"stable"},"sha256":%q,"publisher":"vastplan"},"descriptor":{"id":"old"}}]}`, strings.Repeat("b", 64), strings.Repeat("c", 64), packageSHA)),
+		"contributions": json.RawMessage(fmt.Sprintf(`{"schemaVersion":1,"generation":7,"inventoryDigest":%q,"digest":%q,"contributions":[{"kind":"frontend.rendererModules","surface":"frontend","id":"old","contract":"^9.0.0","owner":{"ref":{"pluginId":"cn.vastplan.renderer","version":"1.0.0","channel":"stable"},"sha256":%q,"publisher":"vastplan"},"descriptor":{"id":"old"}}]}`, strings.Repeat("b", 64), strings.Repeat("c", 64), packageSHA)),
 	}
 	modules := map[string]frontendHMRModule{"cn.vastplan.renderer": {
 		ID: "cn.vastplan.renderer", Publisher: "vastplan",
-		Contributions: []frontendHMRContribution{{Kind: "frontend.rendererModules", Surface: "frontend", ID: "new", Contract: "^8.0.0", Descriptor: json.RawMessage(`{"id":"new","adapter":"ui.render.adapter","uiContract":"^8.0.0","engineFamily":"react","framework":"test"}`)}},
+		Contributions: []frontendHMRContribution{{Kind: "frontend.rendererModules", Surface: "frontend", ID: "new", Contract: "^9.0.0", Descriptor: json.RawMessage(`{"id":"new","adapter":"ui.render.adapter","uiContract":"^9.0.0","engineFamily":"react","framework":"test"}`)}},
 	}}
 	if err := overlayFrontendHMRContributions(document, modules); err != nil {
 		t.Fatal(err)

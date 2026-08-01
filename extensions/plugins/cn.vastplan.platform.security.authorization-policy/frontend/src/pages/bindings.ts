@@ -106,7 +106,7 @@ function bindingForm(client: PlatformAdminClient, mode: "create" | "edit"): Work
       sections: [{ id: "binding", title: message(namespace, "form.bindingSection", "授权绑定"), columns: 2, fields: ["/id", "/subjectKind", "/subjectId", "/issuer", "/roleKey", "/notBefore", "/expiresAt"] }],
     },
     workflow: {
-      size: "lg", title: message(namespace, mode === "create" ? "action.createBinding" : "action.editBinding", mode === "create" ? "新建绑定" : "编辑绑定"), submitLabel: message(namespace, "action.save", "保存"),
+      dialogWidth: "lg", title: message(namespace, mode === "create" ? "action.createBinding" : "action.editBinding", mode === "create" ? "新建绑定" : "编辑绑定"), submitLabel: message(namespace, "action.save", "保存"),
       success: { notify: message(namespace, "notice.bindingSaved", "绑定已保存"), refreshCollection: true, close: true },
     },
     async prepare() {

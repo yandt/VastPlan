@@ -22,7 +22,7 @@ import QuestionCircleOutlined from "@ant-design/icons/QuestionCircleOutlined";
 import EyeOutlined from "@ant-design/icons/EyeOutlined";
 import EyeInvisibleOutlined from "@ant-design/icons/EyeInvisibleOutlined";
 import HolderOutlined from "@ant-design/icons/HolderOutlined";
-import type { SemanticIconName, VastPlanIconProps } from "@vastplan/ui-primitives";
+import { useComponentSize, type SemanticIconName, type VastPlanIconProps } from "@vastplan/ui-primitives";
 
 const icons: Record<SemanticIconName, typeof PlusOutlined> = {
   add: PlusOutlined, remove: DeleteOutlined, edit: EditOutlined, search: SearchOutlined, settings: SettingOutlined,
@@ -32,10 +32,11 @@ const icons: Record<SemanticIconName, typeof PlusOutlined> = {
   copy: CopyOutlined, download: DownloadOutlined, upload: UploadOutlined, more: MoreOutlined, help: QuestionCircleOutlined,
 };
 
-const pixels = { sm: 16, md: 20, lg: 24 } as const;
+const pixels = { xs: 14, sm: 16, md: 20, lg: 24 } as const;
 
-export function AntdNativeIcon({ name, label, size = "md", style }: VastPlanIconProps) {
+export function AntdNativeIcon({ name, label, size: requestedSize, style }: VastPlanIconProps) {
   const Icon = icons[name];
+  const size = useComponentSize(requestedSize);
   return <span data-vastplan-icon={name} data-vastplan-icon-source="renderer-native"><Icon
     role={label === undefined ? undefined : "img"}
     aria-label={label}

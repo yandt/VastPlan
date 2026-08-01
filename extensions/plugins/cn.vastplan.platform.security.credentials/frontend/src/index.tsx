@@ -49,7 +49,7 @@ export function createCredentialsPage(client: PlatformAdminClient, serviceID: st
     workflow: {
       title: message(namespace, "form.title", "安全保存凭证"),
       description: message(namespace, "form.description", "列表和读取 API 永远不会返回明文或密文。使用同名凭证会创建新版本。"),
-      size: "md",
+      dialogWidth: "md",
       submitLabel: message(namespace, "action.save", "安全保存"),
       confirmBeforeSubmit: message(namespace, "confirm.save", "确认通过本次 TLS 请求提交凭证明文？提交完成后输入会立即清除。"),
       success: { notify: message(namespace, "notice.saved", "凭证已安全保存"), refreshCollection: true, close: true },

@@ -32,9 +32,9 @@ export function ColumnPreferenceList({ columns, labels, dragLabel, showLabel, hi
           background: hidden ? ui.theme.tokens.color.hover : "transparent", color: hidden ? ui.theme.tokens.color.mutedText : ui.theme.tokens.color.text,
           opacity: isDragging ? 0.55 : 1,
         }}>
-          <button ref={handleRef} type="button" aria-label={`${dragLabel}: ${label}`} title={`${dragLabel}: ${label}`} onKeyDown={(event) => keyboardMove(event, index, isDragging)} style={iconButtonStyle("grab")}><ui.Icon name="drag" size="sm" /></button>
+          <button ref={handleRef} type="button" aria-label={`${dragLabel}: ${label}`} title={`${dragLabel}: ${label}`} onKeyDown={(event) => keyboardMove(event, index, isDragging)} style={iconButtonStyle("grab")}><ui.Icon name="drag" size="xs" /></button>
           <span title={label} style={{ minWidth: 0, maxWidth: 196, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13 }}>{label}</span>
-          <button type="button" aria-label={`${visibilityLabel}: ${label}`} title={`${visibilityLabel}: ${label}`} aria-pressed={column.visible} onClick={() => onChange(toggleColumnVisibility(columns, column.key))} style={iconButtonStyle("pointer")}><ui.Icon name={column.visible ? "visibility" : "visibilityOff"} size="sm" /></button>
+          <button type="button" aria-label={`${visibilityLabel}: ${label}`} title={`${visibilityLabel}: ${label}`} aria-pressed={column.visible} onClick={() => onChange(toggleColumnVisibility(columns, column.key))} style={iconButtonStyle("pointer")}><ui.Icon name={column.visible ? "visibility" : "visibilityOff"} size="xs" /></button>
         </div>;
       }}
     </SortableList>

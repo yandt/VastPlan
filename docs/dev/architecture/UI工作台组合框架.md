@@ -39,6 +39,8 @@ flowchart TB
 
 `FilterPanel` 是与 Collection、MasterDetail 平级的一级组合组件，统一字段 Schema、紧凑表单、草稿/提交策略、响应式分列和操作位置，但不发起数据请求。`CollectionWorkbench` 组合 FilterPanel，并共享查询、选择、动作、取消和错误状态机，提供 table/page 与 card/cursor 两种受控呈现：Table 保留列显示与顺序偏好、页码和总数；Card 固定标题、状态、摘要、内容与 footer 动作区，支持手动/视口增量加载。Workbench Page 根使用统一零 margin/零 padding Flow，以受治理 `sectionGap` 排列一级区域；FilterPanel 的 `flush/compact` inset 由 Workbench 组合上下文决定，功能插件不能借此设置外部间距。Collection 顶部筛选固定 `flush`，避免 FilterBar 自身 padding 与 Shell 16px 起始节奏叠加。FilterPanel 默认 `xs=1 / md=2 / xl=4`，可通过 `filterPanel.layout.columns` 覆盖；列偏好由工具栏锚定 Popover 即时写入，不使用阻断式确认 Dialog。表单工作流已提供默认 FormDialog 和显式 page、打开时动态 Schema/枚举准备、分区/标签/步骤、1–4 列、有限条件 DSL、脏状态保护、同步/异步/服务端字段错误、一次性提交和成功刷新。Overlay 统一承载 JSON 预览和审计表，并可按信息形态选择 Dialog 或 Drawer。视觉数值的唯一真相源是《[Portal 设计系统](../design/DESIGN.md)》的 `portalPageRhythm`。
 
+UI Contract 9.0 的 `SizeableProps` 为 Workbench 定义提供统一四档 `xs / sm / md / lg`，缺省为 `md`。Page、Workspace Section、Collection、FilterPanel、Card、Form、Overlay、Record、Descriptions 与 Dashboard 都通过同一 `ComponentSizeProvider` 继承，调用方只在组合根声明一次；Renderer 不得在每个组件重新复制默认分支。`Page.size` 管节奏而不管正文宽度，`Grid.size` 管默认 gap 而不管列数。Form/Overlay 的内容 `size` 与 `dialogWidth` / `width` 完全分离。
+
 通用排序由 Workbench 内部 `patterns/interaction/SortableList` 统一承接，当前使用精确锁定的 dnd-kit；Pointer、Touch、自动滚动和碰撞反馈不再由各 Pattern 自行处理，键盘继续提供显式等价操作。第三方事件与 Sensor 不进入 UI Contract 或功能插件，dnd-kit 仅在 Sortable 表面实际挂载后加载。未来首页卡片使用 `DashboardGridSpec` 描述稳定卡片 ID 和响应式位置，可信宿主通过 `loadDashboardGrid()` 按需加载 `react-grid-layout` 并解析卡片内容；Grid 代码不进入普通 Workbench 页面入口。该基础不等于首页已经实现，卡片目录、偏好 CAS、权限裁剪和完整键盘缩放仍是正式启用前置项，详见 ADR-0162。
 
 Record 工作流共享详情字段投影、状态、页面/详情动作、表单、Overlay、取消和错误状态机，并提供 `record-detail`、`master-detail` 与 `tree-detail` 三种 Pattern。MasterDetail 的左侧列表复用 Collection 查询、筛选、page/cursor 和取消语义，右侧可以展示详情或 page-surface 编辑器；TreeDetail 对节点数、深度、ID 唯一性和默认展开层级做有界校验。选择写入受限 URL 参数，窄屏在主区/详情间切换，页内编辑存在脏数据时切换记录必须确认。功能插件不能提供 React render function、HTML、任意树组件或自行实现分栏。
@@ -111,7 +113,7 @@ Collection 可选的状态摘要由 `CollectionSummary` 数据驱动定义。`co
 |---|---|
 | 顶层 `pageActions` | 由可信宿主挂入 `page.header.end` 并整体右对齐；默认纯图标 + Tooltip，可选 `icon-label` / `label`，最多直接显示 4 个，其余进入更多菜单 |
 | `collection.toolbar` / `collection.bulk` | 集合局部工具保留在集合内；批量动作使用 Select 选择后再显式执行，且必须声明选择数量与对象状态前置条件 |
-| `record.row` / `card.footer` | 图标 + Tooltip 居中呈现；`record.row` 固定使用《[Portal 设计系统](../design/DESIGN.md)》的 `sm` recipe，不随 Table density 改变。行操作最多两个直接可见，其余动作进入每行一个“图标 + 标签”的 action overflow 菜单。行操作不使用实心 primary 背景，危险操作保留危险色；页面头部动作固定使用 `lg` |
+| `record.row` / `card.footer` | 图标 + Tooltip 居中呈现；`record.row` 固定使用《[Portal 设计系统](../design/DESIGN.md)》的 `xs` recipe，不随 Table density 改变。行操作最多两个直接可见，其余动作进入每行一个“图标 + 标签”的 action overflow 菜单。行操作不使用实心 primary 背景，危险操作保留危险色；页面头部动作固定使用 `lg` |
 | `form.submit` / `form.cancel` / `form.danger` | 提交只有一个主操作；危险操作必须确认且保留失败上下文 |
 
 浏览器的可见/禁用状态只是体验提示。Action handler 每次执行仍经类型化 BFF 或 capability 调用，由服务端重新判定主体、租户、对象状态、并发版本和权限。
@@ -122,7 +124,7 @@ Collection 可选的状态摘要由 `CollectionSummary` 数据驱动定义。`co
 
 ### 3.4 表单与 Overlay 工作流
 
-`FormSchema` 保持 Draft 7 数据约束，不将分栏、步骤和条件可见性伪装成校验规则。当前 UI Contract 8.5 提供：
+`FormSchema` 保持 Draft 7 数据约束，不将分栏、步骤和条件可见性伪装成校验规则。当前 UI Contract 9.0 提供：
 
 ```text
 FormPresentation
@@ -134,7 +136,8 @@ FormPresentation
 
 FormWorkflow
 ├── surface?: dialog（默认）| page（仅显式页内表单）
-├── title / description / size / dialogHeight?: 160..10000px
+├── title / description / size（内容尺寸）
+├── dialogWidth?: sm | md | lg / dialogHeight?: 160..10000px
 ├── submitAction / cancelAction / confirmBeforeSubmit?
 ├── success: notify、refreshCollection、close、navigate
 └── failure: 字段错误映射、保留输入、可重试性

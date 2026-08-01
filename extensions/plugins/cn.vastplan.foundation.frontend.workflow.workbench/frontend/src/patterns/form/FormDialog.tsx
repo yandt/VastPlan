@@ -12,7 +12,8 @@ export function FormDialog({ form, open }: { form: FormWorkflowController; open:
   return <ui.Dialog
     open={open}
     title={i18n.text(definition.workflow.title)}
-    width={definition.workflow.size}
+    size={definition.workflow.size ?? definition.size}
+    width={definition.workflow.dialogWidth}
     height={definition.workflow.dialogHeight}
     contentOverflow="scroll"
     footer={<FormActions form={form} />}

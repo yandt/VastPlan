@@ -12,8 +12,8 @@ export function WorkspacePage({ page, preferenceScope, preferences, presentation
 }) {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
-  return <WorkbenchPageFlow>
-    {page.sections.map((section, index) => <ui.Panel key={section.id}>
+  return <WorkbenchPageFlow size={page.size}>
+    {page.sections.map((section, index) => <ui.Panel size={section.size} key={section.id}>
       <ui.Stack gap="sm">
         <ui.Stack direction="row" gap="sm" align="center" wrap>
           <ui.Status tone="info">{index + 1}</ui.Status>

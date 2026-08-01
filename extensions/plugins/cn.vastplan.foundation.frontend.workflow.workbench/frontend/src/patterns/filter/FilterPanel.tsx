@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { FilterPanelSpec, FilterSpec, ResponsiveColumnCount } from "@vastplan/ui-contract";
-import { message, usePortalI18n, usePortalUI, type ComponentSize, type WorkbenchComponentInset } from "@vastplan/ui-primitives";
+import { message, useComponentSize, usePortalI18n, usePortalUI, type ComponentSize, type WorkbenchComponentInset } from "@vastplan/ui-primitives";
 import { filterPanelSchema } from "./filter-schema.js";
 import { WorkbenchComponentRegion } from "../layout/WorkbenchRhythm.js";
 
@@ -46,7 +46,7 @@ export function filterPanelActionSpan(fields: readonly FilterSpec[], columns: Re
   return spans;
 }
 
-export function FilterPanel({ panel, value, querying, size = "md", onApply, inset = "flush" }: {
+export function FilterPanel({ panel, value, querying, size: requestedSize, onApply, inset = "flush" }: {
   panel: FilterPanelSpec;
   value: Record<string, unknown>;
   querying: boolean;
@@ -57,6 +57,7 @@ export function FilterPanel({ panel, value, querying, size = "md", onApply, inse
 }) {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
+  const size = useComponentSize(panel.size ?? requestedSize);
   const fields = panel.fields;
   const columns = filterPanelColumns(panel);
   const autoApply = shouldAutoApplyFilterPanel(panel, columns);
@@ -68,8 +69,8 @@ export function FilterPanel({ panel, value, querying, size = "md", onApply, inse
     setDraft(next);
     if (autoApply && automaticFilterKinds.has(filter.kind)) onApply(next);
   };
-  return <WorkbenchComponentRegion inset={inset}><ui.FilterBar appearance="collection">
-    <ui.Grid columns={columns} gap="xs">{fields.map((filter) => <ui.GridItem key={filter.id}>
+  return <WorkbenchComponentRegion inset={inset}><ui.FilterBar size={size} appearance="collection">
+    <ui.Grid size={size} columns={columns} gap="xs">{fields.map((filter) => <ui.GridItem key={filter.id}>
       <div onKeyDown={(event) => { if (autoApply && filter.kind === "text" && event.key === "Enter") { event.preventDefault(); onApply(draft); } }}>
         <ui.FormRenderer size={size} schema={filterPanelSchema([filter])} value={{ [filter.id]: draft[filter.id] }} presentation={{ layout: "compact", labelPlacement: "inside-inline" }} onChange={(patch) => update(filter, patch)} />
       </div>

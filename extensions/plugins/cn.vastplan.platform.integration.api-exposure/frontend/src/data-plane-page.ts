@@ -72,7 +72,7 @@ function createForm(client: PlatformAdminClient): WorkbenchFormDefinition<DataPl
       { id: "service", title: "可信数据面服务", columns: 2, fields: ["/pluginId", "/artifactSha256", "/contributionId"] },
       { id: "binding", title: "入口与权限", columns: 2, fields: ["/hosts", "/allowedModes", "/allowedEndpointOrigins", "/tlsIdentityPrefix", "/authenticationProfileId", "/allowAnonymous", "/requiredPermissions", "/maxObjectBytes"] },
     ], fields: [] },
-    workflow: { size: "lg", title: "新建 Data Plane Exposure 草稿", submitLabel: "创建草稿", success: { notify: "数据面草稿已创建", refreshCollection: true, close: true } },
+    workflow: { dialogWidth: "lg", title: "新建 Data Plane Exposure 草稿", submitLabel: "创建草稿", success: { notify: "数据面草稿已创建", refreshCollection: true, close: true } },
     initialValue: { hosts: [], allowedModes: ["ticket-redirect"], allowedEndpointOrigins: [], allowAnonymous: false, requiredPermissions: [], maxObjectBytes: 268_435_456 },
     async submit({ value }) { await client.createDataPlaneExposureDraft(toDataPlaneDraftRequest(value)); },
   };

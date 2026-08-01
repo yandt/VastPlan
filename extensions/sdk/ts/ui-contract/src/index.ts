@@ -1,13 +1,14 @@
+import type { OverlayWidth, SizeableProps } from "./component-size.js";
+
 /** Serializable UI semantics shared by Web and Mobile renderers. */
 export { uiContractMajor, uiContractRange, uiContractVersion } from "./version.generated.js";
 export const interactionContractVersion = "1.0.0" as const;
 export const jsonSchemaDialect = "http://json-schema.org/draft-07/schema#" as const;
 export * from "./i18n.js";
 export * from "./dashboard.js";
+export * from "./component-size.js";
 
 export type UICapability = "layout" | "menu" | "overlay" | "form" | "data" | "feedback" | "theme" | "approval" | "navigation";
-/** Shared three-step size language for framework-neutral interactive components. */
-export type ComponentSize = "sm" | "md" | "lg";
 /** Governed page-body width selected by a page and enforced by the active Shell. */
 export const pageBodyLayouts = Object.freeze(["fluid", "large", "medium", "small"] as const);
 export type PageBodyLayout = (typeof pageBodyLayouts)[number];
@@ -59,7 +60,7 @@ export interface FormSectionPresentation {
   fields: readonly string[];
   collapsible?: boolean;
 }
-export interface FormPresentation {
+export interface FormPresentation extends SizeableProps {
   /** Governed visual defaults; explicit layout/label/navigation fields win. */
   preset?: FormPresentationPreset;
   layout?: FormLayout;
@@ -75,12 +76,13 @@ export interface FormPresentation {
   sections?: readonly FormSectionPresentation[];
   fields?: readonly FormFieldPresentation[];
 }
-export interface FormWorkflow {
+export interface FormWorkflow extends SizeableProps {
   /** Defaults to dialog. Page forms must opt in explicitly. */
   surface?: "page" | "dialog";
   title: import("./i18n.js").LocalizedText;
   description?: import("./i18n.js").LocalizedText;
-  size?: ComponentSize;
+  /** Dialog/Drawer 几何宽度，与组件 size 正交。 */
+  dialogWidth?: OverlayWidth;
   /** Optional Dialog-only height in pixels; adaptive sizing remains the default. */
   dialogHeight?: number;
   submitLabel?: import("./i18n.js").LocalizedText;
@@ -141,7 +143,7 @@ export interface CollectionCardFieldSpec {
   label?: import("./i18n.js").LocalizedText;
   format?: CollectionCardValueFormat;
 }
-export interface CollectionCardSpec {
+export interface CollectionCardSpec extends SizeableProps {
   titleKey: string;
   subtitleKey?: string;
   status?: { labelKey: string; toneKey?: string };
@@ -156,7 +158,7 @@ export interface FilterPanelLayout {
 }
 export type FilterPanelApplyMode = "auto-single-row" | "explicit";
 /** 可被 Collection、MasterDetail 等工作台组合复用的一级筛选面板。 */
-export interface FilterPanelSpec {
+export interface FilterPanelSpec extends SizeableProps {
   fields: readonly FilterSpec[];
   layout?: FilterPanelLayout;
   apply?: {
@@ -199,7 +201,7 @@ export interface PageActionSpec {
   /** UX projection only; Backend authorization remains authoritative. */
   requiredPermissions?: readonly string[];
 }
-export interface CollectionSpec {
+export interface CollectionSpec extends SizeableProps {
   id: string;
   title: import("./i18n.js").LocalizedText;
   view: CollectionView;
@@ -234,14 +236,14 @@ export interface RecordSectionSpec {
   columns?: number;
   fields: readonly RecordFieldSpec[];
 }
-export interface RecordDetailSpec {
+export interface RecordDetailSpec extends SizeableProps {
   titleKey: string;
   subtitleKey?: string;
   status?: { labelKey: string; toneKey?: string };
   sections: readonly RecordSectionSpec[];
   emptyTitle?: import("./i18n.js").LocalizedText;
 }
-export interface RecordMasterSpec {
+export interface RecordMasterSpec extends SizeableProps {
   id: string;
   title: import("./i18n.js").LocalizedText;
   keyField: string;
@@ -253,7 +255,7 @@ export interface RecordMasterSpec {
   selectionParam?: string;
   emptyTitle?: import("./i18n.js").LocalizedText;
 }
-export interface RecordTreeSpec {
+export interface RecordTreeSpec extends SizeableProps {
   id: string;
   title: import("./i18n.js").LocalizedText;
   selectionParam?: string;

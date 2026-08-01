@@ -11,7 +11,7 @@ import (
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
-const id, version, capability = "cn.vastplan.platform.data.relational.connection-manager", "0.9.12", "platform.database"
+const id, version, capability = "cn.vastplan.platform.data.relational.connection-manager", "0.9.13", "platform.database"
 
 const credentialCapability = "platform.credentials"
 

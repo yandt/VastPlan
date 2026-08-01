@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import { portalPageRhythm, type PortalPageDensity, type WorkbenchComponentInset } from "@vastplan/ui-primitives";
+import { ComponentSizeProvider, componentSizeRecipes, portalPageRhythm, useComponentSize, type ComponentSize, type PortalPageDensity, type WorkbenchComponentInset } from "@vastplan/ui-primitives";
 
 const baseRootStyle: CSSProperties = {
   boxSizing: "border-box",
@@ -10,20 +10,22 @@ const baseRootStyle: CSSProperties = {
 };
 
 /** Owns spacing between page-level Workbench regions; children must not add outer margins. */
-export function WorkbenchPageFlow({ density = "standard", children }: {
+export function WorkbenchPageFlow({ density, size: requestedSize, children }: {
   density?: PortalPageDensity;
+  size?: ComponentSize;
   children: ReactNode;
 }) {
-  return <div data-vp-workbench-flow={density} style={workbenchPageFlowStyle(density)}>{children}</div>;
+  const size = useComponentSize(requestedSize);
+  return <ComponentSizeProvider size={size}><div data-vp-workbench-flow={density ?? size} style={workbenchPageFlowStyle(density, size)}>{children}</div></ComponentSizeProvider>;
 }
 
-export function workbenchPageFlowStyle(density: PortalPageDensity): CSSProperties {
+export function workbenchPageFlowStyle(density: PortalPageDensity | undefined, size: ComponentSize = "md"): CSSProperties {
   return {
     ...baseRootStyle,
     display: "flex",
     flexDirection: "column",
     alignItems: "stretch",
-    gap: portalPageRhythm.sectionGap[density],
+    gap: density === undefined ? componentSizeRecipes.layout[size].flowGap : portalPageRhythm.sectionGap[density],
   };
 }
 

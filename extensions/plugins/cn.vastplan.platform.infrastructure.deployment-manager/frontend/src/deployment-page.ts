@@ -57,10 +57,10 @@ export function createDeploymentPage(client: PlatformAdminClient, serviceID: str
     },
     forms: [form, edit],
     overlays: [
-      { id: "resolution", surface: "drawer", size: "lg", title: message("dialog.resolution", "Planner 只读解析结果"), async load(selected) { return resolutionContent(selected[0]); } },
-      { id: "graph", surface: "drawer", size: "lg", title: message("dialog.graph", "派生服务依赖图"), async load(selected) { return dependencyGraphContent(selected[0]); } },
-      { id: "preview", surface: "dialog", size: "lg", title: message("dialog.preview", "内核校验后的 Deployment v2"), async load(selected) { return { kind: "json", documents: [{ value: (selected[0]?.preview ?? {}) as JSONValue }] }; } },
-      { id: "audit", surface: "drawer", size: "lg", title: message("dialog.audit", "服务修订审计"), async load(selected) {
+      { id: "resolution", surface: "drawer", width: "lg", title: message("dialog.resolution", "Planner 只读解析结果"), async load(selected) { return resolutionContent(selected[0]); } },
+      { id: "graph", surface: "drawer", width: "lg", title: message("dialog.graph", "派生服务依赖图"), async load(selected) { return dependencyGraphContent(selected[0]); } },
+      { id: "preview", surface: "dialog", width: "lg", title: message("dialog.preview", "内核校验后的 Deployment v2"), async load(selected) { return { kind: "json", documents: [{ value: (selected[0]?.preview ?? {}) as JSONValue }] }; } },
+      { id: "audit", surface: "drawer", width: "lg", title: message("dialog.audit", "服务修订审计"), async load(selected) {
         const rows = selected[0] === undefined ? [] : await client.listServiceRevisionAudit(selected[0].id);
         return { kind: "table", rowKey: "id", rows: rows as Array<ServiceAuditEvent & Record<string, unknown>>, columns: [
           { key: "at", label: message("column.time", "时间"), format: "datetime" }, { key: "action", label: message("column.action", "动作") },
@@ -99,7 +99,7 @@ function intentForm(client: PlatformAdminClient, id: "create" | "edit"): Workben
       fields: [{ pointer: "/deployment" }, { pointer: "/services" }],
     },
     workflow: {
-      size: "lg", title: message(id === "create" ? "panel.new" : "panel.edit", id === "create" ? "新建应用意图草稿" : "编辑应用意图草稿"),
+      dialogWidth: "lg", title: message(id === "create" ? "panel.new" : "panel.edit", id === "create" ? "新建应用意图草稿" : "编辑应用意图草稿"),
       submitLabel: message(id === "create" ? "action.create" : "action.save", id === "create" ? "创建草稿" : "保存草稿"),
       success: { notify: message(id === "create" ? "notice.created" : "notice.saved", id === "create" ? "应用意图草稿已创建" : "应用意图草稿已保存"), refreshCollection: true, close: true },
     },

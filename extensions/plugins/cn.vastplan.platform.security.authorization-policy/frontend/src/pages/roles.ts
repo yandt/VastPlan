@@ -134,7 +134,7 @@ function roleForm(client: PlatformAdminClient, mode: "create" | "edit"): Workben
       fields: [{ pointer: "/description", span: 2 }, { pointer: "/permissionSelectors", span: 2 }],
     },
     workflow: {
-      size: "lg",
+      dialogWidth: "lg",
       title: message(namespace, mode === "create" ? "action.createRole" : "action.edit", "角色定义"),
       submitLabel: message(namespace, "action.save", "保存"),
       success: { notify: message(namespace, "notice.roleSaved", "角色已保存"), refreshCollection: true, close: true },

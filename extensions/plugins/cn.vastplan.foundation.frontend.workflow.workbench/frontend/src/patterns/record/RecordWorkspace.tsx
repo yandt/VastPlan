@@ -51,7 +51,7 @@ export function RecordWorkspace({ page, data, refresh, primary, primaryLabel, sp
   }, [i18n, page, record, refresh, ui]);
   const secondary = <RecordPane detail={page.detail} record={record} editor={page.editor} actions={detailActions} loading={data.loading} failure={data.failure} onRetry={refresh} onAction={(action) => void runAction(action)} onDirtyChange={onDirtyChange} onBack={onBack} />;
   return <>
-    <WorkbenchPageFlow>{primary === undefined ? secondary : <ui.SplitView primaryLabel={primaryLabel ?? "Records"} secondaryLabel={i18n.text(page.title)} primary={primary} secondary={secondary} mode={splitMode} primaryWidth="md" />}</WorkbenchPageFlow>
+    <WorkbenchPageFlow size={page.size}>{primary === undefined ? secondary : <ui.SplitView primaryLabel={primaryLabel ?? "Records"} secondaryLabel={i18n.text(page.title)} primary={primary} secondary={secondary} mode={splitMode} primaryWidth="md" />}</WorkbenchPageFlow>
     <CollectionFormWorkflow definition={page.forms?.find((form) => form.id === activeForm)} selected={selected} open={activeForm !== undefined} onClose={() => setActiveForm(undefined)} onRefresh={refresh} />
     <CollectionOverlayWorkflow definition={page.overlays?.find((overlay) => overlay.id === activeOverlay)} selected={selected} open={activeOverlay !== undefined} onClose={() => setActiveOverlay(undefined)} />
   </>;

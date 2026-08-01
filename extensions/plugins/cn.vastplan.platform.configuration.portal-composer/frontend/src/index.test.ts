@@ -125,9 +125,9 @@ function configuration(): PortalConfiguration {
     platform: {
       version: 1, revision: 1, id: "operations.platform", target: { kernel: "frontend" },
       runtimeEngine: { ...ref, engineContract: "^1.0.0", family: "react" },
-      renderAdapter: { ...ref, uiContract: "^8.0.0", config: { defaultRenderer: "antd", allowedRenderers: ["antd"], userSelectable: true } },
-      shell: { ...ref, uiContract: "^8.0.0", config: { defaultTemplate: "standard", allowedTemplates: ["standard", "top-navigation"], userSelectable: true, templateOptions: { standard: {} } } },
-      workbench: { ...ref, uiContract: "^8.0.0" }, accountCenter: { ...ref }, plugins: [ref], security: { firstPartyOnly: true, requireIntegrity: true },
+      renderAdapter: { ...ref, uiContract: "^9.0.0", config: { defaultRenderer: "antd", allowedRenderers: ["antd"], userSelectable: true } },
+      shell: { ...ref, uiContract: "^9.0.0", config: { defaultTemplate: "standard", allowedTemplates: ["standard", "top-navigation"], userSelectable: true, templateOptions: { standard: {} } } },
+      workbench: { ...ref, uiContract: "^9.0.0" }, accountCenter: { ...ref }, plugins: [ref], security: { firstPartyOnly: true, requireIntegrity: true },
     },
     application: { version: 1, revision: 1, id: "operations", target: { kernel: "frontend" }, route: "/operations", plugins: [], config: {} },
     services: [{ id: "backend", logicalService: "backend", routingDomain: "platform", capabilities: [{ capability: "health", read: ["get"] }] }],

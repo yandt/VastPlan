@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@vastplan/ui-primitives", () => ({
-  componentSizeRecipes: { iconButton: { sm: { iconEdge: 12 }, md: { iconEdge: 16 }, lg: { iconEdge: 20 } } },
+  componentSizeRecipes: { iconButton: { xs: { iconEdge: 12 }, sm: { iconEdge: 12 }, md: { iconEdge: 16 }, lg: { iconEdge: 20 } } },
   usePortalUI: () => ({
     theme: { tokens: { color: { danger: "#d00", mutedText: "#777" } } },
     IconButton: ({ icon, label, size }: { icon: string; label: string; size?: string }) => <button type="button" data-icon={icon} data-size={size} aria-label={label} />,
@@ -31,11 +31,11 @@ describe("ActionMenuPopover", () => {
     expect(html).toContain('data-placement="bottom-end"');
     expect(html).toContain('data-surface="compact"');
     expect(html).toContain('aria-label="More actions"');
-    expect(html).toContain('data-size="sm"');
+    expect(html).toContain('data-size="xs"');
     expect(html).toContain('data-variant="action"');
     expect(html).toContain('data-menu-item="publish"');
     expect(html).toContain('data-icon-glyph="remove"');
-    expect(html).toContain('data-icon-size="sm"');
+    expect(html).toContain('data-icon-size="xs"');
     expect(html).toContain('width:12px');
     expect(html).toContain('height:12px');
     expect(html).toContain('color:#d00');

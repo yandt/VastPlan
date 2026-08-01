@@ -4,10 +4,10 @@ import { generateWidgets } from "@rjsf/antd/lib/widgets/index.js";
 import { enumOptionsIndexForValue, enumOptionsValueForIndex } from "@rjsf/utils";
 import type { FieldTemplateProps, ObjectFieldTemplateProps, WidgetProps } from "@rjsf/utils";
 import { useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { cspJSONSchemaValidator } from "@vastplan/rjsf-csp-validator";
 import type { FormPresentation, FormRendererProps, FormSectionPresentation } from "@vastplan/ui-primitives";
-import { formControlAlignment, formGridClassName, formGridColumns, formGridCSS, formGridStyle, formLabelPlacement, localizeJSONSchema, message, usePortalI18n } from "@vastplan/ui-primitives";
+import { componentSizeRecipes, formControlAlignment, formGridClassName, formGridColumns, formGridCSS, formGridStyle, formLabelPlacement, localizeJSONSchema, message, useComponentSize, usePortalI18n } from "@vastplan/ui-primitives";
 import { namespace } from "./theme";
 import { safeAntdTemplates } from "./safe-rjsf-theme";
 import { PresentedField, antdInsideInlineCSS } from "./inside-inline-field";
@@ -104,7 +104,8 @@ function PresentedObject({ presentation, activeSection, onSectionChange, ...prop
   return <div style={{ display: "grid", gap: 16 }}>{sections.map((section) => <div key={section.id}>{renderSection(section)}</div>)}{remaining}</div>;
 }
 
-export function FormRenderer({ schema, value, onChange, size = "md", presentation, presentationSection, onPresentationSectionChange, readOnly, submitting, errors: externalErrors = {}, context: suppliedContext, validate, validationDelayMs = 250, onValidationChange }: FormRendererProps) {
+export function FormRenderer({ schema, value, onChange, size: requestedSize, presentation, presentationSection, onPresentationSectionChange, readOnly, submitting, errors: externalErrors = {}, context: suppliedContext, validate, validationDelayMs = 250, onValidationChange }: FormRendererProps) {
+  const size = useComponentSize(requestedSize);
   const i18n = usePortalI18n();
   const formContext = suppliedContext ?? emptyFormContext;
   const localizedSchema = useMemo(() => localizeJSONSchema(schema.schema, schema.localization, i18n.text), [i18n.text, schema.localization, schema.schema]);
@@ -154,9 +155,10 @@ export function FormRenderer({ schema, value, onChange, size = "md", presentatio
     templates={templates}
     widgets={widgets}
   ><></></RJSFForm>;
+  const rhythmStyle = { "--vp-form-grid-gap": `${componentSizeRecipes.layout[size].gap}px`, margin: componentSizeRecipes.layout[size].outerMargin } as CSSProperties;
   return <ConfigProvider componentSize={antdComponentSize[size]} theme={compact ? compactFormTheme : undefined}>
     <style>{formGridCSS}{controlAlignmentCSS}{formLabelPlacement(presentation) === "inside-inline" ? antdInsideInlineCSS : ""}</style>
-    <div className={`vp-antd-form-controls-${controlAlignment}`} data-form-control-alignment={controlAlignment}>{form}</div>
+    <div className={`vp-antd-form-controls-${controlAlignment}`} data-form-control-alignment={controlAlignment} style={rhythmStyle}>{form}</div>
   </ConfigProvider>;
 }
 

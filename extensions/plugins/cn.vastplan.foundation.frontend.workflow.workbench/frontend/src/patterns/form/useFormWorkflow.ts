@@ -148,7 +148,7 @@ export function useFormWorkflow(input: UseFormWorkflowInput): FormWorkflowContro
   }, [context, definition, i18n.text, onClose, onRefresh, secretPointers, stableSelected, submitting, ui, validation.valid, validation.validating, value]);
 
   return {
-    definition, presentation, controlSize: formControlSize(presentation), schema, context, value, loading, submitting,
+    definition, presentation, controlSize: presentation.size ?? definition?.size ?? definition?.workflow.size ?? formControlSize(presentation), schema, context, value, loading, submitting,
     ...(failure === undefined ? {} : { failure }), fieldErrors, validation, ...(activeSection === undefined ? {} : { activeSection }),
     ...(validate === undefined ? {} : { validate }), change, setValidation, setActiveSection, requestClose, submit,
   };

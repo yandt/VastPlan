@@ -1,13 +1,14 @@
 import { createElement } from "react";
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 import type { IconGlyphDefinition, IconGlyphNode } from "@vastplan/icon-catalog/semantic";
+import type { ComponentSize } from "@vastplan/ui-contract";
 
-const pixels = { sm: 16, md: 20, lg: 24 } as const;
+const pixels = { xs: 14, sm: 16, md: 20, lg: 24 } as const;
 
 interface IconGlyphRenderOptions {
   readonly name: string;
   readonly label?: string;
-  readonly size: "sm" | "md" | "lg";
+  readonly size: ComponentSize;
   readonly className?: string;
   readonly style?: CSSProperties;
 }

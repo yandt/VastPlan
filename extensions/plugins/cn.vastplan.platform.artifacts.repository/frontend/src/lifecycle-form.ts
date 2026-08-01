@@ -55,7 +55,7 @@ export function lifecycleForm(client: PlatformAdminClient): WorkbenchFormDefinit
       ],
     },
     workflow: {
-      size: "md",
+      dialogWidth: "md",
       title: text("form.lifecycle.title", "变更制品生命周期"),
       description: text("form.lifecycle.description", "变更使用 Catalog revision CAS 写入审计流水；revoked 为不可逆安全状态。"),
       submitLabel: text("action.lifecycle.save", "确认变更"),

@@ -1,9 +1,9 @@
-import type { ActionSpec, CollectionDensity, CollectionSpec, ColumnSpec, ComponentSize, FilterPanelSpec, FormPresentation, FormSchema, FormWorkflow, JSONValue, LocalizedText, PageActionSpec, PageBodyLayout, RecordDetailSpec, RecordMasterSpec, RecordTreeSpec, ResponsiveColumnCount } from "@vastplan/ui-contract";
-import { formControlAlignments } from "@vastplan/ui-contract";
+import type { ActionSpec, CollectionDensity, CollectionSpec, ColumnSpec, ComponentSize, FilterPanelSpec, FormPresentation, FormSchema, FormWorkflow, JSONValue, LocalizedText, OverlayWidth, PageActionSpec, PageBodyLayout, RecordDetailSpec, RecordMasterSpec, RecordTreeSpec, ResponsiveColumnCount, SizeableProps } from "@vastplan/ui-contract";
+import { componentSizes, formControlAlignments, overlayWidths } from "@vastplan/ui-contract";
 import { pageBodyLayouts } from "@vastplan/ui-contract";
 import type { PluginExtensionAccess } from "@vastplan/plugin-extension-contract";
 
-export type { ActionSpec, CollectionSpec, CollectionCardSpec, CollectionCardValueFormat, CollectionCardFieldSpec, ComponentSize, DashboardBreakpoint, DashboardCompaction, DashboardGridItem, DashboardGridLayouts, DashboardGridSpec, FilterPanelApplyMode, FilterPanelLayout, FilterPanelSpec, ColumnSpec, DataValueFormat, FilterSpec, FilterFieldKind, CollectionQueryMode, CollectionSelectionMode, CollectionView, FormCondition, FormControlAlignment, FormFieldPresentation, FormLabelPlacement, FormLayout, FormPresentation, FormPresentationPreset, FormSchema, FormSectionPresentation, FormWidget, FormWorkflow, JSONValue, PageActionDisplay, PageActionOverflow, PageActionSpec, PageBodyLayout, RecordDetailSpec, RecordFieldSpec, RecordMasterSpec, RecordSectionSpec, RecordTreeSpec, ResponsiveColumnCount } from "@vastplan/ui-contract";
+export type { ActionSpec, CollectionSpec, CollectionCardSpec, CollectionCardValueFormat, CollectionCardFieldSpec, ComponentSize, DashboardBreakpoint, DashboardCompaction, DashboardGridItem, DashboardGridLayouts, DashboardGridSpec, FilterPanelApplyMode, FilterPanelLayout, FilterPanelSpec, ColumnSpec, DataValueFormat, FilterSpec, FilterFieldKind, CollectionQueryMode, CollectionSelectionMode, CollectionView, FormCondition, FormControlAlignment, FormFieldPresentation, FormLabelPlacement, FormLayout, FormPresentation, FormPresentationPreset, FormSchema, FormSectionPresentation, FormWidget, FormWorkflow, JSONValue, OverlayWidth, PageActionDisplay, PageActionOverflow, PageActionSpec, PageBodyLayout, RecordDetailSpec, RecordFieldSpec, RecordMasterSpec, RecordSectionSpec, RecordTreeSpec, ResponsiveColumnCount, SizeableProps } from "@vastplan/ui-contract";
 export { dashboardBreakpointOrder, dashboardDefaultBreakpoints, dashboardDefaultColumns, jsonSchemaDialect, message } from "@vastplan/ui-contract";
 export { defineDashboardGrid } from "./dashboard.js";
 export type { LocalizedText, MessageDescriptor, MessageValues } from "@vastplan/ui-contract";
@@ -38,7 +38,7 @@ export interface PageActionContext {
   refresh(): void;
 }
 
-export interface PageActionHostDefinition {
+export interface PageActionHostDefinition extends SizeableProps {
   id: string;
   actions: readonly PageActionSpec[];
   forms?: readonly WorkbenchFormDefinition[];
@@ -54,7 +54,7 @@ export interface CollectionSummaryMetric {
   span?: ResponsiveColumnCount;
 }
 
-export interface CollectionSummary {
+export interface CollectionSummary extends SizeableProps {
   title?: LocalizedText;
   /** 默认保留 Panel 兼容现有页面；plain 仅移除装饰性外框。 */
   appearance?: "panel" | "plain";
@@ -93,7 +93,7 @@ export interface WorkbenchFormPreparation {
   initialValue?: Readonly<Record<string, unknown>>;
 }
 
-export interface WorkbenchFormDefinition<Row extends Record<string, unknown> = Record<string, unknown>> {
+export interface WorkbenchFormDefinition<Row extends Record<string, unknown> = Record<string, unknown>> extends SizeableProps {
   id: string;
   schema: FormSchema;
   presentation?: FormPresentation;
@@ -119,11 +119,12 @@ export type WorkbenchOverlayContent =
   | { kind: "json"; documents: readonly { title?: LocalizedText; value: JSONValue }[] }
   | { kind: "table"; columns: readonly ColumnSpec[]; rows: readonly Readonly<Record<string, unknown>>[]; rowKey?: string };
 
-export interface WorkbenchOverlayDefinition<Row extends Record<string, unknown> = Record<string, unknown>> {
+export interface WorkbenchOverlayDefinition<Row extends Record<string, unknown> = Record<string, unknown>> extends SizeableProps {
   id: string;
   surface: "dialog" | "drawer";
   title: LocalizedText;
-  size?: ComponentSize;
+  /** Dialog/Drawer 宽度，与内容组件 size 分离。 */
+  width?: OverlayWidth;
   load(selected: readonly Row[], signal: AbortSignal): Promise<WorkbenchOverlayContent>;
 }
 
@@ -132,7 +133,7 @@ export interface WorkbenchPresentationConfig {
   collection?: { defaultDensity?: CollectionDensity; allowedDensities?: readonly CollectionDensity[] };
 }
 
-export interface CollectionPageDefinition<Row extends Record<string, unknown> = Record<string, unknown>> {
+export interface CollectionPageDefinition<Row extends Record<string, unknown> = Record<string, unknown>> extends SizeableProps {
   id: string;
   path: string;
   title: LocalizedText;
@@ -154,12 +155,12 @@ export interface CollectionPageDefinition<Row extends Record<string, unknown> = 
 }
 
 /** A single routed page that composes several independently governed collections. */
-export interface WorkspaceSectionDefinition {
+export interface WorkspaceSectionDefinition extends SizeableProps {
   id: string;
   page: CollectionPageDefinition<any>;
 }
 
-export interface WorkspacePageDefinition {
+export interface WorkspacePageDefinition extends SizeableProps {
   id: string;
   path: string;
   title: LocalizedText;
@@ -171,7 +172,7 @@ export interface WorkspacePageDefinition {
   sections: readonly WorkspaceSectionDefinition[];
 }
 
-export interface FormPageDefinition {
+export interface FormPageDefinition extends SizeableProps {
   id: string;
   path: string;
   title: LocalizedText;
@@ -200,7 +201,7 @@ export interface RecordActionContext<Row extends Record<string, unknown> = Recor
   refresh(): void;
 }
 
-interface RecordPageCommon<Row extends Record<string, unknown>> {
+interface RecordPageCommon<Row extends Record<string, unknown>> extends SizeableProps {
   id: string;
   path: string;
   title: LocalizedText;
@@ -269,6 +270,7 @@ export function managementServicesFor(portal: Readonly<WorkbenchPortalRuntime>, 
 
 /** Makes page definitions discoverable and prevents a future arbitrary component escape hatch. */
 export function defineCollectionPage<Row extends Record<string, unknown>>(definition: CollectionPageDefinition<Row>): CollectionPageDefinition<Row> {
+	validateComponentSize(definition.size, `Collection page ${definition.id}`);
 	validatePageBodyLayout(definition.bodyLayout, `Collection page ${definition.id}`);
 	validatePermissionRequirements(definition.requiredPermissions, "Collection page requiredPermissions");
 	validatePermissionRequirements(definition.requiredAnyPermissions, "Collection page requiredAnyPermissions");
@@ -285,11 +287,14 @@ export function defineCollectionPage<Row extends Record<string, unknown>>(defini
     throw new Error(`Collection ${definition.collection.id} 只有 Table 视图可声明表格策略`);
   }
   validateFilterPanel(definition.collection.filterPanel, `Collection ${definition.collection.id}`);
+  validateComponentSize(definition.collection.size, `Collection ${definition.collection.id}`);
+  validateComponentSize(definition.collection.card?.size, `Collection ${definition.collection.id} card`);
   const forms = new Map((definition.forms ?? []).map((form) => [form.id, form]));
   if (forms.size !== (definition.forms ?? []).length) throw new Error("Collection 表单 ID 必须唯一");
   const overlays = new Map((definition.overlays ?? []).map((overlay) => [overlay.id, overlay]));
   if (overlays.size !== (definition.overlays ?? []).length) throw new Error("Collection Overlay ID 必须唯一");
   for (const form of forms.values()) validateFormDefinition(form);
+  for (const overlay of overlays.values()) validateOverlayDefinition(overlay);
   const actions = definition.collection.actions ?? [];
   if (new Set(actions.map((action) => action.id)).size !== actions.length) throw new Error(`Collection ${definition.collection.id} 的 Action ID 必须唯一`);
   for (const action of actions) {
@@ -304,13 +309,17 @@ export function defineCollectionPage<Row extends Record<string, unknown>>(defini
 }
 
 export function defineWorkspacePage(definition: WorkspacePageDefinition): WorkspacePageDefinition {
+  validateComponentSize(definition.size, `Workspace page ${definition.id}`);
   validatePageBodyLayout(definition.bodyLayout, `Workspace page ${definition.id}`);
   validatePermissionRequirements(definition.requiredPermissions, "Workspace page requiredPermissions");
   validatePermissionRequirements(definition.requiredAnyPermissions, "Workspace page requiredAnyPermissions");
   if (!validIdentifier(definition.id) || definition.sections.length === 0) throw new Error(`Workspace 页面定义无效: ${definition.id}`);
   const sectionIDs = definition.sections.map((section) => section.id);
   if (new Set(sectionIDs).size !== sectionIDs.length || sectionIDs.some((id) => !validIdentifier(id))) throw new Error(`Workspace ${definition.id} 的 Section ID 无效或重复`);
-  const sections = definition.sections.map((section) => Object.freeze({ ...section, page: defineCollectionPage(section.page) }));
+  const sections = definition.sections.map((section) => {
+    validateComponentSize(section.size, `Workspace ${definition.id} section ${section.id}`);
+    return Object.freeze({ ...section, page: defineCollectionPage(section.page) });
+  });
   const pageActions = sections.flatMap((section) => section.page.pageActions ?? []);
   if (new Set(pageActions.map((action) => action.id)).size !== pageActions.length) throw new Error(`Workspace ${definition.id} 的 Page Action ID 必须跨 Section 唯一`);
   const referencedForms = pageActions.flatMap((action) => action.form === undefined ? [] : [action.form]);
@@ -320,6 +329,7 @@ export function defineWorkspacePage(definition: WorkspacePageDefinition): Worksp
 }
 
 export function defineFormPage(definition: FormPageDefinition): FormPageDefinition {
+	validateComponentSize(definition.size, `Form page ${definition.id}`);
 	validatePageBodyLayout(definition.bodyLayout, `Form page ${definition.id}`);
 	validatePermissionRequirements(definition.requiredPermissions, "Form page requiredPermissions");
 	validatePermissionRequirements(definition.requiredAnyPermissions, "Form page requiredAnyPermissions");
@@ -357,6 +367,7 @@ function validatePermissionRequirements(values: readonly string[] | undefined, l
 }
 
 function validateRecordPage(definition: RecordPageDefinition): void {
+  validateComponentSize(definition.size, `Record page ${definition.id}`);
   validatePageBodyLayout(definition.bodyLayout, `Record page ${definition.id}`);
   validatePermissionRequirements(definition.requiredPermissions, `Record page ${definition.id} requiredPermissions`);
   validatePermissionRequirements(definition.requiredAnyPermissions, `Record page ${definition.id} requiredAnyPermissions`);
@@ -388,6 +399,7 @@ function validateRecordPage(definition: RecordPageDefinition): void {
   for (const form of forms.values()) validateFormDefinition(form);
   const overlays = new Map((definition.overlays ?? []).map((overlay) => [overlay.id, overlay]));
   if (overlays.size !== (definition.overlays ?? []).length) throw new Error(`Record page ${definition.id} 的 Overlay ID 必须唯一`);
+  for (const overlay of overlays.values()) validateOverlayDefinition(overlay);
   const actions = definition.actions ?? [];
   if (new Set(actions.map((action) => action.id)).size !== actions.length) throw new Error(`Record page ${definition.id} 的 Action ID 必须唯一`);
   for (const action of actions) {
@@ -449,6 +461,7 @@ function validateMaster(master: RecordMasterSpec): void {
 
 function validateFilterPanel(panel: FilterPanelSpec | undefined, owner: string): void {
   if (panel === undefined) return;
+  validateComponentSize(panel.size, `${owner} FilterPanel`);
   if (panel.fields.length === 0 || panel.apply?.actionsPlacement !== undefined && panel.apply.actionsPlacement !== "last-cell") {
     throw new Error(`${owner} 的 FilterPanel 定义无效`);
   }
@@ -463,6 +476,9 @@ function validFieldKey(value: string): boolean { return /^[A-Za-z0-9][A-Za-z0-9.
 function validSelectionParam(value: string): boolean { return /^[a-z][a-z0-9_-]{0,39}$/.test(value); }
 
 function validateFormDefinition(form: WorkbenchFormDefinition): void {
+  validateComponentSize(form.size, `表单 ${form.id}`);
+  validateComponentSize(form.workflow.size, `表单 ${form.id} workflow`);
+  validateOverlayWidth(form.workflow.dialogWidth, `表单 ${form.id} dialogWidth`);
   const surface = resolveFormWorkflowSurface(form.workflow);
   const dialogHeight = form.workflow.dialogHeight;
   if (dialogHeight !== undefined && (!Number.isSafeInteger(dialogHeight) || dialogHeight < 160 || dialogHeight > 10_000)) {
@@ -488,6 +504,7 @@ function validateFormDefinition(form: WorkbenchFormDefinition): void {
 
 export function validateFormPresentation(presentation: FormPresentation | undefined, formID = "dynamic-form"): void {
   if (presentation === undefined) return;
+  validateComponentSize(presentation.size, `表单 ${formID} presentation`);
   if (presentation.preset !== undefined && !["compact", "standard", "comfortable", "guided"].includes(presentation.preset)) throw new Error(`表单 ${formID} 的 preset 无效`);
   if (presentation.labelPlacement !== undefined && !["inline", "stacked", "inside-inline"].includes(presentation.labelPlacement)) throw new Error(`表单 ${formID} 的 labelPlacement 无效`);
   if (presentation.controlAlignment !== undefined && !formControlAlignments.includes(presentation.controlAlignment)) throw new Error(`表单 ${formID} 的 controlAlignment 无效`);
@@ -499,6 +516,19 @@ export function validateFormPresentation(presentation: FormPresentation | undefi
     if (!validIdentifier(section.id) || section.fields.length === 0 || section.fields.some((field) => !field.startsWith("/"))) throw new Error(`表单 ${formID} 的 section ${section.id} 无效`);
     validateFormColumns(formID, section.columns, section.columnWidths, `section ${section.id}`);
   }
+}
+
+function validateOverlayDefinition(overlay: WorkbenchOverlayDefinition): void {
+  validateComponentSize(overlay.size, `Overlay ${overlay.id}`);
+  validateOverlayWidth(overlay.width, `Overlay ${overlay.id} width`);
+}
+
+function validateComponentSize(value: ComponentSize | undefined, label: string): void {
+  if (value !== undefined && !componentSizes.includes(value)) throw new Error(`${label} 的 size 无效: ${String(value)}`);
+}
+
+function validateOverlayWidth(value: OverlayWidth | undefined, label: string): void {
+  if (value !== undefined && !overlayWidths.includes(value)) throw new Error(`${label} 无效: ${String(value)}`);
 }
 
 function validateFormColumns(formID: string, columns: number | undefined, widths: readonly number[] | undefined, owner: string): void {

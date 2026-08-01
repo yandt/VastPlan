@@ -2,6 +2,7 @@ import {
   dashboardBreakpointOrder,
   dashboardDefaultBreakpoints,
   dashboardDefaultColumns,
+  componentSizes,
   type DashboardBreakpoint,
   type DashboardGridItem,
   type DashboardGridSpec,
@@ -9,6 +10,7 @@ import {
 
 /** Validates and freezes the JSON-only dashboard layout before future registration. */
 export function defineDashboardGrid(spec: DashboardGridSpec): DashboardGridSpec {
+  if (spec.size !== undefined && !componentSizes.includes(spec.size)) throw new Error(`Dashboard Grid ${spec.id} 的 size 无效`);
   if (!validID(spec.id) || !Array.isArray(spec.cards) || spec.cards.length === 0 || spec.cards.length > 100 || new Set(spec.cards).size !== spec.cards.length || spec.cards.some((id) => !validID(id))) {
     throw new Error(`Dashboard Grid ${spec.id} 的卡片定义无效或重复`);
   }

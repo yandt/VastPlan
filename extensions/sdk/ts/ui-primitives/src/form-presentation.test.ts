@@ -10,7 +10,7 @@ describe("form presentation", () => {
     expect(resolveFormPresentation({ preset: "guided" })).toMatchObject({ layout: "vertical", labelPlacement: "stacked", navigation: "steps" });
     expect(resolveFormPresentation({ preset: "guided", labelPlacement: "inline", navigation: "tabs" })).toMatchObject({ labelPlacement: "inline", navigation: "tabs" });
     expect(resolveFormPresentation({ controlAlignment: "start" })).toMatchObject({ controlAlignment: "start" });
-    expect(formControlSize({ preset: "compact" })).toBe("sm");
+    expect(formControlSize({ preset: "compact" })).toBe("xs");
   });
 
   it("converts validated percentage weights to gap-safe grid fractions", () => {

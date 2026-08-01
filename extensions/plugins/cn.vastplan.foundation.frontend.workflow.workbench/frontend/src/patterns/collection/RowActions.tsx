@@ -6,7 +6,7 @@ import type { CollectionRow } from "./model.js";
 
 const namespace = "cn.vastplan.foundation.frontend.workflow.workbench";
 const directActionLimit = 2;
-const rowActionSize = "sm" as const;
+const rowActionSize = "xs" as const;
 
 /**
  * The collection owns row-action layout. Functional plugins only declare actions

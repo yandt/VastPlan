@@ -101,7 +101,7 @@ describe("Ant Design portal UI renderer", () => {
 
   it("removes the navigation divider from compact action menus", () => {
     const Menu = antdPortalUIComponents.Menu;
-    const markup = renderToStaticMarkup(<Menu size="sm" variant="action" items={[{ id: "submit", label: "Submit" }]} />);
+    const markup = renderToStaticMarkup(<Menu size="xs" variant="action" items={[{ id: "submit", label: "Submit" }]} />);
     expect(markup).toContain("border-inline-end:0");
     expect(markup).toContain("width:max-content");
     expect(markup).toContain("min-width:112px");
@@ -116,10 +116,11 @@ describe("Ant Design portal UI renderer", () => {
     expect(markup).toContain("height:28px");
   });
 
-  it("maps the shared three-step component size scale", () => {
+  it("maps the shared four-step component size scale", () => {
     const IconButton = antdPortalUIComponents.IconButton;
-    const markup = renderToStaticMarkup(<><IconButton size="sm" icon="edit" label="Small" /><IconButton size="md" icon="edit" label="Medium" /><IconButton size="lg" icon="edit" label="Large" /></>);
+    const markup = renderToStaticMarkup(<><IconButton size="xs" icon="edit" label="Extra small" /><IconButton size="sm" icon="edit" label="Small" /><IconButton size="md" icon="edit" label="Medium" /><IconButton size="lg" icon="edit" label="Large" /></>);
     expect(markup).toContain("width:18px;height:18px");
+    expect(markup).toContain("width:24px;height:24px");
     expect(markup).toContain("width:32px;height:32px");
     expect(markup).toContain("width:44px;height:44px");
   });

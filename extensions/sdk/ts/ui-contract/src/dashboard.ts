@@ -21,7 +21,7 @@ export interface DashboardGridItem {
 
 export type DashboardGridLayouts = Readonly<Partial<Record<DashboardBreakpoint, readonly DashboardGridItem[]>>>;
 
-export interface DashboardGridSpec {
+export interface DashboardGridSpec extends SizeableProps {
   id: string;
   /** Stable semantic card IDs resolved by a trusted dashboard host. */
   cards: readonly string[];
@@ -32,3 +32,4 @@ export interface DashboardGridSpec {
   gap?: Readonly<{ horizontal?: number; vertical?: number }>;
   compaction?: DashboardCompaction;
 }
+import type { SizeableProps } from "./component-size.js";

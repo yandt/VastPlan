@@ -23,7 +23,7 @@ export function createPluginConfigurationPage(client: PlatformAdminClient, servi
     workflow: {
       title: message(namespace, "form.title", "编辑配置草稿"),
       description: message(namespace, "form.description", "保存只创建候选草稿，不会立即重启服务或改变活动配置。"),
-      size: "lg",
+      dialogWidth: "lg",
       submitLabel: message(namespace, "action.saveDraft", "保存草稿"),
       success: { notify: message(namespace, "notice.draftSaved", "配置草稿已保存"), refreshCollection: true, close: true },
     },

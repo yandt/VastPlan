@@ -56,7 +56,7 @@ function prepareForm(client: PlatformAdminClient): WorkbenchFormDefinition<Row> 
   return {
     id: "prepare", schema: prepareSchema,
     presentation: { layout: "vertical", navigation: "sections", sections: [{ id: "target", title: text("form.migration.target", "迁移目标"), columns: 2, fields: ["/migrationId", "/targetProvider", "/targetVolumeId"] }], fields: [{ pointer: "/migrationId", span: 2 }] },
-    workflow: { size: "md", title: text("form.migration.prepareTitle", "准备存储迁移"), description: text("form.migration.prepareDescription", "V1 只支持同一 File Provider 下的空目标 Volume。准备阶段不会切换活动仓库。"), submitLabel: text("action.migration.prepare", "准备迁移"), confirmBeforeSubmit: text("confirm.migration.prepare", "系统将探测并绑定目标 Volume，请确认目标为空且未被其他服务使用。"), success: { notify: text("notice.migrationPrepared", "迁移已准备"), refreshCollection: true, close: true } },
+    workflow: { dialogWidth: "md", title: text("form.migration.prepareTitle", "准备存储迁移"), description: text("form.migration.prepareDescription", "V1 只支持同一 File Provider 下的空目标 Volume。准备阶段不会切换活动仓库。"), submitLabel: text("action.migration.prepare", "准备迁移"), confirmBeforeSubmit: text("confirm.migration.prepare", "系统将探测并绑定目标 Volume，请确认目标为空且未被其他服务使用。"), success: { notify: text("notice.migrationPrepared", "迁移已准备"), refreshCollection: true, close: true } },
     async prepare() {
       const status = await client.artifactRepositoryStatus();
       return { initialValue: { migrationId: `repository-${Date.now()}`, targetProvider: status.storageProvider ?? "", targetVolumeId: "" } };
@@ -71,7 +71,7 @@ function cutoverForm(client: PlatformAdminClient): WorkbenchFormDefinition<Row> 
   return {
     id: "cutover", schema: cutoverSchema, initialValue: { observationSeconds: 300 },
     presentation: { layout: "vertical", fields: [{ pointer: "/observationSeconds", widget: "number" }] },
-    workflow: { size: "sm", title: text("form.migration.cutoverTitle", "切换活动 Volume"), description: text("form.migration.cutoverDescription", "系统先做最终增量同步，再原子切换并进入双写观察期。"), submitLabel: text("action.migration.cutover", "确认切换"), confirmBeforeSubmit: text("confirm.migration.cutover", "切换会短暂冻结发布；读取不会中断。"), success: { notify: text("notice.migrationCutover", "仓库已进入观察期"), refreshCollection: true, close: true } },
+    workflow: { dialogWidth: "sm", title: text("form.migration.cutoverTitle", "切换活动 Volume"), description: text("form.migration.cutoverDescription", "系统先做最终增量同步，再原子切换并进入双写观察期。"), submitLabel: text("action.migration.cutover", "确认切换"), confirmBeforeSubmit: text("confirm.migration.cutover", "切换会短暂冻结发布；读取不会中断。"), success: { notify: text("notice.migrationCutover", "仓库已进入观察期"), refreshCollection: true, close: true } },
     async submit({ value, selected }) {
       const id = selected[0]?.migrationId;
       if (typeof id !== "string" || id === "-") return;

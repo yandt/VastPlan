@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ActionSpec, CollectionDensity } from "@vastplan/ui-contract";
-import { usePortalI18n, usePortalUI, type PageRefreshSignal, type WorkbenchPreferencePort } from "@vastplan/ui-primitives";
+import { ComponentSizeProvider, usePortalI18n, usePortalUI, type PageRefreshSignal, type WorkbenchPreferencePort } from "@vastplan/ui-primitives";
 import type { CollectionActionContext, CollectionPageDefinition, CollectionSummary as CollectionSummaryDefinition, WorkbenchPresentationConfig } from "@vastplan/workbench-sdk";
 import { CollectionCards } from "./CollectionCards.js";
 import { FilterPanel } from "../filter/FilterPanel.js";
@@ -113,10 +113,10 @@ export function CollectionPage({ page, preferenceScope, preferences, presentatio
   const selectionMode = collectionSelectionMode(actions, collection.selection);
   const hasFilters = collection.filterPanel !== undefined;
 
-  return <WorkbenchPageFlow>
+  return <WorkbenchPageFlow size={page.size}><ComponentSizeProvider size={collection.size}>
     {summary === undefined ? null : <CollectionSummary summary={summary} />}
     {hasFilters ? <ui.Stack gap="sm">
-      <div style={{ width: "100%", minWidth: 0 }}><FilterPanel panel={collection.filterPanel!} value={filters} querying={data.loading || data.refreshing || data.loadingMore} size="sm" onApply={(value) => { setFilters(value); setPageNumber(1); }} /></div>
+      <div style={{ width: "100%", minWidth: 0 }}><FilterPanel panel={collection.filterPanel!} value={filters} querying={data.loading || data.refreshing || data.loadingMore} size="xs" onApply={(value) => { setFilters(value); setPageNumber(1); }} /></div>
       <div style={{ width: "100%", minWidth: 0 }}><CollectionToolbar hasFilters={hasFilters} refreshing={data.refreshing} selectedCount={selected.length} toolbarActions={toolbarActions} bulkActions={bulkActions} onRefresh={refresh} preferences={collection.view === "table" && collection.preferences !== undefined ? <CollectionPreferencesPopover collection={collection} columns={columns} density={density} densityOptions={densityOptions} onChange={updatePreferences} /> : undefined} onRunAction={(action) => void runAction(action, selected)} /></div>
     </ui.Stack> : <div style={{ width: "100%", minWidth: 0 }}><CollectionToolbar hasFilters={false} refreshing={data.refreshing} selectedCount={selected.length} toolbarActions={toolbarActions} bulkActions={bulkActions} onRefresh={refresh} preferences={collection.view === "table" && collection.preferences !== undefined ? <CollectionPreferencesPopover collection={collection} columns={columns} density={density} densityOptions={densityOptions} onChange={updatePreferences} /> : undefined} onRunAction={(action) => void runAction(action, selected)} /></div>}
     {data.failure === undefined && summaryFailure === undefined ? null : <div style={{ width: "100%", minWidth: 0 }}><ui.ErrorState title={data.failure ?? summaryFailure!} retry={refresh} /></div>}
@@ -133,7 +133,7 @@ export function CollectionPage({ page, preferenceScope, preferences, presentatio
     {collection.view !== "table" || collection.query.mode !== "cursor" || data.nextCursor === undefined ? null : <ui.Stack direction="row" justify="center"><ui.Button kind="secondary" loading={data.loadingMore} disabled={data.loadingMore} onClick={data.loadMore}>{i18n.text({ namespace: "cn.vastplan.foundation.frontend.workflow.workbench", key: "cursor.more", fallback: "加载更多" })}</ui.Button></ui.Stack>}
     <CollectionFormWorkflow definition={page.forms?.find((form) => form.id === activeForm?.id)} selected={activeForm?.selected ?? []} open={activeForm !== undefined} onClose={() => setActiveForm(undefined)} onRefresh={refresh} />
     <CollectionOverlayWorkflow definition={page.overlays?.find((overlay) => overlay.id === activeOverlay?.id)} selected={activeOverlay?.selected ?? []} open={activeOverlay !== undefined} onClose={() => setActiveOverlay(undefined)} />
-  </WorkbenchPageFlow>;
+  </ComponentSizeProvider></WorkbenchPageFlow>;
 }
 
 function validPageSize(collection: CollectionPageDefinition["collection"], preferred: number | undefined): number {

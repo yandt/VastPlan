@@ -2,8 +2,8 @@ import { Breadcrumb as AntdBreadcrumb, Button, Empty, Input, List, Menu as AntdM
 import type { MenuProps as AntdMenuProps } from "antd";
 import { useEffect, useId, useRef } from "react";
 import type { CSSProperties, KeyboardEvent, ReactNode } from "react";
-import type { CommandItem, MenuItem, MenuProps, PopoverProps, RecordNavigationListProps, RecordTreeProps, TabsProps } from "@vastplan/ui-primitives";
-import { componentSizeRecipes, componentVariantRecipes, message, usePortalI18n } from "@vastplan/ui-primitives";
+import type { BreadcrumbProps, CommandItem, CommandPaletteProps, MenuItem, MenuProps, PopoverProps, RecordNavigationListProps, RecordTreeProps, TabsProps } from "@vastplan/ui-primitives";
+import { ComponentSizeProvider, componentSizeRecipes, componentVariantRecipes, message, useComponentSize, usePortalI18n } from "@vastplan/ui-primitives";
 import { namespace } from "./theme";
 import { antdComponentSize } from "./component-size";
 
@@ -23,7 +23,8 @@ function menuItems(items: MenuItem[], size: NonNullable<MenuProps["size"]>, vari
   });
 }
 
-export function Menu({ items, activeID, size = "md", variant = "navigation", onSelect }: MenuProps) {
+export function Menu({ items, activeID, size: requestedSize, variant = "navigation", onSelect }: MenuProps) {
+  const size = useComponentSize(requestedSize);
   const recipe = componentSizeRecipes.menu[size];
   const style: CSSProperties = {
     minWidth: recipe.minWidth,
@@ -35,25 +36,30 @@ export function Menu({ items, activeID, size = "md", variant = "navigation", onS
   return <>{variant === "action" ? <style>{actionMenuCSS}</style> : null}<AntdMenu className={variant === "action" ? actionMenuClass : undefined} selectedKeys={activeID === undefined ? [] : [activeID]} items={menuItems(items, size, variant, onSelect)} onClick={({ key }) => onSelect?.(key)} style={style} /></>;
 }
 
-export function Breadcrumb({ items }: { items: Array<{ id: string; label: string; href?: string; onSelect?(): void }> }) {
-  return <AntdBreadcrumb items={items.map((item) => ({ key: item.id, title: item.href === undefined ? item.label : <a href={item.href} onClick={(event) => { event.preventDefault(); item.onSelect?.(); }}>{item.label}</a> }))} />;
+export function Breadcrumb({ items, size: requestedSize }: BreadcrumbProps) {
+  const size = useComponentSize(requestedSize);
+  return <AntdBreadcrumb style={{ fontSize: componentSizeRecipes.control[size].fontSize }} items={items.map((item) => ({ key: item.id, title: item.href === undefined ? item.label : <a href={item.href} onClick={(event) => { event.preventDefault(); item.onSelect?.(); }}>{item.label}</a> }))} />;
 }
 
-export function Tabs({ items, activeID, size = "md", onChange }: TabsProps) {
+export function Tabs({ items, activeID, size: requestedSize, onChange }: TabsProps) {
+  const size = useComponentSize(requestedSize);
   return <AntdTabs activeKey={activeID} size={antdComponentSize[size]} onChange={onChange} items={items.map((item) => ({ key: item.id, label: item.label, children: item.content, disabled: item.disabled }))} />;
 }
 
-export function CommandPalette({ open, commands, query, onQueryChange, onClose }: { open: boolean; commands: CommandItem[]; query: string; onQueryChange(query: string): void; onClose(): void }) {
+export function CommandPalette({ open, commands, query, onQueryChange, onClose, size: requestedSize }: CommandPaletteProps) {
   const i18n = usePortalI18n();
+  const size = useComponentSize(requestedSize);
   const term = query.trim().toLocaleLowerCase();
   const visible = term === "" ? commands : commands.filter((command) => [command.title, command.description, ...(command.keywords ?? [])].some((value) => value?.toLocaleLowerCase().includes(term)));
   return <Modal open={open} title={i18n.text(message(namespace, "command.title", "命令"))} footer={null} onCancel={onClose} destroyOnHidden>
-    <Input autoFocus value={query} placeholder={i18n.text(message(namespace, "command.search", "搜索命令"))} onChange={(event) => onQueryChange(event.target.value)} />
-    {visible.length === 0 ? <Empty description={i18n.text(message(namespace, "command.empty", "没有匹配命令"))} /> : <List dataSource={visible} renderItem={(command) => <List.Item><Button type="text" block disabled={command.disabled} onClick={() => { command.run(); onClose(); }} style={{ height: "auto", textAlign: "left" }}><strong>{command.title}</strong>{command.description === undefined ? null : <Typography.Text type="secondary"> — {command.description}</Typography.Text>}</Button></List.Item>} />}
+    <ComponentSizeProvider size={size}><Input size={antdComponentSize[size]} autoFocus value={query} placeholder={i18n.text(message(namespace, "command.search", "搜索命令"))} onChange={(event) => onQueryChange(event.target.value)} />
+    {visible.length === 0 ? <Empty description={i18n.text(message(namespace, "command.empty", "没有匹配命令"))} /> : <List size={size === "xs" || size === "sm" ? "small" : "default"} dataSource={visible} renderItem={(command) => <List.Item><Button type="text" block disabled={command.disabled} onClick={() => { command.run(); onClose(); }} style={{ height: "auto", textAlign: "left" }}><strong>{command.title}</strong>{command.description === undefined ? null : <Typography.Text type="secondary"> — {command.description}</Typography.Text>}</Button></List.Item>} />}
+    </ComponentSizeProvider>
   </Modal>;
 }
 
-export function Popover({ open, trigger, children, placement = "bottom-start", surface = "default", initialFocus = "first", ariaLabel, onOpenChange }: PopoverProps) {
+export function Popover({ open, trigger, children, placement = "bottom-start", surface = "default", initialFocus = "first", ariaLabel, onOpenChange, size: requestedSize }: PopoverProps) {
+  const size = useComponentSize(requestedSize);
   const contentID = useId();
   const contentRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
@@ -74,16 +80,19 @@ export function Popover({ open, trigger, children, placement = "bottom-start", s
       if (event.key === "Escape" && open) { event.preventDefault(); close("escape"); }
     },
   });
-  return <AntdPopover open={open} trigger="click" placement={antdPlacement} styles={surface === "compact" ? { container: { padding: 0 }, content: { padding: 0 } } : undefined} afterOpenChange={(next) => { if (next) focusInitial(); }} onOpenChange={(next) => { if (!next) close("outside"); }} content={<div id={contentID} ref={contentRef} role="region" aria-label={ariaLabel} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); close("escape"); } }}>{children}</div>}>{triggerNode}</AntdPopover>;
+  return <AntdPopover open={open} trigger="click" placement={antdPlacement} styles={surface === "compact" ? { container: { padding: 0 }, content: { padding: 0 } } : undefined} afterOpenChange={(next) => { if (next) focusInitial(); }} onOpenChange={(next) => { if (!next) close("outside"); }} content={<ComponentSizeProvider size={size}><div id={contentID} ref={contentRef} role="region" aria-label={ariaLabel} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); close("escape"); } }}>{children}</div></ComponentSizeProvider>}>{triggerNode}</AntdPopover>;
 }
 
-export function RecordNavigationList({ items, selectedID, ariaLabel, onSelect }: RecordNavigationListProps) {
-  return <div role="listbox" aria-label={ariaLabel} style={{ display: "grid", gap: 4 }}>{items.map((item) => <button key={item.id} type="button" role="option" aria-selected={item.id === selectedID} disabled={item.disabled} onClick={() => onSelect(item.id)} style={{ width: "100%", minHeight: 52, display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 8, padding: "10px 12px", textAlign: "left", border: 0, borderRadius: 6, cursor: item.disabled ? "not-allowed" : "pointer", color: "var(--ant-color-text)", background: item.id === selectedID ? "var(--ant-color-primary-bg)" : "transparent" }}>
+export function RecordNavigationList({ items, selectedID, ariaLabel, onSelect, size: requestedSize }: RecordNavigationListProps) {
+  const size = useComponentSize(requestedSize);
+  const recipe = componentSizeRecipes.layout[size];
+  return <ComponentSizeProvider size={size}><div role="listbox" aria-label={ariaLabel} style={{ display: "grid", gap: recipe.gap }}>{items.map((item) => <button key={item.id} type="button" role="option" aria-selected={item.id === selectedID} disabled={item.disabled} onClick={() => onSelect(item.id)} style={{ width: "100%", minHeight: componentSizeRecipes.control[size].height + 12, display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: recipe.gap, padding: recipe.padding, textAlign: "left", border: 0, borderRadius: 6, cursor: item.disabled ? "not-allowed" : "pointer", color: "var(--ant-color-text)", background: item.id === selectedID ? "var(--ant-color-primary-bg)" : "transparent" }}>
     <span style={{ minWidth: 0 }}><strong style={ellipsis}>{item.title}</strong>{item.description === undefined ? null : <span style={{ ...ellipsis, marginTop: 3, color: "var(--ant-color-text-secondary)" }}>{item.description}</span>}</span>{item.status}
-  </button>)}</div>;
+  </button>)}</div></ComponentSizeProvider>;
 }
 
-export function RecordTree({ items, selectedID, expandedIDs, ariaLabel, onSelect, onExpandedChange }: RecordTreeProps) {
+export function RecordTree({ items, selectedID, expandedIDs, ariaLabel, onSelect, onExpandedChange, size: requestedSize }: RecordTreeProps) {
+  const size = useComponentSize(requestedSize);
   const expanded = new Set(expandedIDs);
   const toggle = (id: string) => onExpandedChange(expanded.has(id) ? expandedIDs.filter((value) => value !== id) : [...expandedIDs, id]);
   const branch = (nodes: RecordTreeProps["items"], level: number): ReactNode => <ul role={level === 1 ? "tree" : "group"} aria-label={level === 1 ? ariaLabel : undefined} style={{ listStyle: "none", margin: 0, padding: level === 1 ? 0 : "0 0 0 20px" }}>{nodes.map((item) => {
@@ -96,7 +105,7 @@ export function RecordTree({ items, selectedID, expandedIDs, ariaLabel, onSelect
       </div>{children.length > 0 && open ? branch(children, level + 1) : null}
     </li>;
   })}</ul>;
-  return branch(items, 1);
+  return <ComponentSizeProvider size={size}>{branch(items, 1)}</ComponentSizeProvider>;
 }
 
 function treeKeyboard(event: KeyboardEvent<HTMLButtonElement>, hasChildren: boolean, open: boolean, toggle: () => void) {

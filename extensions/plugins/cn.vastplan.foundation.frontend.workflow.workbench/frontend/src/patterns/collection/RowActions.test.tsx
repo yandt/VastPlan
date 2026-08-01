@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import type { ActionSpec } from "@vastplan/ui-contract";
 
 vi.mock("@vastplan/ui-primitives", () => ({
-  componentSizeRecipes: { iconButton: { sm: { iconEdge: 12 }, md: { iconEdge: 16 }, lg: { iconEdge: 20 } } },
+  componentSizeRecipes: { iconButton: { xs: { iconEdge: 12 }, sm: { iconEdge: 12 }, md: { iconEdge: 16 }, lg: { iconEdge: 20 } } },
   message: (_namespace: string, _key: string, fallback: string) => fallback,
   usePortalI18n: () => ({ text: (value: unknown) => typeof value === "string" ? value : String((value as { fallback?: string }).fallback ?? "") }),
   usePortalUI: () => ({
@@ -29,7 +29,7 @@ describe("RowActions", () => {
     expect(html).toContain('data-justify="center"');
     expect(html).toContain('data-gap="sm"');
     expect(html).toContain('data-icon="edit"');
-    expect(html).toContain('data-size="sm"');
+    expect(html).toContain('data-size="xs"');
     expect(html).toContain('data-tone="normal"');
     expect(html).toContain('aria-label="编辑"');
     expect(html).toContain('data-icon="remove"');
@@ -39,7 +39,7 @@ describe("RowActions", () => {
     expect(html).toContain('data-variant="action"');
     expect(html).toContain('data-menu-item="download"');
     expect(html).toContain('data-icon-glyph="download"');
-    expect(html).toContain('data-icon-size="sm"');
+    expect(html).toContain('data-icon-size="xs"');
     expect(html).toContain('width:12px');
     expect(html).toContain('title="下载"');
     expect(html).toContain(">下载</span>");

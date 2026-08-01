@@ -5,6 +5,8 @@ describe("Workbench rhythm", () => {
   it("keeps the page root flush while owning the section gap", () => {
     expect(workbenchPageFlowStyle("compact")).toMatchObject({ margin: 0, padding: 0, gap: 8 });
     expect(workbenchPageFlowStyle("standard")).toMatchObject({ margin: 0, padding: 0, gap: 16 });
+    expect(workbenchPageFlowStyle(undefined, "xs")).toMatchObject({ margin: 0, padding: 0, gap: 8 });
+    expect(workbenchPageFlowStyle(undefined, "md")).toMatchObject({ margin: 0, padding: 0, gap: 16 });
   });
 
   it("separates component inset from outer page spacing", () => {

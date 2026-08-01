@@ -17,7 +17,7 @@ function configurationForm(client: PortalControlClient, kind: "create" | "edit" 
       { id: "application", title: "功能与服务", columns: 1, fields: ["/applicationPlugins", "/branding", "/config", "/services"] },
     ], fields: [{ pointer: "/applicationPlugins" }, { pointer: "/branding" }, { pointer: "/config" }, { pointer: "/services" }] },
     workflow: {
-      size: "lg",
+      dialogWidth: "lg",
       title: kind === "create" ? "新建 Portal" : "编辑 Portal",
       submitLabel: kind === "create" ? "创建" : "保存",
       success: { notify: "Portal 配置已保存", refreshCollection: true, close: true },
@@ -52,7 +52,7 @@ function restoreForm(client: PortalControlClient): WorkbenchFormDefinition<Porta
     schema: restorePlaceholder,
     presentation: { layout: "vertical", fields: [{ pointer: "/versionId", widget: "select" }] },
     workflow: {
-      size: "sm", title: "恢复历史版本", description: "历史内容只会覆盖当前工作副本；保存后仍需重新提交和审批。",
+      dialogWidth: "sm", title: "恢复历史版本", description: "历史内容只会覆盖当前工作副本；保存后仍需重新提交和审批。",
       submitLabel: "恢复到工作副本", success: { notify: "历史版本已恢复到工作副本", refreshCollection: true, close: true },
     },
     async prepare(selected) {

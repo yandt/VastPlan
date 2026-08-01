@@ -1,5 +1,5 @@
 import type { ComponentType, KeyboardEvent, ReactNode } from "react";
-import type { ComponentSize } from "@vastplan/ui-contract";
+import type { OverlayWidth, SizeableProps } from "@vastplan/ui-contract";
 import type { SemanticIconName } from "./icon.js";
 import type { FormRendererProps } from "./form-renderer.js";
 
@@ -12,16 +12,15 @@ export interface MenuItem {
   children?: MenuItem[];
 }
 
-export interface MenuProps {
+export interface MenuProps extends SizeableProps {
   items: MenuItem[];
   activeID?: string;
-  size?: ComponentSize;
   /** Navigation retains framework navigation treatment; action removes navigation-only chrome. */
   variant?: "navigation" | "action";
   onSelect?(id: string): void;
 }
 
-export interface PageProps {
+export interface PageProps extends SizeableProps {
   title?: string;
   children: ReactNode;
   actions?: ReactNode;
@@ -30,7 +29,7 @@ export interface PageProps {
 export type SpaceSize = "xs" | "sm" | "md" | "lg";
 export type ResponsiveColumns = number | { xs?: number; sm?: number; md?: number; lg?: number; xl?: number };
 
-export interface PortalShellProps {
+export interface PortalShellProps extends SizeableProps {
   header?: ReactNode;
   navigation?: ReactNode;
   inspector?: ReactNode;
@@ -38,7 +37,7 @@ export interface PortalShellProps {
   children: ReactNode;
 }
 
-export interface StackProps {
+export interface StackProps extends SizeableProps {
   direction?: "row" | "column";
   gap?: SpaceSize;
   align?: "start" | "center" | "end" | "stretch";
@@ -47,15 +46,15 @@ export interface StackProps {
   children: ReactNode;
 }
 
-export interface GridProps {
+export interface GridProps extends SizeableProps {
   columns?: ResponsiveColumns;
   gap?: SpaceSize;
   children: ReactNode;
 }
 
-export interface GridItemProps { span?: ResponsiveColumns; children: ReactNode; }
+export interface GridItemProps extends SizeableProps { span?: ResponsiveColumns; children: ReactNode; }
 
-export interface PanelProps {
+export interface PanelProps extends SizeableProps {
   title?: string;
   children: ReactNode;
 }
@@ -69,23 +68,21 @@ export interface BodySectionItem {
 }
 
 /** Renderer-owned section rhythm and separators; callers only provide semantics. */
-export interface BodySectionsProps {
+export interface BodySectionsProps extends SizeableProps {
   sections: readonly BodySectionItem[];
 }
 
-export interface ButtonProps {
+export interface ButtonProps extends SizeableProps {
   children: ReactNode;
   onClick?(): void;
   disabled?: boolean;
   loading?: boolean;
   kind?: "primary" | "secondary" | "danger" | "text";
-  size?: ComponentSize;
 }
 
-export interface IconButtonProps {
+export interface IconButtonProps extends SizeableProps {
   icon: SemanticIconName;
   label: string;
-  size?: ComponentSize;
   onClick?(): void;
   disabled?: boolean;
   loading?: boolean;
@@ -98,26 +95,26 @@ export interface SelectOption {
   disabled?: boolean;
 }
 
-export interface SelectProps {
+export interface SelectProps extends SizeableProps {
   value?: string;
   options: readonly SelectOption[];
   placeholder?: string;
   ariaLabel: string;
   disabled?: boolean;
-  size?: ComponentSize;
   onChange(value: string | undefined): void;
 }
 
 export interface BreadcrumbItem { id: string; label: string; href?: string; onSelect?(): void; }
 export interface TabItem { id: string; label: ReactNode; content: ReactNode; disabled?: boolean; }
-export interface TabsProps { items: TabItem[]; activeID?: string; size?: ComponentSize; onChange?(id: string): void; }
+export interface BreadcrumbProps extends SizeableProps { items: BreadcrumbItem[]; }
+export interface TabsProps extends SizeableProps { items: TabItem[]; activeID?: string; onChange?(id: string): void; }
 
-export interface DialogProps {
+export interface DialogProps extends SizeableProps {
   open: boolean;
   title: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
-  width?: "sm" | "md" | "lg";
+  width?: OverlayWidth;
   /** Optional governed pixel height. Renderers always clamp it to 90vh. */
   height?: number;
   /** Defaults to scroll so a Dialog body, not its containing page, owns overflow. */
@@ -136,7 +133,7 @@ export interface PopoverTriggerProps {
   onClick(): void;
   onKeyDown(event: KeyboardEvent<HTMLElement>): void;
 }
-export interface PopoverProps {
+export interface PopoverProps extends SizeableProps {
   open: boolean;
   trigger(props: PopoverTriggerProps): ReactNode;
   children: ReactNode;
@@ -157,6 +154,14 @@ export interface CommandItem {
   run(): void;
 }
 
+export interface CommandPaletteProps extends SizeableProps {
+  open: boolean;
+  commands: CommandItem[];
+  query: string;
+  onQueryChange(query: string): void;
+  onClose(): void;
+}
+
 export interface TableColumn {
   key: string;
   title: ReactNode;
@@ -168,7 +173,7 @@ export interface TableColumn {
   render?(value: unknown, row: Readonly<Record<string, unknown>>, index: number): ReactNode;
 }
 
-export interface TableProps {
+export interface TableProps extends SizeableProps {
   columns: TableColumn[];
   rows: ReadonlyArray<Readonly<Record<string, unknown>>>;
   rowKey?: string | ((row: Readonly<Record<string, unknown>>) => string);
@@ -189,7 +194,7 @@ export interface TableProps {
   appearance?: "default" | "collection";
 }
 
-export interface DataCardProps {
+export interface DataCardProps extends SizeableProps {
   title: ReactNode;
   subtitle?: ReactNode;
   status?: ReactNode;
@@ -203,7 +208,7 @@ export interface DataCardProps {
   onSelectionChange?(selected: boolean): void;
 }
 
-export interface SplitViewProps {
+export interface SplitViewProps extends SizeableProps {
   primaryLabel: string;
   secondaryLabel: string;
   primary: ReactNode;
@@ -220,7 +225,7 @@ export interface RecordNavigationItem {
   disabled?: boolean;
 }
 
-export interface RecordNavigationListProps {
+export interface RecordNavigationListProps extends SizeableProps {
   items: readonly RecordNavigationItem[];
   selectedID?: string;
   ariaLabel: string;
@@ -231,7 +236,7 @@ export interface RecordTreeItem extends RecordNavigationItem {
   children?: readonly RecordTreeItem[];
 }
 
-export interface RecordTreeProps {
+export interface RecordTreeProps extends SizeableProps {
   items: readonly RecordTreeItem[];
   selectedID?: string;
   expandedIDs: readonly string[];
@@ -240,21 +245,20 @@ export interface RecordTreeProps {
   onExpandedChange(ids: readonly string[]): void;
 }
 
-export interface FilterBarProps {
+export interface FilterBarProps extends SizeableProps {
   children: ReactNode;
   actions?: ReactNode;
   /** Collection is borderless and must contribute no outer margin or inset. */
   appearance?: "default" | "collection";
 }
 
-export interface PaginationProps {
+export interface PaginationProps extends SizeableProps {
   page: number;
   pageSize: number;
   pageSizeOptions?: readonly number[];
   total: number;
   disabled?: boolean;
   align?: "start" | "center" | "end";
-  size?: ComponentSize;
   onChange(page: number, pageSize: number): void;
 }
 
@@ -266,12 +270,18 @@ export interface DescriptionItem {
   span?: ResponsiveColumns;
 }
 
-export interface DescriptionsProps {
+export interface DescriptionsProps extends SizeableProps {
   title?: ReactNode;
   items: DescriptionItem[];
   columns?: ResponsiveColumns;
 }
 export type StatusTone = "neutral" | "info" | "success" | "warning" | "error";
+export interface DividerProps extends SizeableProps { label?: ReactNode; }
+export interface StatusProps extends SizeableProps { tone?: StatusTone; children: ReactNode; }
+export interface EmptyStateProps extends SizeableProps { title: string; description?: string; }
+export interface ErrorStateProps extends SizeableProps { title: string; retry?(): void; }
+export interface SkeletonProps extends SizeableProps { rows?: number; }
+export interface BusyProps extends SizeableProps { label?: string; }
 export interface SemanticThemeTokens {
   color: {
     canvas: string; surface: string; overlaySurface: string; text: string; mutedText: string; border: string;
@@ -295,14 +305,14 @@ export interface PortalUI {
   Stack: ComponentType<StackProps>;
   Grid: ComponentType<GridProps>;
   GridItem: ComponentType<GridItemProps>;
-  Divider: ComponentType<{ label?: ReactNode }>;
+  Divider: ComponentType<DividerProps>;
   Button: ComponentType<ButtonProps>;
   IconButton: ComponentType<IconButtonProps>;
   Select: ComponentType<SelectProps>;
   Menu: ComponentType<MenuProps>;
-  Breadcrumb: ComponentType<{ items: BreadcrumbItem[] }>;
+  Breadcrumb: ComponentType<BreadcrumbProps>;
   Tabs: ComponentType<TabsProps>;
-  CommandPalette: ComponentType<{ open: boolean; commands: CommandItem[]; query: string; onQueryChange(query: string): void; onClose(): void }>;
+  CommandPalette: ComponentType<CommandPaletteProps>;
   Popover: ComponentType<PopoverProps>;
   Dialog: ComponentType<DialogProps>;
   Drawer: ComponentType<DrawerProps>;
@@ -315,13 +325,13 @@ export interface PortalUI {
   RecordTree: ComponentType<RecordTreeProps>;
   Pagination: ComponentType<PaginationProps>;
   Descriptions: ComponentType<DescriptionsProps>;
-  Status: ComponentType<{ tone?: StatusTone; children: ReactNode }>;
+  Status: ComponentType<StatusProps>;
   Icon: ComponentType<import("./icon.js").VastPlanIconProps>;
   theme: { mode: "light" | "dark" | "system"; tokens: SemanticThemeTokens };
-  EmptyState: ComponentType<{ title: string; description?: string }>;
-  ErrorState: ComponentType<{ title: string; retry?(): void }>;
-  Skeleton: ComponentType<{ rows?: number }>;
-  Busy: ComponentType<{ label?: string }>;
+  EmptyState: ComponentType<EmptyStateProps>;
+  ErrorState: ComponentType<ErrorStateProps>;
+  Skeleton: ComponentType<SkeletonProps>;
+  Busy: ComponentType<BusyProps>;
   notify(message: { title: string; content?: string; kind?: "info" | "success" | "warning" | "error" }): void;
   confirm(message: { title: string; content?: string }): Promise<boolean>;
 }

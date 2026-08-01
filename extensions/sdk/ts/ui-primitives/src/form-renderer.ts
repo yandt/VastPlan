@@ -1,11 +1,10 @@
-import type { ComponentSize, FormPresentation, FormSchema, FormValidationResult } from "@vastplan/ui-contract";
+import type { FormPresentation, FormSchema, FormValidationResult, SizeableProps } from "@vastplan/ui-contract";
 
-export interface FormRendererProps {
+export interface FormRendererProps extends SizeableProps {
   schema: FormSchema;
   value: Record<string, unknown>;
   onChange(value: Record<string, unknown>): void;
   /** Component geometry only; form layout remains governed by presentation. */
-  size?: ComponentSize;
   /** A framework-neutral field-label arrangement for composed Workbench forms. */
   presentation?: FormPresentation;
   presentationSection?: string;

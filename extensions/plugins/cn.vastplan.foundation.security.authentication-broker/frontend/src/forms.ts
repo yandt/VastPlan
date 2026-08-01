@@ -82,7 +82,7 @@ function createForm(
     },
     workflow: {
       title: message(namespace, "create.title", "创建 Provider 草稿"),
-      size: "lg",
+      dialogWidth: "lg",
       submitLabel: message(namespace, "create.submit", "创建草稿"),
       success: {
         refreshCollection: true,

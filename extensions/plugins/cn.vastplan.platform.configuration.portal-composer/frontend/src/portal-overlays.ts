@@ -8,7 +8,7 @@ export function portalOverlays(client: PortalControlClient): WorkbenchOverlayDef
 
 function versionHistory(client: PortalControlClient): WorkbenchOverlayDefinition<PortalRow> {
   return {
-    id: "history", surface: "dialog", size: "lg", title: "版本历史",
+    id: "history", surface: "dialog", width: "lg", title: "版本历史",
     async load(selected) {
       const row = selected[0];
       const entries = row === undefined ? [] : (await client.portalVersionHistory(row.id)).entries;
@@ -28,7 +28,7 @@ function versionHistory(client: PortalControlClient): WorkbenchOverlayDefinition
 
 function versionComparison(client: PortalControlClient): WorkbenchOverlayDefinition<PortalRow> {
   return {
-    id: "compare", surface: "dialog", size: "lg", title: "最近两个版本差异",
+    id: "compare", surface: "dialog", width: "lg", title: "最近两个版本差异",
     async load(selected) {
       const row = selected[0];
       if (row === undefined) return { kind: "table", rows: [], columns: [] };
@@ -55,7 +55,7 @@ function versionComparison(client: PortalControlClient): WorkbenchOverlayDefinit
 
 function releaseHistory(): WorkbenchOverlayDefinition<PortalRow> {
   return {
-    id: "releases", surface: "dialog", size: "lg", title: "上线历史",
+    id: "releases", surface: "dialog", width: "lg", title: "上线历史",
     async load(selected) {
       return {
         kind: "table", rowKey: "id",
@@ -73,7 +73,7 @@ function releaseHistory(): WorkbenchOverlayDefinition<PortalRow> {
 
 function auditHistory(client: PortalControlClient): WorkbenchOverlayDefinition<PortalRow> {
   return {
-    id: "audit", surface: "drawer", size: "lg", title: "审计记录",
+    id: "audit", surface: "drawer", width: "lg", title: "审计记录",
     async load(selected) {
       const row = selected[0];
       const rows = row === undefined || row.publicationId === 0 ? [] : await client.auditPortalPublication(row.id, row.publicationId);
@@ -87,7 +87,7 @@ function auditHistory(client: PortalControlClient): WorkbenchOverlayDefinition<P
 
 function configurationPreview(): WorkbenchOverlayDefinition<PortalRow> {
   return {
-    id: "configuration", surface: "drawer", size: "lg", title: "当前完整配置",
+    id: "configuration", surface: "drawer", width: "lg", title: "当前完整配置",
     async load(selected) {
       return { kind: "json", documents: selected[0] === undefined ? [] : [{ value: selected[0].configuration as unknown as JSONValue }] };
     },

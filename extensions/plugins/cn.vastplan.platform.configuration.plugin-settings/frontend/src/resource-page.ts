@@ -29,7 +29,7 @@ export function createPluginConfigurationResourcePage(client: PlatformAdminClien
   const cache = new Map<string, ResourceRow>();
   const createForm: WorkbenchFormDefinition<ResourceRow> = {
     id: "resource-create", schema: emptyFormSchema("resource-create"),
-    workflow: { title: message(namespace, "resource.create", "新增 Profile"), size: "lg", submitLabel: message(namespace, "resource.saveDraft", "保存草稿"), success: { notify: message(namespace, "resource.draftSaved", "Profile 草稿已保存"), refreshCollection: true, close: true } },
+    workflow: { title: message(namespace, "resource.create", "新增 Profile"), dialogWidth: "lg", submitLabel: message(namespace, "resource.saveDraft", "保存草稿"), success: { notify: message(namespace, "resource.draftSaved", "Profile 草稿已保存"), refreshCollection: true, close: true } },
     async prepare() {
       const catalog = await loadResourceCatalog(client);
       if (catalog.length === 0) throw new Error("没有可管理的 Profile 资源集合");

@@ -94,7 +94,7 @@ function createForm(client: APIExposureManagementPort): WorkbenchFormDefinition<
       fields: [],
     },
     workflow: {
-      size: "lg",
+      dialogWidth: "lg",
       title: text("action.create", "新建 API Exposure 草稿"),
       submitLabel: text("action.save", "创建草稿"),
       success: { notify: text("notice.created", "草稿已创建"), refreshCollection: true, close: true },

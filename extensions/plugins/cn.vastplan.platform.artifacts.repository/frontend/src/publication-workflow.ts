@@ -18,7 +18,7 @@ export function publicationForm(client: PlatformAdminClient): WorkbenchFormDefin
   return {
     id: "publication", schema,
     presentation: { layout: "vertical", fields: [{ pointer: "/reason", widget: "textarea" }, { pointer: "/expectedRevision", widget: "hidden" }] },
-    workflow: { size: "md", title: text("form.publication.title", "提交 stable 发布审批"), description: text("form.publication.description", "审批精确绑定当前 testing 制品、发布者签名、来源证明 sidecar 与目标 stable ref。批准人必须是另一位用户。"), submitLabel: text("action.publication.submit", "提交审批"), success: { notify: text("notice.publicationSubmitted", "发布审批已提交"), refreshCollection: true, close: true } },
+    workflow: { dialogWidth: "md", title: text("form.publication.title", "提交 stable 发布审批"), description: text("form.publication.description", "审批精确绑定当前 testing 制品、发布者签名、来源证明 sidecar 与目标 stable ref。批准人必须是另一位用户。"), submitLabel: text("action.publication.submit", "提交审批"), success: { notify: text("notice.publicationSubmitted", "发布审批已提交"), refreshCollection: true, close: true } },
     async prepare() { const page = await client.listArtifactPublications(); return { initialValue: { reason: "", expectedRevision: page.revision } }; },
     async submit({ value, selected }) {
       const row = selected[0]; if (row === undefined) return;
@@ -38,7 +38,7 @@ export function publicationTransitionForm(client: PlatformAdminClient, mode: "re
     },
     presentation: { layout: "vertical", fields: [{ pointer: "/reason", widget: "textarea" }] },
     workflow: {
-      size: "sm",
+      dialogWidth: "sm",
       title: text(`form.publication.${mode}Title`, rejecting ? "驳回发布审批" : "撤销发布审批"),
       description: text(`form.publication.${mode}Description`, rejecting ? "驳回会立即使当前 stable 发布授权失效；提交人与驳回人必须分离。" : "只有原提交人可以撤销，撤销后该申请不可恢复。"),
       submitLabel: text(`action.publication.${mode}`, rejecting ? "确认驳回" : "确认撤销"),
@@ -55,7 +55,7 @@ export function publicationTransitionForm(client: PlatformAdminClient, mode: "re
 
 export function evidenceOverlay(client: PlatformAdminClient): WorkbenchOverlayDefinition<Row> {
   return {
-    id: "evidence", surface: "drawer", size: "lg", title: text("overlay.evidence.title", "供应链证据"),
+    id: "evidence", surface: "drawer", width: "lg", title: text("overlay.evidence.title", "供应链证据"),
     async load(selected) {
       const row = selected[0];
       if (row === undefined) return { kind: "json", documents: [] };

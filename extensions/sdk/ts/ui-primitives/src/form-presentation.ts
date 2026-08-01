@@ -13,8 +13,9 @@ export function resolveFormPresentation(source: FormPresentation | undefined): F
 }
 
 export function formControlSize(presentation: FormPresentation | undefined): ComponentSize {
+  if (presentation?.size !== undefined) return presentation.size;
   switch (presentation?.preset) {
-    case "compact": return "sm";
+    case "compact": return "xs";
     case "comfortable": return "lg";
     default: return "md";
   }
@@ -43,7 +44,7 @@ export function formGridTemplate(presentation: FormPresentation | undefined, sec
 }
 
 export const formGridClassName = "vp-form-grid";
-export const formGridCSS = ".vp-form-grid{box-sizing:border-box;display:grid;grid-template-columns:var(--vp-form-grid-columns);gap:16px;width:100%;min-width:0}.vp-form-grid>*{min-width:0}@media(max-width:767px){.vp-form-grid{grid-template-columns:minmax(0,1fr)!important}.vp-form-grid>*{grid-column:span 1!important}}";
+export const formGridCSS = ".vp-form-grid{box-sizing:border-box;display:grid;grid-template-columns:var(--vp-form-grid-columns);gap:var(--vp-form-grid-gap,16px);width:100%;min-width:0;margin:0}.vp-form-grid>*{min-width:0}@media(max-width:767px){.vp-form-grid{grid-template-columns:minmax(0,1fr)!important}.vp-form-grid>*{grid-column:span 1!important}}";
 
 export function formGridStyle(presentation: FormPresentation | undefined, section?: FormSectionPresentation): CSSProperties {
   return { "--vp-form-grid-columns": formGridTemplate(presentation, section) } as CSSProperties;

@@ -1,6 +1,6 @@
 # VastPlan Portal 设计系统
 
-> 状态：设计基线 v4｜最后更新：2026-07-31
+> 状态：设计基线 v5｜最后更新：2026-08-02
 >
 > 本文是 Portal 跨布局、基于 Ant Design 当前实现的视觉与交互单一真相源。组件职责和安全边界见《[前端门户内核](../architecture/前端门户内核.md)》，Renderer 收敛见 [ADR-0179](../decisions/ADR-0179-Ant-Design单实现与Renderer协议保留.md)。
 
@@ -14,7 +14,7 @@
 
 ## 2. 基础 Token
 
-UI Contract 8.5 暴露语义 token、账户外观契约与 `ComponentSize`，适配器映射到具体框架。布局插件不得读取 Ant Design 私有 token。列表、卡片、表单和操作区的一致性交给《[UI 工作台组合框架](../architecture/UI工作台组合框架.md)》；布局只决定它们所在区域的视觉位置。
+UI Contract 9.0 暴露语义 token、账户外观契约与四级 `ComponentSize`，适配器映射到具体框架。布局插件不得读取 Ant Design 私有 token。列表、卡片、表单和操作区的一致性交给《[UI 工作台组合框架](../architecture/UI工作台组合框架.md)》；布局只决定它们所在区域的视觉位置。
 
 | Token | 基线 | 用途 |
 |---|---:|---|
@@ -34,17 +34,19 @@ UI Contract 8.5 暴露语义 token、账户外观契约与 `ComponentSize`，适
 ### 2.1 组件 Recipe 治理
 
 - 本文定义视觉意图和验收基线；`extensions/sdk/ts/ui-primitives/src/visual-recipes.ts` 保存必须跨 Renderer 一致的可执行数值。组件架构文档只描述职责和行为，不重复保存像素值。
-- 基础控件统一使用 `size=sm/md/lg`。Table 单独保留 `density=compact/standard/comfortable`，只调整表格行高和单元格留白，不向内部图标或表格外组件传播。功能插件不得导入 Ant Design 或写框架私有样式。
+- 基础与组合组件统一使用 `size=xs/sm/md/lg`，未声明时继承组合根，整条链的最终默认值为 `md`。Table 单独保留 `density=compact/standard/comfortable`，只调整表格行高和单元格留白，不向内部图标或表格外组件传播。功能插件不得导入 Ant Design 或写框架私有样式。
+- 每档尺寸同时固化控件高度、字体、图标、内部 padding、项目 gap、Section gap、表面 padding 与圆角。组件外部 margin 固定为 0，兄弟组件间距只由父级组合的 gap 生成，禁止父子双方叠加外间距。
 - 调整公共组件时，先更新本节的视觉基线和共享 recipe，再同步各 Renderer 映射、自动测试及浏览器截图验收；禁止在单个页面反复覆盖样式。
 - 只有通用语义确实不足时才扩展 UI Contract。不得为了修正某个框架的默认边框、间距或图标而让业务插件感知框架差异。
 
 | Size | 通用控件高度 | IconButton / 图标 | 菜单项 | 菜单表面 |
 |---|---:|---:|---:|---:|
-| `sm` | 24px | 18px / 12px | 28px | 最小宽 180px，内边距 3px，2px 圆角 |
+| `xs` | 24px | 18px / 12px | 28px | 最小宽 180px，内边距 3px，2px 圆角 |
+| `sm` | 28px | 24px / 12px | 32px | 最小宽 190px，内边距 3px，3px 圆角 |
 | `md` | 32px | 32px / 16px | 36px | 最小宽 200px，内边距 4px，4px 圆角 |
 | `lg` | 40px | 44px / 20px | 44px | 最小宽 220px，内边距 6px，6px 圆角 |
 
-动作菜单每行固定为“图标 + 标签”，触发器使用图标 + Tooltip。危险动作保留语义危险色；普通动作不使用实心 primary 背景。Menu 的 `variant=action` 消除导航专用 inline-end 分隔线，并采用内容内在宽度（最小 112px、最大 280px）；菜单表面统一保留 4px 内边距，Popover 外层不再叠加内边距。超长标签在 216px 后省略且保留完整 title。`sm` 动作菜单使用 28px 行高，图标与标签间距固定为 6px，项目内边距为 inline-start 12px、inline-end 6px，且项目必须占满菜单容器；渲染器必须清除自身会叠加到该语义间距的默认图标/标题边距。页面级与记录级“更多”都复用 Workbench 的同一紧凑动作菜单。`variant=navigation` 保留导航语义；variant 与 size 互不替代。
+动作菜单每行固定为“图标 + 标签”，触发器使用图标 + Tooltip。危险动作保留语义危险色；普通动作不使用实心 primary 背景。Menu 的 `variant=action` 消除导航专用 inline-end 分隔线，并采用内容内在宽度（最小 112px、最大 280px）；菜单表面统一保留 4px 内边距，Popover 外层不再叠加内边距。超长标签在 216px 后省略且保留完整 title。`xs` 动作菜单使用 28px 行高，图标与标签间距固定为 6px，项目内边距为 inline-start 12px、inline-end 6px，且项目必须占满菜单容器；渲染器必须清除自身会叠加到该语义间距的默认图标/标题边距。页面级与记录级“更多”都复用 Workbench 的同一紧凑动作菜单。`variant=navigation` 保留导航语义；variant 与 size 互不替代。
 
 ## 3. 排版
 
@@ -61,6 +63,7 @@ UI Contract 8.5 暴露语义 token、账户外观契约与 `ComponentSize`，适
 - Shell Header、Aside、Footer 等没有内建内容且全部 Slot 为空时不创建 DOM 和占位；Page Header 因承担页面定位始终存在。
 - Page Header 位于 Page Body 滚动容器之外。正文滚动时保持可见，不依赖多层 `position: sticky`。Page Body 使用设计系统 `surface` 语义色：浅色主题为白色，深色主题由当前 Renderer 的深色表面色接管。
 - Page Body 支持页面级 `fluid / large / medium / small` 语义尺寸，唯一最大宽度分别为“不限制 / 1280px / 960px / 720px”。两种 Shell 必须统一居中整个正文 Slot 区域；移动端始终占满可用宽度。模板级 `contained` 是平台上限，和页面尺寸同时存在时取更窄值。插件不得传入任意像素或 CSS。
+- Page、Grid 和其他组合根支持四级组件 `size`。Page 只用它调整正文 padding、标题和内部节奏，不得改变 `bodyLayout` 宽度；Grid 只用它决定未显式配置时的 gap，不得改变 columns 或 span。二者都会通过统一 Size Provider 向后代传播，局部组件仍可显式覆盖。
 - 配置与管理页面的一级正文分区统一使用 `BodySections`：每个区域只声明稳定 ID、标题、说明和内容，Renderer 统一绘制标题层级、16px 内部间距、24px 区域间距及相邻区域分隔线；最后一个区域不显示多余分隔线。插件不得自行复制 Section 边框、标题样式或外间距。
 - 动态表单控件在字段区域内默认使用 `controlAlignment=end`；仅特殊页面可显式选择 `start`。该语义不改变控件尺寸、列宽、Label 位置或输入文本方向，全宽控件继续占满可用宽度。
 - Renderer 的 Form 根容器必须始终占满上级已分配的字段宽度；`controlAlignment` 只能对齐字段内部控件，不能令 JSON Schema 根对象或筛选字段按内容宽度收缩。

@@ -165,7 +165,7 @@ func TestParseManifest_AcceptsLegacyShellLibraryListForImmutableV1Artifacts(t *t
   "id":"cn.vastplan.foundation.frontend.structure.shell.test","name":"test","description":"test","version":"1.0.0","publisher":"vastplan",
   "engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},
   "contributes":{"frontend":{"shells":[{
-    "id":"ui.structure.shell","uiContract":"^8.0.0","engineFamily":"react",
+    "id":"ui.structure.shell","uiContract":"^9.0.0","engineFamily":"react",
     "libraries":[{"id":"standard","module":{"id":"cn.vastplan.foundation.frontend.structure.layout.standard","version":"1.0.0","channel":"stable"}}]
   }]}}
 }`)
