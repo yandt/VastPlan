@@ -12,4 +12,11 @@ describe("Access visual adapter facade", () => {
 		expect(appearance.localeMenu.minWidth).toBe(128);
   });
   it("fails closed to the Ant facade for unknown templates", () => { expect(accessAppearance("third-party-injected").primary.background).toBe("#1677ff"); });
+
+  it("renders a dark public facade when the browser prefers dark appearance", () => {
+    const appearance = accessAppearance("access", "dark");
+    expect(appearance.canvas).toMatchObject({ background: "#141414", colorScheme: "dark" });
+    expect(appearance.card.background).toBe("#1f1f1f");
+    expect(appearance.input.background).toBe("#1f1f1f");
+  });
 });

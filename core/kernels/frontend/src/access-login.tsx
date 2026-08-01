@@ -3,6 +3,7 @@ import { AccessAuthenticationClient, accessBrandAssetURL, accessLocaleDirection,
 import { accessAppearance } from "./access-appearance";
 import { AccessLocaleSelector } from "./access-locale-selector";
 import { AccessMethodSelector } from "./access-method-selector";
+import { useAccessSystemScheme } from "./access-system-scheme";
 import type { ModuleFetcher } from "./module-loader";
 
 type MessageKey = keyof typeof messages["zh-CN"];
@@ -20,6 +21,7 @@ export function AccessLoginPage({ fetcher }: { fetcher: ModuleFetcher }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<MessageKey>();
   const [clock, setClock] = useState(Date.now());
+  const systemScheme = useAccessSystemScheme();
 
   useEffect(() => {
     let active = true;
@@ -48,7 +50,7 @@ export function AccessLoginPage({ fetcher }: { fetcher: ModuleFetcher }) {
   }, [step?.resendAfter]);
 
   const copy = localizedMessages(locale);
-  const styles = useMemo(() => accessAppearance(access?.accessTemplate), [access?.accessTemplate]);
+  const styles = useMemo(() => accessAppearance(access?.accessTemplate, systemScheme), [access?.accessTemplate, systemScheme]);
 
   const begin = async (nextMethodID = methodId, replaceCurrent = false) => {
     if (nextMethodID === "") return;

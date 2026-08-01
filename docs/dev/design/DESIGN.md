@@ -92,12 +92,12 @@ UI Contract 8.5 暴露语义 token、账户外观契约与 `ComponentSize`，适
 
 ### 4.5 会话前 Access 页面
 
-- 登录页使用与当前 Frontend Platform Profile 相同的 Runtime、Renderer、Shell 和 Workbench，不另建基础组件或框架专用页面。
+- 登录页使用 Portal Foundation 的最小 `access` 视觉适配面，不加载完整 Runtime、Renderer、Shell 或 Workbench，避免扩大未认证攻击面。
 - `access` 模板不显示主菜单、Page Header、Page Body Slot 或功能插件区域。固定结构为 Access Header、单任务 Auth Panel 和 Access Footer。
 - Auth Panel 桌面建议宽 400–440px，移动端占满安全边距；宽屏品牌区只能由受治理模板和内容寻址资产提供，不能成为营销式 Hero。
 - 两种登录方式使用同一面板内的分段切换；超过三种时改为方法列表。切换时只允许复用 identifier，密码和验证码必须清空。
 - 密码字段使用 `current-password`，验证码使用 `one-time-code`；错误放在面板内 `role=alert` 区域，账号不存在与凭证错误不得使用不同文案。
-- 会话前语言和主题使用 Access Profile 引用的 Platform Profile 默认值。用户级偏好只能在 Session 建立后生效。
+- 会话前语言使用 Access Profile 的受治理默认值；主题只跟随浏览器/系统 `prefers-color-scheme`。不得读取 localStorage、用户身份、租户或服务器中的用户级外观偏好；用户级偏好只能在 Session 建立后生效。
 
 ## 5. Overlay 与导航交互
 
