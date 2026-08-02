@@ -9,6 +9,7 @@ export function PresentedField(props: FieldTemplateProps & { placement?: FormLab
   const error = props.rawErrors?.[0];
   const booleanField = props.schema.type === "boolean";
   const fieldClassName = booleanField ? "vp-antd-form-field-boolean" : "vp-antd-form-field-value";
+  const labelColumnWidth = "min(var(--vp-form-label-width,var(--vp-form-label-min-width,112px)),42%)";
   if (props.placement === "inline") return <Form.Item
     className={fieldClassName}
     label={booleanField || label === "" ? undefined : label}
@@ -17,7 +18,9 @@ export function PresentedField(props: FieldTemplateProps & { placement?: FormLab
     validateStatus={(props.rawErrors?.length ?? 0) > 0 ? "error" : undefined}
     help={null}
     labelCol={booleanField ? undefined : { flex: "0 0 112px" }}
-    wrapperCol={booleanField ? undefined : { flex: "1 1 0", style: { minWidth: 0 } }}
+    wrapperCol={booleanField
+      ? { flex: "1 1 0", style: { minWidth: 0, marginInlineStart: labelColumnWidth } }
+      : { flex: "1 1 0", style: { minWidth: 0 } }}
     colon={false}
     style={{ marginBottom: 16 }}
   ><div>{props.children}{error === undefined ? null : <Typography.Text id={`${props.id}__error`} type="danger" role="alert" style={{ display: "block", marginTop: 4 }}>{error}</Typography.Text>}</div></Form.Item>;
