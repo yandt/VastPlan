@@ -219,7 +219,7 @@ func createPublishedPortalPublication(t *testing.T, process *portalKernelProcess
 
 	status, _ = portalJSON(t, author, process.baseURL(), http.MethodPost,
 		fmt.Sprintf("/v1/portals/%s/publications/%d/approve", composition.ID, publication.ID), map[string]any{}, true)
-	if status != http.StatusForbidden {
+	if status != http.StatusConflict {
 		t.Fatalf("提交人不得审批自身 Publication: status=%d", status)
 	}
 	for _, transition := range []struct {

@@ -19,7 +19,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.platform.configuration.global-settings"
-	PluginVersion = "0.8.16"
+	PluginVersion = "0.9.0"
 	Capability    = "platform.settings"
 )
 

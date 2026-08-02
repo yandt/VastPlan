@@ -12,6 +12,7 @@ import (
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	approvalv2 "cdsoft.com.cn/VastPlan/contracts/schemas/approval/v2"
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	versioningv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versioning/v1"
@@ -34,6 +35,24 @@ type portalComposerFixture struct {
 }
 
 type portalFixtureVerifier struct{ verifier nodeagent.ArtifactVerifier }
+
+type portalFixtureCatalog struct {
+	*portaltrust.TrustedCatalog
+	t *testing.T
+}
+
+type portalFixtureCatalogContract interface {
+	portaltrust.PortalCatalog
+	portaltrust.PortalTestArtifactCatalog
+}
+
+func (c portalFixtureCatalog) ValidatePortal(ctx context.Context, tenantID string, spec portalapi.PortalSpec) error {
+	err := c.TrustedCatalog.ValidatePortal(ctx, tenantID, spec)
+	if err != nil {
+		c.t.Logf("可信 Portal Catalog 拒绝测试候选: %v", err)
+	}
+	return err
+}
 
 func (v portalFixtureVerifier) Verify(_ context.Context, ref pluginv1.ArtifactRef, envelope artifacttrust.Envelope) (pluginv1.Artifact, error) {
 	verified, err := v.verifier.Verify(ref, envelope)
@@ -61,6 +80,9 @@ func startPortalComposerFixtureWithOptions(t *testing.T, root string, addressing
 	composerRef := publishBuiltPlugin(t, repository,
 		"./extensions/plugins/cn.vastplan.platform.configuration.portal-composer/backend",
 		"extensions/plugins/cn.vastplan.platform.configuration.portal-composer/vastplan.plugin.json")
+	approvalRef := publishBuiltPlugin(t, repository,
+		"./extensions/plugins/cn.vastplan.foundation.security.approval-policy.native/backend",
+		"extensions/plugins/cn.vastplan.foundation.security.approval-policy.native/vastplan.plugin.json")
 	var ledgerRef, workspaceRef pluginv1.ArtifactRef
 	if versionControl {
 		ledgerRef = publishBuiltPlugin(t, repository,
@@ -80,9 +102,21 @@ func startPortalComposerFixtureWithOptions(t *testing.T, root string, addressing
 	verifier := nodeagent.NewLocalDevelopmentArtifactVerifier()
 	installer := nodeagent.LocalInstaller{Root: filepath.Join(temporary, "installed")}
 	composer := installPortalFixturePlugin(t, repository, verifier, installer, composerRef)
+	approval := installPortalFixturePlugin(t, repository, verifier, installer, approvalRef)
+	approvalProfile := portalFixtureApprovalProfile()
+	approvalDigest, err := approvalv2.ProfileDigest(approvalProfile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	approvalBinding := approvalv2.ProviderBinding{
+		Protocol: approvalv2.Protocol, Capability: approvalv2.Capability,
+		LogicalService: "foundation.approval-policy.native", RoutingDomain: "security",
+		Profile: approvalv2.ProfileRef{ID: approvalProfile.ID, Revision: approvalProfile.Revision, Digest: approvalDigest},
+	}
 	platformCatalog := portalPlatformCatalogForTenant(t, root, "acme")
 	configValues := map[string]any{
 		"platform.portal-composer.platformCatalog": string(platformCatalog),
+		"platform.portal-composer.approvalPolicy":  approvalBinding,
 	}
 	if versionControl {
 		configValues["platform.portal-composer.versionControl"] = map[string]any{
@@ -108,12 +142,19 @@ func startPortalComposerFixtureWithOptions(t *testing.T, root string, addressing
 	if err != nil {
 		t.Fatal(err)
 	}
-	registerPortalTrustServices(t, host, catalog)
+	registerPortalTrustServices(t, host, portalFixtureCatalog{TrustedCatalog: catalog, t: t})
 	if err := host.Start(); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(host.Stop)
 	allowAllPermissions(t, host)
+	approvalConfiguration, err := json.Marshal(map[string]any{"foundation.approval-policy.native.profiles": []approvalv2.PolicyProfile{approvalProfile}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := host.LaunchWithPolicy(context.Background(), approval.EntryPath, portalFixtureLaunchPolicyWithConfiguration(approval, approvalConfiguration)); err != nil {
+		t.Fatalf("启动 Approval Policy Provider: %v", err)
+	}
 	if versionControl {
 		ledger := installPortalFixturePlugin(t, repository, verifier, installer, ledgerRef)
 		workspace := installPortalFixturePlugin(t, repository, verifier, installer, workspaceRef)
@@ -145,7 +186,11 @@ func startPortalComposerFixtureWithOptions(t *testing.T, root string, addressing
 			t.Fatalf("启动 Version Workspace: %v", err)
 		}
 	}
-	if _, err := host.LaunchWithPolicy(context.Background(), composer.EntryPath, portalFixtureLaunchPolicy(composer)); err != nil {
+	composerConfiguration, err := json.Marshal(map[string]any{"platform.portal-composer.approvalPolicy": approvalBinding})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := host.LaunchWithPolicy(context.Background(), composer.EntryPath, portalFixtureLaunchPolicyWithConfiguration(composer, composerConfiguration)); err != nil {
 		t.Fatalf("启动 Portal Composer: %v", err)
 	}
 	addressing.register(t, func(ctx context.Context, target *contractv1.CallTarget, callContext *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
@@ -164,13 +209,23 @@ func startPortalComposerFixtureWithOptions(t *testing.T, root string, addressing
 	return portalComposerFixture{deliveryOrigin: deliveryOrigin}
 }
 
+func portalFixtureApprovalProfile() approvalv2.PolicyProfile {
+	return approvalv2.PolicyProfile{
+		ID: "e2e.portal-publication", Revision: 1, DefaultEffect: approvalv2.EffectDeny,
+		Rules: []approvalv2.Rule{
+			{ID: "e2e.portal-publication.self-review", Priority: 100, Conditions: []approvalv2.Condition{{Left: "actor.id", Operator: approvalv2.OperatorEquals, RightFact: "resource.submittedBy"}}, Effect: approvalv2.EffectDeny, Code: "approval.separation_required", Message: "提交人不得审批自身 Publication"},
+			{ID: "e2e.portal-publication.allow-other", Priority: 90, Conditions: []approvalv2.Condition{{Left: "actor.id", Operator: approvalv2.OperatorNotEquals, RightFact: "resource.submittedBy"}}, Effect: approvalv2.EffectAllow},
+		},
+	}
+}
+
 func portalFixtureLaunchPolicyWithConfiguration(installed nodeagent.InstalledPlugin, configuration []byte) protocolbus.LaunchPolicy {
 	policy := portalFixtureLaunchPolicy(installed)
 	policy.Configuration = configuration
 	return policy
 }
 
-func registerPortalTrustServices(t *testing.T, host *protocolbus.Host, catalog *portaltrust.TrustedCatalog) {
+func registerPortalTrustServices(t *testing.T, host *protocolbus.Host, catalog portalFixtureCatalogContract) {
 	t.Helper()
 	services := map[string]protocolbus.HostService{
 		portalapi.KernelCatalogValidationCapability:            portaltrust.CatalogValidationService(catalog),
@@ -308,6 +363,7 @@ func portalPlatformBackendPlugins() []struct{ packageDir, manifest string } {
 		{"./extensions/plugins/cn.vastplan.platform.security.credentials/backend", "extensions/plugins/cn.vastplan.platform.security.credentials/vastplan.plugin.json"},
 		{"./extensions/plugins/cn.vastplan.platform.data.relational.connection-manager/backend", "extensions/plugins/cn.vastplan.platform.data.relational.connection-manager/vastplan.plugin.json"},
 		{"./extensions/plugins/cn.vastplan.platform.artifacts.repository/backend", "extensions/plugins/cn.vastplan.platform.artifacts.repository/vastplan.plugin.json"},
+		{"./extensions/plugins/cn.vastplan.platform.artifacts.marketplace/backend", "extensions/plugins/cn.vastplan.platform.artifacts.marketplace/vastplan.plugin.json"},
 		{"./extensions/plugins/cn.vastplan.platform.infrastructure.deployment-manager/backend", "extensions/plugins/cn.vastplan.platform.infrastructure.deployment-manager/vastplan.plugin.json"},
 	}
 }

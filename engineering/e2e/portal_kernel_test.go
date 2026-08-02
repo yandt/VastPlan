@@ -25,14 +25,14 @@ func TestNodePortalKernelMTLSPrincipalProjection(t *testing.T) {
 	addressing := startPortalAddressingFixture(t)
 	observed := make(chan *contractv1.CallContext, 1)
 	addressing.register(t, func(_ context.Context, target *contractv1.CallTarget, callContext *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
-		if target.GetOperation() != "list" || string(payload) != "{}" {
+		if target.GetOperation() != "portalGovernance" || string(payload) != "{}" {
 			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: "request.invalid", Message: "unexpected request"}}, nil, nil
 		}
 		select {
 		case observed <- proto.Clone(callContext).(*contractv1.CallContext):
 		default:
 		}
-		return successfulCapability([]byte("[]"))
+		return successfulCapability([]byte(`{"portals":[]}`))
 	})
 
 	identity := startPortalFileIdentityFixture(t)
