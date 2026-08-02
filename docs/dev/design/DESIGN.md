@@ -66,10 +66,10 @@ UI Contract 9.0 暴露语义 token、账户外观契约与四级 `ComponentSize`
 - Page、Grid 和其他组合根支持四级组件 `size`。Page 只用它调整正文 padding、标题和内部节奏，不得改变 `bodyLayout` 宽度；Grid 只用它决定未显式配置时的 gap，不得改变 columns 或 span。二者都会通过统一 Size Provider 向后代传播，局部组件仍可显式覆盖。
 - 配置与管理页面的一级正文分区统一使用 `BodySections`：每个区域只声明稳定 ID、标题、说明和内容，Renderer 统一绘制标题层级、16px 内部间距、24px 区域间距及相邻区域分隔线；最后一个区域不显示多余分隔线。插件不得自行复制 Section 边框、标题样式或外间距。
 - 动态表单控件在字段区域内默认使用 `controlAlignment=end`；仅特殊页面可显式选择 `start`。该语义不改变控件尺寸、列宽、Label 位置或输入文本方向，全宽控件继续占满可用宽度。
-- `FormDialog` 是 Dialog 的受治理 `form` 视觉变体，不缩小控件本身，只收紧内容几何：`xs/sm/md/lg` 的 body padding 为 `8/10/12/16px`、说明与字段区 gap 为 `4/8/8/16px`、行内 Label 最小宽度为 `80/88/96/112px`。Label 随内容扩展、最多占字段行 42%，过长时换行而不省略；说明文本自身 `margin: 0`，所有垂直节奏只由组合 Stack 的 gap 控制。普通确认 Dialog 和页面表单不继承此变体。
+- `FormDialog` 是 Dialog 的受治理 `form` 视觉变体，不缩小控件本身，只收紧内容几何：`xs/sm/md/lg` 的 body padding 为 `8/10/12/16px`、说明与字段区 gap 为 `4/8/8/16px`、行内 Label 最小宽度为 `80/88/96/112px`。Renderer 用同一张表单中最长的非 Boolean Label 推导唯一列宽，所有字段共享该宽度；最多占字段行 42%，过长时换行而不省略。说明文本自身 `margin: 0`，所有垂直节奏只由组合 Stack 的 gap 控制。普通确认 Dialog 和页面表单不继承此变体。
 - Boolean 字段不绘制 Form 左侧 Label 或重复必填星号，只显示复选框自身文字，并在字段列起点左对齐；其余值输入控件继续占满 Label 后的字段列。
 - FormDialog 的 `workflow.description` 属于本次操作的上下文：有值时由 Dialog Header 紧接 Title 以次要颜色、小一级字号显示，间距固定 4px；它不再进入 body，也不得与字段说明重复。字段帮助、校验错误和风险提示仍在 body 内，分别贴近对应字段或操作。
-- 行内表单的文本、数字、选择、日期与多行文本控件必须填满 Label 后的字段列，`controlAlignment=end` 不能令其退化为浏览器默认内容宽度；布尔复选框是唯一例外，保持内容宽度并沿字段列末端对齐。
+- 行内表单的文本、数字、选择、日期与多行文本控件必须填满 Label 后的字段列，`controlAlignment=end` 不能令其退化为浏览器默认内容宽度；布尔复选框是唯一例外，保持内容宽度并沿字段列起点对齐。
 - Renderer 的 Form 根容器必须始终占满上级已分配的字段宽度；`controlAlignment` 只能对齐字段内部控件，不能令 JSON Schema 根对象或筛选字段按内容宽度收缩。
 - 页面间距使用唯一 `portalPageRhythm`：Shell 从 Page Header 底边到 Workbench 根容器统一保留 16px `contentStart`；Workbench 根容器固定 `margin: 0; padding: 0`，并按 compact/standard/comfortable 使用 8/16/24px `sectionGap` 管理一级组件间距。一级组件不得用外部 margin 改写位置；FilterPanel 等可通过 Workbench 内部的 `flush=0` 或 `compact=8px` inset 管理自身内容，但 inset 不得反向补偿 Shell。Collection 顶部 FilterPanel 默认 `flush`；三个 Renderer 的 compact Form 必须隐藏根 Object Schema 标题并清除根外边距，嵌套对象标题不受影响，从而使第一行控件与页面起始节奏可预测。
 - FilterPanel 使用 `inside-inline` 持久 Label：Label 与输入控件共同消费一个筛选单元格宽度，Label 按内容取宽但桌面最大宽度为 `clamp(48px, 18%, 112px)`、移动端为 `clamp(56px, 32%, 128px)`，始终单行；超长文案省略并由 Tooltip 与可访问名称提供全文。输入区域必须 `flex: 1; min-width: 0`，输入后 Label 不消失。Ant Design 实现必须遵守该语义，功能插件不能配置像素宽度或注入框架样式。
