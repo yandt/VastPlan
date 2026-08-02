@@ -43,9 +43,9 @@ func writeSessions(filename string, ownerPermissions []string) error {
 		roles     []string
 	}{
 		{devAdminToken, "local-admin", ownerRoles},
-		{authorToken, "local-author", []string{"platform.portal.read", "platform.portal.compose", "platform.deployment.read", "platform.deployment.compose"}},
-		{approverToken, "local-approver", []string{"platform.portal.read", "platform.portal.approve", "platform.deployment.read", "platform.deployment.approve"}},
-		{publisherToken, "local-publisher", []string{"platform.portal.read", "platform.portal.publish", "platform.deployment.read", "platform.deployment.publish"}},
+		{authorToken, "local-author", []string{"platform.portal.read", "platform.portal.compose", "platform.deployment.read", "platform.deployment.compose", "platform.deployment.plugin.preview", "platform.deployment.plugin.request"}},
+		{approverToken, "local-approver", []string{"platform.portal.read", "platform.portal.approve", "platform.deployment.read", "platform.deployment.approve", "platform.deployment.plugin.preview", "platform.deployment.plugin.approve"}},
+		{publisherToken, "local-publisher", []string{"platform.portal.read", "platform.portal.publish", "platform.deployment.read", "platform.deployment.publish", "platform.deployment.plugin.preview", "platform.deployment.plugin.activate"}},
 	}
 	doc := struct {
 		Sessions []record `json:"sessions"`

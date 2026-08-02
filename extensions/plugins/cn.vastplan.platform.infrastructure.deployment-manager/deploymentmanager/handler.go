@@ -11,9 +11,7 @@ import (
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
-	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationactivation"
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/nodebootstrap"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformprofileactivation"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/plugininstallation"
@@ -36,23 +34,7 @@ func (s *Service) Handler(ctx context.Context, host sdk.Host, call *contractv1.C
 }
 
 func (s *Service) handleLoaded(ctx context.Context, host sdk.Host, call *contractv1.CallContext, payload []byte, operation string) (*contractv1.CallResult, []byte, error) {
-	var request struct {
-		ID                    string                                             `json:"id"`
-		NodeID                string                                             `json:"nodeId"`
-		JobID                 string                                             `json:"jobId"`
-		Plan                  nodebootstrap.Plan                                 `json:"plan"`
-		IfVersion             *int64                                             `json:"ifVersion,omitempty"`
-		RevisionID            uint64                                             `json:"revisionId"`
-		ReleaseID             uint64                                             `json:"releaseId"`
-		Intent                backendcompositionv1.ApplicationIntent             `json:"intent"`
-		ConfigurationSnapshot backendcompositionv1.PlanningConfigurationSnapshot `json:"configurationSnapshot"`
-		Binding               platformadminapi.PutTestTargetBindingRequest       `json:"binding"`
-		Release               platformadminapi.CreateTestReleaseRequest          `json:"release"`
-		Activation            configurationactivation.CreateRequest              `json:"activation"`
-		ProfileActivation     platformprofileactivation.CreateActivationRequest  `json:"profileActivation"`
-		CandidateID           string                                             `json:"candidateId"`
-		InstallationPreview   plugininstallation.PreviewRequest                  `json:"installationPreview"`
-	}
+	var request handlerRequest
 	decoder := json.NewDecoder(bytes.NewReader(payload))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&request); err != nil {
@@ -61,136 +43,7 @@ func (s *Service) handleLoaded(ctx context.Context, host sdk.Host, call *contrac
 	if err := ensureEOF(decoder); err != nil {
 		return domainError("platform.deployment.invalid", errInvalid)
 	}
-	var out any
-	var err error
-	switch operation {
-	case "listNodes":
-		var items []platformadminapi.ManagedNode
-		items, err = s.ListNodes(call)
-		out = map[string]any{"items": items}
-	case "putNode":
-		out, err = s.PutNode(call, request.ID, platformadminapi.PutManagedNodeRequest{Plan: request.Plan, IfVersion: request.IfVersion})
-	case "listBootstrapJobs":
-		_ = s.refreshReadiness(ctx, host, call)
-		var items []platformadminapi.BootstrapJob
-		items, err = s.ListJobs(call)
-		out = map[string]any{"items": items}
-	case "createBootstrap":
-		out, err = s.CreateJob(call, request.NodeID)
-	case "approveBootstrap":
-		var job platformadminapi.BootstrapJob
-		var node platformadminapi.ManagedNode
-		job, node, err = s.beginApproval(call, request.JobID)
-		if err == nil {
-			operationName := "bootstrap"
-			raw, marshalErr := json.Marshal(nodebootstrap.ExecutionRequest{OperationID: job.ID, Plan: node.Plan})
-			if marshalErr != nil {
-				err = marshalErr
-			} else {
-				result, _, callErr := host.Call(ctx, &contractv1.CallTarget{ExtensionPoint: extpoint.KernelService, Capability: nodebootstrap.KernelService, Operation: &operationName}, call, raw)
-				success := callErr == nil && result != nil && result.Status == contractv1.CallResult_STATUS_OK
-				job, err = s.finishApproval(call, job.ID, success)
-				if success && err == nil {
-					_ = s.refreshReadiness(ctx, host, call)
-					job, err = s.job(call, job.ID)
-				}
-				if !success && err == nil {
-					err = errBootstrapFailed
-				}
-			}
-		}
-		out = job
-	case "listDeploymentTargets":
-		var items []platformadminapi.DeploymentTarget
-		items, err = s.ListDeploymentTargets(ctx, host, call)
-		out = map[string]any{"items": items}
-	case "listServiceRevisions":
-		_ = s.ReconcileServiceReferences(ctx, host, call)
-		var items []platformadminapi.ServiceRevision
-		items, err = s.ListServiceRevisions(call)
-		out = map[string]any{"items": publicServiceRevisions(items)}
-	case plugininstallation.PreviewOperation:
-		out, err = s.PreviewPluginInstallation(ctx, host, call, plugininstallation.SourceController, request.InstallationPreview)
-	case plugininstallation.SelfServicePreviewOperation:
-		out, err = s.PreviewPluginInstallation(ctx, host, call, plugininstallation.SourceSelfService, request.InstallationPreview)
-	case plugininstallation.DevelopmentPreviewOperation:
-		out, err = s.PreviewPluginInstallation(ctx, host, call, plugininstallation.SourceDevelopment, request.InstallationPreview)
-	case plugininstallation.CreateOperation:
-		out, err = s.CreatePluginInstallationCandidate(ctx, host, call, plugininstallation.SourceController, request.InstallationPreview)
-	case plugininstallation.SelfServiceCreateOperation:
-		out, err = s.CreatePluginInstallationCandidate(ctx, host, call, plugininstallation.SourceSelfService, request.InstallationPreview)
-	case plugininstallation.DevelopmentCreateOperation:
-		out, err = s.CreatePluginInstallationCandidate(ctx, host, call, plugininstallation.SourceDevelopment, request.InstallationPreview)
-	case plugininstallation.ListOperation:
-		var items []plugininstallation.Candidate
-		items, err = s.ListPluginInstallationCandidates(call)
-		out = map[string]any{"items": items}
-	case plugininstallation.GetOperation:
-		out, err = s.GetPluginInstallationCandidate(call, request.CandidateID)
-	case plugininstallation.SubmitOperation:
-		out, err = s.SubmitPluginInstallationCandidate(ctx, host, call, request.CandidateID)
-	case plugininstallation.ApproveOperation:
-		out, err = s.ApprovePluginInstallationCandidate(ctx, host, call, request.CandidateID)
-	case plugininstallation.ActivateOperation:
-		out, err = s.ActivatePluginInstallationCandidate(ctx, host, call, request.CandidateID)
-	case plugininstallation.CancelOperation:
-		out, err = s.CancelPluginInstallationCandidate(call, request.CandidateID)
-	case plugininstallation.RollbackOperation:
-		out, err = s.RollbackPluginInstallationCandidate(ctx, host, call, request.CandidateID)
-	case "createIntentDraft":
-		out, err = s.CreateIntentDraft(ctx, host, call, request.Intent)
-	case "updateIntentDraft":
-		out, err = s.UpdateIntentDraft(ctx, host, call, request.RevisionID, request.Intent)
-	case "refreshIntentDraft":
-		out, err = s.RefreshIntentPlan(ctx, host, call, request.RevisionID)
-	case "bindIntentConfiguration":
-		out, err = s.BindIntentConfiguration(ctx, host, call, request.RevisionID, request.ConfigurationSnapshot)
-	case "submitServiceDraft":
-		out, err = s.SubmitServiceDraft(ctx, host, call, request.RevisionID)
-	case "approveServiceRevision":
-		out, err = s.ApproveServiceRevision(ctx, host, call, request.RevisionID)
-	case "publishServiceRevision":
-		out, err = s.PublishServiceRevision(ctx, host, call, request.RevisionID)
-	case "rollbackServiceRevision":
-		out, err = s.RollbackServiceRevision(ctx, host, call, request.RevisionID)
-	case configurationactivation.CreateOperation:
-		out, err = s.CreateConfigurationActivation(ctx, host, call, request.Activation)
-	case configurationactivation.GetOperation:
-		out, err = s.GetConfigurationActivation(ctx, host, call, configurationactivation.LookupRequest{CandidateID: request.CandidateID})
-	case configurationactivation.PublishOperation:
-		out, err = s.PublishConfigurationActivation(ctx, host, call, configurationactivation.LookupRequest{CandidateID: request.CandidateID})
-	case platformprofileactivation.CreateActivationOperation:
-		out, err = s.CreateProfileConfigurationActivation(ctx, host, call, request.ProfileActivation)
-	case platformprofileactivation.GetActivationOperation:
-		out, err = s.GetProfileConfigurationActivation(ctx, host, call, platformprofileactivation.ActivationLookup{CandidateID: request.CandidateID})
-	case platformprofileactivation.ApproveActivationOperation:
-		out, err = s.ApproveProfileConfigurationActivation(call, platformprofileactivation.ActivationLookup{CandidateID: request.CandidateID})
-	case platformprofileactivation.PublishActivationOperation:
-		out, err = s.PublishProfileConfigurationActivation(ctx, host, call, platformprofileactivation.ActivationLookup{CandidateID: request.CandidateID})
-	case platformprofileactivation.AbortActivationOperation:
-		out, err = s.AbortProfileConfigurationActivation(ctx, host, call, platformprofileactivation.ActivationLookup{CandidateID: request.CandidateID})
-	case "listServiceRevisionAudit":
-		_ = s.ReconcileServiceReferences(ctx, host, call)
-		var items []platformadminapi.ServiceAuditEvent
-		items, err = s.ListServiceRevisionAudit(call, request.RevisionID)
-		out = map[string]any{"items": items}
-	case "listTestTargetBindings":
-		var items []platformadminapi.TestTargetBinding
-		items, err = s.ListTestTargetBindings(call)
-		out = map[string]any{"items": items}
-	case "putTestTargetBinding":
-		out, err = s.PutTestTargetBinding(call, request.ID, request.Binding)
-	case "listTestReleases":
-		var items []platformadminapi.TestRelease
-		items, err = s.ListTestReleases(call)
-		out = map[string]any{"items": items}
-	case "createTestRelease":
-		out, err = s.CreateTestRelease(ctx, host, call, request.Release)
-	case "rollbackTestRelease":
-		out, err = s.RollbackTestRelease(ctx, host, call, request.ReleaseID)
-	default:
-		err = errInvalid
-	}
+	out, err := s.dispatchOperation(ctx, host, call, operation, request)
 	if err != nil {
 		return domainError(errorCode(err), err)
 	}
@@ -302,6 +155,7 @@ func Descriptor() []byte {
 		,{"name":"createPluginInstallationCandidate","description":"从控制器入口创建持久插件安装候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"installationPreview":{"type":"object"}},"required":["installationPreview"]}}
 		,{"name":"createSelfServicePluginInstallationCandidate","description":"从服务自助入口创建持久插件安装候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"installationPreview":{"type":"object"}},"required":["installationPreview"]}}
 		,{"name":"createDevelopmentPluginInstallationCandidate","description":"从开发入口创建持久插件安装候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"installationPreview":{"type":"object"}},"required":["installationPreview"]}}
+		,{"name":"listPluginInstallationTargets","description":"列出控制器获授权的最小逻辑服务安装目标","paramsSchema":{"type":"object","properties":{}}}
 		,{"name":"listPluginInstallationCandidates","description":"列出插件安装候选及派生状态","paramsSchema":{"type":"object","properties":{}}}
 		,{"name":"getPluginInstallationCandidate","description":"读取一个插件安装候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"candidateId":{"type":"string"}},"required":["candidateId"]}}
 		,{"name":"submitPluginInstallationCandidate","description":"重新规划并提交插件安装候选审批","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"candidateId":{"type":"string"}},"required":["candidateId"]}}
@@ -340,7 +194,7 @@ func Contribution(service *Service) sdk.Contribution {
 			return service.Handler(ctx, host, call, payload, operation)
 		}
 	}
-	operations := []string{"listNodes", "putNode", "listBootstrapJobs", "createBootstrap", "approveBootstrap", "listDeploymentTargets", "listServiceRevisions", plugininstallation.PreviewOperation, plugininstallation.SelfServicePreviewOperation, plugininstallation.DevelopmentPreviewOperation, plugininstallation.CreateOperation, plugininstallation.SelfServiceCreateOperation, plugininstallation.DevelopmentCreateOperation, plugininstallation.ListOperation, plugininstallation.GetOperation, plugininstallation.SubmitOperation, plugininstallation.ApproveOperation, plugininstallation.ActivateOperation, plugininstallation.CancelOperation, plugininstallation.RollbackOperation, "createIntentDraft", "updateIntentDraft", "refreshIntentDraft", "bindIntentConfiguration", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision", configurationactivation.CreateOperation, configurationactivation.GetOperation, configurationactivation.PublishOperation, platformprofileactivation.CreateActivationOperation, platformprofileactivation.GetActivationOperation, platformprofileactivation.ApproveActivationOperation, platformprofileactivation.PublishActivationOperation, platformprofileactivation.AbortActivationOperation, "listServiceRevisionAudit", "listTestTargetBindings", "putTestTargetBinding", "listTestReleases", "createTestRelease", "rollbackTestRelease"}
+	operations := []string{"listNodes", "putNode", "listBootstrapJobs", "createBootstrap", "approveBootstrap", "listDeploymentTargets", "listServiceRevisions", plugininstallation.PreviewOperation, plugininstallation.SelfServicePreviewOperation, plugininstallation.DevelopmentPreviewOperation, plugininstallation.CreateOperation, plugininstallation.SelfServiceCreateOperation, plugininstallation.DevelopmentCreateOperation, plugininstallation.ListTargetsOperation, plugininstallation.ListOperation, plugininstallation.GetOperation, plugininstallation.SubmitOperation, plugininstallation.ApproveOperation, plugininstallation.ActivateOperation, plugininstallation.CancelOperation, plugininstallation.RollbackOperation, "createIntentDraft", "updateIntentDraft", "refreshIntentDraft", "bindIntentConfiguration", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision", configurationactivation.CreateOperation, configurationactivation.GetOperation, configurationactivation.PublishOperation, platformprofileactivation.CreateActivationOperation, platformprofileactivation.GetActivationOperation, platformprofileactivation.ApproveActivationOperation, platformprofileactivation.PublishActivationOperation, platformprofileactivation.AbortActivationOperation, "listServiceRevisionAudit", "listTestTargetBindings", "putTestTargetBinding", "listTestReleases", "createTestRelease", "rollbackTestRelease"}
 	handlers := make(map[string]sdk.Handler, len(operations))
 	for _, operation := range operations {
 		handlers[operation] = handler(operation)

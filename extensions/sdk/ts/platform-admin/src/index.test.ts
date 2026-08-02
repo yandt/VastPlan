@@ -98,6 +98,27 @@ describe("PlatformAdminClient", () => {
     ]);
   });
 
+  it("keeps plugin installation preview and lifecycle on fixed controller BFF routes", async () => {
+    const calls: Array<{ path: string; method?: string; body?: string }> = [];
+    const client = new PlatformAdminClient(async (path, init) => {
+      calls.push({ path, method: init?.method, body: init?.body });
+      return { ok: true, status: 200, json: async () => path === "/v1/csrf" ? { token: "safe" } : {} };
+    }, "operations", "deployment");
+    const request = { version: 1 as const, target: { kernel: "backend" as const, deployment: "agents", unitId: "api" }, change: { action: "upgrade" as const, pluginId: "cn.example.agent", requirement: { pluginId: "cn.example.agent", constraint: "^2.0.0", channel: "stable" } }, expectedActiveRevision: 4 };
+    await client.listPluginInstallationTargets();
+    await client.previewPluginInstallation(request);
+    await client.createPluginInstallationCandidate(request);
+    const id = "installation-0123456789abcdef0123456789abcdef";
+    await client.submitPluginInstallationCandidate(id);
+    expect(calls.filter((call) => call.path !== "/v1/csrf")).toEqual([
+      { path: "/v1/portals/operations/platform/services/deployment/deployment/plugin-installations/targets", method: "GET", body: undefined },
+      { path: "/v1/portals/operations/platform/services/deployment/deployment/plugin-installations/preview", method: "POST", body: JSON.stringify(request) },
+      { path: "/v1/portals/operations/platform/services/deployment/deployment/plugin-installations", method: "POST", body: JSON.stringify(request) },
+      { path: `/v1/portals/operations/platform/services/deployment/deployment/plugin-installations/${id}/submit`, method: "POST", body: "{}" },
+    ]);
+    expect(() => client.getPluginInstallationCandidate("bad/id")).toThrowError(PlatformAdminError);
+  });
+
   it("submits and activates plugin configuration on fixed candidate routes", async () => {
     const calls: Array<{ path: string; method?: string; body?: string }> = [];
     const client = new PlatformAdminClient(async (path, init) => {

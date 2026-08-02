@@ -1,12 +1,12 @@
 {
   "id": "cn.vastplan.platform.infrastructure.deployment-manager",
   "name": "VastPlan 部署与测试发布管理服务",
-  "version": "0.23.0",
+  "version": "0.24.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
-  "description": "管理非敏感节点引导、统一插件安装预览、应用服务修订和 Backend 测试发布；凭证、制品信任、KV 与就绪事实仍由可信内核持有",
+  "description": "管理非敏感节点引导、跨服务插件安装候选、应用服务修订和 Backend 测试发布；凭证、制品信任、KV 与就绪事实仍由可信内核持有",
   "engines": { "backend": "^0.1", "frontend": "^1.0" },
   "capabilities": { "kernelServices": ["kernel.node.bootstrap", "kernel.node.readiness", "kernel.deployment.targets", "kernel.deployment.preview", "kernel.deployment.publish", "kernel.deployment.readiness", "kernel.platform-profile.prepare", "kernel.platform-profile.status", "kernel.platform-profile.activate", "kernel.platform-profile.publish", "kernel.platform-profile.finalize", "kernel.platform-profile.abort", "kernel.platform-profile.rollback", "kernel.state.shared.get", "kernel.state.shared.create", "kernel.state.shared.update"], "credentials": [], "resources": [] },
   "contextAccess": { "required": ["scope.tenant", "caller", "subject.id", "authorization.roles"], "optional": ["scope.project", "scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
@@ -32,6 +32,7 @@
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "listServiceRevisions", "permissions": ["platform.deployment.read"], "access": "read", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "previewPluginInstallation", "permissions": ["platform.deployment.plugin.preview"], "access": "read", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "previewSelfServicePluginInstallation", "permissions": ["platform.deployment.plugin.preview"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "listPluginInstallationTargets", "permissions": ["platform.deployment.plugin.preview"], "access": "read", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "listPluginInstallationCandidates", "permissions": ["platform.deployment.plugin.preview"], "access": "read", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "getPluginInstallationCandidate", "permissions": ["platform.deployment.plugin.preview"], "access": "read", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "createPluginInstallationCandidate", "permissions": ["platform.deployment.plugin.request"], "access": "write", "approval": "different-subject" },
@@ -97,6 +98,7 @@
           { "name": "createPluginInstallationCandidate", "description": "从控制器入口创建持久插件安装候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "installationPreview": { "type": "object" } }, "required": ["installationPreview"] } },
           { "name": "createSelfServicePluginInstallationCandidate", "description": "从服务自助入口创建持久插件安装候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "installationPreview": { "type": "object" } }, "required": ["installationPreview"] } },
           { "name": "createDevelopmentPluginInstallationCandidate", "description": "从开发入口创建持久插件安装候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "installationPreview": { "type": "object" } }, "required": ["installationPreview"] } },
+          { "name": "listPluginInstallationTargets", "description": "列出控制器获授权的最小逻辑服务安装目标", "paramsSchema": { "type": "object", "properties": {} } },
           { "name": "listPluginInstallationCandidates", "description": "列出插件安装候选及派生状态", "paramsSchema": { "type": "object", "properties": {} } },
           { "name": "getPluginInstallationCandidate", "description": "读取一个插件安装候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "candidateId": { "type": "string" } }, "required": ["candidateId"] } },
           { "name": "submitPluginInstallationCandidate", "description": "重新规划并提交插件安装候选审批", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "candidateId": { "type": "string" } }, "required": ["candidateId"] } },
@@ -130,8 +132,14 @@
       }]
     },
     "frontend": {
-      "views": [{ "id": "platform.deployment", "title": "服务与节点部署" }],
-      "menus": [{ "id": "platform.deployment.menu", "title": "服务与节点部署" }]
+      "views": [
+        { "id": "platform.deployment", "title": "服务与节点部署" },
+        { "id": "platform.plugin-installations", "title": "服务插件" }
+      ],
+      "menus": [
+        { "id": "platform.deployment.menu", "title": "服务与节点部署" },
+        { "id": "platform.plugin-installations.menu", "title": "服务插件" }
+      ]
     }
   }
 }

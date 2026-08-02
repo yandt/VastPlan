@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { ServiceRevision } from "@vastplan/platform-admin";
-import { buildBackendIntent, createDeploymentPage, deploymentRow, intentEditorValue, serviceIntentSchema } from "./index";
+import type { PluginInstallationCandidate, ServiceRevision } from "@vastplan/platform-admin";
+import { buildBackendIntent, buildInstallationRequests, createDeploymentPage, createPluginInstallationPage, deploymentRow, installationRow, installationTargetChoices, intentEditorValue, serviceIntentSchema } from "./index";
 import type { PlatformAdminClient } from "@vastplan/platform-admin";
 import type { DeploymentRow } from "./resolution-view";
 
@@ -79,5 +79,47 @@ describe("deployment-manager Intent frontend contract", () => {
       await page.runAction?.({ action: { id, label: id, icon: "more", placement: "record.row" }, selected, refresh() {} }, new AbortController().signal);
     }
     expect(calls).toEqual(["refresh-plan:7", "submit:7", "approve:7", "publish:7", "rollback:7"]);
+  });
+});
+
+describe("deployment-manager controller installation frontend", () => {
+  it("derives selectable logical service targets only from active Application Intents", () => {
+    expect(installationTargetChoices([{ target: { kernel: "backend", deployment: "agents", unitId: "api" }, serviceClass: "application.backend", activeRevision: 7 }])).toEqual([
+      { key: "agents#api", title: "agents · api", deployment: "agents", unitId: "api", activeRevision: 7 },
+    ]);
+  });
+
+  it("builds one bounded controller request per deployment and never accepts a source", () => {
+    const targets = {
+      "agents#api": { key: "agents#api", title: "agents · api", deployment: "agents", unitId: "api", activeRevision: 7 },
+      "reports#worker": { key: "reports#worker", title: "reports · worker", deployment: "reports", unitId: "worker", activeRevision: 3 },
+    };
+    const requests = buildInstallationRequests({ targets: Object.keys(targets), action: "upgrade", pluginId: "cn.example.agent", versionPolicy: "compatible", version: "2.1.0", channel: "stable", features: ["audit"] }, targets);
+    expect(requests).toHaveLength(2);
+    expect(requests[0]).toMatchObject({ version: 1, target: { kernel: "backend", deployment: "agents", unitId: "api" }, change: { action: "upgrade", requirement: { constraint: "^2.1.0" } }, expectedActiveRevision: 7 });
+    expect(requests[0]).not.toHaveProperty("source");
+    expect(() => buildInstallationRequests({ targets: ["agents#api", "agents#worker"], action: "remove", pluginId: "cn.example.agent" }, {
+      ...targets, "agents#worker": { key: "agents#worker", title: "agents · worker", deployment: "agents", unitId: "worker", activeRevision: 7 },
+    })).toThrow("同一部署");
+  });
+
+  it("projects candidate lifecycle and rollout independently", () => {
+    const candidate = {
+      id: "installation-a", status: "Ready", source: "controller", serviceRevisionId: 8, previousServiceRevisionId: 7,
+      requestedBy: "alice", createdAt: "now", updatedAt: "now",
+      preview: { target: { kernel: "backend", deployment: "agents", unitId: "api" }, pluginId: "cn.example.agent", action: "upgrade", artifactLock: { roots: [{ pluginId: "cn.example.agent", constraint: "^2.0.0" }] } },
+      rollout: { status: "Pending", units: [{ id: "api", desired_replicas: 3, replicas: 2, ready_replicas: 1 }] },
+    } as unknown as PluginInstallationCandidate;
+    expect(installationRow(candidate)).toMatchObject({ status: "Ready", rolloutStatus: "Pending", rolloutReplicas: "1/3", version: "^2.0.0", hasRollout: true });
+  });
+
+  it("keeps every mutation data-driven and protected by its dedicated permission", () => {
+    const page = createPluginInstallationPage({} as PlatformAdminClient, undefined, "deployment", "/plugins", "服务插件");
+    expect(page.pageActions?.[0]).toMatchObject({ form: "create-plugin-installation", requiredPermissions: ["platform.deployment.plugin.request"] });
+    const actions = Object.fromEntries((page.collection.actions ?? []).map((action) => [action.id, action]));
+    expect(actions.submit?.requiredPermissions).toEqual(["platform.deployment.plugin.request"]);
+    expect(actions.approve?.requiredPermissions).toEqual(["platform.deployment.plugin.approve"]);
+    expect(actions.activate?.requiredPermissions).toEqual(["platform.deployment.plugin.activate"]);
+    expect(actions.preview?.overlay).toBe("preview");
   });
 });

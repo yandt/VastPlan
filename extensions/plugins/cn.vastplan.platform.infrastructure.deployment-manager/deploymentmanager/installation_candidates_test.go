@@ -118,6 +118,17 @@ func TestPluginInstallationCandidateProjectsPlannerDriftAsStale(t *testing.T) {
 	}
 }
 
+func TestPluginInstallationTargetsExposeOnlyMinimalActiveApplicationIdentity(t *testing.T) {
+	service, _, requester := publishedIntentService(t)
+	targets, err := service.ListPluginInstallationTargets(requester)
+	if err != nil || len(targets) != 1 {
+		t.Fatalf("安装目标投影失败: %+v err=%v", targets, err)
+	}
+	if targets[0].Target.Kernel != "backend" || targets[0].Target.Deployment != "agent-services" || targets[0].Target.UnitID != "api" || targets[0].ActiveRevision != 1 || targets[0].ServiceClass != "application.backend" {
+		t.Fatalf("安装目标泄露或缺少必要身份: %+v", targets[0])
+	}
+}
+
 func upgradeInstallationRequest() plugininstallation.PreviewRequest {
 	return plugininstallation.PreviewRequest{
 		Version: plugininstallation.ProtocolVersion,

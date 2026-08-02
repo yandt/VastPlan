@@ -1,4 +1,11 @@
-import type { BackendApplicationIntent, BackendResolutionReport } from "@vastplan/composition-planning";
+import type {
+  ArtifactLock,
+  ArtifactLockPackage,
+  BackendApplicationIntent,
+  BackendResolutionReport,
+  ConfigurationRequirement,
+  ResolutionDiagnostic,
+} from "@vastplan/composition-planning";
 
 export interface PlatformFetchResponse {
   ok: boolean;
@@ -410,6 +417,91 @@ export interface BootstrapJob {
 
 export interface CompositionRef { id: string; revision: number; digest: string; }
 export interface DeploymentTarget { deploymentName: string; platformProfile: CompositionRef; }
+export type PluginInstallationAction = "install" | "upgrade" | "remove";
+export interface PluginInstallationTarget { kernel: "backend"; deployment: string; unitId: string; }
+export interface PluginInstallationTargetOption { target: PluginInstallationTarget; serviceClass: string; activeRevision: number; }
+export interface PluginInstallationChange {
+  action: PluginInstallationAction;
+  pluginId: string;
+  requirement?: { pluginId: string; constraint: string; channel?: string; features?: string[] };
+}
+export interface PluginInstallationPreviewRequest {
+  version: 1;
+  target: PluginInstallationTarget;
+  change: PluginInstallationChange;
+  expectedActiveRevision?: number;
+}
+export interface PluginInstallationPackageChange {
+  kind: "Added" | "Updated" | "Removed";
+  pluginId: string;
+  root: boolean;
+  before?: ArtifactLockPackage;
+  after?: ArtifactLockPackage;
+}
+export interface PluginInstallationPreview {
+  version: 1;
+  source: "controller" | "self-service" | "development";
+  status: "Resolved" | "NeedsConfiguration" | "Invalid";
+  target: PluginInstallationTarget;
+  action: PluginInstallationAction;
+  pluginId: string;
+  activeRevision: number;
+  candidateRevision: number;
+  candidateIntentDigest: string;
+  planDigest: string;
+  previewDigest?: string;
+  repositoryRevision?: number;
+  platformProfile: CompositionRef;
+  artifactLock?: ArtifactLock;
+  changes: PluginInstallationPackageChange[];
+  configurationGaps: Array<{ unitId: string; pluginId: string; missing: ConfigurationRequirement[] }>;
+  diagnostics: ResolutionDiagnostic[];
+  impact: {
+    applyStrategy: "service-generation";
+    requiresApproval: boolean;
+    kernelRestartRequired: boolean;
+    rootChanged: boolean;
+    noop: boolean;
+  };
+}
+export type PluginInstallationCandidateStatus = "Planned" | "PendingApproval" | "Approved" | "Activating" | "Ready" | "Stale" | "Cancelled" | "RolledBack" | "Superseded";
+export type DeploymentReadinessStatus = "Pending" | "Blocked" | "Ready" | "Degraded" | "DependencyLost" | "Failed" | "Stopped";
+export interface PluginInstallationRollout {
+  schema_version: 1;
+  tenant?: string;
+  deployment: string;
+  revision: number;
+  generation: number;
+  units: Array<{
+    id: string;
+    status: DeploymentReadinessStatus;
+    desired_replicas: number;
+    replicas: number;
+    ready_replicas: number;
+    dependency_issues?: string[];
+    errors?: string[];
+  }>;
+  status: DeploymentReadinessStatus;
+  reason?: string;
+  updated_at: string;
+}
+export interface PluginInstallationCandidate {
+  id: string;
+  status: PluginInstallationCandidateStatus;
+  source: "controller" | "self-service" | "development";
+  preview: PluginInstallationPreview;
+  rollout?: PluginInstallationRollout;
+  serviceRevisionId: number;
+  previousServiceRevisionId: number;
+  rollbackServiceRevisionId?: number;
+  requestedBy: string;
+  submittedBy?: string;
+  approvedBy?: string;
+  activatedBy?: string;
+  cancelledBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 export interface BackendPluginRef { id: string; version: string; channel?: string; }
 export interface BackendServiceUnit {
   id: string; kind: string; plugins: BackendPluginRef[]; config?: Record<string, unknown>; enabled: boolean;

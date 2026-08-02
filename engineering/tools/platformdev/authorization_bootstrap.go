@@ -251,9 +251,9 @@ func developmentGrants(catalog pluginv1.PermissionCatalog, seedSubjectID string)
 		}
 		grants = append(grants, policy.BootstrapGrant{RoleID: roleID, Title: title, SubjectID: subjectID, PermissionSelectors: selectors})
 	}
-	appendExactGrant("platform.deployment-author", "Development Deployment Author", "local-author", "platform.deployment.read", "platform.deployment.compose", "platform.portal.read", "platform.portal.compose")
-	appendExactGrant("platform.deployment-approver", "Development Deployment Approver", "local-approver", "platform.deployment.read", "platform.deployment.approve", "platform.portal.read", "platform.portal.approve")
-	appendExactGrant("platform.deployment-publisher", "Development Deployment Publisher", "local-publisher", "platform.deployment.read", "platform.deployment.publish", "platform.portal.read", "platform.portal.publish")
+	appendExactGrant("platform.deployment-author", "Development Deployment Author", "local-author", "platform.deployment.read", "platform.deployment.compose", "platform.deployment.plugin.preview", "platform.deployment.plugin.request", "platform.portal.read", "platform.portal.compose")
+	appendExactGrant("platform.deployment-approver", "Development Deployment Approver", "local-approver", "platform.deployment.read", "platform.deployment.approve", "platform.deployment.plugin.preview", "platform.deployment.plugin.approve", "platform.portal.read", "platform.portal.approve")
+	appendExactGrant("platform.deployment-publisher", "Development Deployment Publisher", "local-publisher", "platform.deployment.read", "platform.deployment.publish", "platform.deployment.plugin.preview", "platform.deployment.plugin.activate", "platform.portal.read", "platform.portal.publish")
 	if seedSubjectID != "" {
 		grants = append(grants, policy.BootstrapGrant{RoleID: "platform.seed-owner", Title: "Development Seed Platform Owner", SubjectID: seedSubjectID, PermissionSelectors: developmentOwnerPermissionSelectors(catalog)})
 	}

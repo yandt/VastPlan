@@ -14,7 +14,7 @@ import type {
 	ManagedCredentialAuditEvent, ManagedCredentialAuditPage, ManagedCredentialMaintenanceStatus, ManagedNode, NodeBootstrapPlan, PlatformFetch,
 	PlatformFetchResponse, PluginConfigurationCandidate, PluginConfigurationCandidateStatus, PluginConfigurationDefinition, PluginConfigurationResourceCollection, PluginConfigurationResourceItem,
 	PluginConfigurationResourcePage, PluginConfigurationResourceResponse, PrepareArtifactMigrationRequest, PutDatabaseConnectionRequest, PutTestTargetBindingRequest, SeedHandoffState,
-	ServiceAuditEvent, ServiceRevision, ServiceRevisionStatus, Setting, SubmitArtifactPublicationRequest, TestRelease,
+	PluginInstallationCandidate, PluginInstallationPreview, PluginInstallationPreviewRequest, PluginInstallationTargetOption, ServiceAuditEvent, ServiceRevision, ServiceRevisionStatus, Setting, SubmitArtifactPublicationRequest, TestRelease,
 	TestReleaseStatus, TestTargetBinding, UpdateAuthorizationBindingRequest,
 } from "./types.js";
 
@@ -208,6 +208,26 @@ export class PlatformAdminClient {
 
   public listDeploymentTargets(): Promise<DeploymentTarget[]> { return this.get(`${this.basePath}/deployment/targets`); }
   public listServiceRevisions(): Promise<ServiceRevision[]> { return this.get(`${this.basePath}/deployment/service-revisions`); }
+  public previewPluginInstallation(request: PluginInstallationPreviewRequest): Promise<PluginInstallationPreview> {
+    return this.mutate(`${this.basePath}/deployment/plugin-installations/preview`, "POST", request);
+  }
+  public listPluginInstallationCandidates(): Promise<PluginInstallationCandidate[]> {
+    return this.get(`${this.basePath}/deployment/plugin-installations`);
+  }
+  public listPluginInstallationTargets(): Promise<PluginInstallationTargetOption[]> {
+    return this.get(`${this.basePath}/deployment/plugin-installations/targets`);
+  }
+  public getPluginInstallationCandidate(id: string): Promise<PluginInstallationCandidate> {
+    return this.get(`${this.basePath}/deployment/plugin-installations/${segment(id)}`);
+  }
+  public createPluginInstallationCandidate(request: PluginInstallationPreviewRequest): Promise<PluginInstallationCandidate> {
+    return this.mutate(`${this.basePath}/deployment/plugin-installations`, "POST", request);
+  }
+  public submitPluginInstallationCandidate(id: string): Promise<PluginInstallationCandidate> { return this.pluginInstallationAction(id, "submit"); }
+  public approvePluginInstallationCandidate(id: string): Promise<PluginInstallationCandidate> { return this.pluginInstallationAction(id, "approve"); }
+  public activatePluginInstallationCandidate(id: string): Promise<PluginInstallationCandidate> { return this.pluginInstallationAction(id, "activate"); }
+  public cancelPluginInstallationCandidate(id: string): Promise<PluginInstallationCandidate> { return this.pluginInstallationAction(id, "cancel"); }
+  public rollbackPluginInstallationCandidate(id: string): Promise<PluginInstallationCandidate> { return this.pluginInstallationAction(id, "rollback"); }
   public createIntentDraft(intent: BackendApplicationIntent): Promise<ServiceRevision> {
     return this.mutate(`${this.basePath}/deployment/service-revisions`, "POST", { intent });
   }
@@ -261,6 +281,10 @@ export class PlatformAdminClient {
 
   private serviceRevisionAction(id: number, action: string): Promise<ServiceRevision> {
     return this.mutate(`${this.basePath}/deployment/service-revisions/${revision(id)}/${action}`, "POST", {});
+  }
+
+  private pluginInstallationAction(id: string, action: "submit" | "approve" | "activate" | "cancel" | "rollback"): Promise<PluginInstallationCandidate> {
+    return this.mutate(`${this.basePath}/deployment/plugin-installations/${segment(id)}/${action}`, "POST", {});
   }
 
   private apiExposureAction(id:number,action:"submit"|"approve"|"publish"):Promise<APIExposureRevision> { return this.mutate(`${this.basePath}/api-exposures/${revision(id)}/${action}`,"POST",{}); }

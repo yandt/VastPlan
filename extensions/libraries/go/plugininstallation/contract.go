@@ -8,6 +8,7 @@ import (
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/deploymentpublication"
 )
 
 const (
@@ -18,6 +19,7 @@ const (
 	CreateOperation             = "createPluginInstallationCandidate"
 	SelfServiceCreateOperation  = "createSelfServicePluginInstallationCandidate"
 	DevelopmentCreateOperation  = "createDevelopmentPluginInstallationCandidate"
+	ListTargetsOperation        = "listPluginInstallationTargets"
 	ListOperation               = "listPluginInstallationCandidates"
 	GetOperation                = "getPluginInstallationCandidate"
 	SubmitOperation             = "submitPluginInstallationCandidate"
@@ -68,6 +70,15 @@ type Target struct {
 	Kernel     string `json:"kernel"`
 	Deployment string `json:"deployment"`
 	UnitID     string `json:"unitId"`
+}
+
+// TargetOption is the minimum controller-facing projection required to bind a
+// request to the current logical service revision. It intentionally excludes
+// the full Application Intent and deployment history.
+type TargetOption struct {
+	Target         Target `json:"target"`
+	ServiceClass   string `json:"serviceClass"`
+	ActiveRevision uint64 `json:"activeRevision"`
 }
 
 // Change contains only an application root-plugin mutation. Transitive
@@ -138,20 +149,21 @@ type Preview struct {
 // existing deployment workflow; status is a projection of that revision, so
 // installation never owns a second approval or publication state machine.
 type Candidate struct {
-	ID                        string          `json:"id"`
-	Status                    CandidateStatus `json:"status"`
-	Source                    Source          `json:"source"`
-	Preview                   Preview         `json:"preview"`
-	ServiceRevisionID         uint64          `json:"serviceRevisionId"`
-	PreviousServiceRevisionID uint64          `json:"previousServiceRevisionId"`
-	RollbackServiceRevisionID uint64          `json:"rollbackServiceRevisionId,omitempty"`
-	RequestedBy               string          `json:"requestedBy"`
-	SubmittedBy               string          `json:"submittedBy,omitempty"`
-	ApprovedBy                string          `json:"approvedBy,omitempty"`
-	ActivatedBy               string          `json:"activatedBy,omitempty"`
-	CancelledBy               string          `json:"cancelledBy,omitempty"`
-	CreatedAt                 string          `json:"createdAt"`
-	UpdatedAt                 string          `json:"updatedAt"`
+	ID                        string                                      `json:"id"`
+	Status                    CandidateStatus                             `json:"status"`
+	Source                    Source                                      `json:"source"`
+	Preview                   Preview                                     `json:"preview"`
+	Rollout                   *deploymentpublication.ReadinessObservation `json:"rollout,omitempty"`
+	ServiceRevisionID         uint64                                      `json:"serviceRevisionId"`
+	PreviousServiceRevisionID uint64                                      `json:"previousServiceRevisionId"`
+	RollbackServiceRevisionID uint64                                      `json:"rollbackServiceRevisionId,omitempty"`
+	RequestedBy               string                                      `json:"requestedBy"`
+	SubmittedBy               string                                      `json:"submittedBy,omitempty"`
+	ApprovedBy                string                                      `json:"approvedBy,omitempty"`
+	ActivatedBy               string                                      `json:"activatedBy,omitempty"`
+	CancelledBy               string                                      `json:"cancelledBy,omitempty"`
+	CreatedAt                 string                                      `json:"createdAt"`
+	UpdatedAt                 string                                      `json:"updatedAt"`
 }
 
 type CandidateLookup struct {

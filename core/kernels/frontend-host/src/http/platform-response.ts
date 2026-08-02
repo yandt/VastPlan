@@ -43,7 +43,13 @@ function mapCapabilityError(response: ServerResponse, code: string, head = false
   if (code === "platform.deployment.separation_required") return sendAPIError(response, 409, "separation_required", head);
   if (code === "platform.deployment.job_conflict") return sendAPIError(response, 409, "job_conflict", head);
   if (code === "platform.deployment.service_state_conflict") return sendAPIError(response, 409, "service_state_conflict", head);
+  if (["platform.deployment.plan_stale", "platform.deployment.plan_not_ready", "platform.deployment.store_conflict"].includes(code)) return sendAPIError(response, 409, code.slice("platform.deployment.".length), head);
+  if (code === "platform.plugin_installation.candidate_conflict") return sendAPIError(response, 409, "installation_candidate_conflict", head);
+  if (code === "platform.plugin_installation.change_conflict") return sendAPIError(response, 409, "installation_change_conflict", head);
+  if (code === "platform.plugin_installation.target_scope_mismatch") return sendAPIError(response, 403, "installation_target_forbidden", head);
+  if (["platform.plugin_installation.unsupported", "platform.plugin_installation.noop"].includes(code)) return sendAPIError(response, 409, code.endsWith("noop") ? "installation_noop" : "installation_unsupported", head);
   if (["platform.settings.invalid", "platform.credentials.invalid", "platform.database.invalid", "platform.deployment.invalid", "platform.plugin_configuration.invalid"].includes(code)) return sendAPIError(response, 400, "invalid_request", head);
+  if (code === "platform.plugin_installation.invalid") return sendAPIError(response, 400, "invalid_installation_request", head);
   if (code === "platform.plugin_configuration.unavailable") return sendAPIError(response, 503, "configuration_unavailable", head);
   if (code === "platform.deployment.bootstrap_failed") return sendAPIError(response, 502, "bootstrap_failed", head);
   if (code === "platform.deployment.service_publish_failed") return sendAPIError(response, 502, "service_publish_failed", head);

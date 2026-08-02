@@ -12,6 +12,7 @@
 - 列出平台预授权的 Backend 部署目标；
 - 管理 Application Intent、Resolution Report、异人审批、发布审计和单调 revision 回滚；
 - 通过统一 `PluginInstallationIntent` 协议为平台控制器、服务自助和开发自动化生成无副作用的应用插件安装、升级、卸载预览；
+- 提供跨服务“服务插件”页面，把批量目标拆成独立候选，并在用户刷新时聚合内核 readiness 副本进度；
 - 为 plugin-settings 创建 candidate 绑定的 Application 配置修订，禁止普通发布入口绕过候选凭证准备，并在 readiness 失败时自动发布回滚 revision；
 - 为 Platform Profile restart 配置持久化独立 Saga：调用窄内核端口准备候选、执行异人审批、激活 Catalog、发布 Deployment、等待精确 readiness，并在失败时依次生成单调 Catalog/Deployment 回滚修订；
 - 通过 `kernel.deployment.preview/publish` 请求可信内核选择固定 Platform Profile、验签制品并 CAS 发布 Deployment v2；
@@ -35,6 +36,8 @@
 0.22.0 起新增统一安装预览：控制器、服务自助和开发自动化分别使用受治理 operation，在入口固定 `controller/self-service/development` 策略对象后调用同一工作流，来源不能由请求体自报。服务自助入口只接受 Portal BFF，后续 BFF 必须从 ManagementTarget 派生 deployment；开发来源只接受 `platform-dev` 系统身份并要求命中现有 TestTargetBinding。工作流把一个根插件变更投影到活动 Application Intent，复用 Planner 和 Kernel Preview，返回精确依赖差异、配置缺口、Catalog revision、plan/preview digest 与 Service Generation 影响，但不会创建 revision、下载、保护引用或激活制品。Foundation/Platform 插件在该入口 fail-closed。
 
 0.23.0 起增加 Installation Candidate 持久生命周期。创建候选与 ServiceRevision Draft 原子提交；`list/get/submit/approve/activate/cancel/rollbackPluginInstallationCandidate` 只编排既有服务修订。候选状态由修订投影，提交和审批仍会重新规划并检查 stale，激活和回滚仍经可信内核。关联修订拒绝通用编辑、提交、审批和发布入口，避免绕过安装权限；取消只允许未提交草稿并保留候选审计。完整 Artifact Lock 只保存在关联 ServiceRevision，候选记录不重复占用 Shared State 容量。
+
+0.24.0 起提供跨服务控制器页面和固定 Portal BFF 路由。浏览器只能提交逻辑 deployment/unit 的变更意图，不能选择来源、capability、logical service 或物理节点；批量目标按 Deployment 生成独立候选，同一 Deployment 同时只允许一个未完成候选。页面的预览、申请、审批和激活操作使用独立权限。候选列表仅在用户刷新时读取 `kernel.deployment.readiness`，展示期望、已观察和就绪副本；该观察不写入候选账本，也不引入后台轮询。
 
 测试目标绑定只能指向活动 Application Composition 内已有的应用插件，不能增加插件，也不能覆盖 `cn.vastplan.foundation.*` 或 `cn.vastplan.platform.*`。测试发布只接受 `testing` channel 的 SemVer 预发布版本和精确 SHA/repositoryRevision；上传与发布是两个事务。候选就绪与回滚通过 `kernel.deployment.readiness` 读取内核持有的 NATS Composition report，插件不获得 KV 句柄。
 

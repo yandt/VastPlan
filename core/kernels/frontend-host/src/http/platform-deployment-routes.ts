@@ -6,15 +6,18 @@ import { sendAPIError } from "./json-response";
 import { PlatformDeploymentNodeRoutes } from "./platform-deployment-node-routes";
 import { PlatformDeploymentServiceRoutes } from "./platform-deployment-service-routes";
 import { PlatformDeploymentTestRoutes } from "./platform-deployment-test-routes";
+import { PlatformDeploymentInstallationRoutes } from "./platform-deployment-installation-routes";
 
 export class PlatformDeploymentRoutes {
   private readonly nodes: PlatformDeploymentNodeRoutes;
   private readonly services: PlatformDeploymentServiceRoutes;
+  private readonly installations: PlatformDeploymentInstallationRoutes;
   private readonly tests: PlatformDeploymentTestRoutes;
 
   public constructor(client: PlatformCapabilityPort) {
     this.nodes = new PlatformDeploymentNodeRoutes(client);
     this.services = new PlatformDeploymentServiceRoutes(client);
+    this.installations = new PlatformDeploymentInstallationRoutes(client);
     this.tests = new PlatformDeploymentTestRoutes(client);
   }
 
@@ -23,6 +26,7 @@ export class PlatformDeploymentRoutes {
     const deploymentParts = parts.slice(1);
     if (await this.nodes.handle(deploymentParts, principal, target, request, response, signal)) return true;
     if (await this.services.handle(deploymentParts, principal, target, request, response, signal)) return true;
+    if (await this.installations.handle(deploymentParts, principal, target, request, response, signal)) return true;
     if (await this.tests.handle(deploymentParts, principal, target, request, response, signal)) return true;
     sendAPIError(response, 404, "not_found", request.method === "HEAD");
     return true;
