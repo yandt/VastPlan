@@ -23,10 +23,9 @@ describe("top navigation shell layout", () => {
     expect(topNavigationShellCSS).toContain("@media (max-width:767px)");
   });
 
-  it("places desktop page context before the main menu with a visual boundary", () => {
+  it("places desktop page context before the main menu with an explicit visual boundary", () => {
     expect(topNavigationShellCSS).toContain(".vp-top-inline-page-header{box-sizing:border-box;display:grid");
-    expect(topNavigationShellCSS).toContain(".vp-top-inline-page-header+.vp-top-center");
-    expect(topNavigationShellCSS).toContain("padding-left:12px;border-left:1px solid var(--vp-top-border)");
+    expect(topNavigationShellCSS).toContain(".vp-top-page-navigation-divider{align-self:center;width:1px;height:32px");
     expect(topNavigationShellCSS).toContain(".vp-top-page-header{display:none}");
   });
 
