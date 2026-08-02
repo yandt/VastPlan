@@ -7,7 +7,9 @@ export function PresentedField(props: FieldTemplateProps & { placement?: FormLab
   if (props.hidden || props.schema.type === "object" || props.schema.type === "array" || props.placement === "stacked") return <AntdFieldTemplate {...props} />;
   const label = props.displayLabel === false ? "" : props.label;
   const error = props.rawErrors?.[0];
+  const fieldClassName = props.schema.type === "boolean" ? "vp-antd-form-field-boolean" : "vp-antd-form-field-value";
   if (props.placement === "inline") return <Form.Item
+    className={fieldClassName}
     label={label === "" ? undefined : label}
     required={props.required}
     extra={props.rawHelp ?? props.rawDescription}
@@ -42,4 +44,9 @@ export const antdInsideInlineCSS = `
 export const antdFormDialogCSS = `
 .vp-antd-form-dialog .vp-antd-form-controls-start .ant-form-item-label,.vp-antd-form-dialog .vp-antd-form-controls-end .ant-form-item-label{flex:0 0 var(--vp-form-dialog-label-width,96px)!important;min-width:0}
 .vp-antd-form-dialog .vp-antd-form-controls-start .ant-form-item-label>label,.vp-antd-form-dialog .vp-antd-form-controls-end .ant-form-item-label>label{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+`;
+
+export const antdFormFieldWidthCSS = `
+.vp-antd-form-field-value .ant-form-item-control-input-content>div{width:100%;min-width:0}
+.vp-antd-form-field-boolean .ant-form-item-control-input-content>div{width:auto}
 `;
