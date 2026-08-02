@@ -112,6 +112,8 @@ export interface TabsProps extends SizeableProps { items: TabItem[]; activeID?: 
 export interface DialogProps extends SizeableProps {
   open: boolean;
   title: ReactNode;
+  /** Secondary context rendered directly beneath the Dialog title when present. */
+  description?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
   /** Form Dialogs use the governed compact content rhythm without changing field control size. */
