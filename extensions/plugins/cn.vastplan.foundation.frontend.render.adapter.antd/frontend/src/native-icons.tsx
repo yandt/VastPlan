@@ -22,6 +22,7 @@ import QuestionCircleOutlined from "@ant-design/icons/QuestionCircleOutlined";
 import EyeOutlined from "@ant-design/icons/EyeOutlined";
 import EyeInvisibleOutlined from "@ant-design/icons/EyeInvisibleOutlined";
 import HolderOutlined from "@ant-design/icons/HolderOutlined";
+import LogoutOutlined from "@ant-design/icons/LogoutOutlined";
 import { useComponentSize, type SemanticIconName, type VastPlanIconProps } from "@vastplan/ui-primitives";
 
 const icons: Record<SemanticIconName, typeof PlusOutlined> = {
@@ -29,7 +30,7 @@ const icons: Record<SemanticIconName, typeof PlusOutlined> = {
   success: CheckCircleOutlined, warning: WarningOutlined, error: CloseCircleOutlined, info: InfoCircleOutlined,
   close: CloseOutlined, menu: MenuOutlined, import: ImportOutlined, export: ExportOutlined, publish: CloudUploadOutlined,
   refresh: ReloadOutlined, columns: ColumnHeightOutlined, visibility: EyeOutlined, visibilityOff: EyeInvisibleOutlined, drag: HolderOutlined,
-  copy: CopyOutlined, download: DownloadOutlined, upload: UploadOutlined, more: MoreOutlined, help: QuestionCircleOutlined,
+  copy: CopyOutlined, download: DownloadOutlined, upload: UploadOutlined, more: MoreOutlined, help: QuestionCircleOutlined, logout: LogoutOutlined,
 };
 
 const pixels = { xs: 14, sm: 16, md: 20, lg: 24 } as const;

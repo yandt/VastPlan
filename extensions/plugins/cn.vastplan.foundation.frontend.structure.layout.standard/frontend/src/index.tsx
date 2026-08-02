@@ -2,9 +2,12 @@ import { createElement, useEffect, useMemo, useRef, useState, type CSSProperties
 import { uiContractVersion } from "@vastplan/ui-contract";
 import {
   accountNavigationGroupID,
+  accountLogoutMenuItemID,
+  accountMenuItems,
   message,
   portalPageRhythm,
   PortalAccountControl,
+  PortalAccountMenu,
   resolvePageBodyMaxWidth,
   usePortalI18n,
   usePortalUI,
@@ -106,11 +109,18 @@ export function StandardShell(props: UIShellProps) {
     id: `group:${group.id}`,
     label: i18n.text(group.label),
     icon: <ui.Icon name={group.icon} label={i18n.text(group.label)} />,
-    children: [
+    children: group.id === accountNavigationGroupID ? accountMenuItems(group, composition, i18n, props.onLogout !== undefined) : [
       ...group.pages.map((item) => ({ id: item.id, label: i18n.text(item.label), href: pagePath(composition, item.id) })),
       ...group.children.map((child) => ({ id: `group:${child.id}`, label: i18n.text(child.label), children: child.pages.map((item) => ({ id: item.id, label: i18n.text(item.label), href: pagePath(composition, item.id) })) })),
     ],
   }));
+  const selectMobileMenu = (id: string) => {
+    if (id === accountLogoutMenuItemID) {
+      void props.onLogout?.();
+      return;
+    }
+    navigate(id);
+  };
 
   return <div className="vp-shell-root" style={shellTheme}>
     <style>{standardShellCSS}</style>
@@ -124,6 +134,7 @@ export function StandardShell(props: UIShellProps) {
         account={accountGroup === undefined ? null : <PortalAccountControl account={props.account} selected={selectedGroup?.id === accountGroup.id} onSelect={() => selectGroup(accountGroup.id)} />}
         onSelectGroup={selectGroup}
         onNavigate={navigate}
+        onLogout={props.onLogout}
       /> : null}
       <div className="vp-shell-content">
         {navigationVisible ? <div className="vp-mobile-header"><button type="button" className="vp-mobile-menu-button" aria-label={i18n.text(message(namespace, "navigation.open", "打开主菜单"))} onClick={() => setMobileOpen(true)}><ui.Icon name="menu" /></button><Brand name={branding.name} shortName={branding.shortName} logoURL={branding.logoURL} /><span className="vp-mobile-preferences"><PortalAccountControl account={props.account} onSelect={() => setMobileOpen(true)} /></span></div> : null}
@@ -133,12 +144,12 @@ export function StandardShell(props: UIShellProps) {
     </div>
     {hasRegionContent(composition, { shellSlots: ["shell.footer"] }) ? <footer className="vp-shell-footer">{shellSlot(composition.shellSlots, "shell.footer")}</footer> : null}
     <ui.Drawer open={mobileOpen} title={branding.name} placement="left" width="sm" onClose={() => setMobileOpen(false)}>
-      <nav aria-label={i18n.text(message(namespace, "navigation.mobile", "移动主菜单"))}><ui.Menu items={mobileItems} activeID={page?.navigation?.id} onSelect={navigate} /></nav>
+      <nav aria-label={i18n.text(message(namespace, "navigation.mobile", "移动主菜单"))}><ui.Menu items={mobileItems} activeID={page?.navigation?.id} onSelect={selectMobileMenu} /></nav>
     </ui.Drawer>
   </div>;
 }
 
-function DesktopNavigation({ branding, composition, mainGroups, selectedGroup, account, onSelectGroup, onNavigate }: {
+function DesktopNavigation({ branding, composition, mainGroups, selectedGroup, account, onSelectGroup, onNavigate, onLogout }: {
   branding: ReactNode;
   composition: UIShellProps["composition"];
   mainGroups: readonly PortalNavigationGroup[];
@@ -146,6 +157,7 @@ function DesktopNavigation({ branding, composition, mainGroups, selectedGroup, a
   account: ReactNode;
   onSelectGroup(id: string): void;
   onNavigate(id: string): void;
+  onLogout?(): Promise<void>;
 }) {
   const i18n = usePortalI18n();
   const panelRef = useRef<HTMLElement>(null);
@@ -170,7 +182,7 @@ function DesktopNavigation({ branding, composition, mainGroups, selectedGroup, a
     {selectedGroup === undefined ? null : <aside id={panelID} ref={panelRef} className="vp-navigation-panel" aria-label={i18n.text(message(namespace, "navigation.secondaryLabel", "{group}二级导航", { group: i18n.text(selectedGroup.label) }))} onKeyDown={(event) => returnToRail(event, selectedButtonRef)}>
       <header className="vp-navigation-panel-header"><span className="vp-navigation-panel-icon"><IconForGroup group={selectedGroup} /></span><strong>{i18n.text(selectedGroup.label)}</strong></header>
       <nav className="vp-navigation-panel-body" aria-label={i18n.text(selectedGroup.label)}>
-        <SecondLevelMenu group={selectedGroup} composition={composition} onNavigate={onNavigate} />
+        <SecondLevelMenu group={selectedGroup} composition={composition} onNavigate={onNavigate} onLogout={onLogout} />
       </nav>
     </aside>}
   </div>;
@@ -197,7 +209,7 @@ function IconForGroup({ group }: { group: PortalNavigationGroup }) {
   return <ui.Icon name={group.icon} />;
 }
 
-function SecondLevelMenu({ group, composition, onNavigate }: { group: PortalNavigationGroup; composition: UIShellProps["composition"]; onNavigate(id: string): void }) {
+function SecondLevelMenu({ group, composition, onNavigate, onLogout }: { group: PortalNavigationGroup; composition: UIShellProps["composition"]; onNavigate(id: string): void; onLogout?(): Promise<void> }) {
   const i18n = usePortalI18n();
   const activePageID = composition.activeNavigationPath?.pageID;
   const activeChildID = composition.activeNavigationPath?.rootGroupID === group.id ? composition.activeNavigationPath.childGroupID : undefined;
@@ -213,6 +225,9 @@ function SecondLevelMenu({ group, composition, onNavigate }: { group: PortalNavi
     writeOpenGroups(storageKey, next);
     return next;
   });
+  if (group.id === accountNavigationGroupID) {
+    return <PortalAccountMenu group={group} composition={composition} activeID={activePageID} onNavigate={onNavigate} onLogout={onLogout} />;
+  }
   if (group.pages.length === 0 && group.children.length === 0) {
     return <p className="vp-navigation-empty">{i18n.text(message(namespace, "navigation.accountUnavailable", "个人中心尚未装配"))}</p>;
   }

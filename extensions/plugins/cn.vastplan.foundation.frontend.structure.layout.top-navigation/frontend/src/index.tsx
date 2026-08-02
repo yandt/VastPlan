@@ -2,9 +2,12 @@ import { createElement, useEffect, useMemo, useRef, useState, type CSSProperties
 import { uiContractVersion } from "@vastplan/ui-contract";
 import {
   accountNavigationGroupID,
+  accountLogoutMenuItemID,
+  accountMenuItems,
   message,
   portalPageRhythm,
   PortalAccountControl,
+  PortalAccountMenu,
   resolvePageBodyMaxWidth,
   usePortalI18n,
   usePortalUI,
@@ -64,11 +67,18 @@ export function TopNavigationShell(props: UIShellProps) {
     id: `group:${group.id}`,
     label: i18n.text(group.label),
     icon: <ui.Icon name={group.icon} label={i18n.text(group.label)} />,
-    children: [
+    children: group.id === accountNavigationGroupID ? accountMenuItems(group, composition, i18n, props.onLogout !== undefined) : [
       ...group.pages.map((item) => ({ id: item.id, label: i18n.text(item.label), href: pagePath(composition, item.id) })),
       ...group.children.map((child) => ({ id: `group:${child.id}`, label: i18n.text(child.label), children: child.pages.map((item) => ({ id: item.id, label: i18n.text(item.label), href: pagePath(composition, item.id) })) })),
     ],
   }));
+  const selectMobileMenu = (id: string) => {
+    if (id === accountLogoutMenuItemID) {
+      void props.onLogout?.();
+      return;
+    }
+    navigate(id);
+  };
 
   const shellHeaderVisible = shellHeaderSlots.some((slot) => (composition.shellSlots[slot]?.length ?? 0) > 0);
   return <div className="vp-top-shell" style={shellTheme}>
@@ -91,7 +101,7 @@ export function TopNavigationShell(props: UIShellProps) {
       <div className="vp-top-end">
         {settingsRoots.map((group) => <RootPopover key={group.id} group={group} composition={composition} open={openRootID === group.id} active={activeRootID === group.id} onOpenChange={(open) => setOpenRootID(open ? group.id : undefined)} onNavigate={navigate} />)}
         {shellSlot(composition.shellSlots, "shell.navigation.end")}
-        {accountRoot === undefined ? null : <div className="vp-top-account"><AccountPopover group={accountRoot} account={props.account} composition={composition} open={openRootID === accountRoot.id} active={activeRootID === accountRoot.id} onOpenChange={(open) => setOpenRootID(open ? accountRoot.id : undefined)} onNavigate={navigate} /></div>}
+        {accountRoot === undefined ? null : <div className="vp-top-account"><AccountPopover group={accountRoot} account={props.account} composition={composition} open={openRootID === accountRoot.id} active={activeRootID === accountRoot.id} onOpenChange={(open) => setOpenRootID(open ? accountRoot.id : undefined)} onNavigate={navigate} onLogout={props.onLogout} /></div>}
       </div>
       <div className="vp-top-mobile-controls"><PortalAccountControl account={props.account} onSelect={() => setMobileOpen(true)} /><button type="button" className="vp-top-mobile-trigger" aria-label={i18n.text(message(namespace, "navigation.open", "打开主菜单"))} onClick={() => setMobileOpen(true)}><ui.Icon name="menu" /></button></div>
     </header>
@@ -107,7 +117,7 @@ export function TopNavigationShell(props: UIShellProps) {
       </main></div>
     </div>
     {(composition.shellSlots["shell.footer"]?.length ?? 0) === 0 ? null : <footer>{shellSlot(composition.shellSlots, "shell.footer")}</footer>}
-    <ui.Drawer open={mobileOpen} title={branding.name} placement="left" width="sm" onClose={() => setMobileOpen(false)}><nav aria-label={i18n.text(message(namespace, "navigation.mobile", "移动主菜单"))}><ui.Menu items={mobileItems} activeID={page?.navigation?.id} onSelect={navigate} /></nav></ui.Drawer>
+    <ui.Drawer open={mobileOpen} title={branding.name} placement="left" width="sm" onClose={() => setMobileOpen(false)}><nav aria-label={i18n.text(message(namespace, "navigation.mobile", "移动主菜单"))}><ui.Menu items={mobileItems} activeID={page?.navigation?.id} onSelect={selectMobileMenu} /></nav></ui.Drawer>
   </div>;
 }
 
@@ -131,7 +141,7 @@ function RootPopover({ group, composition, open, active, onOpenChange, onNavigat
 }
 
 /** Top layout reuses the same composed account group; only its visual carrier differs. */
-function AccountPopover({ group, account, composition, open, active, onOpenChange, onNavigate }: {
+function AccountPopover({ group, account, composition, open, active, onOpenChange, onNavigate, onLogout }: {
   group: PortalNavigationGroup;
   account: UIShellProps["account"];
   composition: UIShellProps["composition"];
@@ -139,11 +149,12 @@ function AccountPopover({ group, account, composition, open, active, onOpenChang
   active: boolean;
   onOpenChange(open: boolean): void;
   onNavigate(id: string): void;
+  onLogout?(): Promise<void>;
 }) {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
   return <ui.Popover open={open} placement="bottom-end" surface="compact" ariaLabel={i18n.text(group.label)} initialFocus="current" onOpenChange={onOpenChange} trigger={(trigger) => <PortalAccountControl account={account} selected={active} trigger={trigger} />}>
-    <NavigationPopoverMenu groups={[group]} composition={composition} onNavigate={onNavigate} />
+    <PortalAccountMenu group={group} composition={composition} activeID={composition.activeNavigationPath?.pageID} onNavigate={onNavigate} onLogout={onLogout} />
   </ui.Popover>;
 }
 

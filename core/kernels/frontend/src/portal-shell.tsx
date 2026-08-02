@@ -11,6 +11,7 @@ import { AccessLoginPage } from "./access-login";
 import { PortalPreferenceSession } from "./portal-preferences";
 import { PortalAppearanceSession, resolveSystemScheme } from "./portal-appearance";
 import { PortalGenerationCommitClient } from "./portal-generation-client";
+import { logoutPortalSession, portalLogoutRedirect } from "./portal-logout";
 import type { PortalRuntimeSource } from "./portal-runtime-source";
 import { developmentFrontendRuntimeProtocol, productionFrontendRuntimeProtocol, type FrontendRuntimeProtocol } from "./frontend-runtime-protocol";
 import { useKernelRecoveryStatus } from "./kernel-recovery";
@@ -305,6 +306,14 @@ function PortalContent({ prepared, appearance, themeTemplateID, iconThemeID, pat
   };
   const branding = prepared.portal.branding ?? {};
   const Shell = prepared.shellLibrary.Shell;
+  const logout = async () => {
+    try {
+      await logoutPortalSession(globalThis.fetch.bind(globalThis));
+      globalThis.location?.assign(portalLogoutRedirect(pathname));
+    } catch {
+      ui.notify({ title: i18n.text(message(kernelNamespace, "logout.failed", "退出登录失败，请稍后重试。")), kind: "error" });
+    }
+  };
   const personalization = {
     account,
     appearance,
@@ -335,6 +344,7 @@ function PortalContent({ prepared, appearance, themeTemplateID, iconThemeID, pat
     account={account}
     appearance={appearance}
     onAppearanceChange={onAppearanceChange}
+    onLogout={logout}
     branding={{
       name: typeof branding.name === "string" && branding.name !== "" ? branding.name : typeof branding.title === "string" && branding.title !== "" ? branding.title : prepared.portal.id,
       shortName: typeof branding.shortName === "string" ? branding.shortName : undefined,

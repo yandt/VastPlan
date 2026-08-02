@@ -5,6 +5,8 @@ const vendorRoot = resolve(process.argv[2] ?? "bin/portal/assets/vendor");
 const metafilePath = resolve(process.argv[3] ?? resolve(vendorRoot, "icon-catalog.metafile.json"));
 const manifest = JSON.parse(await readFile("extensions/sdk/ts/icon-catalog/src/generated/manifest.json", "utf8"));
 const metafile = JSON.parse(await readFile(metafilePath, "utf8"));
+const semanticIconContract = await readFile("extensions/sdk/ts/ui-contract/src/icons.ts", "utf8");
+const semanticIconCount = (semanticIconContract.match(/^\s+"[a-zA-Z][a-zA-Z0-9]*",$/gm) ?? []).length;
 if (manifest.iconCount !== 846 || manifest.shardCount !== 27 || manifest.license !== "MIT") throw new Error("Ant 图标目录清单无效");
 
 const semanticEntry = resolve(vendorRoot, "icon-catalog-semantic.js");
@@ -16,7 +18,7 @@ const catalogStartupIcons = iconInputs(catalogClosure, metafile.outputs);
 const allIcons = iconInputs(new Set(Object.keys(metafile.outputs).map((file) => resolve(file))), metafile.outputs);
 const delayedShards = dynamicDependencies(catalogClosure, metafile.outputs);
 
-if (semanticIcons.size !== 24) throw new Error(`语义入口必须只包含 24 个图标，实际 ${semanticIcons.size}`);
+if (semanticIcons.size !== semanticIconCount) throw new Error(`语义入口必须只包含契约声明的 ${semanticIconCount} 个图标，实际 ${semanticIcons.size}`);
 if (catalogStartupIcons.size !== 0) throw new Error(`完整目录入口不得静态内联 SVG，实际 ${catalogStartupIcons.size}`);
 if (allIcons.size !== 846) throw new Error(`构建闭包必须包含完整 846 个图标，实际 ${allIcons.size}`);
 if (delayedShards.size !== 27) throw new Error(`完整目录必须生成 27 个延迟分片，实际 ${delayedShards.size}`);

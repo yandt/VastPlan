@@ -19,7 +19,7 @@ import (
 
 const (
 	PluginID      = pluginconfiguration.PluginSettingsID
-	PluginVersion = "0.13.11"
+	PluginVersion = "0.13.13"
 	Capability    = "platform.plugin-configuration"
 	maxStateBytes = 1 << 20
 	maxCandidates = 2048

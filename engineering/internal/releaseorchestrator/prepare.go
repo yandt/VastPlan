@@ -30,6 +30,10 @@ func PrepareRelease(repositoryRoot string, spec ReleaseSpec) (ReleasePlan, error
 	if err != nil {
 		return ReleasePlan{}, err
 	}
+	runtimeVersionChanges, err := SyncSelectedPluginRuntimeVersions(repositoryRoot, workspace, versions, true)
+	if err != nil {
+		return ReleasePlan{}, err
+	}
 	deploymentChanges, err := SyncDeploymentReferences(repositoryRoot, versions)
 	if err != nil {
 		return ReleasePlan{}, err
@@ -49,6 +53,11 @@ func PrepareRelease(repositoryRoot string, spec ReleaseSpec) (ReleasePlan, error
 	} else if len(changes) != 0 {
 		return ReleasePlan{}, fmt.Errorf("package version 投影未收敛: changes=%v", changes)
 	}
+	if changes, err := SyncSelectedPluginRuntimeVersions(repositoryRoot, workspace, versions, false); err != nil {
+		return ReleasePlan{}, err
+	} else if len(changes) != 0 {
+		return ReleasePlan{}, fmt.Errorf("runtime version 投影未收敛: changes=%v", changes)
+	}
 	plan, err := BuildReleasePlan(repositoryRoot, spec)
 	if err != nil {
 		return ReleasePlan{}, err
@@ -58,10 +67,11 @@ func PrepareRelease(repositoryRoot string, spec ReleaseSpec) (ReleasePlan, error
 	for _, path := range plan.GeneratedFiles {
 		generated[path] = struct{}{}
 	}
-	derivedChanges := make([]DerivedChange, 0, len(contractChanges)+len(capabilityChanges)+len(packageVersionChanges))
+	derivedChanges := make([]DerivedChange, 0, len(contractChanges)+len(capabilityChanges)+len(packageVersionChanges)+len(runtimeVersionChanges))
 	derivedChanges = append(derivedChanges, contractChanges...)
 	derivedChanges = append(derivedChanges, capabilityChanges...)
 	derivedChanges = append(derivedChanges, packageVersionChanges...)
+	derivedChanges = append(derivedChanges, runtimeVersionChanges...)
 	for _, change := range derivedChanges {
 		generated[change.Path] = struct{}{}
 	}

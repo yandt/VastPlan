@@ -141,6 +141,10 @@ func BuildReleasePlan(repositoryRoot string, spec ReleaseSpec) (ReleasePlan, err
 	if err != nil {
 		return ReleasePlan{}, err
 	}
+	runtimeVersionChanges, err := SyncSelectedPluginRuntimeVersions(repositoryRoot, workspace, versions, false)
+	if err != nil {
+		return ReleasePlan{}, err
+	}
 	plan := ReleasePlan{
 		SchemaVersion: 1, Mode: spec.Mode, ContractRegistry: ContractRegistryPath,
 		Contracts: map[string]string{}, DeploymentChanges: deploymentChanges,
@@ -159,6 +163,9 @@ func BuildReleasePlan(repositoryRoot string, spec ReleaseSpec) (ReleasePlan, err
 		plan.GeneratedFiles = append(plan.GeneratedFiles, change.Path)
 	}
 	for _, change := range packageVersionChanges {
+		plan.GeneratedFiles = append(plan.GeneratedFiles, change.Path)
+	}
+	for _, change := range runtimeVersionChanges {
 		plan.GeneratedFiles = append(plan.GeneratedFiles, change.Path)
 	}
 	for _, change := range contractChanges {

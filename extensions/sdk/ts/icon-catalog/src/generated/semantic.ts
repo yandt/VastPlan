@@ -25,6 +25,7 @@ import icon20 from "@ant-design/icons-svg/es/asn/DownloadOutlined.js";
 import icon21 from "@ant-design/icons-svg/es/asn/UploadOutlined.js";
 import icon22 from "@ant-design/icons-svg/es/asn/MoreOutlined.js";
 import icon23 from "@ant-design/icons-svg/es/asn/QuestionCircleOutlined.js";
+import icon24 from "@ant-design/icons-svg/es/asn/LogoutOutlined.js";
 
 const glyphs: Readonly<Record<SemanticIconName, IconGlyphDefinition>> = Object.freeze({
   "add": normalizeAntIcon(icon0),
@@ -51,6 +52,7 @@ const glyphs: Readonly<Record<SemanticIconName, IconGlyphDefinition>> = Object.f
   "upload": normalizeAntIcon(icon21),
   "more": normalizeAntIcon(icon22),
   "help": normalizeAntIcon(icon23),
+  "logout": normalizeAntIcon(icon24),
 });
 
 export function semanticIconGlyph(name: SemanticIconName): IconGlyphDefinition { return glyphs[name]; }

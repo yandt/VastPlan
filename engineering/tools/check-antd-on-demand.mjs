@@ -4,6 +4,8 @@ import { resolve } from "node:path";
 const sourceFile = resolve("extensions/plugins/cn.vastplan.foundation.frontend.render.adapter.antd/frontend/src/native-icons.tsx");
 const bundleFile = resolve(process.env.ANTD_BUNDLE_FILE ?? "extensions/plugins/cn.vastplan.foundation.frontend.render.adapter.antd/frontend/dist/index.js");
 const source = readFileSync(sourceFile, "utf8");
+const semanticIconContract = readFileSync(resolve("extensions/sdk/ts/ui-contract/src/icons.ts"), "utf8");
+const semanticIconCount = (semanticIconContract.match(/^\s+"[a-zA-Z][a-zA-Z0-9]*",$/gm) ?? []).length;
 
 if (/from\s+["']@ant-design\/icons["']/.test(source) || /import\s+\*\s+as\s+\w+\s+from\s+["']@ant-design\/icons/.test(source)) {
   throw new Error("Ant Design Icons 必须按图标子路径导入，禁止使用 @ant-design/icons barrel");
@@ -13,7 +15,7 @@ const imports = [...source.matchAll(/from\s+["']@ant-design\/icons\/([A-Za-z0-9]
 if (imports.length === 0 || new Set(imports).size !== imports.length) {
   throw new Error("Ant Design Icons 原生目录缺少按需子路径导入或存在重复导入");
 }
-if (imports.length > 24) throw new Error(`Ant Design Icons 原生目录一次引入 ${imports.length} 个图标，超过 24 个治理上限`);
+if (imports.length !== semanticIconCount) throw new Error(`Ant Design Icons 原生目录必须与 ${semanticIconCount} 个语义图标一一映射，实际 ${imports.length}`);
 
 const maxBundleBytes = Number.parseInt(process.env.ANTD_BUNDLE_MAX_BYTES ?? "1650000", 10);
 const bundleBytes = statSync(bundleFile).size;

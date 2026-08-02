@@ -27,6 +27,7 @@ export const semanticIconNames = Object.freeze([
   "upload",
   "more",
   "help",
+  "logout",
 ] as const);
 
 export type SemanticIconName = (typeof semanticIconNames)[number];

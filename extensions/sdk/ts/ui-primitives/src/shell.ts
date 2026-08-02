@@ -39,6 +39,8 @@ export interface UIShellProps {
   account: PortalAccountSummary;
   appearance: PortalAppearanceSettings;
   onAppearanceChange?(appearance: PortalAppearanceSettings): void;
+  /** Clears the trusted Portal session and returns the browser to the selected login protocol. */
+  onLogout?(): Promise<void>;
   branding: ShellBranding;
   pathname: string;
   recoveryNotice?: ReactNode;
@@ -48,6 +50,7 @@ export interface UIShellProps {
 export {
   PortalAccountControl,
 } from "./portal-account-control.js";
+export { PortalAccountMenu, accountLogoutMenuItemID, accountMenuItems } from "./portal-account-menu.js";
 
 /** Owns stable shell semantics and a governed catalog of visual templates. */
 export interface UIShellAdapter {
