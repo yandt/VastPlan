@@ -81,6 +81,7 @@ UI Contract 9.0 暴露语义 token、账户外观契约与四级 `ComponentSize`
 ### 4.2 顶部导航
 
 - 64px 顶栏：Logo 在 start；`primary` 和 `secondary` 根组在 center；`settings` 和账户区在 end。
+- 顶部布局的根组与“更多”触发器仅显示语义图标；可访问名称与原生 Tooltip 使用完整本地化菜单名称。账户区保持圆形头像，二、三级页面名称只在展开菜单中显示。
 - `primary` 与 `secondary` 之间有视觉分隔。活动根组同时显示 selected surface、位置标记和 `aria-expanded/aria-current` 关联状态。
 - Mega Popover 宽度为 480–840px；子组使用 `repeat(auto-fit, minmax(220px, 1fr))`，最多三列。根直属页面横跨顶部。
 - 只允许一个 Overlay；不使用 hover 打开、不使用嵌套 Popover。重新点击触发器关闭，切换触发器替换内容。
