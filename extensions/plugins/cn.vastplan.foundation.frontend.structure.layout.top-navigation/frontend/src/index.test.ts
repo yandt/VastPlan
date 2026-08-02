@@ -32,7 +32,8 @@ describe("top navigation shell layout", () => {
 
   it("places desktop page context before the main menu with an explicit visual boundary", () => {
     expect(topNavigationShellCSS).toContain(".vp-top-inline-page-header{box-sizing:border-box;display:grid");
-    expect(topNavigationShellCSS).toContain(".vp-top-page-navigation-divider{align-self:center;width:1px;height:32px");
+    expect(topNavigationShellCSS).toContain(".vp-top-page-navigation-divider{align-self:center;width:1px;height:32px;flex:0 0 1px;margin:0 12px");
+    expect(topNavigationShellCSS).toContain(".vp-top-account{display:flex;align-items:center;margin-left:12px;padding-left:12px");
     expect(topNavigationShellCSS).toContain(".vp-top-page-header{display:none}");
   });
 
