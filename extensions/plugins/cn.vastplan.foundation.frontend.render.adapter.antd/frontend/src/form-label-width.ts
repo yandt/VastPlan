@@ -14,7 +14,8 @@ function formLabels(schema: unknown): string[] {
 
 function estimateLabelWidth(label: string, fontSize: number): number {
   const em = Array.from(label).reduce((total, character) => total + characterWidth(character), 0);
-  return Math.ceil(em * fontSize + 12);
+  // Reserve the required marker and the fixed gap before the value column.
+  return Math.ceil(em * fontSize + 28);
 }
 
 function characterWidth(character: string): number {

@@ -7,6 +7,7 @@ describe("resolveFormLabelWidth", () => {
       reason: { type: "string", title: "审批原因" },
       revision: { type: "string", title: "当前冻结配置内容摘要" },
       acknowledged: { type: "boolean", title: "确认已复核冻结内容" },
-    } }, "md")).toBe(152);
+    } }, "md")).toBe(168);
+    expect(resolveFormLabelWidth({ type: "object", properties: { digest: { type: "string", title: "冻结配置摘要" } } }, "md")).toBe(112);
   });
 });
