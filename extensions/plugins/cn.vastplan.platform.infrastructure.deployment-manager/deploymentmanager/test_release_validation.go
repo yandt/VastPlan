@@ -141,6 +141,9 @@ func validateBindingAgainstComposition(binding platformadminapi.TestTargetBindin
 				return nil
 			}
 		}
+		if binding.AllowInstall {
+			return nil
+		}
 	}
 	return errors.New("测试目标绑定未命中现有应用插件槽位")
 }
@@ -162,10 +165,37 @@ func replaceBoundPlugin(composition *backendcompositionv1.ApplicationComposition
 }
 
 func validateTestBindingShape(binding platformadminapi.TestTargetBinding) error {
-	if binding.ID == "" || binding.Kind != platformadminapi.TestTargetBackend || binding.Deployment == "" || binding.UnitID == "" || binding.PluginID == "" || len(binding.AllowedPublishers) == 0 {
+	if binding.ID == "" || binding.Kind != platformadminapi.TestTargetBackend || binding.Deployment == "" || binding.UnitID == "" || binding.PluginID == "" || len(binding.AllowedPublishers) == 0 || binding.PortalTargets == nil {
 		return errInvalid
 	}
+	if len(binding.PortalTargets) > 32 {
+		return errInvalid
+	}
+	for _, portalID := range binding.PortalTargets {
+		if strings.TrimSpace(portalID) == "" || strings.ContainsAny(portalID, "/\\\x00") {
+			return errInvalid
+		}
+	}
 	return nil
+}
+
+func normalizePortalTargets(values []string) []string {
+	if values == nil {
+		return []string{}
+	}
+	set := map[string]struct{}{}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			set[value] = struct{}{}
+		}
+	}
+	out := make([]string, 0, len(set))
+	for value := range set {
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func validateTestArtifactRequest(request platformadminapi.CreateTestReleaseRequest) error {

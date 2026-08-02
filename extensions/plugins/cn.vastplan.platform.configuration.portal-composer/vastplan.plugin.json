@@ -2,7 +2,7 @@
   "id": "cn.vastplan.platform.configuration.portal-composer",
   "name": "VastPlan Portal Composer",
   "description": "以单一 Portal 聚合治理 WorkingCopy、Publication、Release 与用户级 PortalPreference",
-  "version": "6.0.0",
+  "version": "6.1.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -100,7 +100,7 @@
       }
     }
   },
-  "state": { "backend": { "format": "cn.vastplan.platform.portal-composer.shared", "formatVersion": 4 } },
+  "state": { "backend": { "format": "cn.vastplan.platform.portal-composer.shared", "formatVersion": 5 } },
   "activation": ["onStartup", "onPortalStartup"],
   "entry": { "backend": "backend/portal-composer", "frontend": "frontend/dist/index.js" },
   "contributes": {
@@ -110,6 +110,10 @@
         "service_role": "backend",
         "title": "门户组合治理",
         "subcommands": [
+          { "name": "preparePluginInstallation", "description": "为受信部署候选预热一个显式目标 Portal", "audience": "workload" },
+          { "name": "commitPluginInstallation", "description": "提交已预热的 Portal 插件安装代次", "audience": "workload" },
+          { "name": "abortPluginInstallation", "description": "中止尚未提交的 Portal 插件安装准备", "audience": "workload" },
+          { "name": "rollbackPluginInstallation", "description": "回滚已提交的 Portal 插件安装代次", "audience": "workload" },
           { "name": "portalGovernance", "description": "读取 Portal、WorkingCopy、Publication 与 Release", "audience": "user" },
           { "name": "listPortalReleases", "description": "读取运行时需要的 Portal 上线记录", "audience": "user" },
           { "name": "createPortal", "description": "创建 Portal 及首个完整配置版本", "audience": "user" },

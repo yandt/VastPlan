@@ -71,4 +71,37 @@ describe("signed navigation contributions", () => {
       { id: "deep", zone: "primary", label: { key: "navigation.deep", fallback: "Deep" }, icon: { kind: "semantic", name: "menu" }, parent: { nodeId: "child", mode: "required" } },
     ] })))).toThrow(/深度超过/);
   });
+
+  it("parses and translates a 500-node Portal catalog within the bounded budget", () => {
+    const contributions: Array<ContributionIndexSnapshot["contributions"][number]> = [];
+    for (let catalogIndex = 0; catalogIndex < 8; catalogIndex += 1) {
+      const pluginID = `cn.vastplan.test.navigation-${catalogIndex}`;
+      const nodeCount = catalogIndex < 4 ? 63 : 62;
+      contributions.push({
+        kind: "frontend.navigations",
+        surface: "frontend",
+        id: "main",
+        contract: "1.0.0",
+        owner: { ...owner, ref: { ...owner.ref, pluginId: pluginID } },
+        descriptor: descriptor({
+          nodes: Array.from({ length: nodeCount }, (_, nodeIndex) => ({
+            id: `node-${nodeIndex}`,
+            zone: "primary",
+            label: { key: `navigation.node-${nodeIndex}`, fallback: `Node ${nodeIndex}` },
+            icon: { kind: "semantic", name: "menu" },
+            order: nodeIndex,
+          })),
+        }),
+      });
+    }
+    const snapshot: ContributionIndexSnapshot = { schemaVersion: 1, generation: 1, inventoryDigest: digest, digest, contributions };
+    const startedAt = performance.now();
+    const catalogs = navigationCatalogsFromIndex(snapshot);
+    const labels = catalogs.flatMap((catalog) => catalog.nodes.map((node) => translate(node.label, "en-US", {}, "zh-CN")));
+    const elapsed = performance.now() - startedAt;
+
+    expect(labels).toHaveLength(500);
+    expect(labels[0]).toBe("Node 0");
+    expect(elapsed).toBeLessThan(1_000);
+  });
 });

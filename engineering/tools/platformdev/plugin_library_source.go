@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -50,6 +51,11 @@ func (r *runtime) startPluginLibrarySource(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	installationClient, closeInstallationClient, err := r.openDevelopmentInstallationClient()
+	if err != nil {
+		client.CloseIdleConnections()
+		return fmt.Errorf("连接 Development Installation Intent: %w", err)
+	}
 	controller := &pluginlibrarysource.Controller{
 		RepositoryRoot: r.options.root, ScanInterval: time.Second, Debounce: 800 * time.Millisecond,
 		Builder: plugindev.CommandBuilder{
@@ -61,11 +67,13 @@ func (r *runtime) startPluginLibrarySource(ctx context.Context) error {
 			StatusURL: "http://" + r.options.listen + "/__vastplan_dev/status",
 			GoCache:   filepath.Join(r.options.stateRoot, "go-cache"), Logf: log.Printf,
 		},
-		Withdrawer: localWorkspaceWithdrawer{client: client},
-		Store:      pluginlibrarysource.FileStateStore{Path: filepath.Join(r.persistentStateRoot(), "plugin-library-source", "state.json")},
-		Logf:       log.Printf,
+		Withdrawer:    localWorkspaceWithdrawer{client: client},
+		IntentApplier: installationClient,
+		Store:         pluginlibrarysource.FileStateStore{Path: filepath.Join(r.persistentStateRoot(), "plugin-library-source", "state.json")},
+		Logf:          log.Printf,
 	}
 	go func() {
+		defer closeInstallationClient()
 		defer client.CloseIdleConnections()
 		if err := waitForPluginLibraryRepository(ctx, 500*time.Millisecond, func(probeCtx context.Context) error {
 			_, probeErr := client.CatalogSnapshot(probeCtx)

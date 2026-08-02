@@ -6,6 +6,7 @@ export interface CapabilityRoute {
   capability: string;
   routingDomain: string;
   logicalService?: string;
+  portalBinding?: Readonly<{ activationId: number; generation: number }>;
 }
 
 export interface TrustedCapabilityInvoker {
@@ -30,6 +31,10 @@ export class AddressingCapabilityInvoker implements TrustedCapabilityInvoker {
       caller: { kind: principal.system === true ? 4 : 1, id: principal.id },
       principal: { user_id: principal.id, tenant_id: principal.tenantId, system_roles: [...principal.roles], is_admin: false },
       scene: "portal.bff", tenant_id: principal.tenantId,
+      ...(route.portalBinding === undefined ? {} : { metadata: {
+        "vastplan.portal.activation-id": String(route.portalBinding.activationId),
+        "vastplan.portal.generation": String(route.portalBinding.generation),
+      } }),
       trace: { trace_id: randomBytes(16).toString("hex"), span_id: randomBytes(8).toString("hex") },
     }, payload, signal);
     if (response.result.status !== 1) throw new CapabilityApplicationError(response.result.error?.code ?? "capability.failed", response.result.error?.message ?? "Capability 调用失败");

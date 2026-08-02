@@ -148,6 +148,9 @@ func (s *TrustStore) VerifyProof(envelope artifacttrust.Envelope) error {
 	if err != nil {
 		return err
 	}
+	if err := pluginv1.ValidatePackagedNavigationCatalog(manifest); err != nil {
+		return err
+	}
 	_, err = s.provenanceVerifier().Verify(artifactprovenance.ArtifactIdentity{
 		PluginID: envelope.Artifact.PluginID, Channel: envelope.Artifact.Channel, Publisher: manifest.Publisher, SHA256: envelope.Artifact.SHA256,
 	}, envelope.Provenance, envelope.ProvenanceVerification, time.Now().UTC())

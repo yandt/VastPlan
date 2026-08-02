@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot, hydrateRoot, type Root } from "react-dom/client";
 import { PortalI18nProvider, PortalPersonalizationProvider, message, resolveAppearanceColors, usePortalI18n, usePortalUI, type PluginLocalization, type PortalAppearanceSettings, type PortalLocalizationPolicy } from "@vastplan/ui-primitives";
 import { VerifiedFrontendPluginLoader, type ModuleFetcher, type PortalRuntimeSpec } from "./module-loader";
@@ -218,6 +218,7 @@ interface PortalApplicationProps {
 export function PortalApplication({ prepared, appearanceSession, initialPath, recoveryMode = false, developmentError, updateNotice, onApplyUpdate, onRendererChange, onShellTemplateChange, onIconThemeChange, onAppearanceChange }: PortalApplicationProps) {
   const landingPath = useMemo(() => resolvePortalPath(prepared, initialPath), [prepared, initialPath]);
   const [pathname, setPathname] = useState(landingPath);
+	const previousPrepared = useRef(prepared);
   useEffect(() => {
     const onPopState = () => setPathname(globalThis.location?.pathname ?? "/");
     globalThis.addEventListener?.("popstate", onPopState);
@@ -226,6 +227,14 @@ export function PortalApplication({ prepared, appearanceSession, initialPath, re
   useEffect(() => {
     if (landingPath !== initialPath) globalThis.history?.replaceState({}, "", landingPath);
   }, [initialPath, landingPath]);
+	useEffect(() => {
+		const previous = previousPrepared.current;
+		previousPrepared.current = prepared;
+		const fallback = resolveDeactivatedPagePath(previous, prepared, pathname);
+		if (fallback === pathname) return;
+		globalThis.history?.replaceState({}, "", fallback);
+		setPathname(fallback);
+	}, [prepared, pathname]);
   const policy = prepared.portal.localization ?? defaultPortalLocalization;
   const catalogs = useMemo(() => ({ ...prepared.messageCatalogs, [kernelNamespace]: kernelLocalization }), [prepared.messageCatalogs]);
   return <PortalI18nProvider policy={policy} catalogs={catalogs} candidates={globalThis.navigator?.languages ?? []} storageKey={`vastplan.locale.${prepared.portal.tenantId}.${prepared.portal.id}`}>
@@ -485,6 +494,47 @@ export function resolvePortalPath(prepared: PreparedPortal, pathname: string): s
       return zoneRank[leftZone] - zoneRank[rightZone] || left.index - right.index;
     });
   return navigable[0]?.page.path ?? prepared.pages[0]?.path ?? pathname;
+}
+
+/** Redirects only when the current path belonged to a page in the previous
+ * Generation and that page disappeared. Unknown deep links remain not-found. */
+export function resolveDeactivatedPagePath(previous: PreparedPortal, next: PreparedPortal, pathname: string): string {
+	const previousPage = selectPage(previous, pathname);
+	if (previousPage === undefined || selectPage(next, pathname) !== undefined) return pathname;
+	const nextComposition = next.shell.compose({ pages: next.pages, shellContributions: next.shellContributions, navigationCatalogs: next.navigationCatalogs, config: next.portal.shell.config });
+	const previousComposition = previous.shell.compose({ pages: previous.pages, shellContributions: previous.shellContributions, navigationCatalogs: previous.navigationCatalogs, activePageID: previousPage.id, config: previous.portal.shell.config });
+	const groupID = previousPage.navigation === undefined ? undefined : `${previousPage.navigation.parentMenuRef.pluginID}/${previousPage.navigation.parentMenuRef.nodeID}`;
+	if (groupID !== undefined) {
+		const sameGroup = orderedFallbackPages(next.pages.filter((page) => page.navigation !== undefined && `${page.navigation.parentMenuRef.pluginID}/${page.navigation.parentMenuRef.nodeID}` === groupID));
+		const after = sameGroup.find((page) => comparePageNavigation(page, previousPage) > 0);
+		if (after !== undefined) return after.path;
+		if (sameGroup[0] !== undefined) return sameGroup[0].path;
+	}
+	const rootID = previousComposition.activeNavigationPath?.rootGroupID;
+	if (rootID !== undefined) {
+		for (const zone of ["primary", "settings", "secondary"] as const) {
+			const root = nextComposition.navigation[zone].find((group) => group.id === rootID);
+			const candidate = root === undefined ? undefined : [...root.pages, ...root.children.flatMap((child) => child.pages)][0];
+			const page = candidate === undefined ? undefined : next.pages.find((item) => item.id === candidate.id);
+			if (page !== undefined) return page.path;
+		}
+	}
+	for (const zone of ["primary", "settings", "secondary"] as const) {
+		for (const root of nextComposition.navigation[zone]) {
+			const candidate = [...root.pages, ...root.children.flatMap((child) => child.pages)][0];
+			const page = candidate === undefined ? undefined : next.pages.find((item) => item.id === candidate.id);
+			if (page !== undefined) return page.path;
+		}
+	}
+	return next.pages[0]?.path ?? pathname;
+}
+
+function orderedFallbackPages<T extends PreparedPortal["pages"][number]>(pages: readonly T[]): T[] {
+	return [...pages].sort(comparePageNavigation);
+}
+
+function comparePageNavigation(left: PreparedPortal["pages"][number], right: PreparedPortal["pages"][number]): number {
+	return (left.navigation?.order ?? 0) - (right.navigation?.order ?? 0) || left.id.localeCompare(right.id);
 }
 
 export class PortalBootstrapError extends Error {

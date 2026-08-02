@@ -20,7 +20,7 @@ export interface InstallationRow extends Record<string, unknown> {
   candidate: PluginInstallationCandidate;
 }
 
-export function createPluginInstallationPage(deployment: PlatformAdminClient, repository: PlatformAdminClient | undefined, serviceID: string, path: string, title: LocalizedText): CollectionPageDefinition<InstallationRow> {
+export function createPluginInstallationPage(deployment: PlatformAdminClient, repository: PlatformAdminClient | undefined, portalID: string, serviceID: string, path: string, title: LocalizedText): CollectionPageDefinition<InstallationRow> {
   const statusLabels = {
     Planned: message("installation.status.planned", "已规划"), PendingApproval: message("installation.status.pending", "待审批"),
     Approved: message("installation.status.approved", "已批准"), Activating: message("installation.status.activating", "激活中"),
@@ -70,7 +70,7 @@ export function createPluginInstallationPage(deployment: PlatformAdminClient, re
       selection: "single",
       actions: installationActions(),
     },
-    forms: [installationForm(deployment, repository)],
+    forms: [installationForm(deployment, portalID, repository)],
     overlays: [
       { id: "preview", surface: "drawer", width: "lg", title: message("installation.overlay.preview", "插件变更与配置预览"), async load(selected) {
         return { kind: "json", documents: [{ title: message("installation.document.preview", "候选预览"), value: (selected[0]?.candidate.preview ?? {}) as unknown as JSONValue }] };

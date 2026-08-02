@@ -312,6 +312,19 @@ func TestDatabaseRuntimeManagementAndExecutionBoundary(t *testing.T) {
 	}
 }
 
+func TestDeploymentManagerMayOnlyDrivePortalInstallationTransaction(t *testing.T) {
+	manager := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.vastplan.platform.infrastructure.deployment-manager"}}
+	for _, operation := range []string{"preparePluginInstallation", "commitPluginInstallation", "abortPluginInstallation", "rollbackPluginInstallation"} {
+		request := extpoint.PermissionRequest{ExtensionPoint: extpoint.ToolPackage, Capability: "platform.portal-composer", Operation: operation}
+		if got, _ := decide(manager, request); got != extpoint.DecisionAllow {
+			t.Fatalf("Deployment Manager 应可调用 %s: %s", operation, got)
+		}
+	}
+	if got, _ := decide(manager, extpoint.PermissionRequest{ExtensionPoint: extpoint.ToolPackage, Capability: "platform.portal-composer", Operation: "publishPortalPublication"}); got == extpoint.DecisionAllow {
+		t.Fatalf("Deployment Manager 不得获得普通 Portal 发布能力: %s", got)
+	}
+}
+
 func user(roles ...string) *contractv1.CallContext {
 	return &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_USER, Id: "user"}, Principal: &contractv1.Principal{SystemRoles: roles}}
 }

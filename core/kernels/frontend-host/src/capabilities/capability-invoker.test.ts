@@ -23,4 +23,19 @@ describe("AddressingCapabilityInvoker", () => {
     const invoker = new AddressingCapabilityInvoker(addressing);
     await expect(invoker.invoke({ id: "alice", tenantId: "acme", roles: [] }, { capability: "demo", routingDomain: "platform" }, "read", new Uint8Array())).rejects.toEqual(expect.objectContaining<Partial<CapabilityApplicationError>>({ code: "permission.denied" }));
   });
+
+  it("binds trusted Portal Activation and Generation metadata", async () => {
+    let observed: unknown;
+    const addressing = { async invoke(_target: unknown, context: unknown) {
+      observed = context;
+      return { result: { status: 1 }, payload: new Uint8Array() };
+    } } satisfies Pick<NodeAddressingClient, "invoke">;
+    const invoker = new AddressingCapabilityInvoker(addressing);
+    await invoker.invoke({ id: "alice", tenantId: "acme", roles: [] }, {
+      capability: "demo", routingDomain: "platform", portalBinding: { activationId: 17, generation: 17 },
+    }, "read", new Uint8Array());
+    expect(observed).toMatchObject({ metadata: {
+      "vastplan.portal.activation-id": "17", "vastplan.portal.generation": "17",
+    } });
+  });
 });

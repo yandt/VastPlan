@@ -14,7 +14,7 @@ func TestWriteDevelopmentTransportIdentitiesCreatesMutuallyTrustedWorkloads(t *t
 	if err := writeDevelopmentTransportIdentities(dir); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{platformNodeTransportSeed, managedNodeTransportSeed, portalHostTransportSeed} {
+	for _, name := range []string{platformNodeTransportSeed, managedNodeTransportSeed, portalHostTransportSeed, platformDevTransportSeed} {
 		info, err := os.Stat(filepath.Join(dir, name))
 		if err != nil || info.Mode().Perm()&0o077 != 0 {
 			t.Fatalf("传输 seed 必须仅属主可读: name=%s info=%v err=%v", name, info, err)
@@ -25,7 +25,7 @@ func TestWriteDevelopmentTransportIdentitiesCreatesMutuallyTrustedWorkloads(t *t
 		t.Fatal(err)
 	}
 	var document addressing.TransportTrustDocument
-	if err := json.Unmarshal(raw, &document); err != nil || len(document.Identities) != 3 {
+	if err := json.Unmarshal(raw, &document); err != nil || len(document.Identities) != 4 {
 		t.Fatalf("传输信任文档无效: document=%+v err=%v", document, err)
 	}
 	if !document.Identities[2].AllowDelegation || document.Identities[0].NodeID != "local-platform-node" || document.Identities[1].NodeID != "local-managed-node" {
@@ -33,5 +33,8 @@ func TestWriteDevelopmentTransportIdentitiesCreatesMutuallyTrustedWorkloads(t *t
 	}
 	if document.Identities[0].Name != "node-agent/local-platform-node" || document.Identities[1].Name != "node-agent/local-managed-node" {
 		t.Fatalf("Node transport identity 必须投影为策略可验证的 node-agent system caller: %+v", document.Identities)
+	}
+	if document.Identities[3].Name != "platform-dev" || document.Identities[3].NodeID != "platform-dev" || len(document.Identities[3].AllowedSystemCallers) != 1 || document.Identities[3].AllowedSystemCallers[0] != developmentInstallationCaller {
+		t.Fatalf("开发安装控制器身份未被精确绑定: %+v", document.Identities[3])
 	}
 }

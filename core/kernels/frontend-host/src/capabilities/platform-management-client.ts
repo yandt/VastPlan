@@ -23,6 +23,7 @@ export class AddressingPlatformManagementClient implements PlatformCapabilityPor
     this.authorize(target, capability, operation, write);
     return this.invoker.invoke(principal, {
       capability, logicalService: target.service.logicalService, routingDomain: target.service.routingDomain,
+      portalBinding: { activationId: target.activationId, generation: target.generation },
     }, operation, payload, signal);
   }
 }

@@ -29,7 +29,7 @@ func (s *Service) governanceSnapshotLocked(tenantID string) ([]portalapi.Portal,
 	defer s.mu.Unlock()
 	ids := map[string]struct{}{}
 	for _, revision := range s.state.Revisions {
-		if revision.TenantID == tenantID && !s.isTestVersionLocked(revision.ID) {
+		if revision.TenantID == tenantID && !s.isHiddenVersionLocked(revision.ID) {
 			ids[revision.PortalID] = struct{}{}
 		}
 	}

@@ -2,7 +2,7 @@ import type { Principal } from "../identity/identity-provider";
 import type { PortalComposerPort } from "./portal-composer-client";
 import { managementBindingDigest, parseManagementBinding, type ManagedService } from "./management-binding";
 
-export interface PlatformManagementTarget { portalId: string; service: ManagedService }
+export interface PlatformManagementTarget { portalId: string; activationId: number; generation: number; service: ManagedService }
 
 export class ManagementResolutionError extends Error {
   public constructor(public readonly code: string) { super(code); this.name = "ManagementResolutionError"; }
@@ -33,7 +33,10 @@ export class PlatformManagementResolver {
     }
     const service = binding.services.find((candidate) => candidate.id === serviceId);
     if (service === undefined) throw new ManagementResolutionError("managed_service_not_found");
-    return Object.freeze({ portalId, service });
+    const activationId = resolved.id;
+    const generation = spec.revision;
+    if (!positiveInteger(activationId) || !positiveInteger(generation) || activationId !== generation) throw new ManagementResolutionError("portal_activation_invalid");
+    return Object.freeze({ portalId, activationId, generation, service });
   }
 }
 
@@ -61,3 +64,5 @@ function sameRef(left: { id: string; revision: number; digest: string }, value: 
   const right = value as Record<string, unknown>;
   return left.id === right.id && left.revision === right.revision && left.digest === right.digest;
 }
+
+function positiveInteger(value: unknown): value is number { return Number.isSafeInteger(value) && Number(value) > 0; }

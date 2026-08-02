@@ -13,6 +13,7 @@ describe("PlatformManagementResolver", () => {
     const composer = composerWith([activation(fixture.binding, fixture.digest)]);
     const resolver = new PlatformManagementResolver(composer);
     const target = await resolver.resolve({ id: "alice", tenantId: "tenant-a", roles: ["platform.settings.read"] }, "operations", "settings", "portal.example");
+    expect(target).toMatchObject({ activationId: 7, generation: 7 });
     expect(target.service).toMatchObject({ id: "settings", logicalService: "platform.settings.primary", routingDomain: "platform" });
   });
 
@@ -35,9 +36,9 @@ function composerWith(activations: unknown[]): PortalComposerPort {
 
 function activation(binding: Record<string, unknown>, digest: string, audience: string[] = []): unknown {
   return {
-    tenantId: "tenant-a", portalId: "operations", status: "Current",
+    id: 7, tenantId: "tenant-a", portalId: "operations", status: "Current",
     resolved: {
-      id: "operations", tenantId: "tenant-a", domains: ["portal.example"], audience,
+      revision: 7, id: "operations", tenantId: "tenant-a", domains: ["portal.example"], audience,
       management: binding,
       resolution: { platformProfile: binding.platformProfile, managementBindingDigest: digest },
     },

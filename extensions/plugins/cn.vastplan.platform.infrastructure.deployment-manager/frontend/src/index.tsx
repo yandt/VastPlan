@@ -24,7 +24,7 @@ const deploymentManagerPlugin = {
         { service: service.label ?? service.id },
       );
       const repository = repositories[0] === undefined ? undefined : createBrowserPlatformAdminClient(context.portal.id, repositories[0].id);
-      context.addCollectionPage(createPluginInstallationPage(client, repository, service.id, `/operations/plugins${suffix}`, pluginTitle));
+      context.addCollectionPage(createPluginInstallationPage(client, repository, context.portal.id, service.id, `/operations/plugins${suffix}`, pluginTitle));
     }
   },
   localization: { defaultLocale: "zh-CN", messages },

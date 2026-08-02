@@ -6,6 +6,7 @@ import (
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/engineering/internal/plugindev"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/plugininstallation"
 )
 
 func (c *Controller) publishChange(ctx context.Context, state *State, item Observation) error {
@@ -47,6 +48,19 @@ func (c *Controller) publishChange(ctx context.Context, state *State, item Obser
 	}
 	ref := pluginv1.ArtifactRef{PluginID: candidate.PluginID, Version: candidate.Version, Channel: "workspace"}
 	previous := cloneRef(current.ActiveRef)
+	if c.IntentApplier != nil {
+		action := plugininstallation.ActionUpgrade
+		if previous == nil {
+			action = plugininstallation.ActionInstall
+		}
+		intent := InstallationIntent{Action: action, PluginID: candidate.PluginID, Artifact: &ref}
+		if err := intent.validate(); err != nil {
+			return err
+		}
+		if err := c.IntentApplier.ApplyInstallationIntent(ctx, intent); err != nil {
+			return err
+		}
+	}
 	current.PluginID, current.Fingerprint, current.SourceDigest = candidate.PluginID, item.Fingerprint, digest
 	current.ActiveRef, current.PendingWithdrawal = &ref, nil
 	if previous != nil && *previous != ref {

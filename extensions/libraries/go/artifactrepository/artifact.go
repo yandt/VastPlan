@@ -69,6 +69,9 @@ func PackageDirectory(dir string) ([]byte, pluginv1.Manifest, error) {
 	if err != nil {
 		return nil, pluginv1.Manifest{}, err
 	}
+	if err := pluginv1.ValidatePackagedNavigationCatalog(manifest); err != nil {
+		return nil, pluginv1.Manifest{}, err
+	}
 	if err := validateLegalFiles(dir, manifest); err != nil {
 		return nil, pluginv1.Manifest{}, err
 	}

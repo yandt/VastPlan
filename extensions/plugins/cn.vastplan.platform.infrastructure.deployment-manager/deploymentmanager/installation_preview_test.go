@@ -15,8 +15,9 @@ func TestPluginInstallationPreviewReusesPlannerWithoutPersistingRevision(t *test
 	service, host, call := publishedIntentService(t)
 	call.Scene = "portal.bff"
 	request := plugininstallation.PreviewRequest{
-		Version: plugininstallation.ProtocolVersion,
-		Target:  plugininstallation.Target{Kernel: "backend", Deployment: "agent-services", UnitID: "api"},
+		Version:       plugininstallation.ProtocolVersion,
+		Target:        plugininstallation.Target{Kernel: "backend", Deployment: "agent-services", UnitID: "api"},
+		PortalTargets: []string{"operations"},
 		Change: plugininstallation.Change{
 			Action: plugininstallation.ActionUpgrade, PluginID: "cn.vastplan.product.agent.api",
 			Requirement: &pluginv1.ArtifactRequirement{PluginID: "cn.vastplan.product.agent.api", Constraint: "=2.0.0", Channel: "stable"},
@@ -45,8 +46,9 @@ func TestPluginInstallationPreviewReusesPlannerWithoutPersistingRevision(t *test
 func TestPluginInstallationPreviewEnforcesTrustedSourceAdapters(t *testing.T) {
 	service, host, _ := publishedIntentService(t)
 	request := plugininstallation.PreviewRequest{
-		Version: plugininstallation.ProtocolVersion,
-		Target:  plugininstallation.Target{Kernel: "backend", Deployment: "agent-services", UnitID: "api"},
+		Version:       plugininstallation.ProtocolVersion,
+		Target:        plugininstallation.Target{Kernel: "backend", Deployment: "agent-services", UnitID: "api"},
+		PortalTargets: []string{"operations"},
 		Change: plugininstallation.Change{
 			Action: plugininstallation.ActionUpgrade, PluginID: "cn.vastplan.product.agent.api",
 			Requirement: &pluginv1.ArtifactRequirement{PluginID: "cn.vastplan.product.agent.api", Constraint: "=2.0.0", Channel: "stable"},
@@ -63,7 +65,7 @@ func TestPluginInstallationPreviewEnforcesTrustedSourceAdapters(t *testing.T) {
 	}
 	if _, err = service.PutTestTargetBinding(selfService, "agent-api-dev", platformadminapi.PutTestTargetBindingRequest{
 		Kind: platformadminapi.TestTargetBackend, Deployment: "agent-services", UnitID: "api",
-		PluginID: "cn.vastplan.product.agent.api", AllowedPublishers: []string{"vastplan"}, Enabled: true,
+		PluginID: "cn.vastplan.product.agent.api", PortalTargets: []string{"operations"}, AllowedPublishers: []string{"vastplan"}, Enabled: true,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -77,6 +79,18 @@ func TestPluginInstallationPreviewEnforcesTrustedSourceAdapters(t *testing.T) {
 	}
 	if preview.Impact.RequiresApproval || preview.Source != plugininstallation.SourceDevelopment {
 		t.Fatalf("可信开发来源应形成无需人工审批的同链预览: %+v", preview)
+	}
+	version := int64(1)
+	if _, err = service.PutTestTargetBinding(selfService, "agent-api-dev", platformadminapi.PutTestTargetBindingRequest{
+		Kind: platformadminapi.TestTargetBackend, Deployment: "agent-services", UnitID: "api",
+		PluginID: "cn.vastplan.product.agent.api", PortalTargets: []string{}, AllowedPublishers: []string{"vastplan"}, Enabled: true, IfVersion: &version,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	request.PortalTargets = []string{}
+	candidate, err := service.ApplyDevelopmentPluginInstallation(context.Background(), host, development, request)
+	if err != nil || candidate.Status != plugininstallation.CandidateReady || candidate.Source != plugininstallation.SourceDevelopment {
+		t.Fatalf("开发自动安装必须复用持久候选与 Generation 发布链: %+v err=%v", candidate, err)
 	}
 }
 

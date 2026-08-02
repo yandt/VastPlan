@@ -62,6 +62,20 @@ func TestFrontendNavigationCatalogValidatesOptionalFallback(t *testing.T) {
 	}
 }
 
+func TestNavigationSVGSourceIsAuthoringOnly(t *testing.T) {
+	manifest, err := ParseManifest(navigationManifest(`{
+      "navigations":[{"id":"main","contract":"1.0.0","nodes":[
+        {"id":"custom","zone":"primary","label":{"key":"navigation.custom","fallback":"自定义"},"icon":{"kind":"custom","name":"custom"}}
+      ],"icons":[{"id":"custom","motion":"draw","sources":{"normal":"frontend/icons/navigation/custom.svg"}}]}]
+    }`, ""))
+	if err != nil {
+		t.Fatalf("源码 Manifest 应允许受限 SVG source: %v", err)
+	}
+	if err := ValidatePackagedNavigationCatalog(manifest); err == nil || !strings.Contains(err.Error(), "不得保留原始 SVG") {
+		t.Fatalf("签名制品必须拒绝未归一化 source: %v", err)
+	}
+}
+
 func navigationManifest(frontend, suffix string) []byte {
 	return []byte(`{
       "id":"cn.vastplan.demo-navigation","name":"Navigation","description":"Navigation fixture","version":"1.0.0","publisher":"vastplan",

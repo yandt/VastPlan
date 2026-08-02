@@ -10,6 +10,7 @@ import (
 	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/engineering/internal/plugindev"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/plugininstallation"
 )
 
 type memoryStateStore struct {
@@ -53,6 +54,13 @@ func (*fakeWithdrawer) WorkspaceCandidates(context.Context, string) ([]artifactr
 	return nil, nil
 }
 
+type fakeIntentApplier struct{ intents []InstallationIntent }
+
+func (a *fakeIntentApplier) ApplyInstallationIntent(_ context.Context, intent InstallationIntent) error {
+	a.intents = append(a.intents, intent)
+	return nil
+}
+
 func TestControllerPublishesUpdatesThenWithdrawsDeletedSource(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, "extensions", "plugins"), 0o700); err != nil {
@@ -69,10 +77,10 @@ func TestControllerPublishesUpdatesThenWithdrawsDeletedSource(t *testing.T) {
 		}
 	}
 	now := time.Date(2026, 8, 1, 1, 0, 0, 0, time.UTC)
-	store, builder, publisher, withdrawer := &memoryStateStore{}, &fakeBuilder{}, &fakePublisher{}, &fakeWithdrawer{}
+	store, builder, publisher, withdrawer, applier := &memoryStateStore{}, &fakeBuilder{}, &fakePublisher{}, &fakeWithdrawer{}, &fakeIntentApplier{}
 	controller := &Controller{
 		RepositoryRoot: root, Debounce: time.Second, Builder: builder, Publisher: publisher,
-		Withdrawer: withdrawer, Store: store, Now: func() time.Time { return now }, Logf: func(string, ...any) {}, pending: map[string]pendingChange{},
+		Withdrawer: withdrawer, IntentApplier: applier, Store: store, Now: func() time.Time { return now }, Logf: func(string, ...any) {}, pending: map[string]pendingChange{},
 	}
 	initial, err := Scan(root)
 	if err != nil {
@@ -95,6 +103,9 @@ func TestControllerPublishesUpdatesThenWithdrawsDeletedSource(t *testing.T) {
 	if first == nil || len(publisher.published) != 1 || len(withdrawer.refs) != 0 {
 		t.Fatalf("新增未形成 workspace 候选: state=%+v published=%d withdrawn=%d", state.Sources[sourceID], len(publisher.published), len(withdrawer.refs))
 	}
+	if len(applier.intents) != 1 || applier.intents[0].Action != plugininstallation.ActionInstall || applier.intents[0].Artifact == nil || *applier.intents[0].Artifact != *first {
+		t.Fatalf("新增源码必须形成安装意图: %+v", applier.intents)
+	}
 
 	writeSourcePlugin(t, directory, "updated")
 	observed, _ = Scan(root)
@@ -106,6 +117,9 @@ func TestControllerPublishesUpdatesThenWithdrawsDeletedSource(t *testing.T) {
 	second := state.Sources[sourceID].ActiveRef
 	if second == nil || *second == *first || len(publisher.published) != 2 || len(withdrawer.refs) != 1 || withdrawer.refs[0] != *first {
 		t.Fatalf("更新必须先发布新候选再撤回旧候选: state=%+v published=%d withdrawn=%+v", state.Sources[sourceID], len(publisher.published), withdrawer.refs)
+	}
+	if len(applier.intents) != 2 || applier.intents[1].Action != plugininstallation.ActionUpgrade || applier.intents[1].Artifact == nil || *applier.intents[1].Artifact != *second {
+		t.Fatalf("源码更新必须形成升级意图: %+v", applier.intents)
 	}
 
 	if err := os.RemoveAll(directory); err != nil {
@@ -119,6 +133,9 @@ func TestControllerPublishesUpdatesThenWithdrawsDeletedSource(t *testing.T) {
 	}
 	if state.Sources[sourceID].Phase != PhaseRemoved || state.Sources[sourceID].ActiveRef != nil || len(withdrawer.refs) != 2 || withdrawer.refs[1] != *second {
 		t.Fatalf("删除未撤回当前 workspace 候选: state=%+v withdrawn=%+v", state.Sources[sourceID], withdrawer.refs)
+	}
+	if len(applier.intents) != 3 || applier.intents[2].Action != plugininstallation.ActionRemove || applier.intents[2].Artifact != nil {
+		t.Fatalf("源码删除必须形成卸载意图: %+v", applier.intents)
 	}
 }
 

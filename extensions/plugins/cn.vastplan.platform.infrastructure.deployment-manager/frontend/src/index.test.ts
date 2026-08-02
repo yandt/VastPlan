@@ -114,7 +114,7 @@ describe("deployment-manager controller installation frontend", () => {
   });
 
   it("keeps every mutation data-driven and protected by its dedicated permission", () => {
-    const page = createPluginInstallationPage({} as PlatformAdminClient, undefined, "deployment", "/plugins", "服务插件");
+    const page = createPluginInstallationPage({} as PlatformAdminClient, undefined, "operations", "deployment", "/plugins", "服务插件");
     expect(page.pageActions?.[0]).toMatchObject({ form: "create-plugin-installation", requiredPermissions: ["platform.deployment.plugin.request"] });
     const actions = Object.fromEntries((page.collection.actions ?? []).map((action) => [action.id, action]));
     expect(actions.submit?.requiredPermissions).toEqual(["platform.deployment.plugin.request"]);

@@ -28,8 +28,8 @@ export async function startPlatformManagementTestServer(invoker: TrustedCapabili
   origin: string; readHeaders: Record<string, string>; writeHeaders: Record<string, string>; close(): Promise<void>;
 }> {
   const binding = parseManagementBinding(rawBinding);
-  const activation = { tenantId: "tenant-a", portalId: "operations", status: "Current", resolved: {
-    id: "operations", tenantId: "tenant-a", domains: ["127.0.0.1"], management: rawBinding,
+  const activation = { id: 7, tenantId: "tenant-a", portalId: "operations", status: "Current", resolved: {
+    revision: 7, id: "operations", tenantId: "tenant-a", domains: ["127.0.0.1"], management: rawBinding,
     resolution: { platformProfile: rawBinding.platformProfile, managementBindingDigest: managementBindingDigest(binding) },
   } };
   const composer: PortalComposerPort = { async call() { return new TextEncoder().encode(JSON.stringify([activation])); } };

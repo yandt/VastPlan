@@ -55,6 +55,7 @@ function previewRequest() {
   return {
     version: 1,
     target: { kernel: "backend", deployment: "agent-services", unitId: "api" },
+    portalTargets: ["operations"],
     change: { action: "upgrade", pluginId: "cn.example.agent", requirement: { pluginId: "cn.example.agent", constraint: "^2.0.0", channel: "stable" } },
     expectedActiveRevision: 7,
   };

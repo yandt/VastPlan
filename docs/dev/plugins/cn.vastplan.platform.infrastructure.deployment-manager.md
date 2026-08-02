@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.platform.infrastructure.deployment-manager`
 
-当前制品版本：`0.23.0`
+当前制品版本：`0.26.0`
 
 该 platform 基础插件以 `leader + external-shared + cluster + leader routing` 运行，持有租户隔离的节点计划、Bootstrap Job、Application Intent/Plan 快照、服务组合 revision、Test Target Binding、Test Release 和审计记录。它依赖 settings、credentials、artifact repository、Composition Planner 与窄内核服务，但只保存不透明 CredentialRef、已编译 Application Composition 和精确制品身份，永远不能读取 SSH/NATS/制品令牌 material、Platform Catalog、信任根或 KV 句柄。
 
@@ -15,6 +15,7 @@
 - `listDeploymentTargets`、`listServiceRevisions`、`listServiceRevisionAudit`：读取预授权槽位和服务组合记录；
 - `previewPluginInstallation`、`previewSelfServicePluginInstallation`、`previewDevelopmentPluginInstallation`：入口分别固定控制器、服务自助和开发来源，再由统一工作流生成无副作用安装计划；服务自助只接受 Portal BFF，目标在 P4 必须由 ManagementTarget 派生；
 - `create/list/get/submit/approve/activate/cancel/rollbackPluginInstallationCandidate`：持久化安装候选并复用现有 ServiceRevision 审批、发布和单调回滚；创建与草稿原子落盘，取消只允许 Draft；
+- `applyDevelopmentPluginInstallation`：只接受签名 `platform-dev/installation-watch` system caller，把一个已绑定的源码 Install/Upgrade/Remove 依次提交、按策略批准并进入同一 Generation 激活链；
 - `create/update/submitServiceDraft`：由 `platform.deployment.compose` 编辑并提交仅含应用插件的组合；
 - `create/update/refreshIntentDraft`：保存 Application Intent、调用 Planner，并显式接受发生变化的计划快照；旧 Composition 草稿操作只在 P4 切换 Portal 前供现有页面使用，不是长期兼容协议；
 - `approveServiceRevision`：由不同的 `platform.deployment.approve` 用户批准；
@@ -37,6 +38,8 @@
 0.22.0 完成 ADR-0191 P1：统一安装 Preview 契约位于中立 Library，Deployment Manager 只负责把安装/升级/卸载投影为候选 Application Intent 并编排既有 Planner/Kernel Preview。精确依赖、Catalog revision、配置缺口、Profile 和摘要均为只读结果；预览不写共享账本。服务市场、跨服务控制器和开发 watcher 后续只能作为该协议的来源适配器，不能建立平行安装链。
 
 0.23.0 完成 ADR-0191 P2：Installation Candidate 记录来源、目标、变更、预览摘要和关联修订，但不复制 ServiceRevision 状态机。查询状态实时投影提交、审批、发布、stale、活动和回滚事实；取消原子删除未提交草稿并保留审计记录。插件安装新增申请、审批、激活三类独立权限，预览权限不能写入或发布。
+
+0.26.0 完成 ADR-0191 P5—P6：开发目录只通过显式 TestTargetBinding 形成 Installation Intent；`allowInstall` 控制是否允许从空槽位安装，`portalTargets` 精确限制前端影响面。全栈候选按“全部 Portal 预热 → Backend 发布 → Portal 提交”执行；Portal 提交失败会逆序补偿 Portal 并发布单调 Backend 回滚。来源 target 和 Portal 集合都在可信入口固定，空集合明确表示 Backend-only。
 
 ADR-0143 P5 的真实签名插件测试进一步验证了本插件的状态机边界：仓库解析结果变化会在审批时持久化 `planningStale`、退回 Draft 并撤销摘要；显式刷新和重新审批后，发布仍只经既有可信内核服务完成。该验收未给 Deployment Manager 增加仓库私钥、制品读取、Deployment CAS 或 Node Agent 控制权。
 

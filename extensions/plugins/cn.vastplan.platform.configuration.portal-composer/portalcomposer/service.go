@@ -46,20 +46,22 @@ type TestArtifactCatalog interface {
 }
 
 type state struct {
-	NextRevision      uint64                                 `json:"nextRevision"`
-	NextGovernance    uint64                                 `json:"nextGovernanceRevision"`
-	NextActivation    uint64                                 `json:"nextActivation"`
-	NextAudit         uint64                                 `json:"nextAudit"`
-	Revisions         []portalapi.Revision                   `json:"applications"`
-	Profiles          []portalapi.PlatformProfileRevision    `json:"profiles"`
-	Bindings          []portalapi.BindingRevision            `json:"bindings"`
-	Activations       []portalapi.PortalActivation           `json:"activations"`
-	TestBindings      map[string]portalapi.TestTargetBinding `json:"testTargetBindings"`
-	NextTestRelease   uint64                                 `json:"nextTestRelease"`
-	TestReleases      []portalapi.TestRelease                `json:"testReleases"`
-	TestVersionOwners map[uint64]uint64                      `json:"testVersionOwners"`
-	Audit             []portalapi.AuditEvent                 `json:"audit"`
-	VersionControls   map[string]portalVersionControlState   `json:"versionControls"`
+	NextRevision              uint64                                             `json:"nextRevision"`
+	NextGovernance            uint64                                             `json:"nextGovernanceRevision"`
+	NextActivation            uint64                                             `json:"nextActivation"`
+	NextAudit                 uint64                                             `json:"nextAudit"`
+	Revisions                 []portalapi.Revision                               `json:"applications"`
+	Profiles                  []portalapi.PlatformProfileRevision                `json:"profiles"`
+	Bindings                  []portalapi.BindingRevision                        `json:"bindings"`
+	Activations               []portalapi.PortalActivation                       `json:"activations"`
+	TestBindings              map[string]portalapi.TestTargetBinding             `json:"testTargetBindings"`
+	NextTestRelease           uint64                                             `json:"nextTestRelease"`
+	TestReleases              []portalapi.TestRelease                            `json:"testReleases"`
+	TestVersionOwners         map[uint64]uint64                                  `json:"testVersionOwners"`
+	InstallationVersionOwners map[uint64]string                                  `json:"installationVersionOwners"`
+	InstallationPreparations  map[string]portalapi.PluginInstallationPreparation `json:"installationPreparations"`
+	Audit                     []portalapi.AuditEvent                             `json:"audit"`
+	VersionControls           map[string]portalVersionControlState               `json:"versionControls"`
 }
 
 type Service struct {
@@ -320,7 +322,7 @@ func (s *Service) Audit(_ context.Context, principal portalapi.Principal, portal
 	if err != nil {
 		return nil, err
 	}
-	if s.state.Revisions[index].PortalID != portalID || s.isTestVersionLocked(id) {
+	if s.state.Revisions[index].PortalID != portalID || s.isHiddenVersionLocked(id) {
 		return nil, ErrNotFound
 	}
 	out := make([]portalapi.AuditEvent, 0)

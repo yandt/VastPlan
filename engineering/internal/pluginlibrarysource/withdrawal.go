@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/plugininstallation"
 )
 
 func (c *Controller) finishPendingWithdrawals(ctx context.Context, state *State) error {
@@ -102,6 +103,15 @@ func (c *Controller) withdraw(ctx context.Context, state *State, sourceID string
 
 func (c *Controller) removeSource(ctx context.Context, state *State, sourceID string) error {
 	value := state.Sources[sourceID]
+	if c.IntentApplier != nil && value.PluginID != "" && value.ActiveRef != nil {
+		intent := InstallationIntent{Action: plugininstallation.ActionRemove, PluginID: value.PluginID}
+		if err := intent.validate(); err != nil {
+			return err
+		}
+		if err := c.IntentApplier.ApplyInstallationIntent(ctx, intent); err != nil {
+			return err
+		}
+	}
 	if value.PluginID != "" {
 		candidates, err := c.Withdrawer.WorkspaceCandidates(ctx, value.PluginID)
 		if err != nil {

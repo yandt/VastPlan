@@ -33,7 +33,7 @@
       "nodes": [{
         "id": "workbench-gallery",
         "zone": "secondary",
-        "label": { "key": "navigation.workbenchGallery", "fallback": "Workbench 记录模式" },
+        "label": { "key": "navigation.workbench-gallery", "fallback": "Workbench 记录模式" },
         "icon": { "kind": "semantic", "name": "menu" },
         "order": 90
       }],

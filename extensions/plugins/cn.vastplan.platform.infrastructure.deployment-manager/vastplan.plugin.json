@@ -32,6 +32,7 @@
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "listServiceRevisions", "permissions": ["platform.deployment.read"], "access": "read", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "previewPluginInstallation", "permissions": ["platform.deployment.plugin.preview"], "access": "read", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "previewSelfServicePluginInstallation", "permissions": ["platform.deployment.plugin.preview"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "previewDevelopmentPluginInstallation", "permissions": ["platform.deployment.plugin.preview"], "access": "read", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "listPluginInstallationTargets", "permissions": ["platform.deployment.plugin.preview"], "access": "read", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "listPluginInstallationCandidates", "permissions": ["platform.deployment.plugin.preview"], "access": "read", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "getPluginInstallationCandidate", "permissions": ["platform.deployment.plugin.preview"], "access": "read", "approval": "none" },
@@ -39,6 +40,8 @@
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "getSelfServicePluginInstallationCandidate", "permissions": ["platform.deployment.plugin.preview"], "access": "read", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "createPluginInstallationCandidate", "permissions": ["platform.deployment.plugin.request"], "access": "write", "approval": "different-subject" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "createSelfServicePluginInstallationCandidate", "permissions": ["platform.deployment.plugin.request"], "access": "write", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "createDevelopmentPluginInstallationCandidate", "permissions": ["platform.deployment.plugin.request"], "access": "write", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "applyDevelopmentPluginInstallation", "permissions": ["platform.deployment.plugin.activate"], "access": "execute", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "submitPluginInstallationCandidate", "permissions": ["platform.deployment.plugin.request"], "access": "write", "approval": "different-subject" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "cancelPluginInstallationCandidate", "permissions": ["platform.deployment.plugin.request"], "access": "write", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "approvePluginInstallationCandidate", "permissions": ["platform.deployment.plugin.approve"], "access": "approve", "approval": "different-subject" },
@@ -78,6 +81,7 @@
       { "capability": "platform.credentials", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "fail", "logicalService": "platform.credentials", "routingDomain": "platform" },
       { "capability": "platform.artifacts.repository", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "fail", "logicalService": "platform.artifacts.repository", "routingDomain": "platform" },
       { "capability": "platform.composition.plan", "scope": "remote", "kind": "soft", "ready": "readiness", "failurePolicy": "degrade", "logicalService": "platform.composition.plan", "routingDomain": "platform" }
+      ,{ "capability": "platform.portal-composer", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "fail", "logicalService": "platform.portal-composer", "routingDomain": "platform" }
     ],
     "provides": [{ "extensionPoint": "tool.package", "capability": "platform.deployment", "visibility": "cluster", "routing": "leader", "routingDomain": "platform" }]
   },
@@ -126,6 +130,7 @@
           { "name": "createPluginInstallationCandidate", "description": "从控制器入口创建持久插件安装候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "installationPreview": { "type": "object" } }, "required": ["installationPreview"] } },
           { "name": "createSelfServicePluginInstallationCandidate", "description": "从服务自助入口创建持久插件安装候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "installationPreview": { "type": "object" } }, "required": ["installationPreview"] } },
           { "name": "createDevelopmentPluginInstallationCandidate", "description": "从开发入口创建持久插件安装候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "installationPreview": { "type": "object" } }, "required": ["installationPreview"] } },
+          { "name": "applyDevelopmentPluginInstallation", "description": "由受信开发控制器在同一候选链中自动提交并激活", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "installationPreview": { "type": "object" } }, "required": ["installationPreview"] } },
           { "name": "listPluginInstallationTargets", "description": "列出控制器获授权的最小逻辑服务安装目标", "paramsSchema": { "type": "object", "properties": {} } },
           { "name": "listPluginInstallationCandidates", "description": "列出插件安装候选及派生状态", "paramsSchema": { "type": "object", "properties": {} } },
           { "name": "getPluginInstallationCandidate", "description": "读取一个插件安装候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "candidateId": { "type": "string" } }, "required": ["candidateId"] } },

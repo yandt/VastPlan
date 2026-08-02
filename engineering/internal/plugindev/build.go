@@ -68,10 +68,22 @@ func (b CommandBuilder) Build(ctx context.Context, spec Spec, digest string, gen
 	if err != nil {
 		return Candidate{}, err
 	}
-	if _, err := pluginv1.ParseManifest(manifestRaw); err != nil {
+	manifestPath := filepath.Join(stagedSource, "vastplan.plugin.json")
+	if err := os.WriteFile(manifestPath, append(manifestRaw, '\n'), 0o600); err != nil {
 		return Candidate{}, err
 	}
-	if err := os.WriteFile(filepath.Join(stagedSource, "vastplan.plugin.json"), append(manifestRaw, '\n'), 0o600); err != nil {
+	if err := b.run(ctx, root, "node", "engineering/tools/normalize-navigation-icons.mjs", "--plugin-root", stagedSource, "--manifest", manifestPath); err != nil {
+		return Candidate{}, fmt.Errorf("归一化导航 SVG: %w", err)
+	}
+	normalizedManifest, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return Candidate{}, err
+	}
+	parsedManifest, err := pluginv1.ParseManifest(normalizedManifest)
+	if err != nil {
+		return Candidate{}, err
+	}
+	if err := pluginv1.ValidatePackagedNavigationCatalog(parsedManifest); err != nil {
 		return Candidate{}, err
 	}
 

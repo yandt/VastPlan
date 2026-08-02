@@ -100,7 +100,7 @@ func (s *Service) transitionPortalPublication(ctx context.Context, principal por
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	index, err := s.revisionIndex(principal.TenantID, publicationID)
-	if err != nil || s.state.Revisions[index].PortalID != portalID || s.isTestVersionLocked(publicationID) {
+	if err != nil || s.state.Revisions[index].PortalID != portalID || s.isHiddenVersionLocked(publicationID) {
 		return portalapi.PortalPublication{}, ErrNotFound
 	}
 	return s.transitionPublicationLocked(ctx, principal, index, action, "portal.publication.", "")
@@ -109,7 +109,7 @@ func (s *Service) transitionPortalPublication(ctx context.Context, principal por
 func (s *Service) approvePortalPublication(ctx context.Context, principal portalapi.Principal, portalID string, publicationID uint64, request portalapi.PortalApprovalRequest) (portalapi.PortalPublication, error) {
 	s.mu.Lock()
 	index, err := s.revisionIndex(principal.TenantID, publicationID)
-	if err != nil || s.state.Revisions[index].PortalID != portalID || s.isTestVersionLocked(publicationID) {
+	if err != nil || s.state.Revisions[index].PortalID != portalID || s.isHiddenVersionLocked(publicationID) {
 		s.mu.Unlock()
 		return portalapi.PortalPublication{}, ErrNotFound
 	}
@@ -129,7 +129,7 @@ func (s *Service) approvePortalPublication(ctx context.Context, principal portal
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	index, err = s.revisionIndex(principal.TenantID, publicationID)
-	if err != nil || s.state.Revisions[index].PortalID != portalID || s.isTestVersionLocked(publicationID) {
+	if err != nil || s.state.Revisions[index].PortalID != portalID || s.isHiddenVersionLocked(publicationID) {
 		return portalapi.PortalPublication{}, ErrNotFound
 	}
 	current := s.state.Revisions[index]
@@ -147,7 +147,7 @@ func (s *Service) ReleasePortalPublication(ctx context.Context, principal portal
 
 func (s *Service) updateWorkingCopyLocked(ctx context.Context, principal portalapi.Principal, index int, configuration portalapi.PortalConfiguration, auditAction string) error {
 	revision := &s.state.Revisions[index]
-	if revision.Status != portalapi.StatusDraft || s.isTestVersionLocked(revision.ID) {
+	if revision.Status != portalapi.StatusDraft || s.isHiddenVersionLocked(revision.ID) {
 		return ErrInvalidState
 	}
 	if control, enabled := s.state.VersionControls[revision.PortalID]; enabled && control.Pending != nil {
@@ -176,7 +176,7 @@ func (s *Service) updateWorkingCopyLocked(ctx context.Context, principal portala
 
 func (s *Service) transitionPublicationLocked(ctx context.Context, principal portalapi.Principal, index int, action, auditPrefix, auditReason string) (portalapi.PortalPublication, error) {
 	revision := &s.state.Revisions[index]
-	if s.isTestVersionLocked(revision.ID) {
+	if s.isHiddenVersionLocked(revision.ID) {
 		return portalapi.PortalPublication{}, ErrNotFound
 	}
 	profileIndex, bindingIndex, err := s.versionPartsLocked(principal.TenantID, *revision)

@@ -83,6 +83,9 @@ func decide(c *v1.CallContext, request extpoint.PermissionRequest) (extpoint.Dec
 	if configurationActivationAllowed(c, request) {
 		return extpoint.DecisionAllow, "配置协调器只能驱动候选绑定的应用配置发布"
 	}
+	if portalInstallationAllowed(c, request) {
+		return extpoint.DecisionAllow, "部署管理器只能驱动显式 Portal 目标的插件安装事务"
+	}
 	if compositionPlanningAllowed(c, request) {
 		return extpoint.DecisionAllow, "Deployment Manager 只能调用无副作用的应用组合规划端口"
 	}
@@ -124,6 +127,18 @@ func decide(c *v1.CallContext, request extpoint.PermissionRequest) (extpoint.Dec
 		return extpoint.DecisionDeny, "仅已认证用户可管理平台资源"
 	}
 	return extpoint.DecisionAbstain, "非平台管理能力"
+}
+
+func portalInstallationAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {
+	if c.GetCaller().GetKind() != v1.CallerKind_CALLER_KIND_PLUGIN || c.GetCaller().GetId() != "cn.vastplan.platform.infrastructure.deployment-manager" || request.ExtensionPoint != extpoint.ToolPackage || request.Capability != "platform.portal-composer" {
+		return false
+	}
+	switch request.Operation {
+	case "preparePluginInstallation", "commitPluginInstallation", "abortPluginInstallation", "rollbackPluginInstallation":
+		return true
+	default:
+		return false
+	}
 }
 
 func scopedConfigurationResolveAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {

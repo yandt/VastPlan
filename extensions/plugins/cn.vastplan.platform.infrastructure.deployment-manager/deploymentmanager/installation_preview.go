@@ -44,6 +44,9 @@ func (s *Service) planPluginInstallation(ctx context.Context, host sdk.Host, cal
 	if err := authorizeInstallationSource(call, source); err != nil {
 		return plannedInstallation{}, err
 	}
+	if source == plugininstallation.SourceSelfService && len(request.PortalTargets) != 1 {
+		return plannedInstallation{}, plugininstallation.ErrTargetScopeMismatch
+	}
 	tenant, err := callTenant(call)
 	if err != nil {
 		return plannedInstallation{}, err
@@ -117,6 +120,7 @@ func buildInstallationPreview(source plugininstallation.Source, request pluginin
 	result := plugininstallation.Preview{
 		Version: plugininstallation.ProtocolVersion, Source: source, Status: status,
 		Target: request.Target, Action: request.Change.Action, PluginID: request.Change.PluginID,
+		PortalTargets:  append([]string(nil), request.PortalTargets...),
 		ActiveRevision: active.ID, CandidateRevision: candidate.Revision, CandidateIntentDigest: candidate.Digest(),
 		PlanDigest: plan.report.PlanDigest, PlatformProfile: plan.report.PlatformProfile,
 		ArtifactLock: cloneArtifactLock(plan.report.ArtifactLock), Changes: changes, ConfigurationGaps: gaps,

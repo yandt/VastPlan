@@ -65,6 +65,8 @@ func (s *Service) dispatchOperation(ctx context.Context, host sdk.Host, call *co
 		out, err = s.PreviewPluginInstallation(ctx, host, call, installationSource(operation), request.InstallationPreview)
 	case plugininstallation.CreateOperation, plugininstallation.SelfServiceCreateOperation, plugininstallation.DevelopmentCreateOperation:
 		out, err = s.CreatePluginInstallationCandidate(ctx, host, call, installationSource(operation), request.InstallationPreview)
+	case plugininstallation.DevelopmentApplyOperation:
+		out, err = s.ApplyDevelopmentPluginInstallation(ctx, host, call, request.InstallationPreview)
 	case plugininstallation.ListTargetsOperation:
 		var items []plugininstallation.TargetOption
 		items, err = s.ListPluginInstallationTargets(call)
@@ -195,7 +197,7 @@ func installationSource(operation string) plugininstallation.Source {
 	switch operation {
 	case plugininstallation.SelfServicePreviewOperation, plugininstallation.SelfServiceCreateOperation:
 		return plugininstallation.SourceSelfService
-	case plugininstallation.DevelopmentPreviewOperation, plugininstallation.DevelopmentCreateOperation:
+	case plugininstallation.DevelopmentPreviewOperation, plugininstallation.DevelopmentCreateOperation, plugininstallation.DevelopmentApplyOperation:
 		return plugininstallation.SourceDevelopment
 	default:
 		return plugininstallation.SourceController

@@ -433,12 +433,15 @@ export interface PluginInstallationPreviewRequest {
   version: 1;
   target: PluginInstallationTarget;
   change: PluginInstallationChange;
+  /** Explicit cross-kernel scope. An empty array means Backend-only. */
+  portalTargets: string[];
   expectedActiveRevision?: number;
 }
 export interface SelfServicePluginInstallationRequest { version: 1; change: PluginInstallationChange; }
 export interface PluginInstallationPackageChange {
   kind: "Added" | "Updated" | "Removed";
   pluginId: string;
+  portalTargets: string[];
   root: boolean;
   before?: ArtifactLockPackage;
   after?: ArtifactLockPackage;
@@ -542,10 +545,12 @@ export interface ServiceAuditEvent { id: number; revisionId: number; deployment:
 export interface ArtifactRef { pluginId: string; version: string; channel: string; }
 export interface TestTargetBinding {
   id: string; kind: "backend"; deployment: string; unitId: string; pluginId: string;
+  allowInstall?: boolean; portalTargets: string[];
   allowedPublishers: string[]; enabled: boolean; version: number; createdAt: string; updatedAt: string;
 }
 export interface PutTestTargetBindingRequest {
   kind: "backend"; deployment: string; unitId: string; pluginId: string;
+  allowInstall?: boolean; portalTargets: string[];
   allowedPublishers: string[]; enabled: boolean; ifVersion?: number;
 }
 export type TestReleaseStatus = "Queued" | "Resolving" | "Preparing" | "Validating" | "Activating" | "Ready" | "RollingBack" | "RolledBack" | "Failed" | "Superseded";

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 const (
@@ -48,9 +49,10 @@ type FrontendNavigationParent struct {
 }
 
 type FrontendNavigationIcon struct {
-	ID     string                           `json:"id"`
-	States map[string]json.RawMessage       `json:"states"`
-	Motion string                           `json:"motion"`
+	ID      string                     `json:"id"`
+	States  map[string]json.RawMessage `json:"states,omitempty"`
+	Sources map[string]string          `json:"sources,omitempty"`
+	Motion  string                     `json:"motion"`
 }
 
 // FrontendNavigationCatalogFor returns the single validated navigation catalog
@@ -105,9 +107,26 @@ func validateFrontendNavigationCatalog(manifest Manifest, catalog FrontendNaviga
 		if iconBytes > maxNavigationIconBytes {
 			return errors.New("frontend.navigations 自定义图标目录超过 128 KiB")
 		}
-		for state, glyph := range icon.States {
-			if err := validateNavigationGlyphBudget(state, glyph); err != nil {
-				return fmt.Errorf("frontend.navigations 图标 %s: %w", icon.ID, err)
+		if len(icon.Sources) > 0 {
+			if len(icon.States) > 0 || icon.Sources["normal"] == "" {
+				return fmt.Errorf("frontend.navigations 图标 %s 的 source 与 AST 状态不能混用", icon.ID)
+			}
+			for state, source := range icon.Sources {
+				if !validNavigationIconState(state) || !validNavigationIconSource(source) {
+					return fmt.Errorf("frontend.navigations 图标 %s 的 %s source 无效", icon.ID, state)
+				}
+			}
+		} else {
+			if len(icon.States) == 0 {
+				return fmt.Errorf("frontend.navigations 图标 %s 缺少状态", icon.ID)
+			}
+			for state, glyph := range icon.States {
+				if !validNavigationIconState(state) {
+					return fmt.Errorf("frontend.navigations 图标 %s 的状态无效: %s", icon.ID, state)
+				}
+				if err := validateNavigationGlyphBudget(state, glyph); err != nil {
+					return fmt.Errorf("frontend.navigations 图标 %s: %w", icon.ID, err)
+				}
 			}
 		}
 	}
@@ -122,6 +141,31 @@ func validateFrontendNavigationCatalog(manifest Manifest, catalog FrontendNaviga
 		}
 	}
 	return nil
+}
+
+// ValidatePackagedNavigationCatalog rejects authoring-only SVG source paths.
+// Every signed artifact must contain only the normalized, code-free glyph AST.
+func ValidatePackagedNavigationCatalog(manifest Manifest) error {
+	catalog, err := FrontendNavigationCatalogFor(manifest)
+	if err != nil || catalog == nil {
+		return err
+	}
+	for _, icon := range catalog.Icons {
+		if len(icon.Sources) != 0 {
+			return fmt.Errorf("签名插件制品不得保留原始 SVG source: %s", icon.ID)
+		}
+	}
+	return nil
+}
+
+func validNavigationIconState(state string) bool {
+	return state == "normal" || state == "active" || state == "loading" || state == "error"
+}
+
+func validNavigationIconSource(source string) bool {
+	const prefix = "frontend/icons/navigation/"
+	return len(source) > len(prefix)+4 && len(source) <= 240 && strings.HasPrefix(source, prefix) && strings.HasSuffix(source, ".svg") &&
+		!strings.Contains(source, "..") && !strings.Contains(source, "\\") && !strings.Contains(source, "\x00") && !strings.Contains(source, "//")
 }
 
 func validateNavigationParent(manifest Manifest, node FrontendNavigationNode, nodes map[string]FrontendNavigationNode) error {
@@ -177,4 +221,3 @@ func validateNavigationGlyphBudget(state string, raw json.RawMessage) error {
 	}
 	return nil
 }
-

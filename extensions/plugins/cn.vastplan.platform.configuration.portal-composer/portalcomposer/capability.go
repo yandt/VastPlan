@@ -324,7 +324,7 @@ func Contribution(service *Service) sdk.Contribution {
 			if err := service.ensureConfigured(ctx, host, callCtx); err != nil {
 				return nil, nil, err
 			}
-			principal, err := projectPrincipal(callCtx)
+			principal, err := projectPrincipalForOperation(callCtx, op)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -391,4 +391,16 @@ func projectPrincipal(callCtx *contractv1.CallContext) (portalapi.Principal, err
 	}
 	roles := append([]string(nil), callCtx.Principal.SystemRoles...)
 	return portalapi.Principal{ID: callCtx.Principal.UserId, TenantID: callCtx.TenantId, Roles: roles, System: callCtx.Principal.UserId == "system"}, nil
+}
+
+func projectPrincipalForOperation(callCtx *contractv1.CallContext, operation string) (portalapi.Principal, error) {
+	switch operation {
+	case portalapi.PreparePluginInstallationOperation, portalapi.CommitPluginInstallationOperation, portalapi.AbortPluginInstallationOperation, portalapi.RollbackPluginInstallationOperation:
+		if callCtx != nil && callCtx.GetTenantId() != "" && callCtx.GetCaller().GetKind() == contractv1.CallerKind_CALLER_KIND_PLUGIN && callCtx.GetCaller().GetId() == "cn.vastplan.platform.infrastructure.deployment-manager" {
+			return portalapi.Principal{ID: "system", TenantID: callCtx.GetTenantId(), System: true}, nil
+		}
+		return portalapi.Principal{}, ErrForbidden
+	default:
+		return projectPrincipal(callCtx)
+	}
 }

@@ -59,7 +59,7 @@ func TestSelfServiceReviewPolicyRemainsPendingForIndependentApproval(t *testing.
 }
 
 func approvalPreviewRequest() plugininstallation.PreviewRequest {
-	return plugininstallation.PreviewRequest{Version: 1, Target: plugininstallation.Target{Kernel: "backend", Deployment: "agent-services", UnitID: "api"}, Change: plugininstallation.Change{
+	return plugininstallation.PreviewRequest{Version: 1, Target: plugininstallation.Target{Kernel: "backend", Deployment: "agent-services", UnitID: "api"}, PortalTargets: []string{"operations"}, Change: plugininstallation.Change{
 		Action: plugininstallation.ActionUpgrade, PluginID: "cn.vastplan.product.agent.api", Requirement: &pluginv1.ArtifactRequirement{PluginID: "cn.vastplan.product.agent.api", Constraint: "=2.0.0", Channel: "stable"},
 	}}
 }

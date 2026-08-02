@@ -94,6 +94,9 @@ func main() {
 			LicenseSource: *licenseFile, NoticeSource: *noticeFile, SBOMSource: effectiveSBOM,
 		})
 		defer cleanup()
+		if err := normalizeNavigationIcons(packageSource); err != nil {
+			fatalf("导航图标构建失败: %v", err)
+		}
 		var err error
 		builtBytes, manifest, err := artifactrepository.PackageDirectory(packageSource)
 		if err != nil {

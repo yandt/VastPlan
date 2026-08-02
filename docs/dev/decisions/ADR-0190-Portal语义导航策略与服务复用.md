@@ -32,6 +32,8 @@
 5. Shell 只保留 zone、账户、退出与恢复入口等安全锚。无可见页面的插件菜单自动隐藏；活动页面被移除时由统一导航模型选择同组、同级、首个可访问页，最后回到账户或恢复入口。
 6. 自定义菜单图标在构建时归一化为受限 `path/group` AST，运行时不执行插件 SVG 或 React 代码。状态只允许 normal/active/loading/error，动效只允许 none/pulse/spin/draw，并服从 reduced-motion 与活动状态预算。
 
+实现中原始 SVG 只能位于插件的 `frontend/icons/navigation/*.svg` 作者目录。Node 构建步骤在签名打包前完成 XML 白名单解析、`currentColor` 归一化、状态与体积预算校验并删除 source 路径；Go 打包器、仓库发布和供应链复验共同拒绝仍含 source 的制品。可信 Portal 物化阶段会把已验证 Contribution Index 与 `navigationOverrides` 合并校验，未知节点、循环、跨 zone 或超深覆盖在 Activation 候选形成前失败；浏览器仍重复校验以防传输或缓存损坏。
+
 该修订与 UI Contract 10.0.0 同代生效，不保留旧页面导航字段的运行时双读；不可变历史制品只用于审计和旧 Generation 排空，不进入新候选。
 
 ## 种子平台默认策略
@@ -54,3 +56,4 @@
 - 多服务单 Portal 保持一致；多个 Portal 可以按各自受众独立精简或调整菜单。
 - 插件仍可脱离种子平台运行，缺少映射不会导致页面消失。
 - 菜单策略不会成为权限旁路，也不会把具体页面 ID 固化进内核或 Catalog Resolver。
+- 目录解析和语言回退在 512 节点硬上限内保持有界；测试以 500 节点覆盖解析与即时语言解析。活动页面随新 Generation 消失时，Shell 只对旧代确实拥有的页面执行同组、同根、首个可访问页的确定性替换，不吞掉未知深链路的 Not Found。

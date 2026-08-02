@@ -1,20 +1,21 @@
 import { RequestJSONError, requireJSONObject } from "./request-json";
 
 export function controllerInstallationRequest(value: unknown): Readonly<Record<string, unknown>> {
-  const request = exactObject(value, ["version", "target", "change"], ["expectedActiveRevision"]);
+  const request = exactObject(value, ["version", "target", "change", "portalTargets"], ["expectedActiveRevision"]);
   if (request.version !== 1) throw new RequestJSONError("插件安装协议版本无效");
   if (request.expectedActiveRevision !== undefined && (!Number.isSafeInteger(request.expectedActiveRevision) || Number(request.expectedActiveRevision) < 1)) throw new RequestJSONError("活动修订无效");
   const target = exactObject(request.target, ["kernel", "deployment", "unitId"]);
   if (target.kernel !== "backend" || !boundedName(target.deployment, 128) || !boundedName(target.unitId, 128)) throw new RequestJSONError("插件安装目标无效");
   installationChange(request.change);
+  if (!Array.isArray(request.portalTargets) || request.portalTargets.length > 32 || new Set(request.portalTargets).size !== request.portalTargets.length || request.portalTargets.some((item) => !boundedName(item, 160))) throw new RequestJSONError("目标 Portal 无效");
   return request;
 }
 
-export function selfServiceInstallationRequest(value: unknown, target: Readonly<{ kernel: "backend"; deployment: string; unitId: string }>): Readonly<Record<string, unknown>> {
+export function selfServiceInstallationRequest(value: unknown, target: Readonly<{ kernel: "backend"; deployment: string; unitId: string }>, portalID: string): Readonly<Record<string, unknown>> {
   const request = exactObject(value, ["version", "change"]);
   if (request.version !== 1) throw new RequestJSONError("插件安装协议版本无效");
   const change = installationChange(request.change);
-  return Object.freeze({ version: 1, target: Object.freeze({ ...target }), change });
+  return Object.freeze({ version: 1, target: Object.freeze({ ...target }), change, portalTargets: Object.freeze([portalID]) });
 }
 
 function installationChange(value: unknown): Readonly<Record<string, unknown>> {

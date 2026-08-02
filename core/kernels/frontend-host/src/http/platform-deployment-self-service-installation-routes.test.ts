@@ -27,8 +27,8 @@ describe("Platform deployment self-service plugin installation routes", () => {
     const target = { kernel: "backend", deployment: "agent-services", unitId: "api" };
     expect(calls.map(({ operation, payload }) => ({ operation, payload }))).toEqual([
       { operation: "listSelfServicePluginInstallationCandidates", payload: { installationTarget: target } },
-      { operation: "previewSelfServicePluginInstallation", payload: { installationPreview: { ...body, target } } },
-      { operation: "createSelfServicePluginInstallationCandidate", payload: { installationPreview: { ...body, target } } },
+      { operation: "previewSelfServicePluginInstallation", payload: { installationPreview: { ...body, target, portalTargets: ["operations"] } } },
+      { operation: "createSelfServicePluginInstallationCandidate", payload: { installationPreview: { ...body, target, portalTargets: ["operations"] } } },
       { operation: "submitSelfServicePluginInstallationCandidate", payload: { candidateId: id, installationTarget: target } },
       { operation: "approveSelfServicePluginInstallationCandidate", payload: { candidateId: id, installationTarget: target, approvalEvidence: evidence } },
     ]);

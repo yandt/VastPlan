@@ -60,6 +60,7 @@ func (s *Service) PutTestTargetBinding(call *contractv1.CallContext, id string, 
 	binding := platformadminapi.TestTargetBinding{
 		ID: id, Kind: request.Kind, Deployment: strings.TrimSpace(request.Deployment),
 		UnitID: strings.TrimSpace(request.UnitID), PluginID: strings.TrimSpace(request.PluginID),
+		AllowInstall: request.AllowInstall, PortalTargets: normalizePortalTargets(request.PortalTargets),
 		AllowedPublishers: publishers, Enabled: request.Enabled, UpdatedAt: now,
 	}
 	if err := validateTestBindingShape(binding); err != nil {

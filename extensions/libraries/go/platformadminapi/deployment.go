@@ -120,6 +120,8 @@ type TestTargetBinding struct {
 	Deployment        string         `json:"deployment"`
 	UnitID            string         `json:"unitId"`
 	PluginID          string         `json:"pluginId"`
+	AllowInstall      bool           `json:"allowInstall,omitempty"`
+	PortalTargets     []string       `json:"portalTargets"`
 	AllowedPublishers []string       `json:"allowedPublishers"`
 	Enabled           bool           `json:"enabled"`
 	Version           int64          `json:"version"`
@@ -132,6 +134,8 @@ type PutTestTargetBindingRequest struct {
 	Deployment        string         `json:"deployment"`
 	UnitID            string         `json:"unitId"`
 	PluginID          string         `json:"pluginId"`
+	AllowInstall      bool           `json:"allowInstall,omitempty"`
+	PortalTargets     []string       `json:"portalTargets"`
 	AllowedPublishers []string       `json:"allowedPublishers"`
 	Enabled           bool           `json:"enabled"`
 	IfVersion         *int64         `json:"ifVersion,omitempty"`

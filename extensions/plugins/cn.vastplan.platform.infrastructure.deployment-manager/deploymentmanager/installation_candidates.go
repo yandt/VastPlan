@@ -202,12 +202,39 @@ func (s *Service) ApproveSelfServicePluginInstallationCandidate(ctx context.Cont
 }
 
 func (s *Service) ActivatePluginInstallationCandidate(ctx context.Context, host sdk.Host, call *contractv1.CallContext, id string) (plugininstallation.Candidate, error) {
-	revisionID, err := s.installationCandidateRevision(call, id)
+	candidate, err := s.GetPluginInstallationCandidate(call, id)
 	if err != nil {
 		return plugininstallation.Candidate{}, err
 	}
-	if _, err := s.publishServiceRevision(ctx, host, call, revisionID, revisionOwnerInstallation); err != nil {
-		return plugininstallation.Candidate{}, err
+	if candidate.Status != plugininstallation.CandidateApproved && candidate.Status != plugininstallation.CandidateReady {
+		return plugininstallation.Candidate{}, errServiceState
+	}
+	prepared, precommitted, err := prepareInstallationPortals(ctx, host, call, candidate)
+	if err != nil {
+		rollbackErr := rollbackInstallationPortals(ctx, host, call, candidate.ID, precommitted)
+		if candidate.Status == plugininstallation.CandidateReady {
+			_, backendErr := s.RollbackServiceRevision(ctx, host, call, candidate.PreviousServiceRevisionID)
+			rollbackErr = errors.Join(rollbackErr, backendErr)
+		}
+		return plugininstallation.Candidate{}, errors.Join(err, rollbackErr)
+	}
+	backendPublished := candidate.Status == plugininstallation.CandidateReady
+	if !backendPublished {
+		if _, err := s.publishServiceRevision(ctx, host, call, candidate.ServiceRevisionID, revisionOwnerInstallation); err != nil {
+			abortInstallationPortals(ctx, host, call, candidate.ID, prepared)
+			return plugininstallation.Candidate{}, err
+		}
+		backendPublished = true
+	}
+	committed, err := commitInstallationPortals(ctx, host, call, candidate.ID, prepared)
+	if err != nil {
+		rollbackErr := rollbackInstallationPortals(ctx, host, call, candidate.ID, committed)
+		if backendPublished {
+			_, rollbackBackendErr := s.RollbackServiceRevision(ctx, host, call, candidate.PreviousServiceRevisionID)
+			rollbackErr = errors.Join(rollbackErr, rollbackBackendErr)
+		}
+		abortInstallationPortals(ctx, host, call, candidate.ID, prepared[len(committed):])
+		return plugininstallation.Candidate{}, errors.Join(err, rollbackErr)
 	}
 	return s.GetPluginInstallationCandidate(call, id)
 }

@@ -960,22 +960,45 @@
       ]
     },
     "navigationIcon": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "states", "motion"],
-      "properties": {
-        "id": { "$ref": "#/$defs/navigationLocalId" },
-        "states": {
-          "type": "object", "additionalProperties": false, "required": ["normal"],
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false, "required": ["id", "states", "motion"],
           "properties": {
-            "normal": { "$ref": "#/$defs/navigationGlyph" },
-            "active": { "$ref": "#/$defs/navigationGlyph" },
-            "loading": { "$ref": "#/$defs/navigationGlyph" },
-            "error": { "$ref": "#/$defs/navigationGlyph" }
+            "id": { "$ref": "#/$defs/navigationLocalId" },
+            "states": { "$ref": "#/$defs/navigationIconStates" },
+            "motion": { "enum": ["none", "pulse", "spin", "draw"] }
           }
         },
-        "motion": { "enum": ["none", "pulse", "spin", "draw"] }
+        {
+          "type": "object", "additionalProperties": false, "required": ["id", "sources", "motion"],
+          "properties": {
+            "id": { "$ref": "#/$defs/navigationLocalId" },
+            "sources": {
+              "type": "object", "additionalProperties": false, "required": ["normal"],
+              "properties": {
+                "normal": { "$ref": "#/$defs/navigationIconSource" },
+                "active": { "$ref": "#/$defs/navigationIconSource" },
+                "loading": { "$ref": "#/$defs/navigationIconSource" },
+                "error": { "$ref": "#/$defs/navigationIconSource" }
+              }
+            },
+            "motion": { "enum": ["none", "pulse", "spin", "draw"] }
+          }
+        }
+      ]
+    },
+    "navigationIconStates": {
+      "type": "object", "additionalProperties": false, "required": ["normal"],
+      "properties": {
+        "normal": { "$ref": "#/$defs/navigationGlyph" },
+        "active": { "$ref": "#/$defs/navigationGlyph" },
+        "loading": { "$ref": "#/$defs/navigationGlyph" },
+        "error": { "$ref": "#/$defs/navigationGlyph" }
       }
+    },
+    "navigationIconSource": {
+      "type": "string", "minLength": 1, "maxLength": 240,
+      "pattern": "^frontend/icons/navigation/[A-Za-z0-9._/-]+\\.svg$"
     },
     "navigationGlyph": {
       "type": "object",

@@ -13,7 +13,7 @@ func (s *Service) workingCopyIndexLocked(tenantID, portalID string) (int, error)
 	index := -1
 	for candidate := range s.state.Revisions {
 		revision := s.state.Revisions[candidate]
-		if revision.TenantID != tenantID || revision.PortalID != portalID || revision.Status != portalapi.StatusDraft || s.isTestVersionLocked(revision.ID) {
+		if revision.TenantID != tenantID || revision.PortalID != portalID || revision.Status != portalapi.StatusDraft || s.isHiddenVersionLocked(revision.ID) {
 			continue
 		}
 		if index >= 0 {

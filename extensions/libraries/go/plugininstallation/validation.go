@@ -3,6 +3,7 @@ package plugininstallation
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
@@ -24,6 +25,22 @@ func ValidatePreviewRequest(request PreviewRequest) (PreviewRequest, error) {
 	request.Target.Deployment = strings.TrimSpace(request.Target.Deployment)
 	request.Target.UnitID = strings.TrimSpace(request.Target.UnitID)
 	request.Change.PluginID = strings.TrimSpace(request.Change.PluginID)
+	if request.PortalTargets == nil || len(request.PortalTargets) > 32 {
+		return PreviewRequest{}, ErrInvalid
+	}
+	seenPortals := map[string]struct{}{}
+	for index, portalID := range request.PortalTargets {
+		portalID = strings.TrimSpace(portalID)
+		if portalID == "" || len(portalID) > 160 || strings.ContainsAny(portalID, "/\\\x00") {
+			return PreviewRequest{}, ErrInvalid
+		}
+		if _, duplicate := seenPortals[portalID]; duplicate {
+			return PreviewRequest{}, ErrInvalid
+		}
+		seenPortals[portalID] = struct{}{}
+		request.PortalTargets[index] = portalID
+	}
+	sort.Strings(request.PortalTargets)
 	switch request.Change.Action {
 	case ActionInstall, ActionUpgrade:
 		if request.Change.Requirement == nil || request.Change.Requirement.PluginID != request.Change.PluginID {

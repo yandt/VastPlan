@@ -101,7 +101,7 @@ func validatePortalFoundationCandidates(spec portalapi.PortalSpec, index pluginv
 	if _, exists := shellLibraries[spec.Shell.Config.DefaultTemplate]; !exists {
 		return errors.New("Portal 默认 Shell Library 不在 Contribution Index 中")
 	}
-	return nil
+	return validateNavigationCandidates(spec, index)
 }
 
 func requirePlatformProfileOwner(spec portalapi.PortalSpec, contribution pluginv1.IndexedContribution) error {

@@ -10,18 +10,18 @@ interface InstallationTargetChoice {
   activeRevision: number;
 }
 
-export function installationForm(deployment: PlatformAdminClient, repository?: PlatformAdminClient): WorkbenchFormDefinition {
+export function installationForm(deployment: PlatformAdminClient, portalID: string, repository?: PlatformAdminClient): WorkbenchFormDefinition {
   return {
     id: "create-plugin-installation",
     schema: installationSchema([], []),
     presentation: {
       layout: "vertical", navigation: "sections",
       sections: [
-        { id: "targets", title: message("installation.section.targets", "目标服务"), columns: 1, fields: ["/targets"] },
+        { id: "targets", title: message("installation.section.targets", "目标服务"), columns: 1, fields: ["/targets", "/portalTargets"] },
         { id: "change", title: message("installation.section.change", "插件变更"), columns: 2, columnWidths: [45, 55], fields: ["/action", "/pluginId", "/versionPolicy", "/version", "/channel", "/features"] },
       ],
       fields: [
-        { pointer: "/targets" }, { pointer: "/action", widget: "select" }, { pointer: "/pluginId", span: 2 },
+        { pointer: "/targets" }, { pointer: "/portalTargets" }, { pointer: "/action", widget: "select" }, { pointer: "/pluginId", span: 2 },
         { pointer: "/versionPolicy", widget: "select", visibleWhen: { pointer: "/action", in: ["install", "upgrade"] } },
         { pointer: "/version", visibleWhen: { pointer: "/action", in: ["install", "upgrade"] } },
         { pointer: "/channel", widget: "select", visibleWhen: { pointer: "/action", in: ["install", "upgrade"] } },
@@ -34,7 +34,7 @@ export function installationForm(deployment: PlatformAdminClient, repository?: P
       submitLabel: message("installation.action.create", "生成预览候选"),
       success: { notify: message("installation.notice.created", "插件安装预览候选已创建"), refreshCollection: true, close: true },
     },
-    initialValue: { targets: [], action: "install", versionPolicy: "compatible", channel: "stable", features: [] },
+    initialValue: { targets: [], portalTargets: [portalID], action: "install", versionPolicy: "compatible", channel: "stable", features: [] },
     async prepare(_selected, signal) {
       const targetOptions = await deployment.listPluginInstallationTargets();
       let catalog: Awaited<ReturnType<PlatformAdminClient["listArtifactCatalog"]>> | undefined;
@@ -73,6 +73,8 @@ export function buildInstallationRequests(value: Readonly<Record<string, unknown
   if (selectedTargets.some((target) => target === undefined)) throw new Error("目标服务已变化，请重新打开表单");
   if (new Set(selectedTargets.map((target) => target!.deployment)).size !== selectedTargets.length) throw new Error("同一部署一次只能变更一个服务单元，请分批处理");
   const action = value.action;
+  const portalTargets = Array.isArray(value.portalTargets) ? value.portalTargets.filter((item): item is string => typeof item === "string" && item.trim() === item && item !== "") : [];
+  if (portalTargets.length > 32 || new Set(portalTargets).size !== portalTargets.length) throw new Error("目标 Portal 必须显式选择且不能重复");
   const pluginId = typeof value.pluginId === "string" ? value.pluginId.trim() : "";
   if (action !== "install" && action !== "upgrade" && action !== "remove" || !/^[a-z0-9]+(?:[.-][a-z0-9]+)+$/.test(pluginId)) throw new Error("插件变更定义无效");
   const requirement = action === "remove" ? undefined : {
@@ -87,6 +89,7 @@ export function buildInstallationRequests(value: Readonly<Record<string, unknown
       version: 1,
       target: { kernel: "backend", deployment: target.deployment, unitId: target.unitId },
       change: { action, pluginId, ...(requirement === undefined ? {} : { requirement }) },
+      portalTargets,
       expectedActiveRevision: target.activeRevision,
     };
   });
@@ -100,9 +103,10 @@ function installationSchema(targets: readonly InstallationTargetChoice[], catalo
     id: "plugin-installation.controller.v1",
     schema: {
       $schema: jsonSchemaDialect, type: "object", additionalProperties: false,
-      required: ["targets", "action", "pluginId"],
+      required: ["targets", "portalTargets", "action", "pluginId"],
       properties: {
         targets: { type: "array", title: "目标服务", minItems: 1, maxItems: 20, uniqueItems: true, items: { type: "string", oneOf: targets.map((target) => ({ const: target.key, title: target.title })) } },
+        portalTargets: { type: "array", title: "目标 Portal", maxItems: 32, uniqueItems: true, items: { type: "string", minLength: 1, maxLength: 160, pattern: "^[^/\\\\\\u0000]+$" } },
         action: { type: "string", title: "变更类型", default: "install", oneOf: [{ const: "install", title: "安装" }, { const: "upgrade", title: "升级或调整版本" }, { const: "remove", title: "卸载" }] },
         pluginId: { type: "string", title: "应用插件", pattern: "^[a-z0-9]+(?:[.-][a-z0-9]+)+$", ...(pluginOptions.length === 0 ? {} : { oneOf: pluginOptions }) },
         versionPolicy: { type: "string", title: "版本策略", default: "compatible", oneOf: [{ const: "exact", title: "固定版本" }, { const: "compatible", title: "兼容升级" }] },
@@ -114,6 +118,7 @@ function installationSchema(targets: readonly InstallationTargetChoice[], catalo
     },
     uiSchema: {
       targets: { "ui:help": "可同时选择多个逻辑服务；每个目标生成独立候选，不直接选择物理节点。" },
+      portalTargets: { "ui:help": "显式选择需要同代切换该全栈插件的 Portal；空数组表示 Backend-only。" },
       action: { "ui:widget": "select" }, pluginId: pluginOptions.length === 0 ? {} : { "ui:widget": "select" },
       versionPolicy: { "ui:widget": "select" }, channel: { "ui:widget": "select" },
     },

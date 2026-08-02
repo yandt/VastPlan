@@ -59,7 +59,7 @@ export class PlatformDeploymentSelfServiceInstallationRoutes {
   private async mutate(operation: string, role: string, principal: Principal, target: PlatformManagementTarget, installationTarget: Readonly<{ kernel: "backend"; deployment: string; unitId: string }>, request: IncomingMessage, response: ServerResponse, signal: AbortSignal, write = true): Promise<true> {
     if (!authorizeDeployment(this.client, target, operation, write, principal, role, response)) return true;
     await withRequestJSON(request, response, async (body) => {
-      await callDeployment({ client: this.client, principal, target, operation, write, payload: { installationPreview: selfServiceInstallationRequest(body, installationTarget) }, response, signal });
+      await callDeployment({ client: this.client, principal, target, operation, write, payload: { installationPreview: selfServiceInstallationRequest(body, installationTarget, target.portalId) }, response, signal });
     });
     return true;
   }

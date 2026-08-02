@@ -131,8 +131,9 @@ func TestPluginInstallationTargetsExposeOnlyMinimalActiveApplicationIdentity(t *
 
 func upgradeInstallationRequest() plugininstallation.PreviewRequest {
 	return plugininstallation.PreviewRequest{
-		Version: plugininstallation.ProtocolVersion,
-		Target:  plugininstallation.Target{Kernel: "backend", Deployment: "agent-services", UnitID: "api"},
+		Version:       plugininstallation.ProtocolVersion,
+		Target:        plugininstallation.Target{Kernel: "backend", Deployment: "agent-services", UnitID: "api"},
+		PortalTargets: []string{},
 		Change: plugininstallation.Change{
 			Action: plugininstallation.ActionUpgrade, PluginID: "cn.vastplan.product.agent.api",
 			Requirement: &pluginv1.ArtifactRequirement{PluginID: "cn.vastplan.product.agent.api", Constraint: "=2.0.0", Channel: "stable"},

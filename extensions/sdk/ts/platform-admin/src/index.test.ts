@@ -104,7 +104,7 @@ describe("PlatformAdminClient", () => {
       calls.push({ path, method: init?.method, body: init?.body });
       return { ok: true, status: 200, json: async () => path === "/v1/csrf" ? { token: "safe" } : {} };
     }, "operations", "deployment");
-    const request = { version: 1 as const, target: { kernel: "backend" as const, deployment: "agents", unitId: "api" }, change: { action: "upgrade" as const, pluginId: "cn.example.agent", requirement: { pluginId: "cn.example.agent", constraint: "^2.0.0", channel: "stable" } }, expectedActiveRevision: 4 };
+    const request = { version: 1 as const, target: { kernel: "backend" as const, deployment: "agents", unitId: "api" }, portalTargets: ["operations"], change: { action: "upgrade" as const, pluginId: "cn.example.agent", requirement: { pluginId: "cn.example.agent", constraint: "^2.0.0", channel: "stable" } }, expectedActiveRevision: 4 };
     await client.listPluginInstallationTargets();
     await client.previewPluginInstallation(request);
     await client.createPluginInstallationCandidate(request);

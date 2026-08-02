@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { PreparedPortal } from "./portal-runtime";
-import { PortalBootstrapError, PortalRecovery, createBootstrapRuntimeSource, fetchRuntimeSpec, resolvePortalPath } from "./portal-shell";
+import { PortalBootstrapError, PortalRecovery, createBootstrapRuntimeSource, fetchRuntimeSpec, resolveDeactivatedPagePath, resolvePortalPath } from "./portal-shell";
 import { productionFrontendRuntimeProtocol } from "./frontend-runtime-protocol";
 
 const runtimeDocument = (portal: Record<string, unknown>, modules: readonly Record<string, unknown>[]) => ({
@@ -82,5 +82,26 @@ describe("Portal landing route", () => {
   it("保留已注册页面和未知的门户内深层路径", () => {
     expect(resolvePortalPath(prepared, "/operations/settings")).toBe("/operations/settings");
     expect(resolvePortalPath(prepared, "/operations/not-found")).toBe("/operations/not-found");
+  });
+});
+
+describe("removed active page fallback", () => {
+  const shell = { compose(input: { pages: readonly any[]; activePageID?: string }) {
+    const groups = ["group-a", "group-b"].map((id) => ({ id: `cn.vastplan.test/${id}`, pages: input.pages.filter((page) => page.navigation?.parentMenuRef.nodeID === id).map((page) => ({ ...page.navigation, zone: "primary", groupID: `cn.vastplan.test/${id}` })), children: [] }));
+    const active = input.pages.find((page) => page.id === input.activePageID);
+    return { pages: input.pages, navigation: { primary: groups, settings: [], secondary: [] }, shellSlots: {}, pageSlots: {}, activePage: active, activeNavigationPath: active === undefined ? undefined : { zone: "primary", rootGroupID: `cn.vastplan.test/${active.navigation.parentMenuRef.nodeID}`, pageID: active.id } };
+  } };
+  const page = (id: string, group: string, order: number) => ({ id, path: `/operations/${id}`, navigation: { id, label: id, order, parentMenuRef: { pluginID: "cn.vastplan.test", nodeID: group } }, slots: [], pluginID: "cn.vastplan.test" });
+  const prepared = (pages: readonly ReturnType<typeof page>[]) => ({ portal: { shell: { config: {} } }, pages, shell, shellContributions: [], navigationCatalogs: [] }) as unknown as PreparedPortal;
+
+  it("prefers the next page in the same group, then another main group", () => {
+    const previous = prepared([page("first", "group-a", 10), page("removed", "group-a", 20), page("third", "group-a", 30), page("other", "group-b", 10)]);
+    expect(resolveDeactivatedPagePath(previous, prepared([page("first", "group-a", 10), page("third", "group-a", 30), page("other", "group-b", 10)]), "/operations/removed")).toBe("/operations/third");
+    expect(resolveDeactivatedPagePath(previous, prepared([page("other", "group-b", 10)]), "/operations/removed")).toBe("/operations/other");
+  });
+
+  it("does not redirect an unknown deep link", () => {
+    const current = prepared([page("first", "group-a", 10)]);
+    expect(resolveDeactivatedPagePath(current, current, "/operations/unknown")).toBe("/operations/unknown");
   });
 });

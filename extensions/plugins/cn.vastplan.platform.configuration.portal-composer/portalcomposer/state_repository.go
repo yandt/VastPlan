@@ -204,14 +204,16 @@ func composerDigest(raw []byte) string { return fmt.Sprintf("%x", sha256.Sum256(
 
 func emptyState() state {
 	return state{
-		TestBindings:      map[string]portalapi.TestTargetBinding{},
-		TestVersionOwners: map[uint64]uint64{},
-		VersionControls:   map[string]portalVersionControlState{},
+		TestBindings:              map[string]portalapi.TestTargetBinding{},
+		TestVersionOwners:         map[uint64]uint64{},
+		InstallationVersionOwners: map[uint64]string{},
+		InstallationPreparations:  map[string]portalapi.PluginInstallationPreparation{},
+		VersionControls:           map[string]portalVersionControlState{},
 	}
 }
 
 func validateComposerTenantState(value state, tenant string) error {
-	if tenant == "" || value.TestBindings == nil || value.TestVersionOwners == nil || value.VersionControls == nil {
+	if tenant == "" || value.TestBindings == nil || value.TestVersionOwners == nil || value.InstallationVersionOwners == nil || value.InstallationPreparations == nil || value.VersionControls == nil {
 		return errors.New("Portal Composer tenant 状态无效")
 	}
 	openPublications := map[string]int{}
@@ -220,6 +222,9 @@ func validateComposerTenantState(value state, tenant string) error {
 			return errors.New("Portal Composer Application 跨 tenant")
 		}
 		if _, testRevision := value.TestVersionOwners[revision.ID]; testRevision {
+			continue
+		}
+		if _, installationRevision := value.InstallationVersionOwners[revision.ID]; installationRevision {
 			continue
 		}
 		if revision.WorkingRevision == 0 {
@@ -287,6 +292,25 @@ func validateComposerTenantState(value state, tenant string) error {
 			return errors.New("Portal Composer Test Version 归属引用无效")
 		}
 	}
+	for versionID, key := range value.InstallationVersionOwners {
+		preparation, preparationFound := value.InstallationPreparations[key]
+		_, versionFound := versionIDs[versionID]
+		if !versionFound || !preparationFound || preparation.VersionID != versionID || preparation.Status != portalapi.PluginInstallationPreparing && preparation.Status != portalapi.PluginInstallationPrepared && preparation.Status != portalapi.PluginInstallationAborted && preparation.Status != portalapi.PluginInstallationCommitted && preparation.Status != portalapi.PluginInstallationRolledBack {
+			return errors.New("Portal Composer Installation Version 归属引用无效")
+		}
+	}
+	for key, preparation := range value.InstallationPreparations {
+		if key != installationPreparationKey(preparation.CandidateID, preparation.PortalID) || preparation.CandidateID == "" || preparation.PortalID == "" || preparation.PluginID == "" || preparation.VersionID == 0 || preparation.PreviousActivationID == 0 {
+			return errors.New("Portal Composer Plugin Installation 准备状态无效")
+		}
+		if preparation.Status == portalapi.PluginInstallationCommitted || preparation.Status == portalapi.PluginInstallationRolledBack {
+			if preparation.ActivationID == 0 {
+				return errors.New("Portal Composer Plugin Installation 提交状态无效")
+			}
+		} else if owner, ok := value.InstallationVersionOwners[preparation.VersionID]; !ok || owner != key {
+			return errors.New("Portal Composer Plugin Installation 候选归属无效")
+		}
+	}
 	for _, event := range value.Audit {
 		if event.TenantID != tenant {
 			return errors.New("Portal Composer Audit 跨 tenant")
@@ -312,7 +336,9 @@ func validateComposerTenantState(value state, tenant string) error {
 func portalExistsInState(value state, tenant, portalID string) bool {
 	for _, revision := range value.Revisions {
 		if revision.TenantID == tenant && revision.PortalID == portalID {
-			if _, test := value.TestVersionOwners[revision.ID]; !test {
+			_, test := value.TestVersionOwners[revision.ID]
+			_, installation := value.InstallationVersionOwners[revision.ID]
+			if !test && !installation {
 				return true
 			}
 		}

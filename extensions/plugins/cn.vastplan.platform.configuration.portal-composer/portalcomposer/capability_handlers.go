@@ -9,12 +9,40 @@ import (
 
 func (s *Service) handlePortalOperation(ctx context.Context, principal portalapi.Principal, operation string, payload []byte) (any, error) {
 	switch operation {
+	case portalapi.PreparePluginInstallationOperation, portalapi.CommitPluginInstallationOperation, portalapi.AbortPluginInstallationOperation, portalapi.RollbackPluginInstallationOperation:
+		return s.handlePluginInstallationOperation(ctx, principal, operation, payload)
 	case "createPortal", "createPortalWorkingCopy", "savePortalWorkingCopy", "submitPortalPublication", "approvePortalPublication", "publishPortalPublication", "releasePortalPublication", "portalVersionHistory", "readPortalVersion", "comparePortalVersions", "restorePortalVersion", "rollbackPortalRelease", "portalGovernance", "listPortalReleases", "audit":
 		return s.handlePortalAggregateOperation(ctx, principal, operation, payload)
 	case "listTestTargetBindings", "putTestTargetBinding", "listTestReleases", "createTestRelease", "rollbackTestRelease":
 		return s.handleTestReleaseOperation(ctx, principal, operation, payload)
 	default:
 		return nil, fmt.Errorf("不支持 Portal Composer 操作 %q", operation)
+	}
+}
+
+func (s *Service) handlePluginInstallationOperation(ctx context.Context, principal portalapi.Principal, operation string, payload []byte) (any, error) {
+	switch operation {
+	case portalapi.PreparePluginInstallationOperation:
+		var request portalapi.PluginInstallationRequest
+		if err := decode(payload, &request); err != nil {
+			return nil, err
+		}
+		return s.PreparePluginInstallation(ctx, principal, request)
+	case portalapi.CommitPluginInstallationOperation, portalapi.AbortPluginInstallationOperation, portalapi.RollbackPluginInstallationOperation:
+		var request portalapi.PluginInstallationLookup
+		if err := decode(payload, &request); err != nil {
+			return nil, err
+		}
+		switch operation {
+		case portalapi.CommitPluginInstallationOperation:
+			return s.CommitPluginInstallation(ctx, principal, request)
+		case portalapi.AbortPluginInstallationOperation:
+			return s.AbortPluginInstallation(ctx, principal, request)
+		default:
+			return s.RollbackPluginInstallation(ctx, principal, request)
+		}
+	default:
+		return nil, fmt.Errorf("不支持 Portal 插件安装操作 %q", operation)
 	}
 }
 

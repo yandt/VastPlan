@@ -15,6 +15,7 @@ const (
 	platformNodeTransportSeed = "platform-node.transport.seed"
 	managedNodeTransportSeed  = "managed-node.transport.seed"
 	portalHostTransportSeed   = "portal-host.transport.seed"
+	platformDevTransportSeed  = "platform-dev.transport.seed"
 	transportTrustDocument    = "transport-trust.json"
 )
 
@@ -33,7 +34,12 @@ func writeDevelopmentTransportIdentities(secretsDir string) error {
 	if err != nil {
 		return err
 	}
-	document, err := json.MarshalIndent(addressing.TransportTrustDocument{Version: 1, Identities: []addressing.TransportIdentity{node, managed, portal}}, "", "  ")
+	developer, developerSeed, err := developmentTransportIdentity("platform-dev", "controller", "platform-dev")
+	if err != nil {
+		return err
+	}
+	developer.AllowedSystemCallers = []string{"platform-dev/installation-watch"}
+	document, err := json.MarshalIndent(addressing.TransportTrustDocument{Version: 1, Identities: []addressing.TransportIdentity{node, managed, portal, developer}}, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -41,6 +47,7 @@ func writeDevelopmentTransportIdentities(secretsDir string) error {
 		platformNodeTransportSeed: append(nodeSeed, '\n'),
 		managedNodeTransportSeed:  append(managedSeed, '\n'),
 		portalHostTransportSeed:   append(portalSeed, '\n'),
+		platformDevTransportSeed:  append(developerSeed, '\n'),
 		transportTrustDocument:    append(document, '\n'),
 	} {
 		if err := os.WriteFile(filepath.Join(secretsDir, name), content, 0o600); err != nil {

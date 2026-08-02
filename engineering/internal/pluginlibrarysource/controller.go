@@ -23,6 +23,7 @@ type Controller struct {
 	Builder        plugindev.Builder
 	Publisher      plugindev.Publisher
 	Withdrawer     Withdrawer
+	IntentApplier  InstallationIntentApplier
 	Store          StateStore
 	Now            func() time.Time
 	Logf           func(string, ...any)

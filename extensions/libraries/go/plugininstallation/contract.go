@@ -20,6 +20,7 @@ const (
 	CreateOperation              = "createPluginInstallationCandidate"
 	SelfServiceCreateOperation   = "createSelfServicePluginInstallationCandidate"
 	DevelopmentCreateOperation   = "createDevelopmentPluginInstallationCandidate"
+	DevelopmentApplyOperation    = "applyDevelopmentPluginInstallation"
 	ListTargetsOperation         = "listPluginInstallationTargets"
 	ListOperation                = "listPluginInstallationCandidates"
 	GetOperation                 = "getPluginInstallationCandidate"
@@ -101,10 +102,14 @@ type Change struct {
 // one source protocol from the invoked operation and injects the strategy into
 // the shared workflow.
 type PreviewRequest struct {
-	Version                int    `json:"version"`
-	Target                 Target `json:"target"`
-	Change                 Change `json:"change"`
-	ExpectedActiveRevision uint64 `json:"expectedActiveRevision,omitempty"`
+	Version int    `json:"version"`
+	Target  Target `json:"target"`
+	Change  Change `json:"change"`
+	// PortalTargets is owner-bound by the trusted entry adapter. A non-nil
+	// empty slice explicitly selects a Backend-only activation; nil means the
+	// caller failed to make the cross-kernel scope decision.
+	PortalTargets          []string `json:"portalTargets"`
+	ExpectedActiveRevision uint64   `json:"expectedActiveRevision,omitempty"`
 }
 
 type PackageChange struct {
@@ -139,6 +144,7 @@ type Preview struct {
 	Target                Target                                      `json:"target"`
 	Action                Action                                      `json:"action"`
 	PluginID              string                                      `json:"pluginId"`
+	PortalTargets         []string                                    `json:"portalTargets"`
 	ActiveRevision        uint64                                      `json:"activeRevision"`
 	CandidateRevision     uint64                                      `json:"candidateRevision"`
 	CandidateIntentDigest string                                      `json:"candidateIntentDigest"`
