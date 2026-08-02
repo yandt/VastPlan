@@ -8,7 +8,7 @@ import type { AssessmentReportDownloader } from "./assessment-report-downloader.
 export function catalogPage(client: PlatformAdminClient, id: string, path: string, title: ReturnType<typeof text>, navigationLabel: ReturnType<typeof text>, reports?: AssessmentReportDownloader): CollectionPageDefinition<Row> {
   return defineCollectionPage<Row>({
     id, path, title, description: text("page.catalog.description", "查询可信制品、发布者、目标内核与生命周期"),
-    navigation: { id, label: navigationLabel, zone: "settings", groupID: "platform.artifacts", order: 50 },
+    navigation: { id, label: navigationLabel, semanticID: "platform.delivery.artifacts", zone: "settings", groupID: "platform.artifacts", order: 50 },
     collection: {
       id: `${id}.collection`, title: text("panel.catalog", "制品目录"), view: "table",
       query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [10, 20, 50, 100] },

@@ -161,6 +161,19 @@ func ValidateNavigationConfig(config NavigationConfig) error {
 			return fmt.Errorf("导航子组不能跨语义区: %s/%s", group.ID, group.ParentID)
 		}
 	}
+	placements := map[string]struct{}{}
+	for _, placement := range config.NavigationPlacements {
+		if !managementName.MatchString(placement.SemanticID) || !managementName.MatchString(placement.GroupID) {
+			return fmt.Errorf("导航语义映射 id 无效: %s/%s", placement.SemanticID, placement.GroupID)
+		}
+		if _, duplicate := placements[placement.SemanticID]; duplicate {
+			return fmt.Errorf("导航语义映射重复: %s", placement.SemanticID)
+		}
+		placements[placement.SemanticID] = struct{}{}
+		if _, ok := groups[placement.GroupID]; !ok {
+			return fmt.Errorf("导航语义映射引用了未知分组: %s/%s", placement.SemanticID, placement.GroupID)
+		}
+	}
 	return nil
 }
 

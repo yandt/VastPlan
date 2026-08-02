@@ -40,6 +40,8 @@ export interface PortalNavigationGroupDescriptor {
 export interface PortalPageNavigation {
   id: string;
   label: LocalizedText;
+  /** Stable functional classification resolved by the selected Portal navigation policy. */
+  semanticID?: string;
   zone: NavigationZone;
   /** References a group governed by the selected Shell composition. */
   groupID?: string;

@@ -22,7 +22,7 @@ export function createDataPlaneExposurePage(client: PlatformAdminClient, service
     path: `/settings/api-exposures/${serviceID}/data-planes`,
     title: text("dataPlane.title", "数据面暴露"),
     description: text("dataPlane.description", "治理独立 HTTPS 数据面、短时 Endpoint Lease 与一次性 Ticket"),
-    navigation: { id: `platform.data-plane-exposure.${serviceID}`, label: text("dataPlane.navigation", "数据面暴露"), zone: "settings", groupID: "platform.api-exposure", order: 56 },
+    navigation: { id: `platform.data-plane-exposure.${serviceID}`, label: text("dataPlane.navigation", "数据面暴露"), semanticID: "platform.integration.api-exposure", zone: "settings", groupID: "platform.api-exposure", order: 56 },
     collection: {
       id: `platform.data-plane-exposure.${serviceID}.collection`, title: "Data Plane Revisions", view: "table",
       query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [10, 20, 50] },

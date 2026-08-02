@@ -84,7 +84,8 @@ type Shell struct {
 }
 
 type NavigationConfig struct {
-	NavigationGroups []NavigationGroupDescriptor `json:"navigationGroups,omitempty"`
+	NavigationGroups     []NavigationGroupDescriptor `json:"navigationGroups,omitempty"`
+	NavigationPlacements []NavigationPlacement       `json:"navigationPlacements,omitempty"`
 }
 
 type NavigationGroupDescriptor struct {
@@ -94,6 +95,13 @@ type NavigationGroupDescriptor struct {
 	Zone     string `json:"zone"`
 	Icon     string `json:"icon"`
 	Order    int    `json:"order,omitempty"`
+}
+
+// NavigationPlacement lets one Portal Profile place a plugin-owned semantic
+// category without coupling the plugin to a concrete Portal menu tree.
+type NavigationPlacement struct {
+	SemanticID string `json:"semanticID"`
+	GroupID    string `json:"groupID"`
 }
 
 type ShellConfig struct {

@@ -86,6 +86,7 @@ UI Contract 9.0 暴露语义 token、账户外观契约与四级 `ComponentSize`
 - Logo 与页面 Header、页面 Header 与主菜单、主菜单与账户区的三条竖分隔线均使用统一的 12px 内侧间距；顶栏不得用全局 `gap` 参与这些边界的定位，避免左右视觉不均衡。
 - `primary` 与 `secondary` 之间有视觉分隔。活动根组同时显示 selected surface、位置标记和 `aria-expanded/aria-current` 关联状态。
 - 主菜单、用户菜单与“更多”共用 `ui.Menu` 导航组件，当前 Ant Design Renderer 映射为原生 `Menu`：Popover 外层不附加内边距，`sm` 菜单自身管理紧凑内边距、整行 hover、选中和子菜单状态。顶部布局不得自行复刻菜单项 hover 或选中样式。
+- 种子平台默认主菜单按任务分为“服务与部署、制品与交付、资源与配置、集成与 API、安全与授权”；Portal 管理保留在系统设置。同一 Portal 管理的多个服务共享该分类，不同 Portal 可通过 Platform Profile 的语义导航策略独立调整，布局不得硬编码这些业务名称。
 - 只允许一个 Overlay；不使用 hover 打开、不使用嵌套 Popover。重新点击触发器关闭，切换触发器替换内容。
 - 空间不足时尾部根组进入“更多”；活动根组优先留在顶栏。“更多”不改变导航树，只改变视觉承载。
 

@@ -70,6 +70,24 @@ func TestPlatformProfileValidatesBoundedNavigationTree(t *testing.T) {
 	}
 }
 
+func TestPlatformProfileValidatesNavigationSemanticPlacements(t *testing.T) {
+	valid := validShellProfileJSON("navigation-policy", 1, `{"navigationGroups":[{"id":"operations","label":"运行管理","zone":"primary","icon":"menu"}],"navigationPlacements":[{"semanticID":"platform.operations.deployment","groupID":"operations"}],"defaultTemplate":"standard","allowedTemplates":["standard"],"userSelectable":false}`)
+	profile, err := ParsePlatformProfile([]byte(valid))
+	if err != nil || len(profile.Shell.Config.NavigationPlacements) != 1 {
+		t.Fatalf("导航语义映射应有效: %+v %v", profile.Shell.Config.NavigationPlacements, err)
+	}
+
+	unknown := validShellProfileJSON("navigation-policy", 1, `{"navigationPlacements":[{"semanticID":"platform.operations.deployment","groupID":"missing"}],"defaultTemplate":"standard","allowedTemplates":["standard"],"userSelectable":false}`)
+	if _, err := ParsePlatformProfile([]byte(unknown)); err == nil {
+		t.Fatal("导航语义映射不得引用未知分组")
+	}
+
+	duplicate := validShellProfileJSON("navigation-policy", 1, `{"navigationPlacements":[{"semanticID":"platform.operations.deployment","groupID":"primary"},{"semanticID":"platform.operations.deployment","groupID":"primary"}],"defaultTemplate":"standard","allowedTemplates":["standard"],"userSelectable":false}`)
+	if _, err := ParsePlatformProfile([]byte(duplicate)); err == nil {
+		t.Fatal("导航语义映射不得重复")
+	}
+}
+
 func TestFrontendLocalizationPolicyRequiresGovernedDefault(t *testing.T) {
 	profile, err := ParsePlatformProfile([]byte(validShellProfileJSON("localized", 1, `{"defaultTemplate":"standard","allowedTemplates":["standard"],"userSelectable":false}`, `{"defaultLocale":"en-US","supportedLocales":["zh-CN","en-US"]}`)))
 	if err != nil || profile.Localization == nil || profile.Localization.DefaultLocale != "en-US" {

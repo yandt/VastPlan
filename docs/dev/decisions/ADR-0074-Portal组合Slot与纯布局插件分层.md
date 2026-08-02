@@ -47,4 +47,6 @@ Portal Platform Profile 必须分别固定三个相互独立、已签名的第�
 
 导航固定为有界的 `zone → group → page`。页面只声明 `groupID`；分组的 `id / label / zone / icon / order` 由 `ui.structure.composition` 通过 Platform Profile 的 `composition.config.navigationGroups` 治理。未显式分组的页面进入所属 zone 的内建同名组；引用未知分组或跨 zone 分组必须拒绝组合。布局插件只能消费标准化后的非空分组，不能自行猜测业务分组或开放任意二级菜单 Slot。
 
+2026-08-02 后续修订：页面可按 [ADR-0190](ADR-0190-Portal语义导航策略与服务复用.md) 增加稳定 `semanticID`。Platform Profile 通过 `navigationPlacements` 把语义映射到当前 Portal 的分组；原 `zone/groupID` 作为未映射时的默认位置继续保留。该修订不改变有界导航深度和布局只消费标准化模型的原则。
+
 标准桌面布局采用稳定双栏方案：默认 64px 图标主轨，右侧常驻 240px 二级导航栏。点击主轨图标只切换二级导航上下文；选择二级页面才触发路由跳转。二级导航是正常布局区域，不使用 Popover/Flyout，也不覆盖正文。主轨 `center`、主轨 `end` 和二级导航各自拥有有界纵向滚动，Page Header 位于 Page Body 滚动容器之外。平板可缩窄二级栏，手机隐藏桌面双栏并改用全高 Drawer；账户命令仍可使用 Overlay，因为它不是页面层级导航。

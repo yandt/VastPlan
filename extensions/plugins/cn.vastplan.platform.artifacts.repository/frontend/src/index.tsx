@@ -25,7 +25,7 @@ function capacityRows(capacity: ArtifactCapacity): Row[] {
 function capacityPage(client: PlatformAdminClient, id: string, path: string): CollectionPageDefinition<Row> {
   return defineCollectionPage<Row>({
     id, path, title: text("page.capacity.title", "容量与配额"), description: text("page.capacity.description", "查看累积配额、活动用量与隔离占用"),
-    navigation: { id, label: text("page.capacity.navigation", "容量与配额"), zone: "settings", groupID: "platform.artifacts", order: 51 },
+    navigation: { id, label: text("page.capacity.navigation", "容量与配额"), semanticID: "platform.delivery.artifacts", zone: "settings", groupID: "platform.artifacts", order: 51 },
     collection: {
       id: `${id}.collection`, title: text("panel.quotas", "配额用量"), view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [10, 20, 50] },
       filterPanel: { fields: [{ id: "exceeded", label: text("filter.exceeded", "仅超限"), kind: "boolean" }] },
@@ -63,7 +63,7 @@ function referencesPage(client: PlatformAdminClient, id: string, path: string): 
   const ownerKinds = ["deployment-active", "assignment-active", "portal-activation", "artifact-lock", "rollback-history", "seed", "last-known-good", "runner-install", "mobile-install"];
   return defineCollectionPage<Row>({
     id, path, title: text("page.references.title", "制品引用"), description: text("page.references.description", "查看阻止垃圾回收的消费者完整快照"),
-    navigation: { id, label: text("page.references.navigation", "制品引用"), zone: "settings", groupID: "platform.artifacts", order: 52 },
+    navigation: { id, label: text("page.references.navigation", "制品引用"), semanticID: "platform.delivery.artifacts", zone: "settings", groupID: "platform.artifacts", order: 52 },
     collection: {
       id: `${id}.collection`, title: text("panel.references", "引用快照"), view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [10, 20, 50] },
       filterPanel: { fields: [{ id: "ownerKind", label: text("filter.ownerKind", "Owner 类型"), kind: "select", options: ownerKinds.map((value) => ({ value, label: text(`owner.${value}`, value) })) }] },
@@ -99,7 +99,7 @@ function gcBlockerMessage(plan: ArtifactGCPlan): string {
 function garbageCollectionPage(client: PlatformAdminClient, id: string, path: string): CollectionPageDefinition<Row> {
   return defineCollectionPage<Row>({
     id, path, title: text("page.gc.title", "垃圾回收"), description: text("page.gc.description", "按计划隔离并在宽限期后复核清扫"),
-    navigation: { id, label: text("page.gc.navigation", "垃圾回收"), zone: "settings", groupID: "platform.artifacts", order: 53 },
+    navigation: { id, label: text("page.gc.navigation", "垃圾回收"), semanticID: "platform.delivery.artifacts", zone: "settings", groupID: "platform.artifacts", order: 53 },
     pageActions: [
       { id: "quarantine", label: text("action.quarantine", "隔离当前计划"), icon: "warning", tone: "danger", confirm: text("confirm.quarantine", "将重新生成计划并隔离全部候选，默认宽限期为 72 小时。") },
       { id: "sweep", label: text("action.sweep", "清扫到期制品"), icon: "remove", tone: "danger", confirm: text("confirm.sweep", "只会删除已超过宽限期且复核无引用的隔离制品。") },

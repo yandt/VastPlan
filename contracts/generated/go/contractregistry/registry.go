@@ -2,7 +2,7 @@
 package contractregistry
 
 const (
-	FrontendUIContractVersion = "9.0.0"
+	FrontendUIContractVersion = "9.1.0"
 	FrontendUIContractRange   = "^9.0.0"
 	FrontendUIContractMajor   = 9
 )

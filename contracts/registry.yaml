@@ -1,7 +1,7 @@
 schemaVersion: 1
 contracts:
   frontend.ui:
-    version: 9.0.0
+    version: 9.1.0
     compatibility: ^9.0.0
     description: Portal Render Adapter、Shell、Workbench 与功能视图共享的框架无关 UI 契约
   governance.approval:

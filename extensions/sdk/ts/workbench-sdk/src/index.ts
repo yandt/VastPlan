@@ -133,6 +133,16 @@ export interface WorkbenchPresentationConfig {
   collection?: { defaultDensity?: CollectionDensity; allowedDensities?: readonly CollectionDensity[] };
 }
 
+/** Framework-neutral navigation intent; the Portal Profile may remap semanticID to another governed group. */
+export interface WorkbenchPageNavigation {
+  id: string;
+  label: LocalizedText;
+  semanticID?: string;
+  zone: "primary" | "settings" | "secondary";
+  groupID?: string;
+  order?: number;
+}
+
 export interface CollectionPageDefinition<Row extends Record<string, unknown> = Record<string, unknown>> extends SizeableProps {
   id: string;
   path: string;
@@ -143,7 +153,7 @@ export interface CollectionPageDefinition<Row extends Record<string, unknown> = 
   requiredPermissions?: readonly string[];
   /** At least one permission is sufficient to expose a shared governance page. */
   requiredAnyPermissions?: readonly string[];
-  navigation?: { id: string; label: LocalizedText; zone: "primary" | "settings" | "secondary"; groupID?: string; order?: number };
+  navigation?: WorkbenchPageNavigation;
   pageActions?: readonly PageActionSpec[];
   collection: CollectionSpec;
   load(query: CollectionQuery, signal: AbortSignal): Promise<CollectionResult<Row>>;
@@ -168,7 +178,7 @@ export interface WorkspacePageDefinition extends SizeableProps {
   bodyLayout?: PageBodyLayout;
   requiredPermissions?: readonly string[];
   requiredAnyPermissions?: readonly string[];
-  navigation?: { id: string; label: LocalizedText; zone: "primary" | "settings" | "secondary"; groupID?: string; order?: number };
+  navigation?: WorkbenchPageNavigation;
   sections: readonly WorkspaceSectionDefinition[];
 }
 
@@ -180,7 +190,7 @@ export interface FormPageDefinition extends SizeableProps {
   bodyLayout?: PageBodyLayout;
   requiredPermissions?: readonly string[];
   requiredAnyPermissions?: readonly string[];
-  navigation?: { id: string; label: LocalizedText; zone: "primary" | "settings" | "secondary"; groupID?: string; order?: number };
+  navigation?: WorkbenchPageNavigation;
   pageActions?: readonly PageActionSpec[];
   runPageAction?(context: PageActionContext, signal: AbortSignal): Promise<CollectionActionResult | void>;
   form: WorkbenchFormDefinition;
@@ -209,7 +219,7 @@ interface RecordPageCommon<Row extends Record<string, unknown>> extends Sizeable
   bodyLayout?: PageBodyLayout;
   requiredPermissions?: readonly string[];
   requiredAnyPermissions?: readonly string[];
-  navigation?: { id: string; label: LocalizedText; zone: "primary" | "settings" | "secondary"; groupID?: string; order?: number };
+  navigation?: WorkbenchPageNavigation;
   pageActions?: readonly PageActionSpec[];
   runPageAction?(context: PageActionContext, signal: AbortSignal): Promise<CollectionActionResult | void>;
   detail: RecordDetailSpec;

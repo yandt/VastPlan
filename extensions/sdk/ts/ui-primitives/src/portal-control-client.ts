@@ -53,7 +53,7 @@ export interface PortalPlatformProfile {
   target: { kernel: "frontend" };
   runtimeEngine: PortalPluginRef & { engineContract: string; family: string };
   renderAdapter: PortalPluginRef & { uiContract: string; config: { defaultRenderer: string; allowedRenderers: string[]; userSelectable: boolean; rendererOptions?: Record<string, { themeTemplate?: string; allowedThemeTemplates?: string[]; themeUserSelectable?: boolean; iconTheme?: string; allowedIconThemes?: string[]; iconUserSelectable?: boolean }> } };
-  shell: PortalPluginRef & { uiContract: string; config: { navigationGroups?: JSONValue; defaultTemplate: string; allowedTemplates: string[]; userSelectable: boolean; templateOptions?: Record<string, Record<string, JSONValue>> } };
+  shell: PortalPluginRef & { uiContract: string; config: { navigationGroups?: JSONValue; navigationPlacements?: JSONValue; defaultTemplate: string; allowedTemplates: string[]; userSelectable: boolean; templateOptions?: Record<string, Record<string, JSONValue>> } };
   workbench: PortalPluginRef & { uiContract: string };
   accountCenter: PortalPluginRef;
   localization?: { defaultLocale: string; supportedLocales: string[] };
@@ -153,7 +153,7 @@ export interface PortalResolvedSpec {
     branding?: Record<string, JSONValue>;
     runtimeEngine: PortalPluginRef & { engineContract: string; family: string };
     renderAdapter: PortalPluginRef & { uiContract: string; config: { defaultRenderer: string; allowedRenderers: string[]; userSelectable: boolean; rendererOptions?: Record<string, { themeTemplate?: string; allowedThemeTemplates?: string[]; themeUserSelectable?: boolean; iconTheme?: string; allowedIconThemes?: string[]; iconUserSelectable?: boolean }> } };
-    shell: PortalPluginRef & { uiContract: string; config: { defaultTemplate: string; allowedTemplates: string[]; userSelectable: boolean; templateOptions?: Record<string, Record<string, JSONValue>> } };
+    shell: PortalPluginRef & { uiContract: string; config: { navigationGroups?: JSONValue; navigationPlacements?: JSONValue; defaultTemplate: string; allowedTemplates: string[]; userSelectable: boolean; templateOptions?: Record<string, Record<string, JSONValue>> } };
     workbench: PortalPluginRef & { uiContract: string };
     plugins: PortalPluginRef[];
     config?: Record<string, JSONValue>;

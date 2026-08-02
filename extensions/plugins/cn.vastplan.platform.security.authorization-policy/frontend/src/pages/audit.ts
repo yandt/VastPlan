@@ -11,7 +11,7 @@ export function auditPage(client: PlatformAdminClient): CollectionPageDefinition
     title: message(namespace, "audit.title", "授权审计"),
     description: message(namespace, "audit.description", "查看角色、主体绑定、撤权和策略快照的不可变操作记录。"),
     requiredPermissions: ["platform.authorization.audit"],
-    navigation: { id: "platform.authorization.audit", label: message(namespace, "audit.navigation", "授权审计"), zone: "settings", groupID: "platform.authorization", order: 40 },
+    navigation: { id: "platform.authorization.audit", label: message(namespace, "audit.navigation", "授权审计"), semanticID: "platform.security.authorization", zone: "settings", groupID: "platform.authorization", order: 40 },
     collection: {
       id: "authorization-audit",
       title: message(namespace, "audit.title", "授权审计"),

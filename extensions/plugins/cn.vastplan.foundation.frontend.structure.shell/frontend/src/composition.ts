@@ -1,31 +1,21 @@
-import { accountNavigationGroupID, accountSettingsNavigationGroupID, message, pageSlotIDs, semanticIconNames, shellSlotIDs } from "@vastplan/ui-primitives";
+import { accountNavigationGroupID, pageSlotIDs, shellSlotIDs } from "@vastplan/ui-primitives";
 import type {
   NavigationZone,
   PageSlotID,
   PortalNavigationGroup,
   PortalNavigationChildGroup,
-  PortalNavigationGroupDescriptor,
   PortalPageNavigation,
   PortalPageSlotContribution,
   PortalRegisteredShellContribution,
-  SemanticIconName,
   ShellCompositionInput,
   ShellCompositionModel,
   ShellSlotID,
 } from "@vastplan/ui-primitives";
+import { compileNavigationPolicy } from "./navigation-policy";
 
 const shellSlots = new Set<ShellSlotID>(shellSlotIDs);
 const pageSlots = new Set<PageSlotID>(pageSlotIDs);
 const navigationZones = new Set<NavigationZone>(["primary", "secondary", "settings"]);
-const semanticIcons = new Set<SemanticIconName>(semanticIconNames);
-const namespace = "cn.vastplan.foundation.frontend.structure.shell";
-const defaultGroups: readonly PortalNavigationGroupDescriptor[] = [
-  { id: "primary", label: message(namespace, "navigation.primary", "主要功能"), zone: "primary", icon: "menu", order: 10 },
-  { id: "secondary", label: message(namespace, "navigation.secondary", "辅助功能"), zone: "secondary", icon: "info", order: 20 },
-  { id: "settings", label: message(namespace, "navigation.settings", "系统管理"), zone: "settings", icon: "settings", order: 100 },
-  { id: accountNavigationGroupID, label: message(namespace, "navigation.account", "用户"), zone: "secondary", icon: "info", order: 1000 },
-  { id: accountSettingsNavigationGroupID, parentID: accountNavigationGroupID, label: message(namespace, "navigation.accountSettings", "用户设置"), zone: "secondary", icon: "settings", order: 20 },
-];
 
 function ordered<T extends { id: string; order?: number }>(values: readonly T[]): readonly T[] {
   return [...values].sort((left, right) => (left.order ?? 0) - (right.order ?? 0) || left.id.localeCompare(right.id));
@@ -34,15 +24,13 @@ function ordered<T extends { id: string; order?: number }>(values: readonly T[])
 export function compose(input: ShellCompositionInput): ShellCompositionModel {
   const pages = Object.freeze([...input.pages]);
   const activePage = pages.find((page) => page.id === input.activePageID);
-  const descriptors = navigationGroups(input.config);
+  const policy = compileNavigationPolicy(input.config);
+  const descriptors = policy.groups;
   const pagesByGroup = new Map<string, PortalPageNavigation[]>();
   for (const page of pages) {
-    const navigation = page.navigation;
-    if (navigation === undefined) continue;
+    if (page.navigation === undefined) continue;
+    const navigation = policy.resolve(page.navigation);
     const groupID = navigation.groupID ?? navigation.zone;
-    const descriptor = descriptors.get(groupID);
-    if (descriptor === undefined) throw new Error(`导航引用了未治理的分组: ${groupID}`);
-    if (descriptor.zone !== navigation.zone) throw new Error(`导航分组与语义区不一致: ${navigation.id}/${groupID}`);
     let groupPages = pagesByGroup.get(groupID);
     if (groupPages === undefined) {
       groupPages = [];
@@ -86,7 +74,7 @@ export function compose(input: ShellCompositionInput): ShellCompositionModel {
   const pageNormalized: Partial<Record<PageSlotID, readonly PortalPageSlotContribution[]>> = {};
   for (const [slot, contributions] of Object.entries(pageGrouped)) pageNormalized[slot as PageSlotID] = Object.freeze(ordered(contributions));
 
-  const activeNavigationPath = activePage?.navigation === undefined ? undefined : navigationPath(activePage.navigation, descriptors);
+  const activeNavigationPath = activePage?.navigation === undefined ? undefined : policy.path(activePage.navigation);
   return Object.freeze({
     pages,
     activePage,
@@ -99,54 +87,4 @@ export function compose(input: ShellCompositionInput): ShellCompositionModel {
     shellSlots: Object.freeze(shellNormalized),
     pageSlots: Object.freeze(pageNormalized),
   });
-}
-
-function navigationGroups(config: Readonly<Record<string, unknown>> | undefined): ReadonlyMap<string, PortalNavigationGroupDescriptor> {
-  const groups = new Map(defaultGroups.map((group) => [group.id, group]));
-  const configured = config?.navigationGroups;
-  if (configured === undefined) return groups;
-  if (!Array.isArray(configured)) throw new Error("composition.config.navigationGroups 必须是数组");
-  const configuredIDs = new Set<string>();
-  for (const value of configured) {
-    if (!isRecord(value) || typeof value.id !== "string" || !validID(value.id) || configuredIDs.has(value.id) ||
-        typeof value.label !== "string" || value.label.trim() === "" || value.label.length > 80 ||
-        typeof value.zone !== "string" || !navigationZones.has(value.zone as NavigationZone) ||
-        typeof value.icon !== "string" || !semanticIcons.has(value.icon as SemanticIconName) ||
-        (value.parentID !== undefined && (typeof value.parentID !== "string" || !validID(value.parentID) || value.parentID === value.id)) ||
-        (value.order !== undefined && (!Number.isSafeInteger(value.order) || Math.abs(value.order as number) > 1_000_000))) {
-      throw new Error("composition.config.navigationGroups 包含无效或重复分组");
-    }
-    const previous = groups.get(value.id);
-    if (previous !== undefined && (previous.zone !== value.zone || value.parentID !== undefined)) throw new Error(`内建导航分组不能跨语义区或改为子组: ${value.id}`);
-    configuredIDs.add(value.id);
-    groups.set(value.id, Object.freeze({ id: value.id, label: value.label.trim(), zone: value.zone as NavigationZone, icon: value.icon as SemanticIconName, parentID: value.parentID as string | undefined, order: value.order as number | undefined }));
-  }
-  for (const descriptor of groups.values()) {
-    if (descriptor.parentID === undefined) continue;
-    const parent = groups.get(descriptor.parentID);
-    if (parent === undefined) throw new Error(`导航子组引用了未知根组: ${descriptor.id}/${descriptor.parentID}`);
-    if (parent.parentID !== undefined) throw new Error(`导航深度超过 root group → child group → page: ${descriptor.id}`);
-    if (parent.zone !== descriptor.zone) throw new Error(`导航子组不能跨语义区: ${descriptor.id}/${descriptor.parentID}`);
-  }
-  return groups;
-}
-
-function navigationPath(page: PortalPageNavigation, descriptors: ReadonlyMap<string, PortalNavigationGroupDescriptor>) {
-  const groupID = page.groupID ?? page.zone;
-  const group = descriptors.get(groupID);
-  if (group === undefined) throw new Error(`导航引用了未治理的分组: ${groupID}`);
-  return Object.freeze({
-    zone: page.zone,
-    rootGroupID: group.parentID ?? group.id,
-    ...(group.parentID === undefined ? {} : { childGroupID: group.id }),
-    pageID: page.id,
-  });
-}
-
-function validID(value: string): boolean {
-  return /^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/.test(value);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }

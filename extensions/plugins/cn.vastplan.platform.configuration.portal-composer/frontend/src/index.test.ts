@@ -20,14 +20,17 @@ describe("Portal aggregate workspace", () => {
 
   it("edits platform, application and services as one data-driven configuration", () => {
     const properties = portalConfigurationSchema.schema.properties as Record<string, unknown>;
-    expect(Object.keys(properties)).toEqual(expect.arrayContaining(["defaultRenderer", "defaultTemplate", "applicationPlugins", "services"]));
+    expect(Object.keys(properties)).toEqual(expect.arrayContaining(["defaultRenderer", "defaultTemplate", "navigationGroups", "navigationPlacements", "applicationPlugins", "services"]));
     const updated = buildPortalConfiguration(configuration(), {
       route: "/new", defaultRenderer: "antd", allowedRenderers: ["antd"], defaultTemplate: "top-navigation",
+      navigationGroups: [{ id: "operations", label: "运行", zone: "primary", icon: "menu" }],
+      navigationPlacements: [{ semanticID: "platform.operations.deployment", groupID: "operations" }],
       applicationPlugins: [{ id: "cn.example.dashboard", version: "1.2.3" }], services: [{ id: "backend" }],
     });
     expect(updated.application.route).toBe("/new");
     expect(updated.platform.renderAdapter.config.defaultRenderer).toBe("antd");
     expect(updated.platform.shell.config.defaultTemplate).toBe("top-navigation");
+    expect(updated.platform.shell.config.navigationPlacements).toEqual([{ semanticID: "platform.operations.deployment", groupID: "operations" }]);
     expect(updated.platform.plugins).toContainEqual(updated.platform.accountCenter);
     expect(updated.services).toEqual([{ id: "backend" }]);
   });

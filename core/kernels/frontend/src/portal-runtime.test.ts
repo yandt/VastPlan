@@ -243,4 +243,14 @@ describe("PortalRuntime shell", () => {
       context.addRecordPage({ id: "bad", path: "/bad", title: "Bad", pattern: "record-detail", detail: { titleKey: "", sections: [] }, async load() { return undefined; } });
     } } })).prepare(portal)).rejects.toMatchObject({ code: "WORKBENCH_PAGE_REJECTED" });
   });
+
+  it("rejects malformed navigation semantics at the trusted registration boundary", async () => {
+    await expect(new PortalRuntime(loader({ [featureRef.id]: { register(context: FrontendPluginContext) {
+      context.addPage({
+        id: "bad-navigation", path: "/bad-navigation", title: "Bad navigation",
+        navigation: { id: "bad-navigation", label: "Bad navigation", semanticID: "bad semantic", zone: "primary" },
+        slots: [{ id: "body", slot: "page.body.main", component: () => null }],
+      });
+    } } })).prepare(portal)).rejects.toMatchObject({ code: "NAVIGATION_REJECTED" });
+  });
 });

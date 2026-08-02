@@ -38,6 +38,7 @@ export function rolesPage(client: PlatformAdminClient): CollectionPageDefinition
     navigation: {
       id: "platform.authorization.roles",
       label: message(namespace, "roles.navigation", "角色"),
+      semanticID: "platform.security.authorization",
       zone: "settings",
       groupID: "platform.authorization",
       order: 20,

@@ -59,7 +59,7 @@ export function createGlobalSettingsPage(client: PlatformAdminClient, serviceID:
     path,
     title,
     description: message(namespace, "page.description", "管理平台级非敏感配置"),
-    navigation: { id: `platform.global-settings.${serviceID}`, label: title, zone: "settings", order: 20 },
+    navigation: { id: `platform.global-settings.${serviceID}`, label: title, semanticID: "platform.configuration.global-settings", zone: "settings", order: 20 },
     pageActions: [{ id: "create", label: message(namespace, "action.create", "新增设置"), icon: "add", tone: "primary", form: "create" }],
     collection: {
       id: `platform.global-settings.${serviceID}`,

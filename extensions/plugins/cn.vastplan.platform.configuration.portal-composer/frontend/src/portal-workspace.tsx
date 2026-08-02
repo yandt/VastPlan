@@ -12,7 +12,7 @@ export function createPortalPage(client: PortalControlClient): CollectionPageDef
     path: "/settings/portals",
     title: message(namespace, "page.title", "Portal 管理"),
     description: message(namespace, "page.description", "管理 Portal 工作副本、发布审批、上线记录和可选版本历史"),
-    navigation: { id: "platform.portal-composer", label: message(namespace, "page.navigation", "Portal 管理"), zone: "settings", order: 11 },
+    navigation: { id: "platform.portal-composer", label: message(namespace, "page.navigation", "Portal 管理"), semanticID: "platform.portal.management", zone: "settings", order: 11 },
     collection: {
       id: "portals", title: message(namespace, "collection.title", "Portal"), view: "table",
       query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [10, 20, 50] },

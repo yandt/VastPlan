@@ -7,7 +7,7 @@ export function assessmentPage(client: PlatformAdminClient, id: string, path: st
     id, path, title: text("page.assessment.title", "安全评估"),
     description: text("page.assessment.description", "查看仓库已接受的扫描数据库 revision 与报告归档状态；Source/Provider/Controller 配置统一在插件配置中审批发布"),
     requiredPermissions: ["platform.artifacts.read"],
-    navigation: { id, label: text("page.assessment.navigation", "安全评估"), zone: "settings", groupID: "platform.artifacts", order: 54 },
+    navigation: { id, label: text("page.assessment.navigation", "安全评估"), semanticID: "platform.delivery.artifacts", zone: "settings", groupID: "platform.artifacts", order: 54 },
     collection: {
       id: `${id}.collection`, title: text("panel.assessmentRevisions", "已使用数据库 Revision"), view: "table",
       query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [10, 20, 50, 100] },

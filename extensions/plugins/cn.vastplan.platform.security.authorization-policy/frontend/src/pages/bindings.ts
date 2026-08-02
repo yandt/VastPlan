@@ -33,6 +33,7 @@ export function bindingsPage(client: PlatformAdminClient): CollectionPageDefinit
     navigation: {
       id: "platform.authorization.bindings",
       label: message(namespace, "bindings.navigation", "主体绑定"),
+      semanticID: "platform.security.authorization",
       zone: "settings",
       groupID: "platform.authorization",
       order: 30,

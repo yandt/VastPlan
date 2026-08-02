@@ -341,7 +341,9 @@ function registerPage(
   }
   if (!page.slots.some((slot) => slot.slot === "page.body.main")) throw new PortalAssemblyError("PAGE_MAIN_MISSING", `页面必须填充 page.body.main: ${page.id}`);
   if (page.navigation !== undefined && (!managementName(page.navigation.id) || !validLocalizedText(page.navigation.label) || state.navigationIDs.has(page.navigation.id) ||
-      !["primary", "settings", "secondary"].includes(page.navigation.zone) || (page.navigation.groupID !== undefined && !managementName(page.navigation.groupID)))) {
+      !["primary", "settings", "secondary"].includes(page.navigation.zone) ||
+      (page.navigation.semanticID !== undefined && !managementName(page.navigation.semanticID)) ||
+      (page.navigation.groupID !== undefined && !managementName(page.navigation.groupID)))) {
     throw new PortalAssemblyError("NAVIGATION_REJECTED", `导航 ID 重复或语义区无效: ${page.navigation.id}`);
   }
   const slots = [...page.slots, { id: "system.page.help", slot: "page.header.end" as const, component: PageHelpButton, order: 1_000_000 }];

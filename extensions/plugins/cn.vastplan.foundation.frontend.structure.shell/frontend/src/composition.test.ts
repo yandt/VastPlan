@@ -43,6 +43,43 @@ describe("shell composition core", () => {
     expect(model.activeNavigationPath).toEqual({ zone: "primary", rootGroupID: "operations", childGroupID: "compute", pageID: "workers" });
   });
 
+  it("remaps stable plugin semantics through the selected Portal navigation policy", () => {
+    const model = compose({
+      activePageID: "deployments",
+      shellContributions: [],
+      config: {
+        navigationGroups: [
+          { id: "operations", label: "服务与部署", zone: "primary", icon: "menu", order: 10 },
+          { id: "operations.deployments", parentID: "operations", label: "部署管理", zone: "primary", icon: "menu", order: 10 },
+        ],
+        navigationPlacements: [{ semanticID: "platform.operations.deployment", groupID: "operations.deployments" }],
+      },
+      pages: [{
+        id: "deployments", pluginID: "cn.vastplan.platform.infrastructure.deployment-manager", path: "/deployments", title: "部署管理",
+        navigation: { id: "deployments", label: "部署管理", semanticID: "platform.operations.deployment", zone: "settings" },
+        slots: [{ id: "body", slot: "page.body.main", component: () => null }],
+      }],
+    });
+    expect(model.navigation.settings).toEqual([]);
+    expect(model.navigation.primary[0].children[0].pages[0]).toMatchObject({ id: "deployments", zone: "primary", groupID: "operations.deployments" });
+    expect(model.activeNavigationPath).toEqual({ zone: "primary", rootGroupID: "operations", childGroupID: "operations.deployments", pageID: "deployments" });
+  });
+
+  it("rejects duplicate and unknown semantic navigation mappings", () => {
+    const page = {
+      id: "deployments", pluginID: "cn.vastplan.platform.test", path: "/deployments", title: "部署管理",
+      navigation: { id: "deployments", label: "部署管理", semanticID: "platform.operations.deployment", zone: "settings" as const },
+      slots: [{ id: "body", slot: "page.body.main" as const, component: () => null }],
+    };
+    expect(() => compose({ pages: [page], shellContributions: [], config: { navigationPlacements: [
+      { semanticID: "platform.operations.deployment", groupID: "primary" },
+      { semanticID: "platform.operations.deployment", groupID: "primary" },
+    ] } })).toThrow("无效或重复映射");
+    expect(() => compose({ pages: [page], shellContributions: [], config: { navigationPlacements: [
+      { semanticID: "platform.operations.deployment", groupID: "missing" },
+    ] } })).toThrow("未知分组");
+  });
+
   it("composes account plugins through the same root-child-page navigation pipeline", () => {
     const model = compose({
       activePageID: "appearance",

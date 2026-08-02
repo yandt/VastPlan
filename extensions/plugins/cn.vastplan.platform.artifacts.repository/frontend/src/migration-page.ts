@@ -83,7 +83,7 @@ function cutoverForm(client: PlatformAdminClient): WorkbenchFormDefinition<Row> 
 export function migrationPage(client: PlatformAdminClient, id: string, path: string): CollectionPageDefinition<Row> {
   return defineCollectionPage<Row>({
     id, path, title: text("page.migration.title", "存储迁移"), description: text("page.migration.description", "按阶段准备、同步、切换、观察、回滚并安全释放旧 Volume"),
-    navigation: { id, label: text("page.migration.navigation", "存储迁移"), zone: "settings", groupID: "platform.artifacts", order: 54 },
+    navigation: { id, label: text("page.migration.navigation", "存储迁移"), semanticID: "platform.delivery.artifacts", zone: "settings", groupID: "platform.artifacts", order: 54 },
     pageActions: [{ id: "prepare", label: text("action.migration.prepare", "准备迁移"), icon: "add", tone: "primary", form: "prepare", requiredPermissions: ["platform.artifacts.migrate"] }],
     collection: {
       id: `${id}.collection`, title: text("panel.migration", "当前迁移"), view: "table", query: { mode: "page", defaultPageSize: 10, pageSizeOptions: [10] }, selection: "single",

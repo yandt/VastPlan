@@ -70,7 +70,7 @@ export function createCredentialsPage(client: PlatformAdminClient, serviceID: st
     path,
     title,
     description: message(namespace, "page.description", "管理不返回明文的凭证元数据"),
-    navigation: { id: `platform.credentials.${serviceID}`, label: title, zone: "settings", order: 30 },
+    navigation: { id: `platform.credentials.${serviceID}`, label: title, semanticID: "platform.security.credentials", zone: "settings", order: 30 },
     pageActions: [{ id: "save", label: message(namespace, "action.create", "保存或替换凭证"), icon: "add", tone: "primary", form: "save" }],
     collection: {
       id: `platform.credentials.${serviceID}`,
