@@ -2,11 +2,11 @@ import { Card, ConfigProvider, Input, Select as AntdSelect, Steps, Tabs, Typogra
 import RJSFForm from "@rjsf/core/lib/components/Form.js";
 import { generateWidgets } from "@rjsf/antd/lib/widgets/index.js";
 import { enumOptionsIndexForValue, enumOptionsValueForIndex } from "@rjsf/utils";
-import type { FieldTemplateProps, ObjectFieldTemplateProps, WidgetProps } from "@rjsf/utils";
+import type { FieldTemplateProps, ObjectFieldTemplateProps, RJSFValidationError, WidgetProps } from "@rjsf/utils";
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { cspJSONSchemaValidator } from "@vastplan/rjsf-csp-validator";
-import type { FormPresentation, FormRendererProps, FormSectionPresentation } from "@vastplan/ui-primitives";
+import type { FormPresentation, FormRendererProps, FormSectionPresentation, LocalizedText } from "@vastplan/ui-primitives";
 import { componentSizeRecipes, formControlAlignment, formGridClassName, formGridColumns, formGridCSS, formGridStyle, formLabelPlacement, localizeJSONSchema, message, useComponentSize, usePortalI18n } from "@vastplan/ui-primitives";
 import { namespace } from "./theme";
 import { safeAntdTemplates } from "./safe-rjsf-theme";
@@ -25,6 +25,49 @@ const controlAlignmentCSS = `
 .vp-antd-form-controls-end .ant-form-item-control-input-content{justify-content:flex-end}
 .vp-antd-form-controls-start .ant-form-item-control-input-content>*,.vp-antd-form-controls-end .ant-form-item-control-input-content>*{max-width:100%}
 `;
+
+type TextResolver = (value: LocalizedText) => string;
+
+/** Translate normalized JSON Schema errors at the Renderer boundary; validator messages are diagnostic-only. */
+export function localizeValidationErrors(errors: RJSFValidationError[], text: TextResolver): RJSFValidationError[] {
+  return errors.map((error) => {
+    const descriptor = validationMessage(error);
+    const localized = text(descriptor);
+    return { ...error, message: localized, stack: `${error.property ?? ""} ${localized}`.trim() };
+  });
+}
+
+function validationMessage(error: RJSFValidationError): LocalizedText {
+  const limit = validationLimit(error);
+  const name = error.name ?? "invalid";
+  switch (name) {
+    case "required": return message(namespace, "form.validation.required", "此项为必填项");
+    case "minLength": return message(namespace, "form.validation.minLength", "请至少输入 {limit} 个字符", { limit });
+    case "maxLength": return message(namespace, "form.validation.maxLength", "最多可输入 {limit} 个字符", { limit });
+    case "minimum": return message(namespace, "form.validation.minimum", "数值不能小于 {limit}", { limit });
+    case "maximum": return message(namespace, "form.validation.maximum", "数值不能大于 {limit}", { limit });
+    case "exclusiveMinimum": return message(namespace, "form.validation.exclusiveMinimum", "数值必须大于 {limit}", { limit });
+    case "exclusiveMaximum": return message(namespace, "form.validation.exclusiveMaximum", "数值必须小于 {limit}", { limit });
+    case "minItems": return message(namespace, "form.validation.minItems", "请至少添加 {limit} 项", { limit });
+    case "maxItems": return message(namespace, "form.validation.maxItems", "最多可添加 {limit} 项", { limit });
+    case "minProperties": return message(namespace, "form.validation.minProperties", "请至少填写 {limit} 项", { limit });
+    case "maxProperties": return message(namespace, "form.validation.maxProperties", "最多可填写 {limit} 项", { limit });
+    case "pattern": return message(namespace, "form.validation.pattern", "输入格式不正确");
+    case "enum": return message(namespace, "form.validation.enum", "请选择有效选项");
+    case "type": return message(namespace, "form.validation.type", "输入值类型不正确");
+    case "uniqueItems": return message(namespace, "form.validation.uniqueItems", "列表中不能包含重复项");
+    case "additionalProperties": return message(namespace, "form.validation.additionalProperties", "包含不允许的字段");
+    default:
+      return name === "format" || name.startsWith("format")
+        ? message(namespace, "form.validation.format", "输入格式不正确")
+        : message(namespace, "form.invalid", "输入内容不符合要求");
+  }
+}
+
+function validationLimit(error: RJSFValidationError): string | number {
+  const value = error.params?.limit;
+  return typeof value === "string" || typeof value === "number" ? value : "?";
+}
 
 function SecretRefWidget({ value, disabled, readonly, required, onChange, onBlur, onFocus, id, label }: WidgetProps) {
   const i18n = usePortalI18n();
@@ -110,8 +153,9 @@ export function FormRenderer({ schema, value, onChange, size: requestedSize, pre
   const formContext = suppliedContext ?? emptyFormContext;
   const localizedSchema = useMemo(() => localizeJSONSchema(schema.schema, schema.localization, i18n.text), [i18n.text, schema.localization, schema.schema]);
   const localizedUISchema = useMemo(() => schema.uiSchema === undefined ? undefined : localizeJSONSchema(schema.uiSchema, schema.uiLocalization, i18n.text), [i18n.text, schema.uiLocalization, schema.uiSchema]);
-  const validation = useMemo(() => validator.validateFormData(value, schema.schema), [schema.schema, value]);
-  const syncErrors = useMemo(() => Object.fromEntries(validation.errors.map((error, index) => [errorPath(error) || `form.${index}`, error.message ?? i18n.text(message(namespace, "form.invalid", "值不符合 Schema"))])), [i18n, validation.errors]);
+  const transformErrors = useMemo(() => (errors: RJSFValidationError[]) => localizeValidationErrors(errors, i18n.text), [i18n.text]);
+  const validation = useMemo(() => validator.validateFormData(value, schema.schema, undefined, transformErrors, schema.uiSchema), [schema.schema, schema.uiSchema, transformErrors, value]);
+  const syncErrors = useMemo(() => Object.fromEntries(validation.errors.map((error, index) => [errorPath(error) || `form.${index}`, error.message ?? i18n.text(message(namespace, "form.invalid", "输入内容不符合要求"))])), [i18n, validation.errors]);
   const [asyncValidation, setAsyncValidation] = useState<{ source?: Readonly<Record<string, unknown>>; validating: boolean; errors: Readonly<Record<string, string>> }>({ validating: false, errors: {} });
   const currentAsync = asyncValidation.source === value ? asyncValidation : { source: value, validating: validate !== undefined && validation.errors.length === 0, errors: {} };
   useEffect(() => {
@@ -150,6 +194,7 @@ export function FormRenderer({ schema, value, onChange, size: requestedSize, pre
     extraErrors={errorSchema(combinedExternalErrors) as never}
     extraErrorsBlockSubmit
     noHtml5Validate
+    transformErrors={transformErrors}
     formContext={formContext}
     onChange={(event) => onChange((event.formData ?? {}) as Record<string, unknown>)}
     templates={templates}

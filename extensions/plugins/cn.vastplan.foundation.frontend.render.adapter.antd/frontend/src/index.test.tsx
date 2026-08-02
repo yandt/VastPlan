@@ -1,7 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { PortalI18nProvider, type PortalUI } from "@vastplan/ui-primitives";
+import type { RJSFSchema } from "@rjsf/utils";
+import { cspJSONSchemaValidator } from "@vastplan/rjsf-csp-validator";
+import { PortalI18nProvider, translate, type PortalUI } from "@vastplan/ui-primitives";
 import { antdIconForTheme, antdPortalUIComponents, antdRenderer } from "./index";
+import { localizeValidationErrors } from "./form-renderer";
+import { namespace } from "./theme";
 
 describe("Ant Design portal UI renderer", () => {
   it("implements the complete framework-neutral component surface", () => {
@@ -144,6 +148,18 @@ describe("Ant Design portal UI renderer", () => {
     expect(markup).toContain("vp-antd-form-controls-end");
     expect(markup.match(/Name is already used/g)).toHaveLength(1);
     expect(markup).not.toContain("Submit");
+  });
+
+  it("localizes JSON Schema validation errors without exposing validator internals", () => {
+    const catalogs = { [namespace]: antdRenderer.localization! };
+    const schema: RJSFSchema = { type: "object", properties: { reason: { type: "string", minLength: 4 } } };
+    const errors = cspJSONSchemaValidator.validateFormData({ reason: "三个" }, schema).errors;
+    const localize = (locale: string) => localizeValidationErrors(errors, (value) => translate(value, locale, catalogs));
+
+    expect(errors[0]?.message).toContain("#/reason");
+    expect(localize("zh-CN")[0]?.message).toBe("请至少输入 4 个字符");
+    expect(localize("en-US")[0]?.message).toBe("Enter at least 4 characters");
+    expect(localize("zh-CN")[0]?.stack).not.toContain("#/reason");
   });
 
   it("allows a form to opt out of the default end control alignment", () => {
