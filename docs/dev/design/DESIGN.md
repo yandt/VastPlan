@@ -80,7 +80,7 @@ UI Contract 9.0 暴露语义 token、账户外观契约与四级 `ComponentSize`
 
 ### 4.2 顶部导航
 
-- 64px 顶栏：Logo 在 start；`primary` 和 `secondary` 根组在 center；`settings` 和账户区在 end。
+- 64px 顶栏：Logo 在 start；桌面端 Page Header（标题、描述与页面 slots）紧随其后；`primary` 和 `secondary` 根组位于其后，二者以分隔线区分；`settings` 和账户区在 end。移动端仍将 Page Header 保持为独立第二行，避免与菜单争夺可用宽度。
 - 顶部布局的根组与“更多”触发器仅显示语义图标；可访问名称与原生 Tooltip 使用完整本地化菜单名称。账户区保持圆形头像，二、三级页面名称只在展开菜单中显示。
 - 顶部账户区与前方一级菜单之间固定使用一条边界色竖分隔线，分隔线两侧分别保留 6px 与 12px 间距，不依赖菜单数量或图标宽度。
 - `primary` 与 `secondary` 之间有视觉分隔。活动根组同时显示 selected surface、位置标记和 `aria-expanded/aria-current` 关联状态。

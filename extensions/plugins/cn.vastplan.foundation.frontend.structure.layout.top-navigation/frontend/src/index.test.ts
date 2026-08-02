@@ -23,6 +23,13 @@ describe("top navigation shell layout", () => {
     expect(topNavigationShellCSS).toContain("@media (max-width:767px)");
   });
 
+  it("places desktop page context before the main menu with a visual boundary", () => {
+    expect(topNavigationShellCSS).toContain(".vp-top-inline-page-header{box-sizing:border-box;display:grid");
+    expect(topNavigationShellCSS).toContain(".vp-top-inline-page-header+.vp-top-center");
+    expect(topNavigationShellCSS).toContain("padding-left:12px;border-left:1px solid var(--vp-top-border)");
+    expect(topNavigationShellCSS).toContain(".vp-top-page-header{display:none}");
+  });
+
   it("uses the renderer surface token for the page body", () => {
     expect(topNavigationShellCSS).toContain(".vp-top-page-scroller{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;background:var(--vp-top-surface)}");
     expect(topNavigationShellCSS).toContain("padding:var(--vp-page-content-start) 24px 24px");
