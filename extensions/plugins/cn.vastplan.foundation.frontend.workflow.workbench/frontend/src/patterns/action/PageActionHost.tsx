@@ -47,7 +47,7 @@ export function PageActionHost({ definition, onRefresh }: { definition: PageActi
       {layout.direct.map((action) => <PageActionButton key={action.id} action={action} loading={running === action.id} disabled={running !== undefined && running !== action.id} onRun={() => void run(action)} />)}
       <ActionMenuPopover
         label={i18n.text(message(namespace, "action.more", "更多页面操作"))}
-        triggerSize="lg"
+        triggerSize="md"
         items={layout.overflow.map((action) => ({ id: action.id, label: i18n.text(action.label), icon: action.icon, disabled: running !== undefined, tone: action.tone === "danger" ? "danger" : "normal" }))}
         onSelect={(id) => {
         const action = layout.overflow.find((candidate) => candidate.id === id);
@@ -64,8 +64,8 @@ function PageActionButton({ action, loading, disabled, onRun }: { action: PageAc
   const i18n = usePortalI18n();
   const label = i18n.text(action.label);
   const display = action.display ?? "icon";
-  if (display === "icon") return <ui.IconButton size="lg" icon={action.icon} label={label} loading={loading} disabled={disabled} tone={action.tone === "danger" ? "danger" : action.tone === "primary" ? "primary" : "normal"} onClick={onRun} />;
-  return <ui.Button size="lg" kind={action.tone === "danger" ? "danger" : action.tone === "primary" ? "primary" : "secondary"} loading={loading} disabled={disabled} onClick={onRun}>
+  if (display === "icon") return <ui.IconButton size="md" icon={action.icon} label={label} loading={loading} disabled={disabled} tone={action.tone === "danger" ? "danger" : action.tone === "primary" ? "primary" : "normal"} onClick={onRun} />;
+  return <ui.Button size="md" kind={action.tone === "danger" ? "danger" : action.tone === "primary" ? "primary" : "secondary"} loading={loading} disabled={disabled} onClick={onRun}>
     {display === "label" ? null : <ui.Icon name={action.icon} />} {label}
   </ui.Button>;
 }

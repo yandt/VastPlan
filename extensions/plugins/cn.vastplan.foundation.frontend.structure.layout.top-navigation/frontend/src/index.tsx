@@ -128,7 +128,7 @@ function RootPopover({ group, composition, open, active, onOpenChange, onNavigat
   const ui = usePortalUI();
   const i18n = usePortalI18n();
   const label = i18n.text(group.label);
-  return <ui.Popover open={open} placement="bottom-start" ariaLabel={label} initialFocus="current" onOpenChange={(next) => onOpenChange(next)} trigger={(props) => <button ref={(node) => props.ref(node)} type="button" className="vp-top-root-trigger" data-zone={group.zone} data-active={active || undefined} aria-label={label} title={label} aria-current={active ? "location" : undefined} aria-expanded={props["aria-expanded"]} aria-controls={props["aria-controls"]} onClick={props.onClick} onKeyDown={props.onKeyDown}><ui.Icon name={group.icon} size="lg" /></button>}>
+  return <ui.Popover open={open} placement="bottom-start" ariaLabel={label} initialFocus="current" onOpenChange={(next) => onOpenChange(next)} trigger={(props) => <button ref={(node) => props.ref(node)} type="button" className="vp-top-root-trigger" data-zone={group.zone} data-active={active || undefined} aria-label={label} title={label} aria-current={active ? "location" : undefined} aria-expanded={props["aria-expanded"]} aria-controls={props["aria-controls"]} onClick={props.onClick} onKeyDown={props.onKeyDown}><ui.Icon name={group.icon} size="md" /></button>}>
     <MegaGroup group={group} composition={composition} onNavigate={onNavigate} />
   </ui.Popover>;
 }
@@ -154,7 +154,7 @@ function OverflowPopover({ groups: overflow, composition, open, active, onOpenCh
   const ui = usePortalUI();
   const i18n = usePortalI18n();
   const label = i18n.text(message(namespace, "navigation.more", "更多导航"));
-  return <ui.Popover open={open} placement="bottom-end" ariaLabel={label} initialFocus="current" onOpenChange={(next) => onOpenChange(next)} trigger={(props) => <button ref={(node) => props.ref(node)} type="button" className="vp-top-root-trigger" data-active={active || undefined} aria-label={label} title={label} aria-expanded={props["aria-expanded"]} aria-controls={props["aria-controls"]} onClick={props.onClick} onKeyDown={props.onKeyDown}><ui.Icon name="menu" size="lg" /></button>}>
+  return <ui.Popover open={open} placement="bottom-end" ariaLabel={label} initialFocus="current" onOpenChange={(next) => onOpenChange(next)} trigger={(props) => <button ref={(node) => props.ref(node)} type="button" className="vp-top-root-trigger" data-active={active || undefined} aria-label={label} title={label} aria-expanded={props["aria-expanded"]} aria-controls={props["aria-controls"]} onClick={props.onClick} onKeyDown={props.onKeyDown}><ui.Icon name="menu" size="md" /></button>}>
     <div className="vp-top-overflow-mega">{overflow.map((group) => <section key={group.id} className="vp-top-overflow-section"><h2>{i18n.text(group.label)}</h2><MegaGroup group={group} composition={composition} onNavigate={onNavigate} /></section>)}</div>
   </ui.Popover>;
 }
