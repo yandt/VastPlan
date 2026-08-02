@@ -17,6 +17,7 @@ import { PlatformAuthorizationRoutes } from "./platform-authorization-routes";
 import { PlatformPluginConfigurationRoutes } from "./platform-plugin-configuration-routes";
 import type { APIContractCatalogPort } from "../api-exposure/api-exposure-contract";
 import { PlatformManagementAPIRoutes } from "./platform-management-api-routes";
+import { PlatformMarketplaceRoutes } from "./platform-marketplace-routes";
 
 const prefix = "/v1/portals/";
 
@@ -32,6 +33,7 @@ export class PlatformManagementRoutes {
   private readonly authorization: PlatformAuthorizationRoutes;
   private readonly pluginConfigurations: PlatformPluginConfigurationRoutes;
   private readonly managementAPI?: PlatformManagementAPIRoutes;
+  private readonly marketplace: PlatformMarketplaceRoutes;
 
   public constructor(private readonly resolver: PlatformManagementResolver, client: PlatformCapabilityPort, identity: IdentityProvider, contractCatalog?: APIContractCatalogPort) {
     this.settings = new PlatformSettingsRoutes(client);
@@ -44,6 +46,7 @@ export class PlatformManagementRoutes {
     this.apiExposures = new PlatformAPIExposureRoutes(client);
     this.authorization = new PlatformAuthorizationRoutes(client);
     this.pluginConfigurations = new PlatformPluginConfigurationRoutes(client);
+    this.marketplace = new PlatformMarketplaceRoutes(client);
     this.managementAPI = contractCatalog === undefined ? undefined : new PlatformManagementAPIRoutes(contractCatalog, client);
   }
 
@@ -73,6 +76,7 @@ export class PlatformManagementRoutes {
     if (await this.apiExposures.handle(resourceParts, principal, target, request, response, signal)) return true;
     if (await this.authorization.handle(resourceParts, principal, target, request, response, signal)) return true;
     if (await this.pluginConfigurations.handle(resourceParts, principal, target, request, response, signal)) return true;
+    if (await this.marketplace.handle(resourceParts, principal, target, request, response, signal)) return true;
     return reject(response, 404, "not_found", method);
   }
 }

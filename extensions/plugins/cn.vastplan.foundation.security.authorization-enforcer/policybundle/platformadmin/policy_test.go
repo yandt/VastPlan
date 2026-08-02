@@ -236,6 +236,19 @@ func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
 	if got, _ := decide(businessPlugin, runtimeLease); got != extpoint.DecisionDeny {
 		t.Fatalf("其他插件不得被平台策略授权 Runtime lease: %s", got)
 	}
+	marketplace := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.vastplan.platform.artifacts.marketplace"}}
+	if got, _ := decide(marketplace, extpoint.PermissionRequest{ExtensionPoint: extpoint.ToolPackage, Capability: platformadminapi.ArtifactsCapability, Operation: "listCatalog"}); got != extpoint.DecisionAllow {
+		t.Fatalf("Marketplace 应只能读取已验证 Catalog: %s", got)
+	}
+	if got, _ := decide(marketplace, extpoint.PermissionRequest{ExtensionPoint: extpoint.ToolPackage, Capability: platformadminapi.ArtifactsCapability, Operation: "resolve"}); got != extpoint.DecisionDeny {
+		t.Fatalf("Marketplace 不得扩张到仓库解析或写入: %s", got)
+	}
+	if got, _ := decide(marketplace, runtimeLease); got != extpoint.DecisionAllow {
+		t.Fatalf("Marketplace 的受管远端 Token lease 应允许: %s", got)
+	}
+	if got, _ := decide(marketplace, extpoint.PermissionRequest{Capability: "kernel.credential.material-lease", Operation: "consume"}); got != extpoint.DecisionDeny {
+		t.Fatalf("Marketplace 不得扩大 material lease operation: %s", got)
+	}
 }
 
 func TestAPIExposureManagementAndRuntimeBoundaries(t *testing.T) {

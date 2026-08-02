@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.infrastructure.deployment-manager",
   "name": "VastPlan 部署与测试发布管理服务",
-  "version": "0.24.0",
+  "version": "0.25.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -35,6 +35,8 @@
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "listPluginInstallationTargets", "permissions": ["platform.deployment.plugin.preview"], "access": "read", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "listPluginInstallationCandidates", "permissions": ["platform.deployment.plugin.preview"], "access": "read", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "getPluginInstallationCandidate", "permissions": ["platform.deployment.plugin.preview"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "listSelfServicePluginInstallationCandidates", "permissions": ["platform.deployment.plugin.preview"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "getSelfServicePluginInstallationCandidate", "permissions": ["platform.deployment.plugin.preview"], "access": "read", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "createPluginInstallationCandidate", "permissions": ["platform.deployment.plugin.request"], "access": "write", "approval": "different-subject" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "createSelfServicePluginInstallationCandidate", "permissions": ["platform.deployment.plugin.request"], "access": "write", "approval": "different-subject" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "submitPluginInstallationCandidate", "permissions": ["platform.deployment.plugin.request"], "access": "write", "approval": "different-subject" },
@@ -42,6 +44,11 @@
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "approvePluginInstallationCandidate", "permissions": ["platform.deployment.plugin.approve"], "access": "approve", "approval": "different-subject" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "activatePluginInstallationCandidate", "permissions": ["platform.deployment.plugin.activate"], "access": "execute", "approval": "different-subject" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "rollbackPluginInstallationCandidate", "permissions": ["platform.deployment.plugin.activate"], "access": "execute", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "submitSelfServicePluginInstallationCandidate", "permissions": ["platform.deployment.plugin.request"], "access": "write", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "cancelSelfServicePluginInstallationCandidate", "permissions": ["platform.deployment.plugin.request"], "access": "write", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "approveSelfServicePluginInstallationCandidate", "permissions": ["platform.deployment.plugin.approve"], "access": "approve", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "activateSelfServicePluginInstallationCandidate", "permissions": ["platform.deployment.plugin.activate"], "access": "execute", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "rollbackSelfServicePluginInstallationCandidate", "permissions": ["platform.deployment.plugin.activate"], "access": "execute", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "listServiceRevisionAudit", "permissions": ["platform.deployment.read"], "access": "read", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "listTestTargetBindings", "permissions": ["platform.deployment.read"], "access": "read", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "listTestReleases", "permissions": ["platform.deployment.read"], "access": "read", "approval": "none" },
@@ -75,6 +82,27 @@
     "provides": [{ "extensionPoint": "tool.package", "capability": "platform.deployment", "visibility": "cluster", "routing": "leader", "routingDomain": "platform" }]
   },
   "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
+  "configuration": {
+    "scope": "service", "applyMode": "restart",
+    "schema": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "pluginInstallationApprovalPolicy": {
+          "type": "object", "additionalProperties": false, "required": ["protocol", "capability", "logicalService", "routingDomain", "profile"],
+          "properties": {
+            "protocol": { "const": "approval.policy.v2" },
+            "capability": { "const": "foundation.security.approval-policy" },
+            "logicalService": { "type": "string", "minLength": 1, "maxLength": 160 },
+            "routingDomain": { "type": "string", "minLength": 1, "maxLength": 160 },
+            "profile": {
+              "type": "object", "additionalProperties": false, "required": ["id", "revision", "digest"],
+              "properties": { "id": { "type": "string", "minLength": 1, "maxLength": 160 }, "revision": { "type": "integer", "minimum": 1 }, "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" } }
+            }
+          }
+        }
+      }
+    }
+  },
   "state": { "backend": { "format": "cn.vastplan.platform.deployment-manager.shared", "formatVersion": 1 } },
   "activation": ["onStartup", "onPortalStartup"],
   "entry": { "backend": "backend/deployment-manager", "frontend": "frontend/dist/index.js" },
@@ -101,11 +129,18 @@
           { "name": "listPluginInstallationTargets", "description": "列出控制器获授权的最小逻辑服务安装目标", "paramsSchema": { "type": "object", "properties": {} } },
           { "name": "listPluginInstallationCandidates", "description": "列出插件安装候选及派生状态", "paramsSchema": { "type": "object", "properties": {} } },
           { "name": "getPluginInstallationCandidate", "description": "读取一个插件安装候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "candidateId": { "type": "string" } }, "required": ["candidateId"] } },
+          { "name": "listSelfServicePluginInstallationCandidates", "description": "只列出 ManagementTarget 绑定服务的自助安装候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "installationTarget": { "type": "object" } }, "required": ["installationTarget"] } },
+          { "name": "getSelfServicePluginInstallationCandidate", "description": "读取 ManagementTarget 绑定服务的一个自助安装候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "candidateId": { "type": "string" }, "installationTarget": { "type": "object" } }, "required": ["candidateId", "installationTarget"] } },
           { "name": "submitPluginInstallationCandidate", "description": "重新规划并提交插件安装候选审批", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "candidateId": { "type": "string" } }, "required": ["candidateId"] } },
           { "name": "approvePluginInstallationCandidate", "description": "由不同主体批准插件安装候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "candidateId": { "type": "string" } }, "required": ["candidateId"] } },
           { "name": "activatePluginInstallationCandidate", "description": "通过既有可信发布链激活插件安装候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "candidateId": { "type": "string" } }, "required": ["candidateId"] } },
           { "name": "cancelPluginInstallationCandidate", "description": "取消尚未提交的插件安装候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "candidateId": { "type": "string" } }, "required": ["candidateId"] } },
           { "name": "rollbackPluginInstallationCandidate", "description": "以新的服务修订回滚已激活安装候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "candidateId": { "type": "string" } }, "required": ["candidateId"] } },
+          { "name": "submitSelfServicePluginInstallationCandidate", "description": "重新规划并提交绑定服务的自助安装候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "candidateId": { "type": "string" }, "installationTarget": { "type": "object" } }, "required": ["candidateId", "installationTarget"] } },
+          { "name": "approveSelfServicePluginInstallationCandidate", "description": "按审批策略批准绑定服务的自助安装候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "candidateId": { "type": "string" }, "installationTarget": { "type": "object" }, "approvalEvidence": { "type": "object", "maxProperties": 32 } }, "required": ["candidateId", "installationTarget"] } },
+          { "name": "activateSelfServicePluginInstallationCandidate", "description": "激活绑定服务的自助安装候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "candidateId": { "type": "string" }, "installationTarget": { "type": "object" } }, "required": ["candidateId", "installationTarget"] } },
+          { "name": "cancelSelfServicePluginInstallationCandidate", "description": "取消绑定服务尚未提交的自助安装候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "candidateId": { "type": "string" }, "installationTarget": { "type": "object" } }, "required": ["candidateId", "installationTarget"] } },
+          { "name": "rollbackSelfServicePluginInstallationCandidate", "description": "回滚绑定服务已激活的自助安装候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "candidateId": { "type": "string" }, "installationTarget": { "type": "object" } }, "required": ["candidateId", "installationTarget"] } },
           { "name": "createIntentDraft", "description": "创建 Application Intent 规划草稿", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "intent": { "type": "object" } }, "required": ["intent"] } },
           { "name": "updateIntentDraft", "description": "更新 Application Intent 并重建计划快照", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "revisionId": { "type": "integer", "minimum": 1 }, "intent": { "type": "object" } }, "required": ["revisionId", "intent"] } },
           { "name": "refreshIntentDraft", "description": "显式接受最新 Planner 结果并清除 stale", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "revisionId": { "type": "integer", "minimum": 1 } }, "required": ["revisionId"] } },

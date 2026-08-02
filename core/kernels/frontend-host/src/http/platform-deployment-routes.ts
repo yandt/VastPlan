@@ -7,17 +7,20 @@ import { PlatformDeploymentNodeRoutes } from "./platform-deployment-node-routes"
 import { PlatformDeploymentServiceRoutes } from "./platform-deployment-service-routes";
 import { PlatformDeploymentTestRoutes } from "./platform-deployment-test-routes";
 import { PlatformDeploymentInstallationRoutes } from "./platform-deployment-installation-routes";
+import { PlatformDeploymentSelfServiceInstallationRoutes } from "./platform-deployment-self-service-installation-routes";
 
 export class PlatformDeploymentRoutes {
   private readonly nodes: PlatformDeploymentNodeRoutes;
   private readonly services: PlatformDeploymentServiceRoutes;
   private readonly installations: PlatformDeploymentInstallationRoutes;
   private readonly tests: PlatformDeploymentTestRoutes;
+  private readonly selfServiceInstallations: PlatformDeploymentSelfServiceInstallationRoutes;
 
   public constructor(client: PlatformCapabilityPort) {
     this.nodes = new PlatformDeploymentNodeRoutes(client);
     this.services = new PlatformDeploymentServiceRoutes(client);
     this.installations = new PlatformDeploymentInstallationRoutes(client);
+    this.selfServiceInstallations = new PlatformDeploymentSelfServiceInstallationRoutes(client);
     this.tests = new PlatformDeploymentTestRoutes(client);
   }
 
@@ -27,6 +30,7 @@ export class PlatformDeploymentRoutes {
     if (await this.nodes.handle(deploymentParts, principal, target, request, response, signal)) return true;
     if (await this.services.handle(deploymentParts, principal, target, request, response, signal)) return true;
     if (await this.installations.handle(deploymentParts, principal, target, request, response, signal)) return true;
+    if (await this.selfServiceInstallations.handle(deploymentParts, principal, target, request, response, signal)) return true;
     if (await this.tests.handle(deploymentParts, principal, target, request, response, signal)) return true;
     sendAPIError(response, 404, "not_found", request.method === "HEAD");
     return true;

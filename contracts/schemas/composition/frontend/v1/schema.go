@@ -185,8 +185,19 @@ type ManagedService struct {
 	Label          string            `json:"label,omitempty"`
 	LogicalService string            `json:"logicalService"`
 	RoutingDomain  string            `json:"routingDomain"`
+	Resource       *ManagedResource  `json:"resource,omitempty"`
 	Capabilities   []CapabilityGrant `json:"capabilities"`
 	APIs           []ManagementAPI   `json:"apis,omitempty"`
+}
+
+// ManagedResource is an optional, trusted scope carried by a Portal management
+// binding. Browser routes may read it but cannot replace it. The first resource
+// kind binds self-service operations to one logical backend service unit.
+type ManagedResource struct {
+	Kind       string `json:"kind"`
+	Kernel     string `json:"kernel"`
+	Deployment string `json:"deployment"`
+	UnitID     string `json:"unitId"`
 }
 
 // ManagementAPI binds an opaque Portal-local route id to one exact contract

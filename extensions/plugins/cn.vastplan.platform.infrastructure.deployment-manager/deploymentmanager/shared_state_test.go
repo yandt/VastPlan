@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	sharedstatev1 "cdsoft.com.cn/VastPlan/contracts/schemas/sharedstate/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	sharedstatev1 "cdsoft.com.cn/VastPlan/contracts/schemas/sharedstate/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"

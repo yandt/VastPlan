@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "revision": 99,
+  "revision": 100,
   "id": "local-portal-platform",
   "profiles": [
     {
       "version": 1,
-      "revision": 99,
+      "revision": 100,
       "id": "portal-default",
       "target": { "kernel": "frontend" },
       "updates": { "mode": "automatic" },
@@ -101,7 +101,8 @@
         { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.9.15", "channel": "stable" },
         { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.38.2", "channel": "stable" },
         { "id": "cn.vastplan.platform.integration.api-exposure", "version": "0.5.15", "channel": "stable" },
-        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.24.0", "channel": "stable" },
+        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.25.0", "channel": "stable" },
+        { "id": "cn.vastplan.platform.artifacts.marketplace", "version": "0.1.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.security.authorization-policy", "version": "0.7.5", "channel": "stable" }
       ],
       "security": { "firstPartyOnly": true, "requireIntegrity": true }
@@ -113,8 +114,8 @@
       "portalId": "operations",
       "platformProfile": {
         "id": "portal-default",
-        "revision": 99,
-        "digest": "9f86ba6e196ce06f59beb4a55d60a1f02230b56ea3c6cf96de78f0f5794212a8"
+        "revision": 100,
+        "digest": "f5675f6d4844729d19ce57e4af1cecd2e0260df925e4e5f0dfe1774f34543e95"
       },
       "services": [
         {
@@ -180,12 +181,22 @@
           ]
         },
         {
+          "id": "marketplace",
+          "label": "插件市场服务",
+          "logicalService": "platform.artifacts.marketplace",
+          "routingDomain": "platform",
+          "capabilities": [
+            { "capability": "platform.artifacts.marketplace", "read": ["listSources", "listCatalog"] }
+          ]
+        },
+        {
           "id": "deployment",
           "label": "部署管理服务",
           "logicalService": "platform.deployment",
           "routingDomain": "platform",
+          "resource": { "kind": "service-unit", "kernel": "backend", "deployment": "local-platform-management", "unitId": "platform-deployment" },
           "capabilities": [
-            { "capability": "platform.deployment", "read": ["listNodes", "listBootstrapJobs", "listDeploymentTargets", "listServiceRevisions", "previewPluginInstallation", "listPluginInstallationTargets", "listPluginInstallationCandidates", "getPluginInstallationCandidate", "listServiceRevisionAudit", "listTestTargetBindings", "listTestReleases"], "write": ["putNode", "createBootstrap", "approveBootstrap", "createIntentDraft", "updateIntentDraft", "refreshIntentDraft", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision", "createPluginInstallationCandidate", "submitPluginInstallationCandidate", "approvePluginInstallationCandidate", "activatePluginInstallationCandidate", "cancelPluginInstallationCandidate", "rollbackPluginInstallationCandidate", "putTestTargetBinding", "createTestRelease", "rollbackTestRelease"] }
+            { "capability": "platform.deployment", "read": ["listNodes", "listBootstrapJobs", "listDeploymentTargets", "listServiceRevisions", "previewPluginInstallation", "previewSelfServicePluginInstallation", "listPluginInstallationTargets", "listPluginInstallationCandidates", "getPluginInstallationCandidate", "listSelfServicePluginInstallationCandidates", "getSelfServicePluginInstallationCandidate", "listServiceRevisionAudit", "listTestTargetBindings", "listTestReleases"], "write": ["putNode", "createBootstrap", "approveBootstrap", "createIntentDraft", "updateIntentDraft", "refreshIntentDraft", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision", "createPluginInstallationCandidate", "createSelfServicePluginInstallationCandidate", "submitPluginInstallationCandidate", "approvePluginInstallationCandidate", "activatePluginInstallationCandidate", "cancelPluginInstallationCandidate", "rollbackPluginInstallationCandidate", "submitSelfServicePluginInstallationCandidate", "approveSelfServicePluginInstallationCandidate", "activateSelfServicePluginInstallationCandidate", "cancelSelfServicePluginInstallationCandidate", "rollbackSelfServicePluginInstallationCandidate", "putTestTargetBinding", "createTestRelease", "rollbackTestRelease"] }
           ]
         },
         {

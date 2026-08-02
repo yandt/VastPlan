@@ -304,6 +304,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [凭证管理基础插件](plugins/cn.vastplan.platform.security.credentials.md) —— Vault Transit 信封加密、元数据 API 与不返回明文的安全边界
 - [数据库连接基础插件](plugins/cn.vastplan.platform.data.relational.connection-manager.md) —— 连接管理面、CredentialRef 与 Database Runtime 规划边界
 - [制品仓库基础插件](plugins/cn.vastplan.platform.artifacts.repository.md) —— HTTPS 发布/读取、Catalog、Publish Journal、内核信任适配与兼容自举边界
+- [插件市场 Platform 系统插件](plugins/cn.vastplan.platform.artifacts.marketplace.md) —— 多市场 URL 聚合、受治理目录发现、服务自助安装与仓库信任边界
 - [制品安全评估 Provider](plugins/cn.vastplan.platform.artifacts.assessment.provider.md) —— 一次性扫描租约、离线 Trivy、Material Lease 私钥与签名准入记录
 - [制品持续复扫 Controller](plugins/cn.vastplan.platform.artifacts.assessment.controller.md) —— fenced leader、持久计划、稳定抖动、有界退避与只追加状态收敛
 - [Trivy Database File Snapshot](plugins/cn.vastplan.platform.artifacts.assessment.database.file.md) —— 每节点本地、摘要钉死、原子物化的离线数据库快照

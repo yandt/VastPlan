@@ -58,8 +58,8 @@ export async function startPlatformManagementTestServer(invoker: TrustedCapabili
   };
 }
 
-export function managementBinding(capabilities: unknown[]): Record<string, unknown> {
+export function managementBinding(capabilities: unknown[], resource?: Record<string, unknown>): Record<string, unknown> {
   return { tenantId: "tenant-a", portalId: "operations", platformProfile: { id: "profile", revision: 1, digest: "a".repeat(64) }, services: [{
-    id: "core", logicalService: "platform.core.primary", routingDomain: "platform", capabilities,
+    id: "core", logicalService: "platform.core.primary", routingDomain: "platform", ...(resource === undefined ? {} : { resource }), capabilities,
   }] };
 }

@@ -31,7 +31,8 @@
         { "id": "platform-api-exposure", "minReady": 1 },
         { "id": "platform-authentication-delivery", "minReady": 1 },
         { "id": "platform-database", "minReady": 1 },
-        { "id": "platform-database-runtime", "minReady": 1 }
+        { "id": "platform-database-runtime", "minReady": 1 },
+        { "id": "platform-marketplace", "minReady": 1 }
       ]
     }
   ]

@@ -1,7 +1,7 @@
 import type { BackendApplicationIntent } from "@vastplan/composition-planning";
 import type {
 	APIExposureDraftRequest, APIExposureRevision, APIExposureStatus, ArtifactAssessmentInventory, ArtifactAssessmentReportGrant, ArtifactAssessmentRevisionStatus,
-	ArtifactCapacity, ArtifactCapacityBucket, ArtifactCatalogEntry, ArtifactCatalogPage, ArtifactCatalogQuery, ArtifactGCBlocker,
+	ArtifactCapacity, ArtifactCapacityBucket, ArtifactCatalogEntry, ArtifactCatalogPage, ArtifactCatalogQuery, ArtifactGCBlocker, PluginMarketplaceCatalogPage, PluginMarketplaceCatalogQuery, PluginMarketplaceSources,
 	ArtifactGCCandidate, ArtifactGCPlan, ArtifactGCRecord, ArtifactGCStatus, ArtifactLifecycleRequest, ArtifactLifecycleResult,
 	ArtifactProvenanceDeclaration, ArtifactPublication, ArtifactPublicationPage, ArtifactPublicationResult, ArtifactPublicationStatus, ArtifactPythonLockDeclaration,
 	ArtifactQuotaUsage, ArtifactRef, ArtifactReference, ArtifactReferencePage, ArtifactReferenceSnapshot, ArtifactReferenceSnapshotValue,
@@ -14,7 +14,7 @@ import type {
 	ManagedCredentialAuditEvent, ManagedCredentialAuditPage, ManagedCredentialMaintenanceStatus, ManagedNode, NodeBootstrapPlan, PlatformFetch,
 	PlatformFetchResponse, PluginConfigurationCandidate, PluginConfigurationCandidateStatus, PluginConfigurationDefinition, PluginConfigurationResourceCollection, PluginConfigurationResourceItem,
 	PluginConfigurationResourcePage, PluginConfigurationResourceResponse, PrepareArtifactMigrationRequest, PutDatabaseConnectionRequest, PutTestTargetBindingRequest, SeedHandoffState,
-	PluginInstallationCandidate, PluginInstallationPreview, PluginInstallationPreviewRequest, PluginInstallationTargetOption, ServiceAuditEvent, ServiceRevision, ServiceRevisionStatus, Setting, SubmitArtifactPublicationRequest, TestRelease,
+	PluginInstallationCandidate, PluginInstallationPreview, PluginInstallationPreviewRequest, PluginInstallationTargetOption, SelfServicePluginInstallationRequest, ServiceAuditEvent, ServiceRevision, ServiceRevisionStatus, Setting, SubmitArtifactPublicationRequest, TestRelease,
 	TestReleaseStatus, TestTargetBinding, UpdateAuthorizationBindingRequest,
 } from "./types.js";
 
@@ -161,6 +161,15 @@ export class PlatformAdminClient {
       page: String(page), pageSize: String(pageSize),
     })}`);
   }
+  public listPluginMarketplaceSources(): Promise<PluginMarketplaceSources> { return this.get(`${this.basePath}/marketplace/sources`); }
+  public listPluginMarketplaceCatalog(value: PluginMarketplaceCatalogQuery): Promise<PluginMarketplaceCatalogPage> {
+    const page = value.page ?? 1, pageSize = value.pageSize ?? 20;
+    if (!/^[a-z][a-z0-9._-]{0,127}$/.test(value.sourceId) || !Number.isSafeInteger(page) || page < 1 || !Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100) throw new PlatformAdminError(400, "invalid_marketplace_query");
+    return this.get(`${this.basePath}/marketplace/catalog${query({
+      sourceId: value.sourceId, pluginId: value.pluginId, pluginPrefix: value.pluginPrefix, namespace: value.namespace, publisher: value.publisher,
+      version: value.version, channel: value.channel, target: value.target, lifecycle: value.lifecycle, page: String(page), pageSize: String(pageSize),
+    })}`);
+  }
   public artifactRepositoryCapacity(): Promise<ArtifactCapacity> { return this.get(`${this.basePath}/artifacts/capacity`); }
   public listArtifactReferences(): Promise<ArtifactReferencePage> { return this.get(`${this.basePath}/artifacts/references`); }
   public planArtifactGarbageCollection(): Promise<ArtifactGCPlan> { return this.get(`${this.basePath}/artifacts/gc/plan`); }
@@ -228,6 +237,15 @@ export class PlatformAdminClient {
   public activatePluginInstallationCandidate(id: string): Promise<PluginInstallationCandidate> { return this.pluginInstallationAction(id, "activate"); }
   public cancelPluginInstallationCandidate(id: string): Promise<PluginInstallationCandidate> { return this.pluginInstallationAction(id, "cancel"); }
   public rollbackPluginInstallationCandidate(id: string): Promise<PluginInstallationCandidate> { return this.pluginInstallationAction(id, "rollback"); }
+  public previewSelfServicePluginInstallation(request: SelfServicePluginInstallationRequest): Promise<PluginInstallationPreview> { return this.mutate(`${this.basePath}/deployment/service-plugin-installations/preview`, "POST", request); }
+  public listSelfServicePluginInstallationCandidates(): Promise<PluginInstallationCandidate[]> { return this.get(`${this.basePath}/deployment/service-plugin-installations`); }
+  public getSelfServicePluginInstallationCandidate(id: string): Promise<PluginInstallationCandidate> { return this.get(`${this.basePath}/deployment/service-plugin-installations/${segment(id)}`); }
+  public createSelfServicePluginInstallationCandidate(request: SelfServicePluginInstallationRequest): Promise<PluginInstallationCandidate> { return this.mutate(`${this.basePath}/deployment/service-plugin-installations`, "POST", request); }
+  public submitSelfServicePluginInstallationCandidate(id: string): Promise<PluginInstallationCandidate> { return this.selfServicePluginInstallationAction(id, "submit"); }
+  public approveSelfServicePluginInstallationCandidate(id: string, evidence: Readonly<Record<string, unknown>> = {}): Promise<PluginInstallationCandidate> { return this.selfServicePluginInstallationAction(id, "approve", { evidence }); }
+  public activateSelfServicePluginInstallationCandidate(id: string): Promise<PluginInstallationCandidate> { return this.selfServicePluginInstallationAction(id, "activate"); }
+  public cancelSelfServicePluginInstallationCandidate(id: string): Promise<PluginInstallationCandidate> { return this.selfServicePluginInstallationAction(id, "cancel"); }
+  public rollbackSelfServicePluginInstallationCandidate(id: string): Promise<PluginInstallationCandidate> { return this.selfServicePluginInstallationAction(id, "rollback"); }
   public createIntentDraft(intent: BackendApplicationIntent): Promise<ServiceRevision> {
     return this.mutate(`${this.basePath}/deployment/service-revisions`, "POST", { intent });
   }
@@ -285,6 +303,9 @@ export class PlatformAdminClient {
 
   private pluginInstallationAction(id: string, action: "submit" | "approve" | "activate" | "cancel" | "rollback"): Promise<PluginInstallationCandidate> {
     return this.mutate(`${this.basePath}/deployment/plugin-installations/${segment(id)}/${action}`, "POST", {});
+  }
+  private selfServicePluginInstallationAction(id: string, action: "submit" | "approve" | "activate" | "cancel" | "rollback", body: Readonly<Record<string, unknown>> = {}): Promise<PluginInstallationCandidate> {
+    return this.mutate(`${this.basePath}/deployment/service-plugin-installations/${segment(id)}/${action}`, "POST", body);
   }
 
   private apiExposureAction(id:number,action:"submit"|"approve"|"publish"):Promise<APIExposureRevision> { return this.mutate(`${this.basePath}/api-exposures/${revision(id)}/${action}`,"POST",{}); }

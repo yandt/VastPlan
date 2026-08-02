@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	approvalv2 "cdsoft.com.cn/VastPlan/contracts/schemas/approval/v2"
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
@@ -21,6 +22,7 @@ type intentWorkflowHost struct {
 	profile           backendcompositionv1.PlatformProfile
 	plannerGeneration byte
 	plannerStatus     string
+	approvalDecision  *approvalv2.Decision
 }
 
 func (h *intentWorkflowHost) Call(_ context.Context, target *contractv1.CallTarget, _ *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
@@ -50,6 +52,11 @@ func (h *intentWorkflowHost) Call(_ context.Context, target *contractv1.CallTarg
 		return okJSON(result)
 	case platformadminapi.ArtifactsCapability:
 		return okJSON(map[string]any{"revision": 1})
+	case approvalv2.Capability:
+		if h.approvalDecision == nil {
+			return nil, nil, fmt.Errorf("approval decision unavailable")
+		}
+		return okJSON(approvalv2.EvaluateResult{Decision: *h.approvalDecision})
 	default:
 		return nil, nil, fmt.Errorf("unexpected capability %s", target.Capability)
 	}

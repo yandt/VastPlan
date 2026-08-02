@@ -173,6 +173,9 @@ func validateManagedServices(services []ManagedService) error {
 			return fmt.Errorf("服务 id 重复: %s", service.ID)
 		}
 		seenIDs[service.ID] = struct{}{}
+		if service.Resource != nil && (service.Resource.Kind != "service-unit" || service.Resource.Kernel != "backend" || !managementName.MatchString(service.Resource.Deployment) || !managementName.MatchString(service.Resource.UnitID)) {
+			return fmt.Errorf("服务受管资源无效: %s", service.ID)
+		}
 		target := service.LogicalService + "\x00" + service.RoutingDomain
 		if _, duplicate := seenTargets[target]; duplicate {
 			return fmt.Errorf("服务路由目标重复: %s/%s", service.LogicalService, service.RoutingDomain)

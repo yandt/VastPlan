@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	approvalv2 "cdsoft.com.cn/VastPlan/contracts/schemas/approval/v2"
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/plugininstallation"
@@ -82,6 +83,18 @@ func (s *Service) planPluginInstallation(ctx context.Context, host sdk.Host, cal
 	preview, err := buildInstallationPreview(source, request, active, candidate, plan)
 	if err != nil {
 		return plannedInstallation{}, err
+	}
+	requestedBy, err := actor(call)
+	if err != nil {
+		return plannedInstallation{}, err
+	}
+	decision, err := s.evaluateInstallationApproval(ctx, host, call, preview, requestedBy, nil)
+	if err != nil {
+		return plannedInstallation{}, err
+	}
+	if decision != nil {
+		preview.Approval = decision
+		preview.Impact.RequiresApproval = decision.Status != approvalv2.DecisionAllowed
 	}
 	return plannedInstallation{request: request, source: source, active: active, candidate: candidate, plan: plan, preview: preview}, nil
 }

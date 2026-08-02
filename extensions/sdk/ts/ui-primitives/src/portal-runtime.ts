@@ -101,11 +101,19 @@ export interface PortalManagementAPI {
   contractDigest: string;
 }
 
+export interface PortalManagedResource {
+  kind: "service-unit";
+  kernel: "backend";
+  deployment: string;
+  unitId: string;
+}
+
 export interface PortalManagementService {
   id: string;
   label?: string;
   logicalService: string;
   routingDomain: string;
+  resource?: PortalManagedResource;
   capabilities: readonly PortalManagementCapability[];
   apis?: readonly PortalManagementAPI[];
 }

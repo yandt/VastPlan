@@ -231,6 +231,10 @@ export interface ArtifactSecurityStatusEvidence {
   deniedLicense: number; unknownLicense: number; vulnerabilityReportSha256?: string; licenseReportSha256?: string; verification: "verified";
 }
 export interface ArtifactCatalogPage { revision: number; total: number; page: number; pageSize: number; items: ArtifactCatalogEntry[]; }
+export interface PluginMarketplaceSource { id: string; label: string; url: string; priority: number; }
+export interface PluginMarketplaceSources { version: 1; sources: PluginMarketplaceSource[]; }
+export interface PluginMarketplaceCatalogPage extends ArtifactCatalogPage { version: 1; source: PluginMarketplaceSource; }
+export interface PluginMarketplaceCatalogQuery extends ArtifactCatalogQuery { sourceId: string; }
 export interface PrepareArtifactMigrationRequest { migrationId: string; targetProvider: string; targetVolumeId: string; }
 export interface ArtifactRef { pluginId: string; version: string; channel: string; }
 export interface ArtifactRepositoryReceipt {
@@ -431,6 +435,7 @@ export interface PluginInstallationPreviewRequest {
   change: PluginInstallationChange;
   expectedActiveRevision?: number;
 }
+export interface SelfServicePluginInstallationRequest { version: 1; change: PluginInstallationChange; }
 export interface PluginInstallationPackageChange {
   kind: "Added" | "Updated" | "Removed";
   pluginId: string;
@@ -462,6 +467,12 @@ export interface PluginInstallationPreview {
     kernelRestartRequired: boolean;
     rootChanged: boolean;
     noop: boolean;
+  };
+  approval?: {
+    status: "allowed" | "review-required" | "denied";
+    profile: { id: string; revision: number; digest: string };
+    matchedRuleId?: string; code?: string; message?: string; auditNote?: string;
+    requirements?: Array<{ id: string; field: string; kind: "exact-fact-match" | "boolean-true" | "text-length"; fact?: string; minLength?: number; maxLength?: number; title?: string; audit?: boolean }>;
   };
 }
 export type PluginInstallationCandidateStatus = "Planned" | "PendingApproval" | "Approved" | "Activating" | "Ready" | "Stale" | "Cancelled" | "RolledBack" | "Superseded";

@@ -5,6 +5,7 @@
 package plugininstallation
 
 import (
+	approvalv2 "cdsoft.com.cn/VastPlan/contracts/schemas/approval/v2"
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
@@ -12,21 +13,28 @@ import (
 )
 
 const (
-	ProtocolVersion             = 1
-	PreviewOperation            = "previewPluginInstallation"
-	SelfServicePreviewOperation = "previewSelfServicePluginInstallation"
-	DevelopmentPreviewOperation = "previewDevelopmentPluginInstallation"
-	CreateOperation             = "createPluginInstallationCandidate"
-	SelfServiceCreateOperation  = "createSelfServicePluginInstallationCandidate"
-	DevelopmentCreateOperation  = "createDevelopmentPluginInstallationCandidate"
-	ListTargetsOperation        = "listPluginInstallationTargets"
-	ListOperation               = "listPluginInstallationCandidates"
-	GetOperation                = "getPluginInstallationCandidate"
-	SubmitOperation             = "submitPluginInstallationCandidate"
-	ApproveOperation            = "approvePluginInstallationCandidate"
-	ActivateOperation           = "activatePluginInstallationCandidate"
-	CancelOperation             = "cancelPluginInstallationCandidate"
-	RollbackOperation           = "rollbackPluginInstallationCandidate"
+	ProtocolVersion              = 1
+	PreviewOperation             = "previewPluginInstallation"
+	SelfServicePreviewOperation  = "previewSelfServicePluginInstallation"
+	DevelopmentPreviewOperation  = "previewDevelopmentPluginInstallation"
+	CreateOperation              = "createPluginInstallationCandidate"
+	SelfServiceCreateOperation   = "createSelfServicePluginInstallationCandidate"
+	DevelopmentCreateOperation   = "createDevelopmentPluginInstallationCandidate"
+	ListTargetsOperation         = "listPluginInstallationTargets"
+	ListOperation                = "listPluginInstallationCandidates"
+	GetOperation                 = "getPluginInstallationCandidate"
+	SubmitOperation              = "submitPluginInstallationCandidate"
+	ApproveOperation             = "approvePluginInstallationCandidate"
+	ActivateOperation            = "activatePluginInstallationCandidate"
+	CancelOperation              = "cancelPluginInstallationCandidate"
+	RollbackOperation            = "rollbackPluginInstallationCandidate"
+	SelfServiceListOperation     = "listSelfServicePluginInstallationCandidates"
+	SelfServiceGetOperation      = "getSelfServicePluginInstallationCandidate"
+	SelfServiceSubmitOperation   = "submitSelfServicePluginInstallationCandidate"
+	SelfServiceApproveOperation  = "approveSelfServicePluginInstallationCandidate"
+	SelfServiceActivateOperation = "activateSelfServicePluginInstallationCandidate"
+	SelfServiceCancelOperation   = "cancelSelfServicePluginInstallationCandidate"
+	SelfServiceRollbackOperation = "rollbackSelfServicePluginInstallationCandidate"
 
 	SourceController  Source = "controller"
 	SourceSelfService Source = "self-service"
@@ -143,6 +151,7 @@ type Preview struct {
 	ConfigurationGaps     []ConfigurationGap                          `json:"configurationGaps"`
 	Diagnostics           []backendcompositionv1.ResolutionDiagnostic `json:"diagnostics"`
 	Impact                Impact                                      `json:"impact"`
+	Approval              *approvalv2.Decision                        `json:"approval,omitempty"`
 }
 
 // Candidate is the durable lifecycle handle. ServiceRevisionID points to the

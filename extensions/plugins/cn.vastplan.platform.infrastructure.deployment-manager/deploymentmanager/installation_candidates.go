@@ -4,10 +4,12 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"time"
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	approvalv2 "cdsoft.com.cn/VastPlan/contracts/schemas/approval/v2"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/plugininstallation"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
@@ -101,6 +103,34 @@ func (s *Service) ListPluginInstallationCandidates(call *contractv1.CallContext)
 	return sortedInstallationCandidates(s.tenantLocked(tenant))
 }
 
+func (s *Service) ListSelfServicePluginInstallationCandidates(call *contractv1.CallContext, target plugininstallation.Target) ([]plugininstallation.Candidate, error) {
+	if err := validateInstallationTarget(target); err != nil {
+		return nil, err
+	}
+	items, err := s.ListPluginInstallationCandidates(call)
+	if err != nil {
+		return nil, err
+	}
+	filtered := make([]plugininstallation.Candidate, 0, len(items))
+	for _, candidate := range items {
+		if candidate.Source == plugininstallation.SourceSelfService && candidate.Preview.Target == target {
+			filtered = append(filtered, candidate)
+		}
+	}
+	return filtered, nil
+}
+
+func (s *Service) GetSelfServicePluginInstallationCandidate(call *contractv1.CallContext, id string, target plugininstallation.Target) (plugininstallation.Candidate, error) {
+	candidate, err := s.GetPluginInstallationCandidate(call, id)
+	if err != nil {
+		return plugininstallation.Candidate{}, err
+	}
+	if candidate.Source != plugininstallation.SourceSelfService || candidate.Preview.Target != target {
+		return plugininstallation.Candidate{}, plugininstallation.ErrTargetScopeMismatch
+	}
+	return candidate, nil
+}
+
 func (s *Service) GetPluginInstallationCandidate(call *contractv1.CallContext, id string) (plugininstallation.Candidate, error) {
 	tenant, err := callTenant(call)
 	if err != nil {
@@ -117,14 +147,30 @@ func (s *Service) GetPluginInstallationCandidate(call *contractv1.CallContext, i
 }
 
 func (s *Service) SubmitPluginInstallationCandidate(ctx context.Context, host sdk.Host, call *contractv1.CallContext, id string) (plugininstallation.Candidate, error) {
-	revisionID, err := s.installationCandidateRevision(call, id)
+	candidate, err := s.GetPluginInstallationCandidate(call, id)
 	if err != nil {
 		return plugininstallation.Candidate{}, err
 	}
-	if _, err := s.submitServiceDraftForOwner(ctx, host, call, revisionID, revisionOwnerInstallation); err != nil {
-		return plugininstallation.Candidate{}, err
+	if candidate.Status == plugininstallation.CandidatePlanned {
+		if _, err := s.submitServiceDraftForOwner(ctx, host, call, candidate.ServiceRevisionID, revisionOwnerInstallation); err != nil {
+			return plugininstallation.Candidate{}, err
+		}
+	} else if candidate.Status != plugininstallation.CandidatePendingApproval || candidate.Preview.Impact.RequiresApproval {
+		return plugininstallation.Candidate{}, errServiceState
+	}
+	if !candidate.Preview.Impact.RequiresApproval {
+		if err := s.approveInstallationByPolicy(call, id); err != nil {
+			return plugininstallation.Candidate{}, err
+		}
 	}
 	return s.GetPluginInstallationCandidate(call, id)
+}
+
+func (s *Service) SubmitSelfServicePluginInstallationCandidate(ctx context.Context, host sdk.Host, call *contractv1.CallContext, id string, target plugininstallation.Target) (plugininstallation.Candidate, error) {
+	if _, err := s.GetSelfServicePluginInstallationCandidate(call, id, target); err != nil {
+		return plugininstallation.Candidate{}, err
+	}
+	return s.SubmitPluginInstallationCandidate(ctx, host, call, id)
 }
 
 func (s *Service) ApprovePluginInstallationCandidate(ctx context.Context, host sdk.Host, call *contractv1.CallContext, id string) (plugininstallation.Candidate, error) {
@@ -138,6 +184,23 @@ func (s *Service) ApprovePluginInstallationCandidate(ctx context.Context, host s
 	return s.GetPluginInstallationCandidate(call, id)
 }
 
+func (s *Service) ApproveSelfServicePluginInstallationCandidate(ctx context.Context, host sdk.Host, call *contractv1.CallContext, id string, target plugininstallation.Target, evidence map[string]json.RawMessage) (plugininstallation.Candidate, error) {
+	candidate, err := s.GetSelfServicePluginInstallationCandidate(call, id, target)
+	if err != nil {
+		return plugininstallation.Candidate{}, err
+	}
+	if s.approvalBinding != nil {
+		decision, err := s.evaluateInstallationApproval(ctx, host, call, candidate.Preview, candidate.SubmittedBy, evidence)
+		if err != nil {
+			return plugininstallation.Candidate{}, err
+		}
+		if decision == nil || decision.Status != approvalv2.DecisionAllowed {
+			return plugininstallation.Candidate{}, errInstallationApprovalRequired
+		}
+	}
+	return s.ApprovePluginInstallationCandidate(ctx, host, call, id)
+}
+
 func (s *Service) ActivatePluginInstallationCandidate(ctx context.Context, host sdk.Host, call *contractv1.CallContext, id string) (plugininstallation.Candidate, error) {
 	revisionID, err := s.installationCandidateRevision(call, id)
 	if err != nil {
@@ -147,6 +210,13 @@ func (s *Service) ActivatePluginInstallationCandidate(ctx context.Context, host 
 		return plugininstallation.Candidate{}, err
 	}
 	return s.GetPluginInstallationCandidate(call, id)
+}
+
+func (s *Service) ActivateSelfServicePluginInstallationCandidate(ctx context.Context, host sdk.Host, call *contractv1.CallContext, id string, target plugininstallation.Target) (plugininstallation.Candidate, error) {
+	if _, err := s.GetSelfServicePluginInstallationCandidate(call, id, target); err != nil {
+		return plugininstallation.Candidate{}, err
+	}
+	return s.ActivatePluginInstallationCandidate(ctx, host, call, id)
 }
 
 func (s *Service) CancelPluginInstallationCandidate(call *contractv1.CallContext, id string) (plugininstallation.Candidate, error) {
@@ -194,6 +264,13 @@ func (s *Service) CancelPluginInstallationCandidate(call *contractv1.CallContext
 	return projectInstallationCandidate(state, record)
 }
 
+func (s *Service) CancelSelfServicePluginInstallationCandidate(call *contractv1.CallContext, id string, target plugininstallation.Target) (plugininstallation.Candidate, error) {
+	if _, err := s.GetSelfServicePluginInstallationCandidate(call, id, target); err != nil {
+		return plugininstallation.Candidate{}, err
+	}
+	return s.CancelPluginInstallationCandidate(call, id)
+}
+
 func (s *Service) RollbackPluginInstallationCandidate(ctx context.Context, host sdk.Host, call *contractv1.CallContext, id string) (plugininstallation.Candidate, error) {
 	candidate, err := s.GetPluginInstallationCandidate(call, id)
 	if err != nil {
@@ -206,6 +283,20 @@ func (s *Service) RollbackPluginInstallationCandidate(ctx context.Context, host 
 		return plugininstallation.Candidate{}, err
 	}
 	return s.GetPluginInstallationCandidate(call, id)
+}
+
+func (s *Service) RollbackSelfServicePluginInstallationCandidate(ctx context.Context, host sdk.Host, call *contractv1.CallContext, id string, target plugininstallation.Target) (plugininstallation.Candidate, error) {
+	if _, err := s.GetSelfServicePluginInstallationCandidate(call, id, target); err != nil {
+		return plugininstallation.Candidate{}, err
+	}
+	return s.RollbackPluginInstallationCandidate(ctx, host, call, id)
+}
+
+func validateInstallationTarget(target plugininstallation.Target) error {
+	if target.Kernel != "backend" || target.Deployment == "" || target.UnitID == "" {
+		return plugininstallation.ErrTargetScopeMismatch
+	}
+	return nil
 }
 
 func (s *Service) installationCandidateRevision(call *contractv1.CallContext, id string) (uint64, error) {

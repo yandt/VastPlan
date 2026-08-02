@@ -23,6 +23,7 @@ import (
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformprofileactivation"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfiguration"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginmarketplace"
 )
 
 const (
@@ -69,6 +70,9 @@ func decide(c *v1.CallContext, request extpoint.PermissionRequest) (extpoint.Dec
 	}
 	if artifactReferenceWriteAllowed(c, request) {
 		return extpoint.DecisionAllow, "制品消费者可发布自己拥有的完整引用快照"
+	}
+	if marketplaceCatalogReadAllowed(c, request) {
+		return extpoint.DecisionAllow, "Marketplace 只能读取已验证 Artifact Catalog"
 	}
 	if managedCredentialLifecycleAllowed(c, request) {
 		return extpoint.DecisionAllow, "业务插件只能管理自己拥有的托管凭证"
@@ -149,11 +153,15 @@ func artifactReferenceWriteAllowed(c *v1.CallContext, request extpoint.Permissio
 
 func governedCapability(capability string) bool {
 	switch capability {
-	case platformadminapi.SettingsCapability, platformadminapi.CredentialsCapability, "platform.credentials.material-lease", "kernel.credential.material-lease", configurationauthority.KernelIssueService, configurationauthority.KernelConsumeService, platformadminapi.DatabaseCapability, databasev1.Capability, platformadminapi.ArtifactsCapability, platformadminapi.DeploymentCapability, platformadminapi.PluginConfigurationCapability, backendcompositionv1.PlanningCapability, "platform.api-exposure":
+	case platformadminapi.SettingsCapability, platformadminapi.CredentialsCapability, "platform.credentials.material-lease", "kernel.credential.material-lease", configurationauthority.KernelIssueService, configurationauthority.KernelConsumeService, platformadminapi.DatabaseCapability, databasev1.Capability, platformadminapi.ArtifactsCapability, pluginmarketplace.Capability, platformadminapi.DeploymentCapability, platformadminapi.PluginConfigurationCapability, backendcompositionv1.PlanningCapability, "platform.api-exposure":
 		return true
 	default:
 		return strings.HasPrefix(capability, artifactstorage.CapabilityPrefix) || strings.HasPrefix(capability, "configuration.")
 	}
+}
+
+func marketplaceCatalogReadAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {
+	return c.GetCaller().GetKind() == v1.CallerKind_CALLER_KIND_PLUGIN && c.GetCaller().GetId() == "cn.vastplan.platform.artifacts.marketplace" && request.ExtensionPoint == extpoint.ToolPackage && request.Capability == platformadminapi.ArtifactsCapability && request.Operation == "listCatalog"
 }
 
 func compositionPlanningAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {
@@ -322,6 +330,8 @@ func allowedKernelCallback(c *v1.CallContext, request extpoint.PermissionRequest
 		return authorizationPolicySharedStateKernelService(request.Capability)
 	case databasev1.RuntimePluginID:
 		return request.Capability == "kernel.credential.material-lease"
+	case "cn.vastplan.platform.artifacts.marketplace":
+		return request.Capability == "kernel.credential.material-lease" && request.Operation == "issue"
 	case "cn.vastplan.platform.infrastructure.deployment-manager":
 		return request.Capability == "kernel.node.bootstrap" || request.Capability == "kernel.node.readiness" || request.Capability == "kernel.deployment.targets" || request.Capability == "kernel.deployment.preview" || request.Capability == "kernel.deployment.publish" || request.Capability == "kernel.deployment.readiness" || platformProfileKernelService(request.Capability) || sharedStateKernelService(request.Capability)
 	default:
@@ -361,13 +371,24 @@ func pluginMetadataReadAllowed(id, capability, operation string) bool {
 	if len(id) < len("cn.vastplan.platform.") || id[:len("cn.vastplan.platform.")] != "cn.vastplan.platform." {
 		return false
 	}
+	// Marketplace has an intentionally narrower repository projection and must
+	// pass marketplaceCatalogReadAllowed instead of inheriting all platform reads.
+	if id == "cn.vastplan.platform.artifacts.marketplace" {
+		return false
+	}
 	switch capability {
 	case platformadminapi.CredentialsCapability:
 		return operation == "describe" || operation == "list"
 	case platformadminapi.DatabaseCapability:
 		return operation == "describe" || operation == "list"
 	case platformadminapi.ArtifactsCapability:
-		return operation == "status" || operation == "capacity" || operation == "listCatalog" || operation == "listPublishJournal" || operation == "resolve" || operation == "describePlanning" || operation == "listReferences" || operation == "gcPlan" || operation == "gcStatus" || operation == "migrationStatus"
+		if operation == "resolve" {
+			return id == "cn.vastplan.platform.infrastructure.deployment-manager"
+		}
+		if operation == "describePlanning" {
+			return id == "cn.vastplan.platform.infrastructure.composition-planner"
+		}
+		return operation == "status" || operation == "capacity" || operation == "listCatalog" || operation == "listPublishJournal" || operation == "listReferences" || operation == "gcPlan" || operation == "gcStatus" || operation == "migrationStatus"
 	default:
 		return false
 	}

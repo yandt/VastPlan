@@ -79,6 +79,9 @@ function validateManagementServices(portal: PortalSpec): void {
     }
     serviceIDs.add(service.id);
     serviceTargets.add(target);
+    if (service.resource !== undefined && (service.resource.kind !== "service-unit" || service.resource.kernel !== "backend" || !managementName(service.resource.deployment) || !managementName(service.resource.unitId))) {
+      throw new PortalAssemblyError("MANAGEMENT_RESOURCE_INVALID", `Portal 管理资源无效: ${service.id}`);
+    }
     const capabilities = new Set<string>();
     for (const grant of service.capabilities) {
       const operations = [...(grant.read ?? []), ...(grant.write ?? [])];

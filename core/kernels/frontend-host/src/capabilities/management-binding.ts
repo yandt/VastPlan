@@ -5,11 +5,13 @@ const managementName = /^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/;
 export interface ManagementRef { id: string; revision: number; digest: string }
 export interface CapabilityGrant { capability: string; read: readonly string[]; write: readonly string[] }
 export interface ManagementAPI { id: string; contractId: string; contractVersion: string; contractDigest: string }
+export interface ManagedResource { kind: "service-unit"; kernel: "backend"; deployment: string; unitId: string }
 export interface ManagedService {
   id: string;
   label?: string;
   logicalService: string;
   routingDomain: string;
+  resource?: ManagedResource;
   capabilities: readonly CapabilityGrant[];
   apis?: readonly ManagementAPI[];
 }
@@ -44,8 +46,9 @@ export function parseManagementBinding(value: unknown): ManagementBinding {
     const seenCapabilities = new Set<string>();
     const capabilities = service.capabilities.map((value) => parseGrant(value, seenCapabilities));
     const apis = parseAPIs(service.apis);
+    const resource = parseManagedResource(service.resource);
     const label = optionalString(service.label);
-    return Object.freeze({ id, ...(label === undefined ? {} : { label }), logicalService, routingDomain, capabilities: Object.freeze(capabilities), apis: Object.freeze(apis) });
+    return Object.freeze({ id, ...(label === undefined ? {} : { label }), logicalService, routingDomain, ...(resource === undefined ? {} : { resource }), capabilities: Object.freeze(capabilities), apis: Object.freeze(apis) });
   });
   return Object.freeze({ tenantId, portalId, platformProfile, services: Object.freeze(services) });
 }
@@ -60,6 +63,7 @@ export function managementBindingDigest(binding: ManagementBinding): string {
       ...(service.label === undefined ? {} : { label: service.label }),
       logicalService: service.logicalService,
       routingDomain: service.routingDomain,
+      ...(service.resource === undefined ? {} : { resource: { ...service.resource } }),
       capabilities: service.capabilities.map((grant) => ({
         capability: grant.capability,
         ...(grant.read.length === 0 ? {} : { read: [...grant.read] }),
@@ -69,6 +73,13 @@ export function managementBindingDigest(binding: ManagementBinding): string {
     })),
   };
   return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
+}
+
+function parseManagedResource(value: unknown): ManagedResource | undefined {
+  if (value === undefined) return undefined;
+  const resource = record(value, "managed resource");
+  if (Object.keys(resource).some((key) => !["kind", "kernel", "deployment", "unitId"].includes(key)) || resource.kind !== "service-unit" || resource.kernel !== "backend") throw new Error("managed resource 类型无效");
+  return Object.freeze({ kind: "service-unit", kernel: "backend", deployment: named(resource.deployment, "resource.deployment"), unitId: named(resource.unitId, "resource.unitId") });
 }
 
 function parseAPIs(value: unknown): ManagementAPI[] {

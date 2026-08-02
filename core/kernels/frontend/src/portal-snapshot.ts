@@ -3,6 +3,7 @@ import type { PortalSpec, ShellSelection } from "./portal-contracts";
 export function snapshotPortal(portal: PortalSpec): Readonly<PortalSpec> {
   const services = portal.management.services.map((service) => Object.freeze({
     ...service,
+    resource: service.resource === undefined ? undefined : Object.freeze({ ...service.resource }),
     capabilities: Object.freeze(service.capabilities.map((grant) => Object.freeze({
       ...grant,
       read: grant.read === undefined ? undefined : Object.freeze([...grant.read]),

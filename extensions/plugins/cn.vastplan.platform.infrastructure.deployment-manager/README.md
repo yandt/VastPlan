@@ -39,6 +39,8 @@
 
 0.24.0 起提供跨服务控制器页面和固定 Portal BFF 路由。浏览器只能提交逻辑 deployment/unit 的变更意图，不能选择来源、capability、logical service 或物理节点；批量目标按 Deployment 生成独立候选，同一 Deployment 同时只允许一个未完成候选。页面的预览、申请、审批和激活操作使用独立权限。候选列表仅在用户刷新时读取 `kernel.deployment.readiness`，展示期望、已观察和就绪副本；该观察不写入候选账本，也不引入后台轮询。
 
+0.25.0 起增加服务自助适配器。Portal BFF 从已发布 `ManagementTarget.resource` 派生唯一 backend deployment/unit，浏览器只提交插件变更；候选查询和所有生命周期 operation 再次校验 `self-service` 来源与相同目标。可选 `approval.policy.v2` Binding 在组合根注入：策略允许时提交后由策略主体进入既有 `Approved` 状态，需要证据时保留 `PendingApproval`，拒绝时不创建候选。控制器、自助和开发入口仍复用同一个候选与 ServiceRevision 状态机。
+
 测试目标绑定只能指向活动 Application Composition 内已有的应用插件，不能增加插件，也不能覆盖 `cn.vastplan.foundation.*` 或 `cn.vastplan.platform.*`。测试发布只接受 `testing` channel 的 SemVer 预发布版本和精确 SHA/repositoryRevision；上传与发布是两个事务。候选就绪与回滚通过 `kernel.deployment.readiness` 读取内核持有的 NATS Composition report，插件不获得 KV 句柄。
 
 0.17.0 起，租户状态通过可信宿主 `kernel.state.shared.get/create/update` 保存为 `tenant/deployment.control/tenant` 单文档 CAS 聚合；插件不持有 NATS、数据库或文件系统凭证。0.18.0 进一步复用 Unit Leadership 的 host-only epoch/token 保护 mutating 内核回调：新 leader 可以读取同一账本并执行中断恢复，旧 leader 的过期写入被 Store revision 拒绝，失效 Runtime 不能开始新副作用；SSH 远端再用 root-owned `flock` 与单调 epoch 拒绝延迟旧请求。当前仍采用 `leader + external-shared + leader routing`，不宣称 active-active。

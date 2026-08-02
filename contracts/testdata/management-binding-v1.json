@@ -13,6 +13,7 @@
         "label": "Platform settings",
         "logicalService": "platform.settings.primary",
         "routingDomain": "platform",
+        "resource": { "kind": "service-unit", "kernel": "backend", "deployment": "agent-services", "unitId": "api" },
         "capabilities": [
           {
             "capability": "platform.settings",
@@ -23,5 +24,5 @@
       }
     ]
   },
-  "digest": "7614ff6fcc2e1e8485f97d0f22fc9ee11eb460dc2feae688484a326f599fa671"
+  "digest": "ef5b4151be8c2570cdbaf3a9575f3312b419e104a920075d2efedb3d6e16e1a1"
 }

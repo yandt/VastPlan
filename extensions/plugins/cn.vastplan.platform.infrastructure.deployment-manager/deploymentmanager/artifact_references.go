@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"sort"
 
-	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactreference"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactreference"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )

@@ -265,7 +265,8 @@ export interface WorkbenchPluginContext {
 
 export interface WorkbenchManagementCapability { capability: string; read?: readonly string[]; write?: readonly string[]; }
 export interface WorkbenchManagementAPI { id: string; contractId: string; contractVersion: string; contractDigest: string; }
-export interface WorkbenchManagementService { id: string; label?: string; logicalService: string; routingDomain: string; capabilities: readonly WorkbenchManagementCapability[]; apis?: readonly WorkbenchManagementAPI[]; }
+export interface WorkbenchManagedResource { kind: "service-unit"; kernel: "backend"; deployment: string; unitId: string; }
+export interface WorkbenchManagementService { id: string; label?: string; logicalService: string; routingDomain: string; resource?: WorkbenchManagedResource; capabilities: readonly WorkbenchManagementCapability[]; apis?: readonly WorkbenchManagementAPI[]; }
 export interface WorkbenchPortalRuntime { revision: number; id: string; tenantId: string; route: string; experience?: { permissions: readonly string[] }; management: { services: readonly WorkbenchManagementService[] }; }
 export interface WorkbenchFrontendPluginContext extends WorkbenchPluginContext {
   readonly portal: Readonly<WorkbenchPortalRuntime>;

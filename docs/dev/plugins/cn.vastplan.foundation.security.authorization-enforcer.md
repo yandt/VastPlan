@@ -1,13 +1,15 @@
 # Authorization Enforcer
 
 插件 ID：`cn.vastplan.foundation.security.authorization-enforcer`
-当前制品版本：`0.3.9`
+当前制品版本：`0.3.10`
 
 该 foundation 插件在每个 Backend unit 内以 per-kernel + local-ephemeral + direct 运行，位于用户调用的最终本地 PEP。它严格验证 Catalog、签名 Snapshot、audience 和有效期；未知目录操作弃权给 workload policy，目录内用户操作缺少策略或权限时拒绝。
 
 平台管理、Portal、Interaction 与 Approval Provider 协议的首方无状态 workload 规则以四个独立 Policy Bundle 包编译进同一签名 Enforcer 制品，保留稳定 Checker ID、优先级和单元测试，但不再形成额外进程。Bundle 只承载策略内容；注册、调用、上下文裁剪和 fail-closed 强制仍走统一协议总线。
 
 `0.3.9` 起，每个调用源内核只按稳定 `foundation.security.approval-policy` capability 放行保留可信 Principal 的插件调用，不钉死 Composer、未来消费者或具体 Provider 插件 ID；Provider 目标侧仍重复校验 caller、actor 与 tenant。源端和目标端复用 Approval Go SDK 的同一访问判定，避免双强制点漂移。
+
+`0.3.10` 增加 Marketplace 最小能力边界：只允许精确首方 Marketplace 插件调用 Artifact Repository 的 `listCatalog`，并允许其向可信宿主申请绑定自身 CredentialRef 的 runtime material lease；其他仓库解析、下载或写入 operation 继续拒绝。
 
 `0.3.7` 起，平台管理 Bundle 精确允许 `authorization-policy` 使用其 Manifest 已申请的 `get/fenced.create/fenced.update` Shared State 回调；普通非 fenced 写入、删除和未声明操作继续拒绝。该授权只解决插件到可信宿主的 workload 回调，不替代用户对角色与权限管理 API 的在线授权。
 

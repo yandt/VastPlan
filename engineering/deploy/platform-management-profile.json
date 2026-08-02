@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "revision": 74,
+  "revision": 75,
   "id": "local-platform-management",
   "target": { "kernel": "backend" },
   "serviceClasses": ["application.backend"],
@@ -28,7 +28,7 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.9", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.10", "channel": "stable" },
         { "id": "cn.vastplan.foundation.security.bootstrap-policy", "version": "0.1.1", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.8.16", "channel": "stable" }
       ]
@@ -59,7 +59,7 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.9", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.10", "channel": "stable" },
         { "id": "cn.vastplan.platform.integration.api-exposure", "version": "0.5.15", "channel": "stable" }
       ]
     },
@@ -118,7 +118,7 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.9", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.10", "channel": "stable" },
         { "id": "cn.vastplan.platform.artifacts.storage.file", "version": "0.2.7", "channel": "stable" },
         { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.38.2", "channel": "stable" }
       ]
@@ -152,7 +152,7 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.9", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.10", "channel": "stable" },
         { "id": "cn.vastplan.platform.infrastructure.composition-planner", "version": "0.2.6", "channel": "stable" }
       ]
     },
@@ -194,7 +194,7 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.9", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.10", "channel": "stable" },
         { "id": "cn.vastplan.platform.security.credentials", "version": "0.12.15", "channel": "stable" }
       ]
     },
@@ -219,7 +219,7 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.9", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.10", "channel": "stable" },
         { "id": "cn.vastplan.foundation.security.authentication-broker", "version": "0.4.9", "channel": "stable" },
         { "id": "cn.vastplan.foundation.security.seed-access", "version": "0.1.5", "channel": "stable" }
       ]
@@ -244,7 +244,7 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.9", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.10", "channel": "stable" },
         { "id": "cn.vastplan.foundation.security.authorization-session", "version": "0.1.2", "channel": "stable" }
       ]
     },
@@ -275,7 +275,7 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.9", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.10", "channel": "stable" },
         { "id": "cn.vastplan.platform.security.authentication.delivery.webhook", "version": "0.2.2", "channel": "stable" }
       ]
     },
@@ -299,7 +299,7 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.9", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.10", "channel": "stable" },
         { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.9.15", "channel": "stable" }
       ]
     },
@@ -328,8 +328,41 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.9", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.10", "channel": "stable" },
         { "id": "cn.vastplan.foundation.data.relational.runtime", "version": "0.7.7", "channel": "stable" }
+      ]
+    },
+    {
+      "id": "platform-marketplace",
+      "kind": "service",
+      "enabled": true,
+      "service_role": "backend",
+      "logical_service": "platform.artifacts.marketplace",
+      "instance_policy": "active-active",
+      "state_model": "external-shared",
+      "visibility": "cluster",
+      "routing": "queue",
+      "routing_domain": "platform",
+      "replicas": 1,
+      "placement": { "nodeSelector": { "environment": "local-platform" } },
+      "config": {
+        "plugins": {
+          "cn.vastplan.platform.artifacts.marketplace": {
+            "sources": [
+              { "id": "platform", "label": "平台插件市场", "url": "vastplan://platform.artifacts.repository", "priority": 10 }
+            ]
+          }
+        },
+        "environment_allowlist": {
+          "cn.vastplan.foundation.security.authorization-enforcer": ["VASTPLAN_AUTHORIZATION_PERMISSION_CATALOG", "VASTPLAN_AUTHORIZATION_POLICY_SNAPSHOT", "VASTPLAN_AUTHORIZATION_POLICY_TRUST", "VASTPLAN_AUTHORIZATION_POLICY_AUDIENCE", "VASTPLAN_AUTHORIZATION_DIRECTORY_GROUPS"]
+        },
+        "kernel_service_grants": {
+          "cn.vastplan.platform.artifacts.marketplace": ["kernel.credential.material-lease"]
+        }
+      },
+      "plugins": [
+        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.10", "channel": "stable" },
+        { "id": "cn.vastplan.platform.artifacts.marketplace", "version": "0.1.0", "channel": "stable" }
       ]
     },
     {
@@ -346,6 +379,17 @@
       "replicas": 1,
       "placement": { "nodeSelector": { "environment": "local-platform" } },
       "config": {
+        "plugins": {
+          "cn.vastplan.platform.infrastructure.deployment-manager": {
+            "pluginInstallationApprovalPolicy": {
+              "protocol": "approval.policy.v2",
+              "capability": "foundation.security.approval-policy",
+              "logicalService": "foundation.approval-policy.native",
+              "routingDomain": "security",
+              "profile": { "id": "seed.plugin-installation", "revision": 1, "digest": "8b6a8b3bf92ad7260c74b8413493934d5a6a4abeaca1e1a44a14eee3ca6c3508" }
+            }
+          }
+        },
         "environment_allowlist": {
           "cn.vastplan.foundation.security.authorization-enforcer": ["VASTPLAN_AUTHORIZATION_PERMISSION_CATALOG", "VASTPLAN_AUTHORIZATION_POLICY_SNAPSHOT", "VASTPLAN_AUTHORIZATION_POLICY_TRUST", "VASTPLAN_AUTHORIZATION_POLICY_AUDIENCE", "VASTPLAN_AUTHORIZATION_DIRECTORY_GROUPS"]
         },
@@ -354,8 +398,8 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.9", "channel": "stable" },
-        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.24.0", "channel": "stable" }
+        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.10", "channel": "stable" },
+        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.25.0", "channel": "stable" }
       ]
     },
     {
@@ -380,7 +424,7 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.9", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.10", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.plugin-settings", "version": "0.13.13", "channel": "stable" }
       ]
     },
@@ -430,6 +474,37 @@
                     "effect": "allow"
                   }
                 ]
+              },
+              {
+                "id": "seed.plugin-installation",
+                "revision": 1,
+                "defaultEffect": "deny",
+                "rules": [
+                  {
+                    "id": "seed.plugin-installation.first-party",
+                    "priority": 100,
+                    "conditions": [
+                      { "left": "context.source", "operator": "equals", "value": "self-service" },
+                      { "left": "resource.attributes.publisher", "operator": "equals", "value": "vastplan" }
+                    ],
+                    "effect": "allow"
+                  },
+                  {
+                    "id": "seed.plugin-installation.review",
+                    "priority": 90,
+                    "conditions": [
+                      { "left": "context.source", "operator": "equals", "value": "self-service" }
+                    ],
+                    "effect": "require-evidence",
+                    "requirements": [
+                      { "id": "installation.review.digest", "field": "review.expected-digest", "kind": "exact-fact-match", "fact": "resource.digest", "title": "冻结计划摘要" },
+                      { "id": "installation.review.acknowledged", "field": "review.acknowledged", "kind": "boolean-true", "title": "确认已复核插件变更" },
+                      { "id": "installation.review.reason", "field": "review.reason", "kind": "text-length", "minLength": 4, "maxLength": 512, "title": "审批原因", "audit": true }
+                    ],
+                    "code": "approval.review_required",
+                    "message": "非第一方插件变更需要复核证据"
+                  }
+                ]
               }
             ]
           }
@@ -439,7 +514,7 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.9", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.10", "channel": "stable" },
         { "id": "cn.vastplan.foundation.security.approval-policy.native", "version": "0.1.2", "channel": "stable" }
       ]
     },
@@ -481,7 +556,7 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.9", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.10", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "5.1.1", "channel": "stable" }
       ]
     },
@@ -504,7 +579,7 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.9", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.10", "channel": "stable" },
         { "id": "cn.vastplan.foundation.security.authorization-engine.native", "version": "0.1.6", "channel": "stable" }
       ]
     },
@@ -546,7 +621,7 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.9", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.10", "channel": "stable" },
         { "id": "cn.vastplan.platform.security.authorization-policy", "version": "0.7.5", "channel": "stable" }
       ]
     },
@@ -577,7 +652,7 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.9", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.10", "channel": "stable" },
         { "id": "cn.vastplan.platform.interaction.broker", "version": "0.1.7", "channel": "stable" }
       ]
     }

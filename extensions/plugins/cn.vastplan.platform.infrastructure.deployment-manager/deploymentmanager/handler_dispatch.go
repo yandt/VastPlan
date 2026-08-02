@@ -31,6 +31,8 @@ type handlerRequest struct {
 	ProfileActivation     platformprofileactivation.CreateActivationRequest  `json:"profileActivation"`
 	CandidateID           string                                             `json:"candidateId"`
 	InstallationPreview   plugininstallation.PreviewRequest                  `json:"installationPreview"`
+	InstallationTarget    plugininstallation.Target                          `json:"installationTarget"`
+	ApprovalEvidence      map[string]json.RawMessage                         `json:"approvalEvidence,omitempty"`
 }
 
 func (s *Service) dispatchOperation(ctx context.Context, host sdk.Host, call *contractv1.CallContext, operation string, request handlerRequest) (out any, err error) {
@@ -74,9 +76,20 @@ func (s *Service) dispatchOperation(ctx context.Context, host sdk.Host, call *co
 			items = observeInstallationRollouts(ctx, host, call, items)
 		}
 		out = map[string]any{"items": items}
+	case plugininstallation.SelfServiceListOperation:
+		var items []plugininstallation.Candidate
+		items, err = s.ListSelfServicePluginInstallationCandidates(call, request.InstallationTarget)
+		if err == nil {
+			items = observeInstallationRollouts(ctx, host, call, items)
+		}
+		out = map[string]any{"items": items}
 	case plugininstallation.GetOperation:
 		var candidate plugininstallation.Candidate
 		candidate, err = s.GetPluginInstallationCandidate(call, request.CandidateID)
+		out = observeInstallationRollout(ctx, host, call, candidate)
+	case plugininstallation.SelfServiceGetOperation:
+		var candidate plugininstallation.Candidate
+		candidate, err = s.GetSelfServicePluginInstallationCandidate(call, request.CandidateID, request.InstallationTarget)
 		out = observeInstallationRollout(ctx, host, call, candidate)
 	case plugininstallation.SubmitOperation:
 		out, err = s.SubmitPluginInstallationCandidate(ctx, host, call, request.CandidateID)
@@ -88,6 +101,16 @@ func (s *Service) dispatchOperation(ctx context.Context, host sdk.Host, call *co
 		out, err = s.CancelPluginInstallationCandidate(call, request.CandidateID)
 	case plugininstallation.RollbackOperation:
 		out, err = s.RollbackPluginInstallationCandidate(ctx, host, call, request.CandidateID)
+	case plugininstallation.SelfServiceSubmitOperation:
+		out, err = s.SubmitSelfServicePluginInstallationCandidate(ctx, host, call, request.CandidateID, request.InstallationTarget)
+	case plugininstallation.SelfServiceApproveOperation:
+		out, err = s.ApproveSelfServicePluginInstallationCandidate(ctx, host, call, request.CandidateID, request.InstallationTarget, request.ApprovalEvidence)
+	case plugininstallation.SelfServiceActivateOperation:
+		out, err = s.ActivateSelfServicePluginInstallationCandidate(ctx, host, call, request.CandidateID, request.InstallationTarget)
+	case plugininstallation.SelfServiceCancelOperation:
+		out, err = s.CancelSelfServicePluginInstallationCandidate(call, request.CandidateID, request.InstallationTarget)
+	case plugininstallation.SelfServiceRollbackOperation:
+		out, err = s.RollbackSelfServicePluginInstallationCandidate(ctx, host, call, request.CandidateID, request.InstallationTarget)
 	case "createIntentDraft":
 		out, err = s.CreateIntentDraft(ctx, host, call, request.Intent)
 	case "updateIntentDraft":

@@ -7,12 +7,13 @@ import (
 	"sync"
 	"time"
 
+	approvalv2 "cdsoft.com.cn/VastPlan/contracts/schemas/approval/v2"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
 )
 
 const (
 	PluginID      = "cn.vastplan.platform.infrastructure.deployment-manager"
-	PluginVersion = "0.24.0"
+	PluginVersion = "0.25.0"
 	Capability    = platformadminapi.DeploymentCapability
 	jobTTL        = 30 * time.Minute
 	maxStateBytes = 1 << 20
@@ -60,13 +61,28 @@ type Service struct {
 	recoveredTenants    map[string]bool
 	releaseTimeout      time.Duration
 	releasePollInterval time.Duration
+	approvalBinding     *approvalv2.ProviderBinding
 }
 
 func New() *Service {
+	return NewWithOptions(ServiceOptions{})
+}
+
+type ServiceOptions struct {
+	ApprovalBinding *approvalv2.ProviderBinding
+}
+
+func NewWithOptions(options ServiceOptions) *Service {
+	var binding *approvalv2.ProviderBinding
+	if options.ApprovalBinding != nil {
+		copy := *options.ApprovalBinding
+		binding = &copy
+	}
 	return &Service{
 		now: func() time.Time { return time.Now().UTC() }, newID: randomID,
 		data:             persisted{Tenants: map[string]*tenantState{}},
 		recoveredTenants: map[string]bool{},
 		releaseTimeout:   2 * time.Minute, releasePollInterval: 500 * time.Millisecond,
+		approvalBinding: binding,
 	}
 }
