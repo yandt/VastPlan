@@ -11,6 +11,7 @@
 - 通过窄化的 `kernel.node.readiness` 观察签名 Node Lease，并在引导完成或查询作业时收敛最终状态。
 - 列出平台预授权的 Backend 部署目标；
 - 管理 Application Intent、Resolution Report、异人审批、发布审计和单调 revision 回滚；
+- 通过统一 `PluginInstallationIntent` 协议为平台控制器、服务自助和开发自动化生成无副作用的应用插件安装、升级、卸载预览；
 - 为 plugin-settings 创建 candidate 绑定的 Application 配置修订，禁止普通发布入口绕过候选凭证准备，并在 readiness 失败时自动发布回滚 revision；
 - 为 Platform Profile restart 配置持久化独立 Saga：调用窄内核端口准备候选、执行异人审批、激活 Catalog、发布 Deployment、等待精确 readiness，并在失败时依次生成单调 Catalog/Deployment 回滚修订；
 - 通过 `kernel.deployment.preview/publish` 请求可信内核选择固定 Platform Profile、验签制品并 CAS 发布 Deployment v2；
@@ -30,6 +31,8 @@
 0.21.0 起，根插件版本采用固定 `=x.y.z` 或兼容 `^x.y.z` 两种用户策略；运行、审批、回滚和节点安装仍只消费 Planner 产生的精确锁。
 
 0.21.1 起，精确锁同时包含制品 SHA-256；部署管理只转交和审计该锁，不在运行阶段重新解析版本。
+
+0.22.0 起新增统一安装预览：控制器、服务自助和开发自动化分别使用受治理 operation，在入口固定 `controller/self-service/development` 策略对象后调用同一工作流，来源不能由请求体自报。服务自助入口只接受 Portal BFF，后续 BFF 必须从 ManagementTarget 派生 deployment；开发来源只接受 `platform-dev` 系统身份并要求命中现有 TestTargetBinding。工作流把一个根插件变更投影到活动 Application Intent，复用 Planner 和 Kernel Preview，返回精确依赖差异、配置缺口、Catalog revision、plan/preview digest 与 Service Generation 影响，但不会创建 revision、下载、保护引用或激活制品。Foundation/Platform 插件在该入口 fail-closed。
 
 测试目标绑定只能指向活动 Application Composition 内已有的应用插件，不能增加插件，也不能覆盖 `cn.vastplan.foundation.*` 或 `cn.vastplan.platform.*`。测试发布只接受 `testing` channel 的 SemVer 预发布版本和精确 SHA/repositoryRevision；上传与发布是两个事务。候选就绪与回滚通过 `kernel.deployment.readiness` 读取内核持有的 NATS Composition report，插件不获得 KV 句柄。
 

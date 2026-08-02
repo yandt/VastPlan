@@ -271,6 +271,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [ADR-0188 授权与业务审批策略解耦](decisions/ADR-0188-授权与业务审批策略解耦.md)
 - [ADR-0189 审批策略 Provider 与声明式规则](decisions/ADR-0189-审批策略Provider与声明式规则.md)
 - [ADR-0190 Portal 语义导航策略与服务复用](decisions/ADR-0190-Portal语义导航策略与服务复用.md)
+- [ADR-0191 统一插件安装意图与多入口生命周期控制](decisions/ADR-0191-统一插件安装意图与多入口生命周期控制.md)
 
 ### 通用版本账本
 

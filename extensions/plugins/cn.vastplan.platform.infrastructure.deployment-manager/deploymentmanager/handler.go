@@ -9,13 +9,14 @@ import (
 	"errors"
 	"io"
 
-	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationactivation"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationactivation"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/nodebootstrap"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformprofileactivation"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/plugininstallation"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 	sharedstatesdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/sharedstate"
 )
@@ -50,6 +51,7 @@ func (s *Service) handleLoaded(ctx context.Context, host sdk.Host, call *contrac
 		Activation            configurationactivation.CreateRequest              `json:"activation"`
 		ProfileActivation     platformprofileactivation.CreateActivationRequest  `json:"profileActivation"`
 		CandidateID           string                                             `json:"candidateId"`
+		InstallationPreview   plugininstallation.PreviewRequest                  `json:"installationPreview"`
 	}
 	decoder := json.NewDecoder(bytes.NewReader(payload))
 	decoder.DisallowUnknownFields()
@@ -107,6 +109,12 @@ func (s *Service) handleLoaded(ctx context.Context, host sdk.Host, call *contrac
 		var items []platformadminapi.ServiceRevision
 		items, err = s.ListServiceRevisions(call)
 		out = map[string]any{"items": publicServiceRevisions(items)}
+	case plugininstallation.PreviewOperation:
+		out, err = s.PreviewPluginInstallation(ctx, host, call, plugininstallation.SourceController, request.InstallationPreview)
+	case plugininstallation.SelfServicePreviewOperation:
+		out, err = s.PreviewPluginInstallation(ctx, host, call, plugininstallation.SourceSelfService, request.InstallationPreview)
+	case plugininstallation.DevelopmentPreviewOperation:
+		out, err = s.PreviewPluginInstallation(ctx, host, call, plugininstallation.SourceDevelopment, request.InstallationPreview)
 	case "createIntentDraft":
 		out, err = s.CreateIntentDraft(ctx, host, call, request.Intent)
 	case "updateIntentDraft":
@@ -214,6 +222,16 @@ func errorCode(err error) string {
 		return "platform.test_release.in_progress"
 	case errors.Is(err, errTestArtifact):
 		return "platform.test_release.artifact_rejected"
+	case errors.Is(err, plugininstallation.ErrUntrustedSource):
+		return "platform.plugin_installation.source_untrusted"
+	case errors.Is(err, plugininstallation.ErrTargetScopeMismatch):
+		return "platform.plugin_installation.target_scope_mismatch"
+	case errors.Is(err, plugininstallation.ErrDevelopmentForbidden):
+		return "platform.plugin_installation.development_forbidden"
+	case errors.Is(err, errInstallationConflict):
+		return "platform.plugin_installation.change_conflict"
+	case errors.Is(err, errInstallationUnsupported):
+		return "platform.plugin_installation.unsupported"
 	case isSharedStateError(err):
 		return "platform.deployment.unavailable"
 	default:
@@ -252,6 +270,9 @@ func Descriptor() []byte {
 		{"name":"approveBootstrap","description":"由不同审批人批准并触发可信内核引导","paramsSchema":{"type":"object","properties":{"jobId":{"type":"string"}},"required":["jobId"]}}
 		,{"name":"listDeploymentTargets","description":"列出平台预授权的部署目标","paramsSchema":{"type":"object","properties":{}}}
 		,{"name":"listServiceRevisions","description":"列出服务组合修订","paramsSchema":{"type":"object","properties":{}}}
+		,{"name":"previewPluginInstallation","description":"按可信来源预览应用插件安装、升级或卸载影响","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"installationPreview":{"type":"object"}},"required":["installationPreview"]}}
+		,{"name":"previewSelfServicePluginInstallation","description":"由 Portal 管理绑定为当前服务预览应用插件变更","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"installationPreview":{"type":"object"}},"required":["installationPreview"]}}
+		,{"name":"previewDevelopmentPluginInstallation","description":"由受信开发控制器为显式绑定目标预览插件变更","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"installationPreview":{"type":"object"}},"required":["installationPreview"]}}
 		,{"name":"createIntentDraft","description":"创建 Application Intent 规划草稿","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"intent":{"type":"object"}},"required":["intent"]}}
 		,{"name":"updateIntentDraft","description":"更新 Application Intent 并重建计划快照","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"revisionId":{"type":"integer","minimum":1},"intent":{"type":"object"}},"required":["revisionId","intent"]}}
 		,{"name":"refreshIntentDraft","description":"显式接受最新 Planner 结果并清除 stale","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"revisionId":{"type":"integer","minimum":1}},"required":["revisionId"]}}
@@ -283,7 +304,7 @@ func Contribution(service *Service) sdk.Contribution {
 			return service.Handler(ctx, host, call, payload, operation)
 		}
 	}
-	operations := []string{"listNodes", "putNode", "listBootstrapJobs", "createBootstrap", "approveBootstrap", "listDeploymentTargets", "listServiceRevisions", "createIntentDraft", "updateIntentDraft", "refreshIntentDraft", "bindIntentConfiguration", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision", configurationactivation.CreateOperation, configurationactivation.GetOperation, configurationactivation.PublishOperation, platformprofileactivation.CreateActivationOperation, platformprofileactivation.GetActivationOperation, platformprofileactivation.ApproveActivationOperation, platformprofileactivation.PublishActivationOperation, platformprofileactivation.AbortActivationOperation, "listServiceRevisionAudit", "listTestTargetBindings", "putTestTargetBinding", "listTestReleases", "createTestRelease", "rollbackTestRelease"}
+	operations := []string{"listNodes", "putNode", "listBootstrapJobs", "createBootstrap", "approveBootstrap", "listDeploymentTargets", "listServiceRevisions", plugininstallation.PreviewOperation, plugininstallation.SelfServicePreviewOperation, plugininstallation.DevelopmentPreviewOperation, "createIntentDraft", "updateIntentDraft", "refreshIntentDraft", "bindIntentConfiguration", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision", configurationactivation.CreateOperation, configurationactivation.GetOperation, configurationactivation.PublishOperation, platformprofileactivation.CreateActivationOperation, platformprofileactivation.GetActivationOperation, platformprofileactivation.ApproveActivationOperation, platformprofileactivation.PublishActivationOperation, platformprofileactivation.AbortActivationOperation, "listServiceRevisionAudit", "listTestTargetBindings", "putTestTargetBinding", "listTestReleases", "createTestRelease", "rollbackTestRelease"}
 	handlers := make(map[string]sdk.Handler, len(operations))
 	for _, operation := range operations {
 		handlers[operation] = handler(operation)
