@@ -123,7 +123,7 @@ func TestBuildPermissionCatalogFromSystemManagementPlugins(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if catalog.SchemaVersion != PermissionCatalogSchemaVersion || len(catalog.Permissions) != 22 || len(catalog.Operations) != 77 || len(catalog.Digest) != 64 {
+	if catalog.SchemaVersion != PermissionCatalogSchemaVersion || len(catalog.Permissions) != 25 || len(catalog.Operations) != 86 || len(catalog.Digest) != 64 {
 		t.Fatalf("系统管理权限目录不完整: permissions=%d operations=%d digest=%s", len(catalog.Permissions), len(catalog.Operations), catalog.Digest)
 	}
 }

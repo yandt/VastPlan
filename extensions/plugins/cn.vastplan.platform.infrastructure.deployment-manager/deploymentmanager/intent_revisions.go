@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
-	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfiguration"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
@@ -59,6 +59,9 @@ func (s *Service) UpdateIntentDraft(ctx context.Context, host sdk.Host, call *co
 		return platformadminapi.ServiceRevision{}, err
 	}
 	old := state.Revisions[index]
+	if err := requireServiceRevisionOwner(state, id, revisionOwnerOrdinary); err != nil {
+		return platformadminapi.ServiceRevision{}, err
+	}
 	if old.Status != platformadminapi.ServiceDraft || old.Intent == nil {
 		return platformadminapi.ServiceRevision{}, errServiceState
 	}
@@ -111,6 +114,9 @@ func (s *Service) replaceIntentPlan(ctx context.Context, host sdk.Host, call *co
 		return platformadminapi.ServiceRevision{}, err
 	}
 	old := state.Revisions[index]
+	if err := requireServiceRevisionOwner(state, id, revisionOwnerOrdinary); err != nil {
+		return platformadminapi.ServiceRevision{}, err
+	}
 	if old.Status != platformadminapi.ServiceDraft || old.Intent == nil {
 		return platformadminapi.ServiceRevision{}, errServiceState
 	}

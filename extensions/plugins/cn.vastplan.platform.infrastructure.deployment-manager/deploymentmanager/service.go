@@ -12,7 +12,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.platform.infrastructure.deployment-manager"
-	PluginVersion = "0.22.0"
+	PluginVersion = "0.23.0"
 	Capability    = platformadminapi.DeploymentCapability
 	jobTTL        = 30 * time.Minute
 	maxStateBytes = 1 << 20
@@ -31,17 +31,18 @@ var (
 )
 
 type tenantState struct {
-	Nodes                 map[string]platformadminapi.ManagedNode       `json:"nodes"`
-	Jobs                  map[string]platformadminapi.BootstrapJob      `json:"jobs"`
-	NextRevision          uint64                                        `json:"nextRevision"`
-	NextAudit             uint64                                        `json:"nextAudit"`
-	Revisions             []platformadminapi.ServiceRevision            `json:"revisions"`
-	ConfigurationRequests map[string]string                             `json:"configurationRequests,omitempty"`
-	ProfileActivations    map[string]profileActivationRecord            `json:"profileActivations,omitempty"`
-	ServiceAudit          []platformadminapi.ServiceAuditEvent          `json:"serviceAudit"`
-	TestBindings          map[string]platformadminapi.TestTargetBinding `json:"testBindings"`
-	NextTestRelease       uint64                                        `json:"nextTestRelease"`
-	TestReleases          []platformadminapi.TestRelease                `json:"testReleases"`
+	Nodes                  map[string]platformadminapi.ManagedNode       `json:"nodes"`
+	Jobs                   map[string]platformadminapi.BootstrapJob      `json:"jobs"`
+	NextRevision           uint64                                        `json:"nextRevision"`
+	NextAudit              uint64                                        `json:"nextAudit"`
+	Revisions              []platformadminapi.ServiceRevision            `json:"revisions"`
+	ConfigurationRequests  map[string]string                             `json:"configurationRequests,omitempty"`
+	ProfileActivations     map[string]profileActivationRecord            `json:"profileActivations,omitempty"`
+	ServiceAudit           []platformadminapi.ServiceAuditEvent          `json:"serviceAudit"`
+	TestBindings           map[string]platformadminapi.TestTargetBinding `json:"testBindings"`
+	InstallationCandidates map[string]installationCandidateRecord        `json:"installationCandidates,omitempty"`
+	NextTestRelease        uint64                                        `json:"nextTestRelease"`
+	TestReleases           []platformadminapi.TestRelease                `json:"testReleases"`
 }
 
 type persisted struct {

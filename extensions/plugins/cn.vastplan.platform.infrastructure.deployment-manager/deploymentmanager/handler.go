@@ -115,6 +115,28 @@ func (s *Service) handleLoaded(ctx context.Context, host sdk.Host, call *contrac
 		out, err = s.PreviewPluginInstallation(ctx, host, call, plugininstallation.SourceSelfService, request.InstallationPreview)
 	case plugininstallation.DevelopmentPreviewOperation:
 		out, err = s.PreviewPluginInstallation(ctx, host, call, plugininstallation.SourceDevelopment, request.InstallationPreview)
+	case plugininstallation.CreateOperation:
+		out, err = s.CreatePluginInstallationCandidate(ctx, host, call, plugininstallation.SourceController, request.InstallationPreview)
+	case plugininstallation.SelfServiceCreateOperation:
+		out, err = s.CreatePluginInstallationCandidate(ctx, host, call, plugininstallation.SourceSelfService, request.InstallationPreview)
+	case plugininstallation.DevelopmentCreateOperation:
+		out, err = s.CreatePluginInstallationCandidate(ctx, host, call, plugininstallation.SourceDevelopment, request.InstallationPreview)
+	case plugininstallation.ListOperation:
+		var items []plugininstallation.Candidate
+		items, err = s.ListPluginInstallationCandidates(call)
+		out = map[string]any{"items": items}
+	case plugininstallation.GetOperation:
+		out, err = s.GetPluginInstallationCandidate(call, request.CandidateID)
+	case plugininstallation.SubmitOperation:
+		out, err = s.SubmitPluginInstallationCandidate(ctx, host, call, request.CandidateID)
+	case plugininstallation.ApproveOperation:
+		out, err = s.ApprovePluginInstallationCandidate(ctx, host, call, request.CandidateID)
+	case plugininstallation.ActivateOperation:
+		out, err = s.ActivatePluginInstallationCandidate(ctx, host, call, request.CandidateID)
+	case plugininstallation.CancelOperation:
+		out, err = s.CancelPluginInstallationCandidate(call, request.CandidateID)
+	case plugininstallation.RollbackOperation:
+		out, err = s.RollbackPluginInstallationCandidate(ctx, host, call, request.CandidateID)
 	case "createIntentDraft":
 		out, err = s.CreateIntentDraft(ctx, host, call, request.Intent)
 	case "updateIntentDraft":
@@ -232,6 +254,10 @@ func errorCode(err error) string {
 		return "platform.plugin_installation.change_conflict"
 	case errors.Is(err, errInstallationUnsupported):
 		return "platform.plugin_installation.unsupported"
+	case errors.Is(err, errInstallationCandidateConflict):
+		return "platform.plugin_installation.candidate_conflict"
+	case errors.Is(err, errInstallationNoop):
+		return "platform.plugin_installation.noop"
 	case isSharedStateError(err):
 		return "platform.deployment.unavailable"
 	default:
@@ -273,6 +299,16 @@ func Descriptor() []byte {
 		,{"name":"previewPluginInstallation","description":"按可信来源预览应用插件安装、升级或卸载影响","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"installationPreview":{"type":"object"}},"required":["installationPreview"]}}
 		,{"name":"previewSelfServicePluginInstallation","description":"由 Portal 管理绑定为当前服务预览应用插件变更","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"installationPreview":{"type":"object"}},"required":["installationPreview"]}}
 		,{"name":"previewDevelopmentPluginInstallation","description":"由受信开发控制器为显式绑定目标预览插件变更","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"installationPreview":{"type":"object"}},"required":["installationPreview"]}}
+		,{"name":"createPluginInstallationCandidate","description":"从控制器入口创建持久插件安装候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"installationPreview":{"type":"object"}},"required":["installationPreview"]}}
+		,{"name":"createSelfServicePluginInstallationCandidate","description":"从服务自助入口创建持久插件安装候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"installationPreview":{"type":"object"}},"required":["installationPreview"]}}
+		,{"name":"createDevelopmentPluginInstallationCandidate","description":"从开发入口创建持久插件安装候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"installationPreview":{"type":"object"}},"required":["installationPreview"]}}
+		,{"name":"listPluginInstallationCandidates","description":"列出插件安装候选及派生状态","paramsSchema":{"type":"object","properties":{}}}
+		,{"name":"getPluginInstallationCandidate","description":"读取一个插件安装候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"candidateId":{"type":"string"}},"required":["candidateId"]}}
+		,{"name":"submitPluginInstallationCandidate","description":"重新规划并提交插件安装候选审批","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"candidateId":{"type":"string"}},"required":["candidateId"]}}
+		,{"name":"approvePluginInstallationCandidate","description":"由不同主体批准插件安装候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"candidateId":{"type":"string"}},"required":["candidateId"]}}
+		,{"name":"activatePluginInstallationCandidate","description":"通过既有可信发布链激活插件安装候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"candidateId":{"type":"string"}},"required":["candidateId"]}}
+		,{"name":"cancelPluginInstallationCandidate","description":"取消尚未提交的插件安装候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"candidateId":{"type":"string"}},"required":["candidateId"]}}
+		,{"name":"rollbackPluginInstallationCandidate","description":"以新的服务修订回滚已激活安装候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"candidateId":{"type":"string"}},"required":["candidateId"]}}
 		,{"name":"createIntentDraft","description":"创建 Application Intent 规划草稿","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"intent":{"type":"object"}},"required":["intent"]}}
 		,{"name":"updateIntentDraft","description":"更新 Application Intent 并重建计划快照","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"revisionId":{"type":"integer","minimum":1},"intent":{"type":"object"}},"required":["revisionId","intent"]}}
 		,{"name":"refreshIntentDraft","description":"显式接受最新 Planner 结果并清除 stale","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"revisionId":{"type":"integer","minimum":1}},"required":["revisionId"]}}
@@ -304,7 +340,7 @@ func Contribution(service *Service) sdk.Contribution {
 			return service.Handler(ctx, host, call, payload, operation)
 		}
 	}
-	operations := []string{"listNodes", "putNode", "listBootstrapJobs", "createBootstrap", "approveBootstrap", "listDeploymentTargets", "listServiceRevisions", plugininstallation.PreviewOperation, plugininstallation.SelfServicePreviewOperation, plugininstallation.DevelopmentPreviewOperation, "createIntentDraft", "updateIntentDraft", "refreshIntentDraft", "bindIntentConfiguration", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision", configurationactivation.CreateOperation, configurationactivation.GetOperation, configurationactivation.PublishOperation, platformprofileactivation.CreateActivationOperation, platformprofileactivation.GetActivationOperation, platformprofileactivation.ApproveActivationOperation, platformprofileactivation.PublishActivationOperation, platformprofileactivation.AbortActivationOperation, "listServiceRevisionAudit", "listTestTargetBindings", "putTestTargetBinding", "listTestReleases", "createTestRelease", "rollbackTestRelease"}
+	operations := []string{"listNodes", "putNode", "listBootstrapJobs", "createBootstrap", "approveBootstrap", "listDeploymentTargets", "listServiceRevisions", plugininstallation.PreviewOperation, plugininstallation.SelfServicePreviewOperation, plugininstallation.DevelopmentPreviewOperation, plugininstallation.CreateOperation, plugininstallation.SelfServiceCreateOperation, plugininstallation.DevelopmentCreateOperation, plugininstallation.ListOperation, plugininstallation.GetOperation, plugininstallation.SubmitOperation, plugininstallation.ApproveOperation, plugininstallation.ActivateOperation, plugininstallation.CancelOperation, plugininstallation.RollbackOperation, "createIntentDraft", "updateIntentDraft", "refreshIntentDraft", "bindIntentConfiguration", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision", configurationactivation.CreateOperation, configurationactivation.GetOperation, configurationactivation.PublishOperation, platformprofileactivation.CreateActivationOperation, platformprofileactivation.GetActivationOperation, platformprofileactivation.ApproveActivationOperation, platformprofileactivation.PublishActivationOperation, platformprofileactivation.AbortActivationOperation, "listServiceRevisionAudit", "listTestTargetBindings", "putTestTargetBinding", "listTestReleases", "createTestRelease", "rollbackTestRelease"}
 	handlers := make(map[string]sdk.Handler, len(operations))
 	for _, operation := range operations {
 		handlers[operation] = handler(operation)

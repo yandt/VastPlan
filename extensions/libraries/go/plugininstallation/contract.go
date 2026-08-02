@@ -15,6 +15,16 @@ const (
 	PreviewOperation            = "previewPluginInstallation"
 	SelfServicePreviewOperation = "previewSelfServicePluginInstallation"
 	DevelopmentPreviewOperation = "previewDevelopmentPluginInstallation"
+	CreateOperation             = "createPluginInstallationCandidate"
+	SelfServiceCreateOperation  = "createSelfServicePluginInstallationCandidate"
+	DevelopmentCreateOperation  = "createDevelopmentPluginInstallationCandidate"
+	ListOperation               = "listPluginInstallationCandidates"
+	GetOperation                = "getPluginInstallationCandidate"
+	SubmitOperation             = "submitPluginInstallationCandidate"
+	ApproveOperation            = "approvePluginInstallationCandidate"
+	ActivateOperation           = "activatePluginInstallationCandidate"
+	CancelOperation             = "cancelPluginInstallationCandidate"
+	RollbackOperation           = "rollbackPluginInstallationCandidate"
 
 	SourceController  Source = "controller"
 	SourceSelfService Source = "self-service"
@@ -33,6 +43,16 @@ const (
 	PackageRemoved PackageChangeKind = "Removed"
 
 	ApplyServiceGeneration ApplyStrategy = "service-generation"
+
+	CandidatePlanned         CandidateStatus = "Planned"
+	CandidatePendingApproval CandidateStatus = "PendingApproval"
+	CandidateApproved        CandidateStatus = "Approved"
+	CandidateActivating      CandidateStatus = "Activating"
+	CandidateReady           CandidateStatus = "Ready"
+	CandidateStale           CandidateStatus = "Stale"
+	CandidateCancelled       CandidateStatus = "Cancelled"
+	CandidateRolledBack      CandidateStatus = "RolledBack"
+	CandidateSuperseded      CandidateStatus = "Superseded"
 )
 
 type Source string
@@ -40,6 +60,7 @@ type Action string
 type Status string
 type PackageChangeKind string
 type ApplyStrategy string
+type CandidateStatus string
 
 // Target identifies a logical service, not a physical node. Cluster rollout is
 // derived later from the resulting Deployment revision.
@@ -111,4 +132,28 @@ type Preview struct {
 	ConfigurationGaps     []ConfigurationGap                          `json:"configurationGaps"`
 	Diagnostics           []backendcompositionv1.ResolutionDiagnostic `json:"diagnostics"`
 	Impact                Impact                                      `json:"impact"`
+}
+
+// Candidate is the durable lifecycle handle. ServiceRevisionID points to the
+// existing deployment workflow; status is a projection of that revision, so
+// installation never owns a second approval or publication state machine.
+type Candidate struct {
+	ID                        string          `json:"id"`
+	Status                    CandidateStatus `json:"status"`
+	Source                    Source          `json:"source"`
+	Preview                   Preview         `json:"preview"`
+	ServiceRevisionID         uint64          `json:"serviceRevisionId"`
+	PreviousServiceRevisionID uint64          `json:"previousServiceRevisionId"`
+	RollbackServiceRevisionID uint64          `json:"rollbackServiceRevisionId,omitempty"`
+	RequestedBy               string          `json:"requestedBy"`
+	SubmittedBy               string          `json:"submittedBy,omitempty"`
+	ApprovedBy                string          `json:"approvedBy,omitempty"`
+	ActivatedBy               string          `json:"activatedBy,omitempty"`
+	CancelledBy               string          `json:"cancelledBy,omitempty"`
+	CreatedAt                 string          `json:"createdAt"`
+	UpdatedAt                 string          `json:"updatedAt"`
+}
+
+type CandidateLookup struct {
+	CandidateID string `json:"candidateId"`
 }

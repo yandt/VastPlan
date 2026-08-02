@@ -28,6 +28,9 @@ func (s *Service) validateLoaded() error {
 		if state.TestBindings == nil {
 			state.TestBindings = map[string]platformadminapi.TestTargetBinding{}
 		}
+		if state.InstallationCandidates == nil {
+			state.InstallationCandidates = map[string]installationCandidateRecord{}
+		}
 		if state.ConfigurationRequests == nil {
 			state.ConfigurationRequests = map[string]string{}
 		}
@@ -80,6 +83,11 @@ func (s *Service) validateLoaded() error {
 		for _, release := range state.TestReleases {
 			if release.ID == 0 || release.BindingID == "" || release.RequestedBy == "" || !validTestReleaseStatus(release.Status) {
 				return fmt.Errorf("deployment-manager 状态包含无效测试发布 %d", release.ID)
+			}
+		}
+		for id, candidate := range state.InstallationCandidates {
+			if err := validateInstallationCandidateRecord(state, id, candidate); err != nil {
+				return fmt.Errorf("deployment-manager 状态包含无效插件安装候选 %q: %w", id, err)
 			}
 		}
 	}
@@ -220,6 +228,9 @@ func (s *Service) tenantLocked(tenant string) *tenantState {
 	if state.TestBindings == nil {
 		state.TestBindings = map[string]platformadminapi.TestTargetBinding{}
 	}
+	if state.InstallationCandidates == nil {
+		state.InstallationCandidates = map[string]installationCandidateRecord{}
+	}
 	if state.ConfigurationRequests == nil {
 		state.ConfigurationRequests = map[string]string{}
 	}
@@ -233,7 +244,7 @@ func emptyTenantState() *tenantState {
 	return &tenantState{
 		Nodes: map[string]platformadminapi.ManagedNode{}, Jobs: map[string]platformadminapi.BootstrapJob{},
 		TestBindings: map[string]platformadminapi.TestTargetBinding{}, ConfigurationRequests: map[string]string{},
-		ProfileActivations: map[string]profileActivationRecord{},
+		ProfileActivations: map[string]profileActivationRecord{}, InstallationCandidates: map[string]installationCandidateRecord{},
 	}
 }
 

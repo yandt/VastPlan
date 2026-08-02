@@ -15,20 +15,37 @@ var (
 	errInstallationUnsupported = errors.New("活动服务尚未使用 Application Intent，不能生成插件安装预览")
 )
 
+type plannedInstallation struct {
+	request   plugininstallation.PreviewRequest
+	source    plugininstallation.Source
+	active    platformadminapi.ServiceRevision
+	candidate backendcompositionv1.ApplicationIntent
+	plan      intentPlan
+	preview   plugininstallation.Preview
+}
+
 // PreviewPluginInstallation projects one root-plugin mutation through the
 // existing Planner and kernel preview path. It is deliberately read-only: no
 // revision, artifact reference or activation is persisted here.
 func (s *Service) PreviewPluginInstallation(ctx context.Context, host sdk.Host, call *contractv1.CallContext, source plugininstallation.Source, input plugininstallation.PreviewRequest) (plugininstallation.Preview, error) {
-	request, err := plugininstallation.ValidatePreviewRequest(input)
+	planned, err := s.planPluginInstallation(ctx, host, call, source, input)
 	if err != nil {
 		return plugininstallation.Preview{}, err
 	}
+	return planned.preview, nil
+}
+
+func (s *Service) planPluginInstallation(ctx context.Context, host sdk.Host, call *contractv1.CallContext, source plugininstallation.Source, input plugininstallation.PreviewRequest) (plannedInstallation, error) {
+	request, err := plugininstallation.ValidatePreviewRequest(input)
+	if err != nil {
+		return plannedInstallation{}, err
+	}
 	if err := authorizeInstallationSource(call, source); err != nil {
-		return plugininstallation.Preview{}, err
+		return plannedInstallation{}, err
 	}
 	tenant, err := callTenant(call)
 	if err != nil {
-		return plugininstallation.Preview{}, err
+		return plannedInstallation{}, err
 	}
 
 	s.mu.Lock()
@@ -38,35 +55,35 @@ func (s *Service) PreviewPluginInstallation(ctx context.Context, host sdk.Host, 
 	developmentBound := source != plugininstallation.SourceDevelopment || developmentInstallationBound(state, request)
 	s.mu.Unlock()
 	if err != nil {
-		return plugininstallation.Preview{}, err
+		return plannedInstallation{}, err
 	}
 	if !developmentBound {
-		return plugininstallation.Preview{}, plugininstallation.ErrTargetScopeMismatch
+		return plannedInstallation{}, plugininstallation.ErrTargetScopeMismatch
 	}
 	if request.ExpectedActiveRevision != 0 && request.ExpectedActiveRevision != active.ID {
-		return plugininstallation.Preview{}, errVersionConflict
+		return plannedInstallation{}, errVersionConflict
 	}
 	if active.Intent == nil || active.ResolutionReport == nil || active.ResolutionReport.ArtifactLock == nil {
-		return plugininstallation.Preview{}, errInstallationUnsupported
+		return plannedInstallation{}, errInstallationUnsupported
 	}
 
 	candidate := cloneJSON(*active.Intent)
 	if err := applyInstallationChange(&candidate, request); err != nil {
-		return plugininstallation.Preview{}, err
+		return plannedInstallation{}, err
 	}
 	candidate, err = normalizeApplicationIntent(candidate, tenant, candidateRevision)
 	if err != nil {
-		return plugininstallation.Preview{}, err
+		return plannedInstallation{}, err
 	}
 	plan, err := buildIntentPlan(ctx, host, call, candidate, active.ConfigurationSnapshot, candidateRevision)
 	if err != nil {
-		return plugininstallation.Preview{}, err
+		return plannedInstallation{}, err
 	}
 	preview, err := buildInstallationPreview(source, request, active, candidate, plan)
 	if err != nil {
-		return plugininstallation.Preview{}, err
+		return plannedInstallation{}, err
 	}
-	return preview, nil
+	return plannedInstallation{request: request, source: source, active: active, candidate: candidate, plan: plan, preview: preview}, nil
 }
 
 func buildInstallationPreview(source plugininstallation.Source, request plugininstallation.PreviewRequest, active platformadminapi.ServiceRevision, candidate backendcompositionv1.ApplicationIntent, plan intentPlan) (plugininstallation.Preview, error) {

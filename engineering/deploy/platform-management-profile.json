@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "revision": 72,
+  "revision": 73,
   "id": "local-platform-management",
   "target": { "kernel": "backend" },
   "serviceClasses": ["application.backend"],
@@ -355,7 +355,7 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.9", "channel": "stable" },
-        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.22.0", "channel": "stable" }
+        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.23.0", "channel": "stable" }
       ]
     },
     {

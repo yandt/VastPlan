@@ -34,6 +34,8 @@
 
 0.22.0 起新增统一安装预览：控制器、服务自助和开发自动化分别使用受治理 operation，在入口固定 `controller/self-service/development` 策略对象后调用同一工作流，来源不能由请求体自报。服务自助入口只接受 Portal BFF，后续 BFF 必须从 ManagementTarget 派生 deployment；开发来源只接受 `platform-dev` 系统身份并要求命中现有 TestTargetBinding。工作流把一个根插件变更投影到活动 Application Intent，复用 Planner 和 Kernel Preview，返回精确依赖差异、配置缺口、Catalog revision、plan/preview digest 与 Service Generation 影响，但不会创建 revision、下载、保护引用或激活制品。Foundation/Platform 插件在该入口 fail-closed。
 
+0.23.0 起增加 Installation Candidate 持久生命周期。创建候选与 ServiceRevision Draft 原子提交；`list/get/submit/approve/activate/cancel/rollbackPluginInstallationCandidate` 只编排既有服务修订。候选状态由修订投影，提交和审批仍会重新规划并检查 stale，激活和回滚仍经可信内核。关联修订拒绝通用编辑、提交、审批和发布入口，避免绕过安装权限；取消只允许未提交草稿并保留候选审计。完整 Artifact Lock 只保存在关联 ServiceRevision，候选记录不重复占用 Shared State 容量。
+
 测试目标绑定只能指向活动 Application Composition 内已有的应用插件，不能增加插件，也不能覆盖 `cn.vastplan.foundation.*` 或 `cn.vastplan.platform.*`。测试发布只接受 `testing` channel 的 SemVer 预发布版本和精确 SHA/repositoryRevision；上传与发布是两个事务。候选就绪与回滚通过 `kernel.deployment.readiness` 读取内核持有的 NATS Composition report，插件不获得 KV 句柄。
 
 0.17.0 起，租户状态通过可信宿主 `kernel.state.shared.get/create/update` 保存为 `tenant/deployment.control/tenant` 单文档 CAS 聚合；插件不持有 NATS、数据库或文件系统凭证。0.18.0 进一步复用 Unit Leadership 的 host-only epoch/token 保护 mutating 内核回调：新 leader 可以读取同一账本并执行中断恢复，旧 leader 的过期写入被 Store revision 拒绝，失效 Runtime 不能开始新副作用；SSH 远端再用 root-owned `flock` 与单调 epoch 拒绝延迟旧请求。当前仍采用 `leader + external-shared + leader routing`，不宣称 active-active。

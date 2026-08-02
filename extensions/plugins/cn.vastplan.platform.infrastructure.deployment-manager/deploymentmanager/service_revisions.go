@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/deploymentpublication"
-	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfig"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
@@ -163,6 +163,13 @@ func (s *Service) UpdateServiceDraft(ctx context.Context, host sdk.Host, call *c
 }
 
 func (s *Service) SubmitServiceDraft(ctx context.Context, host sdk.Host, call *contractv1.CallContext, id uint64) (platformadminapi.ServiceRevision, error) {
+	return s.submitServiceDraftForOwner(ctx, host, call, id, revisionOwnerOrdinary)
+}
+
+func (s *Service) submitServiceDraftForOwner(ctx context.Context, host sdk.Host, call *contractv1.CallContext, id uint64, owner serviceRevisionWorkflowOwner) (platformadminapi.ServiceRevision, error) {
+	if err := s.checkServiceRevisionOwner(call, id, owner); err != nil {
+		return platformadminapi.ServiceRevision{}, err
+	}
 	if revision, ok := s.intentRevision(call, id); ok && isIntentRevision(revision) {
 		return s.submitIntentDraft(ctx, host, call, id)
 	}
@@ -170,6 +177,10 @@ func (s *Service) SubmitServiceDraft(ctx context.Context, host sdk.Host, call *c
 }
 
 func (s *Service) ApproveServiceRevision(ctx context.Context, host sdk.Host, call *contractv1.CallContext, id uint64) (platformadminapi.ServiceRevision, error) {
+	return s.approveServiceRevisionForOwner(ctx, host, call, id, revisionOwnerOrdinary)
+}
+
+func (s *Service) approveServiceRevisionForOwner(ctx context.Context, host sdk.Host, call *contractv1.CallContext, id uint64, owner serviceRevisionWorkflowOwner) (platformadminapi.ServiceRevision, error) {
 	tenant, err := callTenant(call)
 	if err != nil {
 		return platformadminapi.ServiceRevision{}, err
@@ -181,6 +192,9 @@ func (s *Service) ApproveServiceRevision(ctx context.Context, host sdk.Host, cal
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	state := s.tenantLocked(tenant)
+	if err := requireServiceRevisionOwner(state, id, owner); err != nil {
+		return platformadminapi.ServiceRevision{}, err
+	}
 	index, err := serviceRevisionIndex(state, id)
 	if err != nil {
 		return platformadminapi.ServiceRevision{}, err
@@ -234,10 +248,10 @@ func (s *Service) intentRevision(call *contractv1.CallContext, id uint64) (platf
 }
 
 func (s *Service) PublishServiceRevision(ctx context.Context, host sdk.Host, call *contractv1.CallContext, id uint64) (platformadminapi.ServiceRevision, error) {
-	return s.publishServiceRevision(ctx, host, call, id, false)
+	return s.publishServiceRevision(ctx, host, call, id, revisionOwnerOrdinary)
 }
 
-func (s *Service) publishServiceRevision(ctx context.Context, host sdk.Host, call *contractv1.CallContext, id uint64, configurationActivation bool) (platformadminapi.ServiceRevision, error) {
+func (s *Service) publishServiceRevision(ctx context.Context, host sdk.Host, call *contractv1.CallContext, id uint64, owner serviceRevisionWorkflowOwner) (platformadminapi.ServiceRevision, error) {
 	tenant, err := callTenant(call)
 	if err != nil {
 		return platformadminapi.ServiceRevision{}, err
@@ -249,6 +263,9 @@ func (s *Service) publishServiceRevision(ctx context.Context, host sdk.Host, cal
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	state := s.tenantLocked(tenant)
+	if err := requireServiceRevisionOwner(state, id, owner); err != nil {
+		return platformadminapi.ServiceRevision{}, err
+	}
 	index, err := serviceRevisionIndex(state, id)
 	if err != nil {
 		return platformadminapi.ServiceRevision{}, err
@@ -257,7 +274,7 @@ func (s *Service) publishServiceRevision(ctx context.Context, host sdk.Host, cal
 	if profileActivationLocksDeployment(state, revision.Deployment) {
 		return platformadminapi.ServiceRevision{}, errServiceState
 	}
-	if revision.ConfigurationCandidateID != "" && !configurationActivation {
+	if revision.ConfigurationCandidateID != "" && owner != revisionOwnerConfiguration {
 		return platformadminapi.ServiceRevision{}, errServiceState
 	}
 	if revision.Status != platformadminapi.ServiceApproved && revision.Status != platformadminapi.ServicePublishing {
@@ -339,6 +356,16 @@ func (s *Service) publishServiceRevision(ctx context.Context, host sdk.Host, cal
 	return cloneServiceRevision(revision), nil
 }
 
+func (s *Service) checkServiceRevisionOwner(call *contractv1.CallContext, id uint64, owner serviceRevisionWorkflowOwner) error {
+	tenant, err := callTenant(call)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return requireServiceRevisionOwner(s.tenantLocked(tenant), id, owner)
+}
+
 func (s *Service) RollbackServiceRevision(ctx context.Context, host sdk.Host, call *contractv1.CallContext, sourceID uint64) (platformadminapi.ServiceRevision, error) {
 	tenant, err := callTenant(call)
 	if err != nil {
@@ -383,6 +410,10 @@ func (s *Service) RollbackServiceRevision(ctx context.Context, host sdk.Host, ca
 	}
 	revision := state.Revisions[newIndex]
 	revision.Status = platformadminapi.ServicePublishing
+	// Persist the content source on the new monotonic revision. Higher-level
+	// workflows can recover rollback completion after a controller restart
+	// without guessing from semantically similar configuration.
+	revision.PreviousServiceRevision = sourceID
 	if revision.ResolutionReport != nil {
 		revision.SubmittedPlanDigest = revision.ResolutionReport.PlanDigest
 		revision.ApprovedPlanDigest = revision.ResolutionReport.PlanDigest

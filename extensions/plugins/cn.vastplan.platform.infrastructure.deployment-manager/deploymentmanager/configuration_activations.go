@@ -181,7 +181,7 @@ func (s *Service) PublishConfigurationActivation(ctx context.Context, host sdk.H
 		return configurationactivation.Activation{}, errServiceState
 	}
 	if revision.Status != platformadminapi.ServicePublished {
-		if _, err := s.publishServiceRevision(ctx, host, call, revision.ID, true); err != nil {
+		if _, err := s.publishServiceRevision(ctx, host, call, revision.ID, revisionOwnerConfiguration); err != nil {
 			return configurationactivation.Activation{}, err
 		}
 	}
