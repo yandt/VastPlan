@@ -363,6 +363,9 @@ func Contribution(service *Service) sdk.Contribution {
 				if errors.Is(err, ErrVersionControlUnavailable) {
 					return composerStateError("portal.version_control_unavailable", err, true), nil, nil
 				}
+				if errors.Is(err, ErrCatalogRejected) {
+					return composerStateError("portal.catalog.rejected", ErrCatalogRejected, false), nil, nil
+				}
 				var stateError *sharedstatesdk.ServiceError
 				if errors.As(err, &stateError) {
 					return composerStateError("portal.composer.unavailable", err, stateError.Retryable), nil, nil

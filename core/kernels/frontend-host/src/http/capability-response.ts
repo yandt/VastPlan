@@ -32,6 +32,7 @@ export async function sendCapabilityResponse(
     else if (error instanceof CapabilityApplicationError && error.code === "portal.approval.provider_unavailable") sendAPIError(response, 503, "approval_provider_unavailable", head);
     else if (error instanceof CapabilityApplicationError && error.code === "portal.approval.digest_mismatch") sendAPIError(response, 409, "approval_digest_mismatch", head);
     else if (error instanceof CapabilityApplicationError && error.code === "portal.approval.reason_required") sendAPIError(response, 400, "approval_reason_required", head);
+    else if (error instanceof CapabilityApplicationError && error.code === "portal.catalog.rejected") sendAPIError(response, 409, "portal_catalog_rejected", head);
     else sendAPIError(response, 400, "request_rejected", head);
   }
 }

@@ -138,6 +138,9 @@ func run(opts options) error {
 	if err := r.prepare(ctx); err != nil {
 		return err
 	}
+	if err := r.hydrateDevelopmentStableArchive(); err != nil {
+		return err
+	}
 	if err := r.start(ctx); err != nil {
 		_ = r.shutdown()
 		return err

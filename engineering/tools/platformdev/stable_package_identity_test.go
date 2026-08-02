@@ -87,6 +87,72 @@ func TestHydrateRecordedStablePackagesLeavesDynamicGoForVariantValidation(t *tes
 	}
 }
 
+func TestDevelopmentStableArchiveKeepsHistoricalExactRefsAvailable(t *testing.T) {
+	root := t.TempDir()
+	ledgerPath := filepath.Join(root, "identity", "stable.json")
+	source := writeStableIdentityTestRepository(t, "1.0.0", "historical")
+	if err := reconcileStablePackageIdentities(source, ledgerPath); err != nil {
+		t.Fatal(err)
+	}
+	repositoryRoot := filepath.Join(root, "run", "repository")
+	privateKeyPath := filepath.Join(root, "run", "secrets", "artifact-signing.pem")
+	trustPath := filepath.Join(root, "run", "secrets", "seed-artifact-trust.json")
+	trustKey, err := ensureSigningIdentity(privateKeyPath, "vastplan", "local-development")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeTrustDocument(trustPath, trustKey); err != nil {
+		t.Fatal(err)
+	}
+	count, unavailable, err := hydrateDevelopmentStableArchive(repositoryRoot, ledgerPath, privateKeyPath, trustPath)
+	if err != nil || count != 1 || unavailable != 0 {
+		t.Fatalf("历史 stable 制品装入失败: count=%d unavailable=%d err=%v", count, unavailable, err)
+	}
+	ref := artifactrepository.Ref{PluginID: "cn.vastplan.test.identity", Version: "1.0.0", Channel: "stable"}
+	repository, err := artifactrepository.NewRepository(repositoryRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact, packageBytes, err := repository.Read(ref)
+	if err != nil || artifact.SHA256 == "" || string(packageBytes) == "" {
+		t.Fatalf("历史精确引用不可读: artifact=%+v err=%v", artifact, err)
+	}
+	cacheInfo, err := os.Stat(stablePackageCacheObject(stablePackageCacheRoot(ledgerPath), artifact.SHA256))
+	if err != nil {
+		t.Fatal(err)
+	}
+	objectInfo, err := os.Stat(filepath.Join(repositoryRoot, "artifacts", ref.PluginID, ref.Version, ref.Channel, artifact.Object))
+	if err != nil || !os.SameFile(cacheInfo, objectInfo) {
+		t.Fatalf("历史包体必须以硬链接复用对象缓存: cache=%v object=%v err=%v", cacheInfo, objectInfo, err)
+	}
+	count, unavailable, err = hydrateDevelopmentStableArchive(repositoryRoot, ledgerPath, privateKeyPath, trustPath)
+	if err != nil || count != 0 || unavailable != 0 {
+		t.Fatalf("重复装入必须幂等: count=%d unavailable=%d err=%v", count, unavailable, err)
+	}
+}
+
+func TestDevelopmentStableArchiveSkipsUnavailableUnreferencedHistory(t *testing.T) {
+	root := t.TempDir()
+	ledgerPath := filepath.Join(root, "stable.json")
+	missing := stablePackageIdentity{PluginID: "cn.vastplan.test.missing", Version: "1.0.0", Channel: "stable", SHA256: strings.Repeat("a", 64)}
+	if err := writeStablePackageIdentityLedger(ledgerPath, stablePackageIdentityLedger{Schema: developmentStablePackageIdentitySchema, Artifacts: []stablePackageIdentity{missing}}); err != nil {
+		t.Fatal(err)
+	}
+	privateKeyPath := filepath.Join(root, "secrets", "artifact-signing.pem")
+	trustPath := filepath.Join(root, "secrets", "seed-artifact-trust.json")
+	trustKey, err := ensureSigningIdentity(privateKeyPath, "vastplan", "local-development")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeTrustDocument(trustPath, trustKey); err != nil {
+		t.Fatal(err)
+	}
+	count, unavailable, err := hydrateDevelopmentStableArchive(filepath.Join(root, "repository"), ledgerPath, privateKeyPath, trustPath)
+	if err != nil || count != 0 || unavailable != 1 {
+		t.Fatalf("无关历史对象缺失不得阻断启动: count=%d unavailable=%d err=%v", count, unavailable, err)
+	}
+}
+
 func TestStablePackageIdentityLedgerFailsClosedWhenCorrupted(t *testing.T) {
 	root := t.TempDir()
 	ledgerPath := filepath.Join(root, "stable.json")

@@ -15,6 +15,8 @@ import (
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
 
+var errRecordedStablePackageUnavailable = errors.New("已登记 stable 制品缓存缺失")
+
 var stableCachePluginIDPattern = regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)+$`)
 
 func stablePackageCacheRoot(ledgerPath string) string {
@@ -154,7 +156,7 @@ func recoverLegacyStablePackage(workspaceStateRoot string, identity stablePackag
 			return packageBytes, nil
 		}
 	}
-	return nil, fmt.Errorf("已登记 stable 制品缓存缺失: %s sha256=%s；不能从当前源码重建并覆盖旧版本", stablePackageIdentityLabel(identity), identity.SHA256)
+	return nil, fmt.Errorf("%w: %s sha256=%s；不能从当前源码重建并覆盖旧版本", errRecordedStablePackageUnavailable, stablePackageIdentityLabel(identity), identity.SHA256)
 }
 
 func writeStablePackageCache(cacheRoot string, identity stablePackageIdentity, packageBytes []byte) error {

@@ -77,6 +77,14 @@ describe("Portal aggregate routes", () => {
 		expect(response.status).toBe(409);
 		expect(await response.json()).toEqual({ error: "approval_separation_required" });
   });
+
+  it("reports trusted catalog rejection as an actionable publication conflict", async () => {
+    const composer: PortalComposerPort = { async call() { throw new CapabilityApplicationError("portal.catalog.rejected", "internal artifact path"); } };
+    const { origin, headers } = await startServer(composer);
+    const response = await fetch(`${origin}/v1/portals/operations/publications/7/publish`, { method: "POST", headers, body: "{}" });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "portal_catalog_rejected" });
+  });
 });
 
 async function startServer(composer: PortalComposerPort): Promise<{ origin: string; headers: Record<string, string> }> {

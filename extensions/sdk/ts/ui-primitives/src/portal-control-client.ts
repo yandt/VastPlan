@@ -448,6 +448,7 @@ function portalControlErrorMessage(code: string): string {
     approval_provider_unavailable: "审批服务暂时不可用，请稍后重试。",
     approval_digest_mismatch: "待审批内容已经变化，请刷新页面后重新复验。",
     approval_reason_required: "请填写至少 4 个字符的审批原因。",
+    portal_catalog_rejected: "待发布内容引用的插件制品已缺失、失效或不再满足可信目录要求，请刷新配置后重新提交审批。",
   };
   return message[code] ?? `Portal control request failed: ${code}`;
 }

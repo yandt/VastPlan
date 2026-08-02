@@ -153,6 +153,7 @@ describe("PortalControlClient", () => {
   it("explains approval policy failures without generic forbidden", () => {
 		expect(new PortalControlError(409, "approval_separation_required").message).toBe("该内容由当前账号提交，需要其他审批人批准。");
 		expect(new PortalControlError(409, "approval_digest_mismatch").message).toBe("待审批内容已经变化，请刷新页面后重新复验。");
+		expect(new PortalControlError(409, "portal_catalog_rejected").message).toBe("待发布内容引用的插件制品已缺失、失效或不再满足可信目录要求，请刷新配置后重新提交审批。");
   });
 });
 

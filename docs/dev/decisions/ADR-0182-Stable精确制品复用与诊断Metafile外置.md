@@ -18,6 +18,7 @@ esbuild 原始 metafile 是 SBOM 和 Module Graph 构建期证据，包含源码
 4. 新 SemVer 或新的 dynamic-go variant 仍从当前源码构建、验证并登记。`workspace/testing/dev.*` 继续走测试发布协议，不进入 stable 对象缓存。正式远端仓库仍是生产制品真相源，本地缓存只负责开发 Seed 的不可变复用。
 5. esbuild 原始 `vastplan.*-metafile.json` 只用于构建期 SBOM、按需加载门禁和 Module Graph 生成；正式插件 staging 在打包前删除它。签名 Module Graph、运行节点、SBOM 和 Manifest 仍保留。即使调用方使用 source-only 打包路径，也不得绕过清理。
 6. `--fresh` 可以清理运行态与普通构建缓存，但不能删除 stable 身份账本和对象缓存。工作区源码若要进入 stable，必须提升插件 SemVer 并同步所有精确引用；复用旧对象不能充当发布动作。
+7. 开发态 Portal Publication、服务版本与回滚记录可以在多次 Seed 重建之间继续引用旧 stable 精确制品。编排器必须在最小 Seed Runtime 快照完成后，把身份账本中的普通历史 stable 对象以硬链接装入本次临时 Bootstrap 仓库，并用本次开发 Seed 身份重新签署；dynamic-go 仍只接受当前 Host ABI 变体。历史对象不进入 Seed Inventory 或 LKG 摘要，生产环境仍由远端仓库长期保存和提供历史精确制品。
 
 ## 备选方案
 
@@ -29,5 +30,6 @@ esbuild 原始 metafile 是 SBOM 和 Module Graph 构建期证据，包含源码
 
 - Seed 重建只会从源码打包并晋级明确提升版本的插件；其余普通 stable 依赖与远端包管理器一样在打包前复用原字节。
 - 本地首次迁移会读取一次历史可信对象并建立独立缓存，后续不依赖历史运行目录。
+- 开发态已审批 Publication 不会仅因下一次 Seed 重建只包含最新插件版本而失去发布或回滚所需的精确制品；历史包体通过硬链接复用，不按每次运行重复占用对象空间。
 - 开发者修改旧版本源码后执行 Seed 重建时，平台会继续运行旧 stable，并明确提示建议的新版本；调试新代码应使用 workspace/testing。
 - 原始 metafile 不再是正式制品内容，但自动 SBOM 仍在清理前消费它，供应链依赖证据不降低。
