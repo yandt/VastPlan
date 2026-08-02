@@ -4,11 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
-	approvalv1 "cdsoft.com.cn/VastPlan/contracts/schemas/approval/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
@@ -179,29 +177,45 @@ func (s *Service) transitionPortalVersion(ctx context.Context, principal portala
 		}
 		return s.portalVersionLocked(principal.TenantID, s.state.Revisions[index])
 	}
+	var approvalCandidate *portalapi.Revision
+	approvalAudit := ""
+	if action == "approve" {
+		s.mu.Lock()
+		index, err := s.revisionIndex(principal.TenantID, id)
+		if err != nil || s.state.Revisions[index].PortalID != portalID || s.isTestVersionLocked(id) != allowTest {
+			s.mu.Unlock()
+			return portalapi.PortalVersion{}, ErrNotFound
+		}
+		candidate := s.state.Revisions[index]
+		s.mu.Unlock()
+		decision, err := s.approvalDecision(ctx, principal, candidate, portalapi.PortalApprovalRequest{})
+		if err != nil {
+			return portalapi.PortalVersion{}, err
+		}
+		if err := requireAllowedApproval(decision); err != nil {
+			return portalapi.PortalVersion{}, err
+		}
+		approvalCandidate, approvalAudit = &candidate, decision.AuditNote
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	index, err := s.revisionIndex(principal.TenantID, id)
 	if err != nil || s.state.Revisions[index].PortalID != portalID || s.isTestVersionLocked(id) != allowTest {
 		return portalapi.PortalVersion{}, ErrNotFound
 	}
-	if !allowTest {
-		if action == "approve" {
-			if err := s.requireApprovalLocked(principal, s.state.Revisions[index], portalapi.PortalApprovalRequest{}); err != nil {
-				return portalapi.PortalVersion{}, err
-			}
+	if approvalCandidate != nil {
+		current := s.state.Revisions[index]
+		if current.Status != approvalCandidate.Status || current.ConfigurationDigest != approvalCandidate.ConfigurationDigest || current.SubmittedBy != approvalCandidate.SubmittedBy {
+			return portalapi.PortalVersion{}, fmt.Errorf("%w: PortalVersion 在审批求值期间已变化", ErrInvalidState)
 		}
-		if _, err := s.transitionPublicationLocked(ctx, principal, index, action, "portal.version.", ""); err != nil {
+	}
+	if !allowTest {
+		if _, err := s.transitionPublicationLocked(ctx, principal, index, action, "portal.version.", approvalAudit); err != nil {
 			return portalapi.PortalVersion{}, err
 		}
 		return s.portalVersionLocked(principal.TenantID, s.state.Revisions[index])
 	}
 	revision := &s.state.Revisions[index]
-	if action == "approve" {
-		if err := s.requireApprovalLocked(principal, *revision, portalapi.PortalApprovalRequest{}); err != nil {
-			return portalapi.PortalVersion{}, err
-		}
-	}
 	profileIndex, bindingIndex, err := s.versionPartsLocked(principal.TenantID, *revision)
 	if err != nil {
 		return portalapi.PortalVersion{}, err
@@ -231,7 +245,7 @@ func (s *Service) transitionPortalVersion(ctx context.Context, principal portala
 	applyActors(&revision.SubmittedBy, &revision.ApprovedBy, &revision.PublishedBy, principal.ID, action)
 	applyActors(&profile.SubmittedBy, &profile.ApprovedBy, &profile.PublishedBy, principal.ID, action)
 	applyActors(&binding.SubmittedBy, &binding.ApprovedBy, &binding.PublishedBy, principal.ID, action)
-	s.auditLocked(*revision, "portal.version."+action, principal, "", "normal")
+	s.auditLocked(*revision, "portal.version."+action, principal, approvalAudit, "normal")
 	if err := s.save(); err != nil {
 		return portalapi.PortalVersion{}, err
 	}
@@ -326,86 +340,6 @@ func (s *Service) RollbackPortalRelease(ctx context.Context, principal portalapi
 	}
 	release, err := s.rollbackPortalActivation(ctx, principal, sourceID, expectedCurrentID, reason)
 	return projectRelease(release), err
-}
-
-func (s *Service) PortalGovernance(ctx context.Context, principal portalapi.Principal) (portalapi.PortalGovernanceSnapshot, error) {
-	if principal.ID == "" || principal.TenantID == "" {
-		return portalapi.PortalGovernanceSnapshot{}, ErrForbidden
-	}
-	_ = s.reconcilePortalReferences(ctx, principal)
-	s.mu.Lock()
-	ids := map[string]struct{}{}
-	for _, revision := range s.state.Revisions {
-		if revision.TenantID == principal.TenantID && !s.isTestVersionLocked(revision.ID) {
-			ids[revision.PortalID] = struct{}{}
-		}
-	}
-	portals := make([]portalapi.Portal, 0, len(ids))
-	for id := range ids {
-		portal, err := s.portalLocked(principal.TenantID, id)
-		if err != nil {
-			s.mu.Unlock()
-			return portalapi.PortalGovernanceSnapshot{}, err
-		}
-		if portal.PendingPublication != nil && portal.PendingPublication.Status == portalapi.StatusPendingApproval {
-			index, indexErr := s.revisionIndex(principal.TenantID, portal.PendingPublication.ID)
-			if indexErr != nil {
-				s.mu.Unlock()
-				return portalapi.PortalGovernanceSnapshot{}, indexErr
-			}
-			decision := s.approvalDecision(principal, s.state.Revisions[index], approvalv1.ReviewEvidence{})
-			portal.PendingPublication.Approval = &decision
-		}
-		portals = append(portals, portal)
-	}
-	sort.Slice(portals, func(i, j int) bool { return portals[i].ID < portals[j].ID })
-	template := s.portalCreationTemplateLocked(principal.TenantID)
-	bindings := make(map[string]PortalVersionControlBinding, len(s.state.VersionControls))
-	for portalID, control := range s.state.VersionControls {
-		bindings[portalID] = control.Binding
-	}
-	s.mu.Unlock()
-	if len(bindings) != 0 {
-		control, controlErr := versionControlFromContext(ctx)
-		for index := range portals {
-			binding, enabled := bindings[portals[index].ID]
-			if !enabled {
-				continue
-			}
-			if controlErr != nil {
-				portals[index].VersionControl.Availability = portalapi.PortalVersionControlUnavailable
-				continue
-			}
-			capabilities, err := control.Describe(ctx, binding, portals[index].ID)
-			if err != nil {
-				portals[index].VersionControl.Availability = portalapi.PortalVersionControlUnavailable
-				continue
-			}
-			portals[index].VersionControl = portalVersionControlStatus(capabilities)
-		}
-	}
-	return portalapi.PortalGovernanceSnapshot{Portals: portals, CreationTemplate: template}, nil
-}
-
-func portalVersionControlStatus(capabilities PortalVersionControlCapabilities) portalapi.PortalVersionControlStatus {
-	return portalapi.PortalVersionControlStatus{
-		Enabled: true, Availability: portalapi.PortalVersionControlAvailable,
-		Capabilities: portalVersionControlCapabilityNames(capabilities),
-	}
-}
-
-func portalVersionControlCapabilityNames(capabilities PortalVersionControlCapabilities) []string {
-	values := []string{"history"}
-	if capabilities.Read {
-		values = append(values, "read")
-	}
-	if capabilities.Diff {
-		values = append(values, "diff")
-	}
-	if capabilities.Read && capabilities.Restore {
-		values = append(values, "restore")
-	}
-	return values
 }
 
 func (s *Service) ListPortalReleases(ctx context.Context, principal portalapi.Principal) ([]portalapi.PortalRelease, error) {

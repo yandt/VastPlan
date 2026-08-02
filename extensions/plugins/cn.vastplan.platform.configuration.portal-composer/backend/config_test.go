@@ -3,20 +3,20 @@ package main
 import (
 	"testing"
 
-	approvalv1 "cdsoft.com.cn/VastPlan/contracts/schemas/approval/v1"
+	approvalv2 "cdsoft.com.cn/VastPlan/contracts/schemas/approval/v2"
 )
 
 func TestApprovalPolicyConfigurationSelectsOneImplementation(t *testing.T) {
-	configuration := runtimeConfiguration{ApprovalPolicy: approvalv1.Profile{
-		Protocol: approvalv1.Protocol, ID: "foundation.approval.seed-review", Mode: approvalv1.ModeSingleOperatorReview,
-		RequireReason: true, RequireDigestAcknowledgement: true,
+	configuration := runtimeConfiguration{ApprovalPolicy: approvalv2.ProviderBinding{
+		Protocol: approvalv2.Protocol, Capability: approvalv2.Capability, LogicalService: "foundation.approval-policy.native", RoutingDomain: "security",
+		Profile: approvalv2.ProfileRef{ID: "seed.portal-publication", Revision: 1, Digest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
 	}}
-	policy, err := approvalPolicyFromConfiguration(configuration)
-	if err != nil || policy.Profile().Mode != approvalv1.ModeSingleOperatorReview {
-		t.Fatalf("组合根未选择单人复验策略: profile=%+v err=%v", policy.Profile(), err)
+	binding, err := approvalPolicyFromConfiguration(configuration)
+	if err != nil || binding.Profile.ID != "seed.portal-publication" {
+		t.Fatalf("组合根未选择精确 Provider Binding: binding=%+v err=%v", binding, err)
 	}
-	configuration.ApprovalPolicy.RequireReason, configuration.ApprovalPolicy.RequireDigestAcknowledgement = false, false
+	configuration.ApprovalPolicy.Profile.Digest = ""
 	if _, err := approvalPolicyFromConfiguration(configuration); err == nil {
-		t.Fatal("缺少原因和摘要确认的单人策略必须拒绝")
+		t.Fatal("缺少 Profile digest 的 Provider Binding 必须拒绝")
 	}
 }

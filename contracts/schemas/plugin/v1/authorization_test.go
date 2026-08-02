@@ -35,10 +35,10 @@ func TestAuthorizationGuardAcceptsInjectedApprovalPolicy(t *testing.T) {
 	raw := strings.Replace(string(authorizationManifest("cn.vastplan.platform.infrastructure.demo", "platform.demo", "platform.demo.read", "listItems", false)), `"approval":"none"`, `"approval":"policy"`, 1)
 	manifest, err := ParseManifest([]byte(raw))
 	if err != nil {
-		t.Fatalf("approval.policy.v1 元数据未被清单接受: %v", err)
+		t.Fatalf("Approval Provider 元数据未被清单接受: %v", err)
 	}
 	if manifest.Authorization.OperationGuards[0].Approval != "policy" {
-		t.Fatalf("approval.policy.v1 元数据未被清单接受: guard=%+v err=%v", manifest.Authorization, err)
+		t.Fatalf("Approval Provider 元数据未被清单接受: guard=%+v err=%v", manifest.Authorization, err)
 	}
 }
 

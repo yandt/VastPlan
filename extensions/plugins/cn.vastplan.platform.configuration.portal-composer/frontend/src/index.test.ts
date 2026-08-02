@@ -86,13 +86,22 @@ describe("Portal aggregate workspace", () => {
     expect(toPortalRow(portal)[0]).toMatchObject({ historyAvailable: false, diffAvailable: false, restoreAvailable: false });
   });
 
-  it("projects server-owned approval requirements into data-driven actions", () => {
+  it("projects server-owned approval requirements into data-driven actions", async () => {
 		const source = { configuration: configuration(), kind: "inline" as const };
-		const publication: NonNullable<Portal["pendingPublication"]> = { id: 7, tenantId: "tenant-a", portalId: "operations", workingRevision: 2, status: "PendingApproval", digest: "a".repeat(64), source, resolved: {} as never, submittedBy: "seed-operator", createdAt: "2026-08-02T00:00:00Z", updatedAt: "2026-08-02T00:00:00Z", approval: { status: "review-required", policyId: "foundation.approval.seed-review", message: "需复验" } };
+		const profile = { id: "seed.portal-publication", revision: 1, digest: "b".repeat(64) };
+		const requirements = [
+			{ id: "seed.review.digest", field: "review.expected-digest", kind: "exact-fact-match" as const, fact: "resource.digest", title: "冻结配置摘要" },
+			{ id: "seed.review.reason", field: "review.reason", kind: "text-length" as const, minLength: 4, maxLength: 512, title: "审批原因" },
+		];
+		const publication: NonNullable<Portal["pendingPublication"]> = { id: 7, tenantId: "tenant-a", portalId: "operations", workingRevision: 2, status: "PendingApproval", digest: "a".repeat(64), source, resolved: {} as never, submittedBy: "seed-operator", createdAt: "2026-08-02T00:00:00Z", updatedAt: "2026-08-02T00:00:00Z", approval: { status: "review-required", profile, requirements, message: "需复验" } };
 		const portal: Portal = { id: "operations", tenantId: "tenant-a", pendingPublication: publication, versionControl: { enabled: false, availability: "disabled", capabilities: [] }, releases: [], createdAt: publication.createdAt, updatedAt: publication.updatedAt };
-		expect(toPortalRow(portal)[0]).toMatchObject({ canApproveDirect: false, canApproveWithReview: true, approvalLabel: "需单人复验", approvalReason: "需复验" });
-		publication.approval = { status: "denied", policyId: "foundation.approval.different-subject", message: "需要其他审批人" };
-		expect(toPortalRow(portal)[0]).toMatchObject({ canApproveDirect: false, canApproveWithReview: false, approvalLabel: "需其他审批人" });
+		expect(toPortalRow(portal)[0]).toMatchObject({ canApproveDirect: false, canApproveWithReview: true, approvalLabel: "需复验", approvalReason: "需复验" });
+		const page = createPortalPage(new PortalControlClient({ fetch: async () => response({}) }));
+		const form = page.forms?.find((candidate) => candidate.id === "approval-review");
+		const prepared = await form?.prepare?.(toPortalRow(portal), new AbortController().signal);
+		expect(prepared?.schema?.schema).toMatchObject({ required: ["expectedDigest", "reason"], properties: { reason: { minLength: 4, maxLength: 512 } } });
+		publication.approval = { status: "denied", profile, message: "需要其他审批人" };
+		expect(toPortalRow(portal)[0]).toMatchObject({ canApproveDirect: false, canApproveWithReview: false, approvalLabel: "需要其他审批人" });
   });
 });
 

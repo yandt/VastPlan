@@ -71,7 +71,7 @@ export function toPortalRow(portal: Portal): PortalRow[] {
     canSubmit: portal.workingCopy !== undefined,
     canApproveDirect: portal.pendingPublication?.status === "PendingApproval" && approval?.status === "allowed",
     canApproveWithReview: portal.pendingPublication?.status === "PendingApproval" && approval?.status === "review-required",
-    approvalLabel: approvalLabel(portal.pendingPublication?.status, approval?.status),
+    approvalLabel: approvalLabel(portal.pendingPublication?.status, approval?.status, approval?.message),
     approvalReason: approval?.message ?? "",
     canPublish: portal.pendingPublication?.status === "Approved",
     canCreateWorkingCopy: portal.workingCopy === undefined && portal.pendingPublication === undefined && published !== undefined,
@@ -84,11 +84,11 @@ export function toPortalRow(portal: Portal): PortalRow[] {
   }];
 }
 
-function approvalLabel(status: PortalRevisionStatus | undefined, decision: "allowed" | "review-required" | "denied" | undefined): string {
+function approvalLabel(status: PortalRevisionStatus | undefined, decision: "allowed" | "review-required" | "denied" | undefined, message?: string): string {
   if (status !== "PendingApproval") return "-";
   if (decision === "allowed") return "策略允许";
-  if (decision === "review-required") return "需单人复验";
-  return "需其他审批人";
+  if (decision === "review-required") return message || "需补充审批证据";
+  return message || "当前策略拒绝";
 }
 
 function activeConfiguration(portal: Portal): { configuration: PortalConfiguration; status: PortalRevisionStatus; publication?: PortalPublication } | undefined {

@@ -95,7 +95,7 @@ func TestPortalOptionalVersionControlCommitHistoryCompareAndRestore(t *testing.T
 		t.Fatal(err)
 	}
 	control := newFakePortalVersionControl()
-	ctx := withVersionControl(context.Background(), control)
+	ctx := withDifferentSubjectTestPolicy(withVersionControl(context.Background(), control))
 	author, approver, publisher := principal("author"), principal("approver"), principal("publisher")
 	configuration, err := service.configurationFromCatalog(spec("/first"), author.TenantID)
 	if err != nil {

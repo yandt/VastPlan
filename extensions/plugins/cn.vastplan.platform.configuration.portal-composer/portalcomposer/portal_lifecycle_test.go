@@ -6,13 +6,13 @@ import (
 	"strings"
 	"testing"
 
-	approvalv1 "cdsoft.com.cn/VastPlan/contracts/schemas/approval/v1"
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/approvalpolicy"
+	approvalv2 "cdsoft.com.cn/VastPlan/contracts/schemas/approval/v2"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
 func TestPortalNoVersionLifecycleUsesWorkingCopyPublicationAndRelease(t *testing.T) {
 	service := newTestService(t)
+	approvalCtx := withDifferentSubjectTestPolicy(context.Background())
 	author := principal("author", "portal.compose")
 	approver := principal("approver", "portal.approve")
 	publisher := principal("publisher", "portal.publish")
@@ -43,17 +43,17 @@ func TestPortalNoVersionLifecycleUsesWorkingCopyPublicationAndRelease(t *testing
 		t.Fatalf("冻结 Publication 失败: %+v err=%v", publication, err)
 	}
 	publication.Source.Configuration.Application.Route = "/tampered-client-copy"
-	governance, err := service.PortalGovernance(context.Background(), author)
+	governance, err := service.PortalGovernance(approvalCtx, author)
 	if err != nil || len(governance.Portals) != 1 || governance.Portals[0].WorkingCopy != nil || governance.Portals[0].PendingPublication == nil || governance.Portals[0].PendingPublication.Source.Configuration.Application.Route != "/updated" {
 		t.Fatalf("Publication 必须是隔离冻结快照: %+v err=%v", governance, err)
 	}
 	if _, err := service.SavePortalWorkingCopy(context.Background(), author, portal.ID, portalapi.SavePortalWorkingCopyRequest{ExpectedRevision: working.Revision, Configuration: configuration}); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("候选审批期间不得继续修改 WorkingCopy: %v", err)
 	}
-	if _, err := service.ApprovePortalPublication(context.Background(), author, portal.ID, publication.ID, portalapi.PortalApprovalRequest{}); !errors.Is(err, ErrSelfApproval) {
+	if _, err := service.ApprovePortalPublication(approvalCtx, author, portal.ID, publication.ID, portalapi.PortalApprovalRequest{}); !errors.Is(err, ErrSelfApproval) {
 		t.Fatalf("Publication 必须异人审批: %v", err)
 	}
-	publication, err = service.ApprovePortalPublication(context.Background(), approver, portal.ID, publication.ID, portalapi.PortalApprovalRequest{})
+	publication, err = service.ApprovePortalPublication(approvalCtx, approver, portal.ID, publication.ID, portalapi.PortalApprovalRequest{})
 	if err != nil || publication.Status != portalapi.StatusApproved {
 		t.Fatalf("审批 Publication 失败: %+v err=%v", publication, err)
 	}
@@ -78,15 +78,8 @@ func TestPortalNoVersionLifecycleUsesWorkingCopyPublicationAndRelease(t *testing
 }
 
 func TestSeedSingleOperatorReviewRequiresFrozenDigestEvidence(t *testing.T) {
-	policy, err := approvalpolicy.New(approvalv1.Profile{
-		Protocol: approvalv1.Protocol, ID: "foundation.approval.seed-review", Mode: approvalv1.ModeSingleOperatorReview,
-		RequireReason: true, RequireDigestAcknowledgement: true,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
 	service := newTestService(t)
-	service.approvalPolicy = policy
+	approvalCtx := withSeedReviewTestPolicy(context.Background())
 	operator := principal("seed-operator", "portal.compose", "portal.approve")
 	configuration, err := service.configurationFromCatalog(spec("/"), operator.TenantID)
 	if err != nil {
@@ -100,24 +93,24 @@ func TestSeedSingleOperatorReviewRequiresFrozenDigestEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	governance, err := service.PortalGovernance(context.Background(), operator)
-	if err != nil || governance.Portals[0].PendingPublication.Approval == nil || governance.Portals[0].PendingPublication.Approval.Status != approvalv1.DecisionReviewRequired {
+	governance, err := service.PortalGovernance(approvalCtx, operator)
+	if err != nil || governance.Portals[0].PendingPublication.Approval == nil || governance.Portals[0].PendingPublication.Approval.Status != approvalv2.DecisionReviewRequired {
 		t.Fatalf("同一 Seed Operator 应得到复验要求: %+v err=%v", governance, err)
 	}
-	if _, err := service.ApprovePortalPublication(context.Background(), operator, portal.ID, publication.ID, portalapi.PortalApprovalRequest{}); err == nil {
+	if _, err := service.ApprovePortalPublication(approvalCtx, operator, portal.ID, publication.ID, portalapi.PortalApprovalRequest{}); err == nil {
 		t.Fatal("缺少复验证据时不得批准")
 	}
-	wrong := portalapi.PortalApprovalRequest{Review: approvalv1.ReviewEvidence{ExpectedDigest: strings.Repeat("f", 64), Acknowledged: true, Reason: "已复核冻结配置"}}
-	if _, err := service.ApprovePortalPublication(context.Background(), operator, portal.ID, publication.ID, wrong); err == nil {
+	wrong := portalapi.PortalApprovalRequest{Review: approvalv2.ReviewEvidence{ExpectedDigest: strings.Repeat("f", 64), Acknowledged: true, Reason: "已复核冻结配置"}}
+	if _, err := service.ApprovePortalPublication(approvalCtx, operator, portal.ID, publication.ID, wrong); err == nil {
 		t.Fatal("摘要不匹配时不得批准")
 	}
-	valid := portalapi.PortalApprovalRequest{Review: approvalv1.ReviewEvidence{ExpectedDigest: publication.Digest, Acknowledged: true, Reason: "已复核冻结配置"}}
-	approved, err := service.ApprovePortalPublication(context.Background(), operator, portal.ID, publication.ID, valid)
+	valid := portalapi.PortalApprovalRequest{Review: approvalv2.ReviewEvidence{ExpectedDigest: publication.Digest, Acknowledged: true, Reason: "已复核冻结配置"}}
+	approved, err := service.ApprovePortalPublication(approvalCtx, operator, portal.ID, publication.ID, valid)
 	if err != nil || approved.Status != portalapi.StatusApproved {
 		t.Fatalf("有效单人复验未批准: %+v err=%v", approved, err)
 	}
 	audit, err := service.Audit(context.Background(), operator, portal.ID, publication.ID)
-	if err != nil || !strings.Contains(audit[len(audit)-1].Reason, "single-operator-review") {
+	if err != nil || !strings.Contains(audit[len(audit)-1].Reason, "test.self-review") {
 		t.Fatalf("单人复验未写入明确审计: %+v err=%v", audit, err)
 	}
 }

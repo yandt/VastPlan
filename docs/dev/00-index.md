@@ -269,6 +269,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [ADR-0186 页面正文默认使用 Large](decisions/ADR-0186-页面正文默认Large.md)
 - [ADR-0187 认证、会话、授权管理与权限判定完全解耦](decisions/ADR-0187-认证会话授权四域解耦与快照交付.md)
 - [ADR-0188 授权与业务审批策略解耦](decisions/ADR-0188-授权与业务审批策略解耦.md)
+- [ADR-0189 审批策略 Provider 与声明式规则](decisions/ADR-0189-审批策略Provider与声明式规则.md)
 
 ### 通用版本账本
 
@@ -306,6 +307,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [Trivy Database File Snapshot](plugins/cn.vastplan.platform.artifacts.assessment.database.file.md) —— 每节点本地、摘要钉死、原子物化的离线数据库快照
 - [API Exposure 治理插件](plugins/cn.vastplan.platform.integration.api-exposure.md) —— 受治理 API Contract、随机 Route Key、Gateway Catalog、Endpoint Lease 与一次性 Ticket
 - [Authorization Policy](plugins/cn.vastplan.platform.security.authorization-policy.md) —— Role/Binding revision、即时撤权、签名 Policy Snapshot 与 Workbench 管理面
+- [Native Approval Policy Provider](plugins/cn.vastplan.foundation.security.approval-policy.native.md) —— 可替换 approval.policy.v2 Provider、声明式规则与精确 Profile 摘要
 - [Workbench Pattern Gallery](plugins/cn.vastplan.example.frontend.workbench-gallery.md) —— RecordDetail、MasterDetail 与 TreeDetail 的开发 Application 示例
 - [本地文件制品存储 Provider](plugins/cn.vastplan.platform.artifacts.storage.file.md) —— 私有 volume 供给、路径隔离与非 RPC 数据面
 

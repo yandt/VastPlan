@@ -1,0 +1,117 @@
+{
+  "id": "cn.vastplan.foundation.security.approval-policy.native",
+  "name": "VastPlan Native Approval Policy Provider",
+  "description": "默认 Go approval.policy.v2 Provider，以版本化声明式规则求值业务审批决定",
+  "version": "0.1.2",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "engines": { "backend": "^0.1" },
+  "contextAccess": { "required": ["caller"], "optional": ["scope.tenant", "subject.id", "authorization.roles", "trace", "request.deadline", "propagation.callPath"] },
+  "runtime": {
+    "instancePolicy": "active-active",
+    "stateModel": "external-shared",
+    "visibility": "cluster",
+    "routing": "queue",
+    "routingDomain": "security",
+    "provides": [
+      { "extensionPoint": "tool.package", "capability": "foundation.security.approval-policy", "visibility": "cluster", "routing": "queue", "routingDomain": "security" }
+    ]
+  },
+  "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
+  "configuration": {
+    "scope": "service",
+    "applyMode": "restart",
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["foundation.approval-policy.native.profiles"],
+      "properties": {
+        "foundation.approval-policy.native.profiles": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "items": { "$ref": "#/$defs/profile" }
+        }
+      },
+      "$defs": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 160 },
+        "condition": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["left", "operator"],
+          "properties": {
+            "left": { "type": "string", "minLength": 2, "maxLength": 200 },
+            "operator": { "enum": ["equals", "not-equals", "contains", "not-contains", "exists", "not-exists"] },
+            "rightFact": { "type": "string", "minLength": 2, "maxLength": 200 },
+            "value": { "type": "string", "maxLength": 1024 }
+          }
+        },
+        "requirement": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "field", "kind"],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "field": { "$ref": "#/$defs/id" },
+            "kind": { "enum": ["exact-fact-match", "boolean-true", "text-length"] },
+            "fact": { "type": "string", "minLength": 2, "maxLength": 200 },
+            "minLength": { "type": "integer", "minimum": 0, "maximum": 4096 },
+            "maxLength": { "type": "integer", "minimum": 0, "maximum": 4096 },
+            "title": { "type": "string", "maxLength": 200 },
+            "audit": { "type": "boolean" }
+          }
+        },
+        "rule": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "priority", "conditions", "effect"],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "priority": { "type": "integer", "minimum": -1000000, "maximum": 1000000 },
+            "conditions": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "$ref": "#/$defs/condition" } },
+            "effect": { "enum": ["allow", "deny", "require-evidence"] },
+            "requirements": { "type": "array", "maxItems": 32, "items": { "$ref": "#/$defs/requirement" } },
+            "code": { "$ref": "#/$defs/id" },
+            "message": { "type": "string", "maxLength": 512 }
+          }
+        },
+        "profile": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "revision", "defaultEffect", "rules"],
+          "properties": {
+            "id": { "$ref": "#/$defs/id" },
+            "revision": { "type": "integer", "minimum": 1 },
+            "defaultEffect": { "const": "deny" },
+            "rules": { "type": "array", "minItems": 1, "maxItems": 256, "items": { "$ref": "#/$defs/rule" } }
+          }
+        }
+      }
+    }
+  },
+  "activation": ["onStartup"],
+  "entry": { "backend": "backend/approval-policy-native" },
+  "contributes": {
+    "backend": {
+      "permissionCheckers": [{
+        "id": "foundation.security.approval-policy.access",
+        "service_role": "backend",
+        "title": "Approval Provider 插件调用策略",
+        "priority": 1000,
+        "applies": { "target": "foundation.security.approval-policy" }
+      }],
+      "tools": [{
+        "id": "foundation.security.approval-policy",
+        "service_role": "backend",
+        "title": "VastPlan Native Approval Policy Provider",
+        "subcommands": [
+          { "name": "evaluate", "description": "按精确 Profile 求值一个审批请求" },
+          { "name": "evaluateBatch", "description": "按精确 Profile 批量求值审批读模型" },
+          { "name": "health", "description": "读取 Provider 与 Profile 健康状态" }
+        ]
+      }]
+    }
+  }
+}

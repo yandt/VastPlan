@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.platform.configuration.portal-composer`
 
-当前制品版本：`4.3.0`
+当前制品版本：`5.0.0`
 
 该平台基础插件以 `active-active + external-shared + queue` 方式治理 Portal。每个 `portalId` 只有一个聚合，内部包含 WorkingCopy、Publication、Release 和版本控制语义状态。
 
@@ -10,7 +10,7 @@
 
 - WorkingCopy revision CAS 保存，不产生业务版本或历史；
 - 提交时冻结完整配置和 digest，形成 `PendingApproval → Approved → Published` Publication；
-- 内核权限只判断是否拥有 `platform.portal.approve`；独立 `approval.policy.v1` 再判断异人审批或 Seed 单人复验，后端向 Workbench 投影 `allowed/review-required/denied` 并以当前冻结摘要重复强制；
+- 内核权限只判断是否拥有 `platform.portal.approve`；Composer 通过 `approval.policy.v2` Provider Binding 取得业务审批决定，不含 Seed/企业或自审硬编码。后端向 Workbench 投影 `allowed/review-required/denied`、精确 ProfileRef 和数据驱动证据要求，并在写入前重新求值、复核当前冻结摘要；
 - `PortalRelease` 上线、历史回滚、制品物化、引用保护和 CAS；普通上线只接受最近且从未上线的 Published Publication；
 - Frontend Test Release 在完整 Portal 配置上替换一个获授权插件，并形成带原子归属的隔离候选；候选与 Activation 不进入正式 Publication/PortalRelease 谱系，不能由普通上线入口晋级；正式上线以正式 Release 基线做 CAS，同时校验当前测试覆盖未并发变化，并在成功后将其标记为 `Superseded`；
 - 只通过 `kernel.portal.catalog.*` 窄服务取得可信校验与已验签制品引用；
@@ -29,12 +29,12 @@
 - `POST /v1/portals/{portalId}/working-copy`：从已发布配置创建下一轮工作副本；
 - `PUT /v1/portals/{portalId}/working-copy`：按 working revision CAS 保存完整配置；
 - `POST /v1/portals/{portalId}/publications`：冻结当前 WorkingCopy 并提交审批；
-- `POST /v1/portals/{portalId}/publications/{publicationId}/approve|publish`：推进 Publication；单人复验的 approve 正文必须携带冻结摘要、确认和审计原因；
+- `POST /v1/portals/{portalId}/publications/{publicationId}/approve|publish`：推进 Publication；approve 只接收有界 ReviewEvidence，具体必填证据由 Provider Profile 决定；
 - `POST /v1/portals/{portalId}/releases`：上线一个 Published Publication；
 - `POST /v1/portals/{portalId}/releases/{releaseId}/rollback`：由历史 Release 创建新上线记录；
 - `GET /v1/portals/{portalId}/history[/{versionId}]`、`GET .../compare`、`POST .../restore`：仅在配置 Workspace 后提供历史、比较和恢复。
 
-所有写操作均重新取得 CSRF token；tenant 与 Principal 只能由可信会话和 CallContext 投影。Portal、Publication 与 Release 身份以 URL 为权威并在 Composer 交叉校验，正文不能覆盖；system break-glass 必须携带原因并写入高优先级审计。完整边界见《[前端门户内核](../architecture/前端门户内核.md)》、[ADR-0174](../decisions/ADR-0174-Portal可选版本控制与发布快照分离.md)、[ADR-0188](../decisions/ADR-0188-授权与业务审批策略解耦.md) 和 [ADR-0125](../decisions/ADR-0125-Portal-Composer与Preference共享状态分区.md)。
+所有写操作均重新取得 CSRF token；tenant 与 Principal 只能由可信会话和 CallContext 投影。Portal、Publication 与 Release 身份以 URL 为权威并在 Composer 交叉校验，正文不能覆盖；system break-glass 必须携带原因并写入高优先级审计。完整边界见《[前端门户内核](../architecture/前端门户内核.md)》、[ADR-0174](../decisions/ADR-0174-Portal可选版本控制与发布快照分离.md)、[ADR-0189](../decisions/ADR-0189-审批策略Provider与声明式规则.md) 和 [ADR-0125](../decisions/ADR-0125-Portal-Composer与Preference共享状态分区.md)。
 
 ## P2.3 实施状态
 

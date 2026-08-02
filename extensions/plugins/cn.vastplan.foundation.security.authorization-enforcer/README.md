@@ -2,7 +2,7 @@
 
 `cn.vastplan.foundation.security.authorization-enforcer` 是每内核本地授权强制点。它验证 Permission Catalog 与 Ed25519 Policy Snapshot，校验 audience、有效期、Catalog digest、Policy digest 和撤权 revision，并对用户调用 fail-closed。
 
-自 `0.2.0` 起，平台管理、Portal 与 Interaction 的无状态 workload 策略作为独立 `policybundle/*` 包随同一签名制品运行。它们保留各自的 contribution ID、优先级和测试，但不再各自启动插件进程。Bootstrap Policy 仍是自举链上的独立运行单元。
+自 `0.2.0` 起，无状态 workload 策略作为独立 `policybundle/*` 包随同一签名制品运行。`0.3.9` 增加 Approval Provider 稳定协议的调用源策略：允许保留可信 Principal 的插件求值，拒绝用户直连，且不维护消费者或 Provider 插件 ID 白名单；源端和目标端复用 Approval Go SDK 的同一判定。各 Bundle 保留自己的 contribution ID、优先级和测试，但不再各自启动插件进程。Bootstrap Policy 仍是自举链上的独立运行单元。
 
 授权体系提供两项相互独立的本地能力：
 

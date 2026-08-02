@@ -27,7 +27,7 @@ type PermissionDeclaration struct {
 }
 
 // OperationGuard requires every listed permission. Approval is descriptive
-// policy metadata; "policy" means a separately configured approval.policy.v1
+// policy metadata; "policy" means a separately configured Approval Provider
 // decides the domain evidence. The target service remains the final object-state
 // enforcement point and never treats this metadata as an authorization result.
 type OperationGuard struct {

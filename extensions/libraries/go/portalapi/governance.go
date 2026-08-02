@@ -1,7 +1,7 @@
 package portalapi
 
 import (
-	approvalv1 "cdsoft.com.cn/VastPlan/contracts/schemas/approval/v1"
+	approvalv2 "cdsoft.com.cn/VastPlan/contracts/schemas/approval/v2"
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	versioningv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versioning/v1"
@@ -56,11 +56,11 @@ type PortalPublication struct {
 	PublishedBy     string                  `json:"publishedBy,omitempty"`
 	CreatedAt       string                  `json:"createdAt"`
 	UpdatedAt       string                  `json:"updatedAt"`
-	Approval        *approvalv1.Decision    `json:"approval,omitempty"`
+	Approval        *approvalv2.Decision    `json:"approval,omitempty"`
 }
 
 type PortalApprovalRequest struct {
-	Review approvalv1.ReviewEvidence `json:"review"`
+	Review approvalv2.ReviewEvidence `json:"review"`
 }
 
 type PortalVersionControlAvailability string

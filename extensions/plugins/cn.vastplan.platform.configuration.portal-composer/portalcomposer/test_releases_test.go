@@ -140,7 +140,7 @@ func TestFrontendTestReleaseReusesImmutableApplicationAndActivation(t *testing.T
 	if owner := service.state.TestVersionOwners[release.CandidatePortalVersionID]; owner != release.ID {
 		t.Fatalf("测试候选必须与 Test Release 在同一次状态提交中建立归属: owner=%d release=%d", owner, release.ID)
 	}
-	governance, err := service.PortalGovernance(context.Background(), admin)
+	governance, err := service.PortalGovernance(differentSubjectTestContext(), admin)
 	if err != nil || len(governance.Portals) != 1 {
 		t.Fatalf("读取 Portal 聚合失败: %+v err=%v", governance, err)
 	}
@@ -159,7 +159,7 @@ func TestFrontendTestReleaseReusesImmutableApplicationAndActivation(t *testing.T
 		principal portalapi.Principal
 		action    string
 	}{{author, "submit"}, {approver, "approve"}, {publisher, "publish"}} {
-		next, err = service.TransitionPortalVersion(context.Background(), step.principal, portal.ID, next.ID, step.action)
+		next, err = service.TransitionPortalVersion(differentSubjectTestContext(), step.principal, portal.ID, next.ID, step.action)
 		if err != nil {
 			t.Fatalf("正式版本推进失败: action=%s err=%v", step.action, err)
 		}
@@ -371,7 +371,7 @@ func publishTestPortalApplication(t *testing.T, service *Service, author, approv
 	if _, err = service.Submit(context.Background(), author, draft.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = service.Approve(context.Background(), approver, draft.ID); err != nil {
+	if _, err = service.Approve(differentSubjectTestContext(), approver, draft.ID); err != nil {
 		t.Fatal(err)
 	}
 	published, err := service.Publish(context.Background(), publisher, draft.ID, portalapi.PublishRequest{})

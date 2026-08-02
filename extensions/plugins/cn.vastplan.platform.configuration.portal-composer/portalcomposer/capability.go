@@ -337,6 +337,13 @@ func Contribution(service *Service) sdk.Contribution {
 				var handleErr error
 				requestContext := withCatalog(ctx, hostCatalog{host: host, callCtx: callCtx})
 				requestContext = withVersionControl(requestContext, versionControl)
+				if operationNeedsApprovalPolicy(op) {
+					policy, policyErr := newHostApprovalPolicy(host, callCtx, service.approvalBinding)
+					if policyErr != nil {
+						return policyErr
+					}
+					requestContext = withApprovalPolicy(requestContext, policy)
+				}
 				raw, handleErr = service.Handle(requestContext, principal, op, payload)
 				return handleErr
 			})
@@ -349,6 +356,9 @@ func Contribution(service *Service) sdk.Contribution {
 				}
 				if errors.Is(err, ErrStateConflict) {
 					return composerStateError("portal.composer.conflict", err, true), nil, nil
+				}
+				if errors.Is(err, ErrApprovalProviderUnavailable) {
+					return composerStateError("portal.approval.provider_unavailable", err, true), nil, nil
 				}
 				if errors.Is(err, ErrVersionControlUnavailable) {
 					return composerStateError("portal.version_control_unavailable", err, true), nil, nil

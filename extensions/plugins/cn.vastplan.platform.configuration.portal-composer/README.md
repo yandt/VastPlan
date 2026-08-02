@@ -6,16 +6,20 @@
 
 WorkingCopy 保存使用独立 revision CAS，不产生业务版本；提交时冻结规范配置和 SHA-256 digest，形成 `PendingApproval → Approved → Published` Publication。审批期间没有可编辑 WorkingCopy。`PortalRelease` 引用精确 Published Publication，重新执行可信 Catalog 校验、制品物化、引用保护、路由冲突检查和 CAS 后才改变线上 Portal。
 
-审批资格和审批证据完全分开：内核只用 `platform.portal.approve` 判断当前主体是否具备资格，插件再消费组合根注入的 `approval.policy.v1`。`different-subject` 要求提交人与审批人不同；`single-operator-review` 允许 Seed Operator 在重新确认精确冻结摘要并填写审计原因后批准自己的候选，记录始终标明单人复验。治理读模型返回 `allowed/review-required/denied`，Workbench 据此显示直接批准、复验表单或“需其他审批人”，后端仍重复强制同一策略。
+审批资格和业务审批完全分开：内核只用 `platform.portal.approve` 判断当前主体是否具备操作资格，Composer 再通过 `approval.policy.v2` 调用部署所选 Provider。Composer 不识别 Seed、企业环境、Provider 类型或自审规则，只投影 Provider 返回的 `allowed/review-required/denied`、精确 ProfileRef 与数据驱动证据要求；写操作会重新求值并复核冻结摘要和状态。
 
 ```json
 {
   "platform.portal-composer.approvalPolicy": {
-    "protocol": "approval.policy.v1",
-    "id": "foundation.approval.different-subject",
-    "mode": "different-subject",
-    "requireReason": false,
-    "requireDigestAcknowledgement": false
+    "protocol": "approval.policy.v2",
+    "capability": "foundation.security.approval-policy",
+    "logicalService": "foundation.approval-policy.native",
+    "routingDomain": "security",
+    "profile": {
+      "id": "enterprise.portal-publication",
+      "revision": 1,
+      "digest": "<profile-sha256>"
+    }
   }
 }
 ```
@@ -48,4 +52,4 @@ pnpm --filter @vastplan/portal-composer typecheck
 pnpm --filter @vastplan/portal-composer test
 ```
 
-完整边界见[Portal 可选版本控制接入](../../../docs/dev/architecture/Portal可选版本控制接入.md)、[ADR-0174](../../../docs/dev/decisions/ADR-0174-Portal可选版本控制与发布快照分离.md)和 [ADR-0188](../../../docs/dev/decisions/ADR-0188-授权与业务审批策略解耦.md)。
+完整边界见[Portal 可选版本控制接入](../../../docs/dev/architecture/Portal可选版本控制接入.md)、[ADR-0174](../../../docs/dev/decisions/ADR-0174-Portal可选版本控制与发布快照分离.md)和 [ADR-0189](../../../docs/dev/decisions/ADR-0189-审批策略Provider与声明式规则.md)。

@@ -1,5 +1,5 @@
-import { type PortalConfiguration, type PortalControlClient } from "@vastplan/ui-primitives";
-import { jsonSchemaDialect, type FormSchema, type WorkbenchFormDefinition } from "@vastplan/workbench-sdk";
+import { type PortalApprovalEvidenceRequirement, type PortalConfiguration, type PortalControlClient } from "@vastplan/ui-primitives";
+import { jsonSchemaDialect, type FormPresentation, type FormSchema, type JSONValue, type WorkbenchFormDefinition } from "@vastplan/workbench-sdk";
 import { buildPortalConfiguration, configurationToForm, portalConfigurationSchema } from "./portal-form";
 import type { PortalRow } from "./portal-model";
 
@@ -10,39 +10,69 @@ export function portalForms(client: PortalControlClient): WorkbenchFormDefinitio
 function approvalReviewForm(client: PortalControlClient): WorkbenchFormDefinition<PortalRow> {
   return {
     id: "approval-review",
-    schema: {
-      id: "portal-approval-review.v1",
-      schema: {
-        $schema: jsonSchemaDialect, type: "object", additionalProperties: false,
-        required: ["expectedDigest", "acknowledged", "reason"],
-        properties: {
-          expectedDigest: { type: "string", title: "冻结配置摘要", pattern: "^[a-f0-9]{64}$", readOnly: true },
-          acknowledged: { type: "boolean", title: "我已复核上述冻结配置，确认内容准确" },
-          reason: { type: "string", title: "审批原因", minLength: 4, maxLength: 512 },
-        },
-      },
-    },
-    presentation: { layout: "vertical", fields: [
-      { pointer: "/expectedDigest", widget: "text", help: "提交后若冻结内容发生变化，审批会被拒绝。" },
-      { pointer: "/acknowledged", widget: "boolean" },
-      { pointer: "/reason", widget: "textarea" },
-    ] },
+    schema: approvalEvidencePlaceholder,
+    presentation: { layout: "vertical", fields: [] },
     workflow: {
-      dialogWidth: "sm", title: "复验并批准", description: "当前种子策略允许同一管理员复验，但不会把它记录为异人审批。",
-      submitLabel: "确认批准", success: { notify: "Portal 已通过单人复验批准", refreshCollection: true, close: true },
+      dialogWidth: "sm", title: "补充审批证据", description: "请按当前审批策略补充证据；服务端会对冻结资源重新求值。",
+      submitLabel: "提交审批", success: { notify: "Portal 审批已完成", refreshCollection: true, close: true },
     },
     async prepare(selected) {
       const row = selected[0];
       if (row === undefined || row.portal.pendingPublication === undefined) throw new Error("未选择待审批 Portal");
-      return { initialValue: { expectedDigest: row.portal.pendingPublication.digest, acknowledged: false, reason: "" } };
+      const requirements = row.portal.pendingPublication.approval?.requirements ?? [];
+      if (requirements.length === 0) throw new Error("审批 Provider 未返回可填写的证据要求");
+      const form = approvalEvidenceDefinition(requirements, row.portal.pendingPublication.approval?.profile.revision ?? 1);
+      return {
+        schema: form.schema,
+        presentation: form.presentation,
+        initialValue: { expectedDigest: row.portal.pendingPublication.digest, acknowledged: false, reason: "" },
+      };
     },
     async submit({ value, selected }) {
       const row = selected[0];
-      if (row === undefined || typeof value.expectedDigest !== "string" || value.acknowledged !== true || typeof value.reason !== "string") return;
+      if (row === undefined) return;
       await client.approvePortalPublication(row.id, row.publicationId, {
-        expectedDigest: value.expectedDigest, acknowledged: true, reason: value.reason,
+        expectedDigest: typeof value.expectedDigest === "string" ? value.expectedDigest : "",
+        acknowledged: value.acknowledged === true,
+        reason: typeof value.reason === "string" ? value.reason : "",
       });
     },
+  };
+}
+
+const approvalEvidencePlaceholder: FormSchema = {
+  id: "portal-approval-evidence.loading",
+  schema: { $schema: jsonSchemaDialect, type: "object", additionalProperties: false, properties: {} },
+};
+
+function approvalEvidenceDefinition(requirements: readonly PortalApprovalEvidenceRequirement[], revision: number): { schema: FormSchema; presentation: FormPresentation } {
+  const required: string[] = [];
+  const properties: Record<string, JSONValue> = {};
+  const fields: NonNullable<FormPresentation["fields"]>[number][] = [];
+  for (const requirement of requirements) {
+    const title = requirement.title || requirement.id;
+    if (requirement.field === "review.expected-digest" && requirement.kind === "exact-fact-match" && requirement.fact === "resource.digest") {
+      required.push("expectedDigest");
+      properties.expectedDigest = { type: "string", title, pattern: "^[a-f0-9]{64}$", readOnly: true };
+      fields.push({ pointer: "/expectedDigest", widget: "text", help: "冻结内容变化后，已有证据会失效。" });
+    } else if (requirement.field === "review.acknowledged" && requirement.kind === "boolean-true") {
+      required.push("acknowledged");
+      properties.acknowledged = { type: "boolean", title };
+      fields.push({ pointer: "/acknowledged", widget: "boolean" });
+    } else if (requirement.field === "review.reason" && requirement.kind === "text-length") {
+      required.push("reason");
+      properties.reason = { type: "string", title, minLength: requirement.minLength ?? 1, maxLength: requirement.maxLength ?? 512 };
+      fields.push({ pointer: "/reason", widget: "textarea" });
+    } else {
+      throw new Error(`当前 Portal UI 不支持审批证据 ${requirement.field}/${requirement.kind}`);
+    }
+  }
+  return {
+    schema: {
+      id: `portal-approval-evidence.v${revision}`,
+      schema: { $schema: jsonSchemaDialect, type: "object", additionalProperties: false, required, properties },
+    },
+    presentation: { layout: "vertical", fields },
   };
 }
 

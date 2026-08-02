@@ -113,11 +113,29 @@ export interface PortalPublication {
 }
 
 export type PortalApprovalDecisionStatus = "allowed" | "review-required" | "denied";
+export interface PortalApprovalProfileRef {
+  id: string;
+  revision: number;
+  digest: string;
+}
+export type PortalApprovalEvidenceKind = "exact-fact-match" | "boolean-true" | "text-length";
+export interface PortalApprovalEvidenceRequirement {
+  id: string;
+  field: string;
+  kind: PortalApprovalEvidenceKind;
+  fact?: string;
+  minLength?: number;
+  maxLength?: number;
+  title?: string;
+  audit?: boolean;
+}
 export interface PortalApprovalDecision {
   status: PortalApprovalDecisionStatus;
-  policyId: string;
+  profile: PortalApprovalProfileRef;
+  matchedRuleId?: string;
   code?: string;
   message?: string;
+  requirements?: PortalApprovalEvidenceRequirement[];
 }
 export interface PortalApprovalReview {
   expectedDigest: string;
@@ -426,6 +444,8 @@ function portalControlErrorMessage(code: string): string {
   const message: Record<string, string> = {
     approval_separation_required: "该内容由当前账号提交，需要其他审批人批准。",
     approval_review_required: "当前审批需要先完成冻结内容复验。",
+    approval_evidence_mismatch: "审批证据与当前冻结内容不一致，请刷新后重试。",
+    approval_provider_unavailable: "审批服务暂时不可用，请稍后重试。",
     approval_digest_mismatch: "待审批内容已经变化，请刷新页面后重新复验。",
     approval_reason_required: "请填写至少 4 个字符的审批原因。",
   };

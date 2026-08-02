@@ -185,6 +185,7 @@ func TestGovernedPublishRequiresDifferentApproverAndPersistsAudit(t *testing.T) 
 	author := principal("author", "portal.compose", "portal.approve")
 	approver := principal("approver", "portal.approve")
 	publisher := principal("publisher", "portal.publish")
+	approvalCtx := differentSubjectTestContext()
 	draft, err := s.CreateDraft(context.Background(), author, spec("/"))
 	if err != nil {
 		t.Fatal(err)
@@ -192,10 +193,10 @@ func TestGovernedPublishRequiresDifferentApproverAndPersistsAudit(t *testing.T) 
 	if _, err := s.Submit(context.Background(), author, draft.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Approve(context.Background(), author, draft.ID); !errors.Is(err, ErrSelfApproval) {
+	if _, err := s.Approve(approvalCtx, author, draft.ID); !errors.Is(err, ErrSelfApproval) {
 		t.Fatalf("自审必须被拒绝: %v", err)
 	}
-	if _, err := s.Approve(context.Background(), approver, draft.ID); err != nil {
+	if _, err := s.Approve(approvalCtx, approver, draft.ID); err != nil {
 		t.Fatal(err)
 	}
 	published, err := s.Publish(context.Background(), publisher, draft.ID, portalapi.PublishRequest{})
@@ -229,6 +230,7 @@ func TestActivationReferenceOutboxRetriesAfterRepositoryRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	author, approver, publisher := principal("author", "portal.compose"), principal("approver", "portal.approve"), principal("publisher", "portal.publish")
+	approvalCtx := differentSubjectTestContext()
 	draft, err := s.CreateDraft(context.Background(), author, spec("/"))
 	if err != nil {
 		t.Fatal(err)
@@ -236,7 +238,7 @@ func TestActivationReferenceOutboxRetriesAfterRepositoryRecovery(t *testing.T) {
 	if _, err = s.Submit(context.Background(), author, draft.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.Approve(context.Background(), approver, draft.ID); err != nil {
+	if _, err = s.Approve(approvalCtx, approver, draft.ID); err != nil {
 		t.Fatal(err)
 	}
 	published, err := s.Publish(context.Background(), publisher, draft.ID, portalapi.PublishRequest{})
@@ -357,7 +359,7 @@ func TestReleaseRejectsHistoricalPublishedVersion(t *testing.T) {
 			principal portalapi.Principal
 			action    string
 		}{{author, "submit"}, {approver, "approve"}, {publisher, "publish"}} {
-			version, transitionErr = s.TransitionPortalVersion(context.Background(), step.principal, portal.ID, version.ID, step.action)
+			version, transitionErr = s.TransitionPortalVersion(differentSubjectTestContext(), step.principal, portal.ID, version.ID, step.action)
 			if transitionErr != nil {
 				t.Fatal(transitionErr)
 			}
@@ -402,7 +404,7 @@ func TestPublishRejectsCrossPortalRouteAndBreakGlassNeedsReason(t *testing.T) {
 			principal portalapi.Principal
 			action    string
 		}{{author, "submit"}, {approver, "approve"}, {publisher, "publish"}} {
-			if _, transitionErr := s.TransitionPortalVersion(context.Background(), step.principal, id, version.ID, step.action); transitionErr != nil {
+			if _, transitionErr := s.TransitionPortalVersion(differentSubjectTestContext(), step.principal, id, version.ID, step.action); transitionErr != nil {
 				t.Fatal(transitionErr)
 			}
 		}
@@ -436,7 +438,7 @@ func TestRollbackCreatesNewImmutableActivation(t *testing.T) {
 		if _, err := s.Submit(context.Background(), author, draft.ID); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := s.Approve(context.Background(), approver, draft.ID); err != nil {
+		if _, err := s.Approve(differentSubjectTestContext(), approver, draft.ID); err != nil {
 			t.Fatal(err)
 		}
 		published, err := s.Publish(context.Background(), publisher, draft.ID, portalapi.PublishRequest{})
@@ -479,7 +481,7 @@ func TestPublishedPortalVersionDoesNotGoLiveBeforeReleaseCAS(t *testing.T) {
 		principal portalapi.Principal
 		action    string
 	}{{author, "submit"}, {approver, "approve"}, {publisher, "publish"}} {
-		version, err = s.TransitionPortalVersion(context.Background(), step.principal, portal.ID, version.ID, step.action)
+		version, err = s.TransitionPortalVersion(differentSubjectTestContext(), step.principal, portal.ID, version.ID, step.action)
 		if err != nil {
 			t.Fatal(err)
 		}

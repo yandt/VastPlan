@@ -13,7 +13,7 @@ import (
 func TestComposerStateIsSharedAcrossInstancesAndTenantIsolated(t *testing.T) {
 	host := &configuredHost{state: newStateOnlyHost(t)}
 	callA := &contractv1.CallContext{TenantId: "tenant-a", Principal: &contractv1.Principal{UserId: "author", SystemRoles: []string{"portal.compose"}}}
-	first := New(nil)
+	first := newBoundTestService()
 	request := portalapi.CreatePortalRequest{PortalID: "admin", Configuration: portalapi.PortalConfiguration{Application: spec("/")}}
 	created, raw, err := Contribution(first).Handlers["createPortal"](context.Background(), host, callA, mustJSON(t, request))
 	if err != nil || created.GetStatus() != contractv1.CallResult_STATUS_OK {
@@ -23,7 +23,7 @@ func TestComposerStateIsSharedAcrossInstancesAndTenantIsolated(t *testing.T) {
 	if err := json.Unmarshal(raw, &portal); err != nil || portal.ID != "admin" || portal.WorkingCopy == nil {
 		t.Fatalf("首次实例响应错误: %s %v", raw, err)
 	}
-	second := New(nil)
+	second := newBoundTestService()
 	listed, raw, err := Contribution(second).Handlers["portalGovernance"](context.Background(), host, callA, []byte(`{}`))
 	if err != nil || listed.GetStatus() != contractv1.CallResult_STATUS_OK {
 		t.Fatalf("第二实例读取失败: result=%+v err=%v", listed, err)
@@ -33,7 +33,7 @@ func TestComposerStateIsSharedAcrossInstancesAndTenantIsolated(t *testing.T) {
 		t.Fatalf("第二实例未读取共享状态: %s %v", raw, err)
 	}
 	callB := &contractv1.CallContext{TenantId: "tenant-b", Principal: &contractv1.Principal{UserId: "author", SystemRoles: []string{"portal.compose"}}}
-	result, raw, err := Contribution(New(nil)).Handlers["portalGovernance"](context.Background(), host, callB, []byte(`{}`))
+	result, raw, err := Contribution(newBoundTestService()).Handlers["portalGovernance"](context.Background(), host, callB, []byte(`{}`))
 	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK || string(raw) != `{"portals":[]}` {
 		t.Fatalf("跨 tenant 状态泄漏: result=%+v raw=%s err=%v", result, raw, err)
 	}

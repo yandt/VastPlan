@@ -2,7 +2,7 @@
   "id": "cn.vastplan.platform.configuration.portal-composer",
   "name": "VastPlan Portal Composer",
   "description": "以单一 Portal 聚合治理 WorkingCopy、Publication、Release 与用户级 PortalPreference",
-  "version": "4.3.0",
+  "version": "5.0.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -49,6 +49,7 @@
     "routing": "queue",
     "routingDomain": "platform",
     "requires": [
+      { "capability": "foundation.security.approval-policy", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "fail" },
       { "capability": "foundation.versioning.workspace", "scope": "remote", "kind": "lazy", "ready": "readiness", "failurePolicy": "degrade", "logicalService": "foundation.versioning.workspace", "routingDomain": "platform" }
     ],
     "provides": [
@@ -69,13 +70,22 @@
         "platform.portal-composer.approvalPolicy": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["protocol", "id", "mode", "requireReason", "requireDigestAcknowledgement"],
+          "required": ["protocol", "capability", "logicalService", "routingDomain", "profile"],
           "properties": {
-            "protocol": { "const": "approval.policy.v1" },
-            "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$" },
-            "mode": { "enum": ["different-subject", "single-operator-review"] },
-            "requireReason": { "type": "boolean" },
-            "requireDigestAcknowledgement": { "type": "boolean" }
+            "protocol": { "const": "approval.policy.v2" },
+            "capability": { "const": "foundation.security.approval-policy" },
+            "logicalService": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$" },
+            "routingDomain": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{0,63}$" },
+            "profile": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "revision", "digest"],
+              "properties": {
+                "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$" },
+                "revision": { "type": "integer", "minimum": 1 },
+                "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+              }
+            }
           }
         },
         "platform.portal-composer.versionControl": {

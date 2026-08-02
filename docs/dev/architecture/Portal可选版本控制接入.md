@@ -73,7 +73,7 @@ Portal Composer 清单对 `foundation.versioning.workspace` 使用 `lazy + degra
 
 1. `saveWorkingCopy` 规范化并以 working revision CAS 覆盖当前配置。
 2. `submitPublication` 在同一个 Portal 聚合 CAS 内复制并冻结当前配置、digest 和提交人，工作副本在候选结束前不可继续修改。
-3. `approvePublication` 先通过独立 `approval.policy.v1` 复核当前主体、提交人和冻结摘要，再只改变领域状态。企业 Profile 使用异人审批；Seed Profile 可显式选择带摘要确认和审计原因的单人复验。
+3. `approvePublication` 先通过部署选择的 `approval.policy.v2` Provider 复核当前主体、提交人、冻结摘要和声明式证据要求，再只改变领域状态。环境只绑定精确 Policy Profile，不在 Portal 代码内区分 Seed 或企业规则。
 4. `publishPublication` 再次复核冻结内容与 Catalog，只冻结发布资格，不改变线上 Portal。
 5. `releasePortal` 物化 Published Publication 并以当前 Release CAS 上线。
 

@@ -10,9 +10,9 @@ import (
 	"time"
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	approvalv2 "cdsoft.com.cn/VastPlan/contracts/schemas/approval/v2"
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/approvalpolicy"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
@@ -74,7 +74,7 @@ type Service struct {
 	versionControlDefault      *PortalVersionControlBinding
 	versionControlConfigLoaded bool
 	now                        func() time.Time
-	approvalPolicy             approvalpolicy.Policy
+	approvalBinding            approvalv2.ProviderBinding
 }
 
 func (s *Service) BindPlatformCatalog(catalog frontendcompositionv1.PortalPlatformCatalog) error {
@@ -95,14 +95,14 @@ func (s *Service) BindPlatformCatalog(catalog frontendcompositionv1.PortalPlatfo
 }
 
 func New(catalog Catalog) *Service {
-	return NewWithApprovalPolicy(catalog, approvalpolicy.MustDifferentSubject())
+	return &Service{state: emptyState(), artifactCatalog: catalog, now: time.Now}
 }
 
-func NewWithApprovalPolicy(catalog Catalog, policy approvalpolicy.Policy) *Service {
-	if policy == nil {
-		panic("Portal Composer ApprovalPolicy 不能为空")
+func NewWithApprovalBinding(catalog Catalog, binding approvalv2.ProviderBinding) *Service {
+	if err := approvalv2.ValidateBinding(binding); err != nil {
+		panic("Portal Composer Approval Provider Binding 无效: " + err.Error())
 	}
-	return &Service{state: emptyState(), artifactCatalog: catalog, approvalPolicy: policy, now: time.Now}
+	return &Service{state: emptyState(), artifactCatalog: catalog, approvalBinding: binding, now: time.Now}
 }
 
 func (s *Service) BindVersionControl(binding *PortalVersionControlBinding) error {

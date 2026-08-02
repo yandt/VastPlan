@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	approvalv1 "cdsoft.com.cn/VastPlan/contracts/schemas/approval/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
@@ -95,22 +94,49 @@ func (s *Service) transitionPortalPublication(ctx context.Context, principal por
 	if err := requireTrustedPrincipal(principal); err != nil {
 		return portalapi.PortalPublication{}, err
 	}
+	if action == "approve" {
+		return s.approvePortalPublication(ctx, principal, portalID, publicationID, approval)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	index, err := s.revisionIndex(principal.TenantID, publicationID)
 	if err != nil || s.state.Revisions[index].PortalID != portalID || s.isTestVersionLocked(publicationID) {
 		return portalapi.PortalPublication{}, ErrNotFound
 	}
-	auditReason := ""
-	if action == "approve" {
-		decision := s.approvalDecision(principal, s.state.Revisions[index], approval.Review)
-		if decision.Status != approvalv1.DecisionAllowed {
-			err := &ApprovalError{Decision: decision}
-			return portalapi.PortalPublication{}, err
-		}
-		auditReason = decision.AuditNote
+	return s.transitionPublicationLocked(ctx, principal, index, action, "portal.publication.", "")
+}
+
+func (s *Service) approvePortalPublication(ctx context.Context, principal portalapi.Principal, portalID string, publicationID uint64, request portalapi.PortalApprovalRequest) (portalapi.PortalPublication, error) {
+	s.mu.Lock()
+	index, err := s.revisionIndex(principal.TenantID, publicationID)
+	if err != nil || s.state.Revisions[index].PortalID != portalID || s.isTestVersionLocked(publicationID) {
+		s.mu.Unlock()
+		return portalapi.PortalPublication{}, ErrNotFound
 	}
-	return s.transitionPublicationLocked(ctx, principal, index, action, "portal.publication.", auditReason)
+	candidate := s.state.Revisions[index]
+	s.mu.Unlock()
+	if _, err := transitionStatus(principal, candidate.Status, "approve"); err != nil {
+		return portalapi.PortalPublication{}, err
+	}
+	decision, err := s.approvalDecision(ctx, principal, candidate, request)
+	if err != nil {
+		return portalapi.PortalPublication{}, err
+	}
+	if err := requireAllowedApproval(decision); err != nil {
+		return portalapi.PortalPublication{}, err
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	index, err = s.revisionIndex(principal.TenantID, publicationID)
+	if err != nil || s.state.Revisions[index].PortalID != portalID || s.isTestVersionLocked(publicationID) {
+		return portalapi.PortalPublication{}, ErrNotFound
+	}
+	current := s.state.Revisions[index]
+	if current.Status != candidate.Status || current.ConfigurationDigest != candidate.ConfigurationDigest || current.SubmittedBy != candidate.SubmittedBy {
+		return portalapi.PortalPublication{}, fmt.Errorf("%w: Publication 在审批求值期间已变化", ErrInvalidState)
+	}
+	return s.transitionPublicationLocked(ctx, principal, index, "approve", "portal.publication.", decision.AuditNote)
 }
 
 func (s *Service) ReleasePortalPublication(ctx context.Context, principal portalapi.Principal, portalID string, request portalapi.PortalPublicationReleaseRequest) (portalapi.PortalRelease, error) {

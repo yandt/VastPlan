@@ -22,7 +22,7 @@ func TestPortalVersionControlProjectsOnlySupportedCapabilities(t *testing.T) {
 	}
 	control := newFakePortalVersionControl()
 	control.capabilities.Diff = false
-	ctx := withVersionControl(context.Background(), control)
+	ctx := withDifferentSubjectTestPolicy(withVersionControl(context.Background(), control))
 	author := principal("author")
 	portal, _ := createPortalAggregateForTest(t, service, ctx, author)
 
@@ -134,7 +134,7 @@ func TestPortalReleaseAndHotProjectionSurviveColdVersionControlFailure(t *testin
 		t.Fatal(err)
 	}
 	control := newFakePortalVersionControl()
-	ctx := withVersionControl(context.Background(), control)
+	ctx := withDifferentSubjectTestPolicy(withVersionControl(context.Background(), control))
 	author, approver, publisher := principal("author"), principal("approver"), principal("publisher")
 	portal, _ := createPortalAggregateForTest(t, service, ctx, author)
 	publication, err := service.SubmitPortalPublication(ctx, author, portal.ID, portalapi.SubmitPortalPublicationRequest{ExpectedWorkingRevision: portal.WorkingCopy.Revision})

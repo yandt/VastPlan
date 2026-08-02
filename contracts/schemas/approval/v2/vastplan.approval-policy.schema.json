@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/approval/v2/vastplan.approval-policy.schema.json",
+  "title": "VastPlan Approval Policy Provider v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "capability", "logicalService", "routingDomain", "profile"],
+  "properties": {
+    "protocol": { "const": "approval.policy.v2" },
+    "capability": { "const": "foundation.security.approval-policy" },
+    "logicalService": { "$ref": "#/$defs/id" },
+    "routingDomain": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{0,63}$" },
+    "profile": { "$ref": "#/$defs/profileRef" }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 160 },
+    "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "profileRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "revision", "digest"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "revision": { "type": "integer", "minimum": 1 },
+        "digest": { "$ref": "#/$defs/digest" }
+      }
+    }
+  }
+}
