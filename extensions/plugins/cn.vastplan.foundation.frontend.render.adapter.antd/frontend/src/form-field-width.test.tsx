@@ -15,7 +15,9 @@ describe("Ant Design form field width", () => {
     </PortalI18nProvider>);
     expect(markup).toContain("vp-antd-form-field-value");
     expect(markup).toContain("vp-antd-form-field-boolean");
+    expect((markup.match(/确认已复核/g) ?? [])).toHaveLength(1);
+    expect(markup).toContain("max-width:42%");
     expect(markup).toContain(".vp-antd-form-field-value .ant-form-item-control-input-content&gt;div{width:100%;min-width:0}");
-    expect(markup).toContain(".vp-antd-form-field-boolean .ant-form-item-control-input-content&gt;div{width:auto}");
+    expect(markup).toContain(".vp-antd-form-field-boolean .ant-form-item-control-input-content{justify-content:flex-start!important}");
   });
 });

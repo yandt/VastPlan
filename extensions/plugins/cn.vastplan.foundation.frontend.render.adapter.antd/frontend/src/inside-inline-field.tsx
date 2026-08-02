@@ -7,16 +7,17 @@ export function PresentedField(props: FieldTemplateProps & { placement?: FormLab
   if (props.hidden || props.schema.type === "object" || props.schema.type === "array" || props.placement === "stacked") return <AntdFieldTemplate {...props} />;
   const label = props.displayLabel === false ? "" : props.label;
   const error = props.rawErrors?.[0];
-  const fieldClassName = props.schema.type === "boolean" ? "vp-antd-form-field-boolean" : "vp-antd-form-field-value";
+  const booleanField = props.schema.type === "boolean";
+  const fieldClassName = booleanField ? "vp-antd-form-field-boolean" : "vp-antd-form-field-value";
   if (props.placement === "inline") return <Form.Item
     className={fieldClassName}
-    label={label === "" ? undefined : label}
-    required={props.required}
+    label={booleanField || label === "" ? undefined : label}
+    required={booleanField ? false : props.required}
     extra={props.rawHelp ?? props.rawDescription}
     validateStatus={(props.rawErrors?.length ?? 0) > 0 ? "error" : undefined}
     help={null}
-    labelCol={{ flex: "0 0 112px" }}
-    wrapperCol={{ flex: "1 1 0", style: { minWidth: 0 } }}
+    labelCol={booleanField ? undefined : { flex: "0 0 112px" }}
+    wrapperCol={booleanField ? undefined : { flex: "1 1 0", style: { minWidth: 0 } }}
     colon={false}
     style={{ marginBottom: 16 }}
   ><div>{props.children}{error === undefined ? null : <Typography.Text id={`${props.id}__error`} type="danger" role="alert" style={{ display: "block", marginTop: 4 }}>{error}</Typography.Text>}</div></Form.Item>;
@@ -41,12 +42,10 @@ export const antdInsideInlineCSS = `
 @media (max-width:767px){.vp-antd-inside-inline-field .vp-inside-inline-label{max-width:clamp(56px,32%,128px)}}
 `;
 
-export const antdFormDialogCSS = `
-.vp-antd-form-dialog .vp-antd-form-controls-start .ant-form-item-label,.vp-antd-form-dialog .vp-antd-form-controls-end .ant-form-item-label{flex:0 0 var(--vp-form-dialog-label-width,96px)!important;min-width:0}
-.vp-antd-form-dialog .vp-antd-form-controls-start .ant-form-item-label>label,.vp-antd-form-dialog .vp-antd-form-controls-end .ant-form-item-label>label{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-`;
-
 export const antdFormFieldWidthCSS = `
+.vp-antd-form-field-value .ant-form-item-label{flex:0 1 auto!important;width:fit-content;min-width:var(--vp-form-label-min-width,112px);max-width:42%}
+.vp-antd-form-field-value .ant-form-item-label>label{display:block;white-space:normal;overflow:visible;text-overflow:clip}
 .vp-antd-form-field-value .ant-form-item-control-input-content>div{width:100%;min-width:0}
+.vp-antd-form-field-boolean .ant-form-item-control-input-content{justify-content:flex-start!important}
 .vp-antd-form-field-boolean .ant-form-item-control-input-content>div{width:auto}
 `;

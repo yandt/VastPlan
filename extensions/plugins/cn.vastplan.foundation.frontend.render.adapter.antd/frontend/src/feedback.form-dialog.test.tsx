@@ -7,7 +7,7 @@ vi.mock("antd", async (importOriginal) => {
     ...actual,
     Modal: ({ className, styles, children }: { className?: string; styles?: { container?: Record<string, unknown>; body?: Record<string, unknown> }; children: unknown }) => <div
       className={className}
-      data-label-width={styles?.container?.["--vp-form-dialog-label-width"]}
+      data-label-min-width={styles?.container?.["--vp-form-label-min-width"]}
       data-body-padding={styles?.body?.padding}
     >{children as never}</div>,
   };
@@ -19,7 +19,7 @@ describe("Ant Design FormDialog", () => {
   it("uses the shared compact form geometry while retaining the requested component size", () => {
     const html = renderToStaticMarkup(<Dialog open title="补充审批证据" variant="form" size="md" onClose={() => undefined}>内容</Dialog>);
     expect(html).toContain("vp-antd-form-dialog");
-    expect(html).toContain('data-label-width="96px"');
+    expect(html).toContain('data-label-min-width="96px"');
     expect(html).toContain('data-body-padding="12"');
   });
 });

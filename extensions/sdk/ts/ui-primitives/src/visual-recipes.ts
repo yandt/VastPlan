@@ -50,10 +50,10 @@ export const componentSizeRecipes = Object.freeze({
   ),
   /** FormDialog is intentionally denser than a general overlay without shrinking its controls. */
   formDialog: sizeRecipe(
-    { bodyPadding: 8, contentGap: 4, inlineLabelWidth: 80 },
-    { bodyPadding: 10, contentGap: 8, inlineLabelWidth: 88 },
-    { bodyPadding: 12, contentGap: 8, inlineLabelWidth: 96 },
-    { bodyPadding: 16, contentGap: 16, inlineLabelWidth: 112 },
+    { bodyPadding: 8, contentGap: 4, inlineLabelMinWidth: 80 },
+    { bodyPadding: 10, contentGap: 8, inlineLabelMinWidth: 88 },
+    { bodyPadding: 12, contentGap: 8, inlineLabelMinWidth: 96 },
+    { bodyPadding: 16, contentGap: 16, inlineLabelMinWidth: 112 },
   ),
   descriptions: sizeRecipe(
     { fontSize: 12, titleFontSize: 14, cellPaddingBlock: 4, cellPaddingInline: 8 },

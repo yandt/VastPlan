@@ -10,7 +10,7 @@ import type { FormPresentation, FormRendererProps, FormSectionPresentation, Loca
 import { componentSizeRecipes, formControlAlignment, formGridClassName, formGridColumns, formGridCSS, formGridStyle, formLabelPlacement, localizeJSONSchema, message, useComponentSize, usePortalI18n } from "@vastplan/ui-primitives";
 import { namespace } from "./theme";
 import { safeAntdTemplates } from "./safe-rjsf-theme";
-import { PresentedField, antdFormDialogCSS, antdFormFieldWidthCSS, antdInsideInlineCSS } from "./inside-inline-field";
+import { PresentedField, antdFormFieldWidthCSS, antdInsideInlineCSS } from "./inside-inline-field";
 import { antdComponentSize } from "./component-size";
 
 const validator = cspJSONSchemaValidator;
@@ -202,7 +202,7 @@ export function FormRenderer({ schema, value, onChange, size: requestedSize, pre
   ><></></RJSFForm>;
   const rhythmStyle = { "--vp-form-grid-gap": `${componentSizeRecipes.layout[size].gap}px`, margin: componentSizeRecipes.layout[size].outerMargin } as CSSProperties;
   return <ConfigProvider componentSize={antdComponentSize[size]} theme={compact ? compactFormTheme : undefined}>
-    <style>{formGridCSS}{controlAlignmentCSS}{antdFormDialogCSS}{antdFormFieldWidthCSS}{formLabelPlacement(presentation) === "inside-inline" ? antdInsideInlineCSS : ""}</style>
+    <style>{formGridCSS}{controlAlignmentCSS}{antdFormFieldWidthCSS}{formLabelPlacement(presentation) === "inside-inline" ? antdInsideInlineCSS : ""}</style>
     <div className={`vp-antd-form-controls-${controlAlignment}`} data-form-control-alignment={controlAlignment} style={rhythmStyle}>{form}</div>
   </ConfigProvider>;
 }

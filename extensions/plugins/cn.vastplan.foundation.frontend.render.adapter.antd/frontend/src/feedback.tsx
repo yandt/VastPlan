@@ -44,7 +44,7 @@ export function Dialog({ open, title, description, children, footer, variant = "
   const bodyPadding = variant === "form" ? formRecipe.bodyPadding : recipe.padding;
   const modalTitle = description === undefined ? title : <div className="vp-antd-dialog-title"><div>{title}</div><Typography.Text type="secondary" style={{ display: "block", marginTop: 4, fontSize: componentSizeRecipes.control[size].fontSize, fontWeight: 400, lineHeight: 1.5 }}>{description}</Typography.Text></div>;
   return <Modal open={open} title={modalTitle} footer={footer ?? null} className={variant === "form" ? "vp-antd-form-dialog" : undefined} width={dialogWidths[width]} onCancel={onClose} destroyOnHidden styles={{
-    container: { ...dialogFrameStyle(height), display: "flex", flexDirection: "column", overflow: "hidden", ...(variant === "form" ? { "--vp-form-dialog-label-width": `${formRecipe.inlineLabelWidth}px` } as CSSProperties : {}) },
+    container: { ...dialogFrameStyle(height), display: "flex", flexDirection: "column", overflow: "hidden", ...(variant === "form" ? { "--vp-form-label-min-width": `${formRecipe.inlineLabelMinWidth}px` } as CSSProperties : {}) },
     body: { ...dialogBodyStyle(contentOverflow), padding: bodyPadding, ...(scrollable ? { flex: "1 1 auto" } : {}) },
   }}><ComponentSizeProvider size={size}>{children}</ComponentSizeProvider></Modal>;
 }
