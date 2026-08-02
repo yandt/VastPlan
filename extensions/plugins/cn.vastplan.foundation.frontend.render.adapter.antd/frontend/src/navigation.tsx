@@ -80,7 +80,9 @@ export function Popover({ open, trigger, children, placement = "bottom-start", s
       if (event.key === "Escape" && open) { event.preventDefault(); close("escape"); }
     },
   });
-  return <AntdPopover open={open} trigger="click" placement={antdPlacement} styles={surface === "compact" ? { container: { padding: 0 }, content: { padding: 0 } } : undefined} afterOpenChange={(next) => { if (next) focusInitial(); }} onOpenChange={(next) => { if (!next) close("outside"); }} content={<ComponentSizeProvider size={size}><div id={contentID} ref={contentRef} role="region" aria-label={ariaLabel} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); close("escape"); } }}>{children}</div></ComponentSizeProvider>}>{triggerNode}</AntdPopover>;
+  // Plugins may provide function components as triggers. The stable DOM wrapper keeps the
+  // Ant overlay anchor independent of whether that component forwards a React ref.
+  return <AntdPopover open={open} trigger="click" placement={antdPlacement} styles={surface === "compact" ? { container: { padding: 0 }, content: { padding: 0 } } : undefined} afterOpenChange={(next) => { if (next) focusInitial(); }} onOpenChange={(next) => { if (!next) close("outside"); }} content={<ComponentSizeProvider size={size}><div id={contentID} ref={contentRef} role="region" aria-label={ariaLabel} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); close("escape"); } }}>{children}</div></ComponentSizeProvider>}><span className="vp-antd-popover-trigger-anchor">{triggerNode}</span></AntdPopover>;
 }
 
 export function RecordNavigationList({ items, selectedID, ariaLabel, onSelect, size: requestedSize }: RecordNavigationListProps) {
