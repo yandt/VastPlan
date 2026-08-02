@@ -38,3 +38,8 @@ export const antdInsideInlineCSS = `
 .vp-antd-inside-inline-field .vp-inside-inline-control>.ant-input,.vp-antd-inside-inline-field .vp-inside-inline-control>.ant-input-affix-wrapper,.vp-antd-inside-inline-field .vp-inside-inline-control>.ant-input-number,.vp-antd-inside-inline-field .vp-inside-inline-control>.ant-picker,.vp-antd-inside-inline-field .vp-inside-inline-control>.ant-select{width:100%;border:0!important;box-shadow:none!important;background:transparent!important}
 @media (max-width:767px){.vp-antd-inside-inline-field .vp-inside-inline-label{max-width:clamp(56px,32%,128px)}}
 `;
+
+export const antdFormDialogCSS = `
+.vp-antd-form-dialog .vp-antd-form-controls-start .ant-form-item-label,.vp-antd-form-dialog .vp-antd-form-controls-end .ant-form-item-label{flex:0 0 var(--vp-form-dialog-label-width,96px)!important;min-width:0}
+.vp-antd-form-dialog .vp-antd-form-controls-start .ant-form-item-label>label,.vp-antd-form-dialog .vp-antd-form-controls-end .ant-form-item-label>label{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+`;

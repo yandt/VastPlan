@@ -1,5 +1,5 @@
 import { Alert, Button as AntdButton, Drawer as AntdDrawer, Empty, Modal, Skeleton as AntdSkeleton, Spin, Tooltip } from "antd";
-import type { ComponentType } from "react";
+import type { ComponentType, CSSProperties } from "react";
 import type { BusyProps, ButtonProps, DialogProps, DrawerProps, EmptyStateProps, ErrorStateProps, IconButtonProps, SkeletonProps, VastPlanIconProps } from "@vastplan/ui-primitives";
 import { ComponentSizeProvider, componentSizeRecipes, dialogBodyStyle, dialogFrameStyle, message, useComponentSize, usePortalI18n, VastPlanIcon } from "@vastplan/ui-primitives";
 import { antdComponentSize } from "./component-size";
@@ -36,13 +36,15 @@ export function iconButtonWith(Icon: ComponentType<VastPlanIconProps>, { icon, l
 
 export function IconButton(props: IconButtonProps) { return iconButtonWith(VastPlanIcon, props); }
 
-export function Dialog({ open, title, children, footer, width = "md", size: requestedSize, height, contentOverflow = "scroll", onClose }: DialogProps) {
+export function Dialog({ open, title, children, footer, variant = "default", width = "md", size: requestedSize, height, contentOverflow = "scroll", onClose }: DialogProps) {
   const scrollable = contentOverflow === "scroll";
   const size = useComponentSize(requestedSize);
   const recipe = componentSizeRecipes.layout[size];
-  return <Modal open={open} title={title} footer={footer ?? null} width={dialogWidths[width]} onCancel={onClose} destroyOnHidden styles={{
-    container: { ...dialogFrameStyle(height), display: "flex", flexDirection: "column", overflow: "hidden" },
-    body: { ...dialogBodyStyle(contentOverflow), padding: recipe.padding, ...(scrollable ? { flex: "1 1 auto" } : {}) },
+  const formRecipe = componentSizeRecipes.formDialog[size];
+  const bodyPadding = variant === "form" ? formRecipe.bodyPadding : recipe.padding;
+  return <Modal open={open} title={title} footer={footer ?? null} className={variant === "form" ? "vp-antd-form-dialog" : undefined} width={dialogWidths[width]} onCancel={onClose} destroyOnHidden styles={{
+    container: { ...dialogFrameStyle(height), display: "flex", flexDirection: "column", overflow: "hidden", ...(variant === "form" ? { "--vp-form-dialog-label-width": `${formRecipe.inlineLabelWidth}px` } as CSSProperties : {}) },
+    body: { ...dialogBodyStyle(contentOverflow), padding: bodyPadding, ...(scrollable ? { flex: "1 1 auto" } : {}) },
   }}><ComponentSizeProvider size={size}>{children}</ComponentSizeProvider></Modal>;
 }
 

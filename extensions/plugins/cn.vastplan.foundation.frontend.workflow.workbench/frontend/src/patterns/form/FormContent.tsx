@@ -1,13 +1,14 @@
-import { message, usePortalI18n, usePortalUI } from "@vastplan/ui-primitives";
+import { componentSizeRecipes, message, usePortalI18n, usePortalUI } from "@vastplan/ui-primitives";
 import type { FormWorkflowController } from "./useFormWorkflow.js";
 
 const namespace = "cn.vastplan.foundation.frontend.workflow.workbench";
 
-export function FormContent({ form, showDescription = true }: { form: FormWorkflowController; showDescription?: boolean }) {
+export function FormContent({ form, showDescription = true, density = "default" }: { form: FormWorkflowController; showDescription?: boolean; density?: "default" | "dialog" }) {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
-  return <ui.Stack gap={form.presentation.preset === "compact" ? "sm" : "md"}>
-    {!showDescription || form.definition?.workflow.description === undefined ? null : <p>{i18n.text(form.definition.workflow.description)}</p>}
+  const gap = density === "dialog" ? dialogContentGap(form.controlSize) : form.presentation.preset === "compact" ? "sm" : "md";
+  return <ui.Stack gap={gap}>
+    {!showDescription || form.definition?.workflow.description === undefined ? null : <p style={{ margin: 0 }}>{i18n.text(form.definition.workflow.description)}</p>}
     {form.failure === undefined ? null : <ui.ErrorState title={form.failure} />}
     {form.validation.errors.$form === undefined ? null : <ui.ErrorState title={form.validation.errors.$form} />}
     {form.loading || form.schema === undefined ? <ui.Skeleton rows={5} /> : <ui.FormRenderer
@@ -26,4 +27,9 @@ export function FormContent({ form, showDescription = true }: { form: FormWorkfl
     />}
     {form.validation.validating ? <ui.Status tone="info">{i18n.text(message(namespace, "form.validating", "正在校验表单…"))}</ui.Status> : null}
   </ui.Stack>;
+}
+
+function dialogContentGap(size: FormWorkflowController["controlSize"]): "xs" | "sm" | "md" {
+  const gap = componentSizeRecipes.formDialog[size].contentGap;
+  return gap <= 4 ? "xs" : gap <= 8 ? "sm" : "md";
 }

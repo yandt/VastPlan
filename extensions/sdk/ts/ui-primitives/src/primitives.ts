@@ -114,6 +114,8 @@ export interface DialogProps extends SizeableProps {
   title: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
+  /** Form Dialogs use the governed compact content rhythm without changing field control size. */
+  variant?: "default" | "form";
   width?: OverlayWidth;
   /** Optional governed pixel height. Renderers always clamp it to 90vh. */
   height?: number;

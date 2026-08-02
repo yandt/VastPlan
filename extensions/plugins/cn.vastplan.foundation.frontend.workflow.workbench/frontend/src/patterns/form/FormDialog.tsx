@@ -13,12 +13,13 @@ export function FormDialog({ form, open }: { form: FormWorkflowController; open:
     open={open}
     title={i18n.text(definition.workflow.title)}
     size={definition.workflow.size ?? definition.size}
+    variant="form"
     width={definition.workflow.dialogWidth}
     height={definition.workflow.dialogHeight}
     contentOverflow="scroll"
     footer={<FormActions form={form} />}
     onClose={() => { if (!form.submitting) void form.requestClose(); }}
   >
-    <FormContent form={form} />
+    <FormContent form={form} density="dialog" />
   </ui.Dialog>;
 }
