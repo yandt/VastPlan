@@ -26,7 +26,8 @@ describe("visual recipes", () => {
 
   it("governs page body widths and lets the narrower page or Shell limit win", () => {
     expect(pageBodyLayoutRecipes).toEqual({ fluid: {}, large: { maxWidth: 1280 }, medium: { maxWidth: 960 }, small: { maxWidth: 720 } });
-    expect(resolvePageBodyMaxWidth(undefined, false)).toBeUndefined();
+    expect(resolvePageBodyMaxWidth(undefined, false)).toBe(1280);
+    expect(resolvePageBodyMaxWidth("fluid", false)).toBeUndefined();
     expect(resolvePageBodyMaxWidth("fluid", true)).toBe(1280);
     expect(resolvePageBodyMaxWidth("small", false)).toBe(720);
     expect(resolvePageBodyMaxWidth("medium", true)).toBe(960);

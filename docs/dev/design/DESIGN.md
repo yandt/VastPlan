@@ -62,7 +62,7 @@ UI Contract 9.0 暴露语义 token、账户外观契约与四级 `ComponentSize`
 - `shell.header.*`、`shell.navigation.*`、`page.header.*`、`page.body.*`、`page.aside` 和 `shell.footer` 的拓扑由组合插件统一管理。
 - Shell Header、Aside、Footer 等没有内建内容且全部 Slot 为空时不创建 DOM 和占位；Page Header 因承担页面定位始终存在。
 - Page Header 位于 Page Body 滚动容器之外。正文滚动时保持可见，不依赖多层 `position: sticky`。Page Body 使用设计系统 `surface` 语义色：浅色主题为白色，深色主题由当前 Renderer 的深色表面色接管。
-- Page Body 支持页面级 `fluid / large / medium / small` 语义尺寸，唯一最大宽度分别为“不限制 / 1280px / 960px / 720px”。两种 Shell 必须统一居中整个正文 Slot 区域；移动端始终占满可用宽度。模板级 `contained` 是平台上限，和页面尺寸同时存在时取更窄值。插件不得传入任意像素或 CSS。
+- Page Body 支持页面级 `fluid / large / medium / small` 语义尺寸，唯一最大宽度分别为“不限制 / 1280px / 960px / 720px”；页面省略 `bodyLayout` 时默认使用 `large`，只有明确需要全宽的页面才声明 `fluid`。两种 Shell 必须统一居中整个正文 Slot 区域；移动端始终占满可用宽度。模板级 `contained` 是平台上限，和页面尺寸同时存在时取更窄值。插件不得传入任意像素或 CSS。
 - Page、Grid 和其他组合根支持四级组件 `size`。Page 只用它调整正文 padding、标题和内部节奏，不得改变 `bodyLayout` 宽度；Grid 只用它决定未显式配置时的 gap，不得改变 columns 或 span。二者都会通过统一 Size Provider 向后代传播，局部组件仍可显式覆盖。
 - 配置与管理页面的一级正文分区统一使用 `BodySections`：每个区域只声明稳定 ID、标题、说明和内容，Renderer 统一绘制标题层级、16px 内部间距、24px 区域间距及相邻区域分隔线；最后一个区域不显示多余分隔线。插件不得自行复制 Section 边框、标题样式或外间距。
 - 动态表单控件在字段区域内默认使用 `controlAlignment=end`；仅特殊页面可显式选择 `start`。该语义不改变控件尺寸、列宽、Label 位置或输入文本方向，全宽控件继续占满可用宽度。

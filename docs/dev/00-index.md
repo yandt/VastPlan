@@ -248,7 +248,6 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [ADR-0165 Contract Registry 与插件发布编排](decisions/ADR-0165-Contract-Registry与插件发布编排.md)
 - [ADR-0166 独立页面动作宿主与固定帮助入口](decisions/ADR-0166-独立页面动作宿主与固定帮助入口.md)
 - [ADR-0167 三级组件尺寸与组合密度投影](decisions/ADR-0167-三级组件尺寸与组合密度投影.md)
-- [ADR-0185 四级组件尺寸与组合根继承](decisions/ADR-0185-四级组件尺寸与组合根继承.md)
 - [ADR-0168 表格密度与内部控件尺寸隔离](decisions/ADR-0168-表格密度与内部控件尺寸隔离.md)
 - [ADR-0169 Seed Recovery Capsule 与分阶段可用性](decisions/ADR-0169-Seed-Recovery-Capsule与分阶段可用性.md)
 - [ADR-0170 统一 Capability Contract 与可信 ArtifactIdentity](decisions/ADR-0170-统一Capability-Contract与可信ArtifactIdentity.md)
@@ -266,6 +265,8 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [ADR-0182 Stable 精确制品复用与诊断 Metafile 外置](decisions/ADR-0182-Stable精确制品复用与诊断Metafile外置.md)
 - [ADR-0183 页面正文语义尺寸与 Shell 统一居中](decisions/ADR-0183-页面正文语义尺寸与Shell统一居中.md)
 - [ADR-0184 表单控件对齐与页面正文分段组件](decisions/ADR-0184-表单控件对齐与页面正文分段组件.md)
+- [ADR-0185 四级组件尺寸与组合根继承](decisions/ADR-0185-四级组件尺寸与组合根继承.md)
+- [ADR-0186 页面正文默认使用 Large](decisions/ADR-0186-页面正文默认Large.md)
 
 ### 通用版本账本
 

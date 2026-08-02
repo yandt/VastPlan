@@ -102,7 +102,7 @@ export function TopNavigationShell(props: UIShellProps) {
         <div className="vp-top-page-header-center">{pageSlot(composition.pageSlots, "page.header.center")}</div>
         <div className="vp-top-page-header-side vp-top-page-header-end">{pageSlot(composition.pageSlots, "page.header.end")}</div>
       </header>}
-      <div className="vp-top-page-scroller"><main className="vp-top-page" data-page-body-layout={page?.bodyLayout ?? "fluid"} style={{ maxWidth: pageWidth }}>
+      <div className="vp-top-page-scroller"><main className="vp-top-page" data-page-body-layout={page?.bodyLayout ?? "large"} style={{ maxWidth: pageWidth }}>
         {recoveryNotice}
         {page === undefined ? <ui.EmptyState title={i18n.text(message(namespace, "page.notFound", "页面不存在"))} description={i18n.text(message(namespace, "page.pathMissing", "Portal 没有注册路径 {path}", { path: pathname }))} /> : <>
           {pageSlot(composition.pageSlots, "page.body.before")}

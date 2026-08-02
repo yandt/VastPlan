@@ -80,7 +80,7 @@ export interface PortalPageDefinition {
   path: string;
   title: LocalizedText;
   description?: LocalizedText;
-  /** Semantic content width. The Shell owns centering and the executable width recipe. */
+  /** Semantic content width. The Shell owns centering and the executable width recipe; omitted pages default to large. */
   bodyLayout?: PageBodyLayout;
   navigation?: PortalPageNavigation;
   slots: readonly PortalPageSlotContribution[];

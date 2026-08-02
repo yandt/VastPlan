@@ -93,7 +93,7 @@ export function StandardShell(props: UIShellProps) {
     <div className="vp-page-header-center">{pageSlot(composition.pageSlots, "page.header.center")}</div>
     <div className="vp-page-header-side vp-page-header-end">{pageSlot(composition.pageSlots, "page.header.end")}</div>
   </header>;
-  const pageBody = <div className="vp-page-scroller"><main className="vp-page" data-page-body-layout={page?.bodyLayout ?? "fluid"} style={{ maxWidth: pageWidth }}>
+  const pageBody = <div className="vp-page-scroller"><main className="vp-page" data-page-body-layout={page?.bodyLayout ?? "large"} style={{ maxWidth: pageWidth }}>
     {recoveryNotice}
     {page === undefined ? <ui.EmptyState title={i18n.text(message(namespace, "page.notFound", "页面不存在"))} description={i18n.text(message(namespace, "page.pathMissing", "Portal 没有注册路径 {path}", { path: pathname }))} /> : <>
       {pageSlot(composition.pageSlots, "page.body.before")}

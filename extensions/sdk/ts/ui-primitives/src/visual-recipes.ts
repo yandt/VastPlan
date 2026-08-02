@@ -72,9 +72,9 @@ export const pageBodyLayoutRecipes: Readonly<Record<PageBodyLayout, Readonly<{ m
   small: Object.freeze({ maxWidth: 720 }),
 });
 
-/** Combines a page request with an optional Shell-wide cap. The narrower limit always wins. */
+/** Combines a page request with an optional Shell-wide cap. Omitted pages default to large. */
 export function resolvePageBodyMaxWidth(layout: PageBodyLayout | undefined, shellContained: boolean): number | undefined {
-  const pageMaxWidth = pageBodyLayoutRecipes[layout ?? "fluid"].maxWidth;
+  const pageMaxWidth = pageBodyLayoutRecipes[layout ?? "large"].maxWidth;
   const shellMaxWidth = shellContained ? pageBodyLayoutRecipes.large.maxWidth : undefined;
   if (pageMaxWidth === undefined) return shellMaxWidth;
   if (shellMaxWidth === undefined) return pageMaxWidth;
