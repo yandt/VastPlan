@@ -12,9 +12,11 @@ const rowActionSize = "xs" as const;
  * The collection owns row-action layout. Functional plugins only declare actions
  * with placement=record.row and never construct framework-specific button groups.
  */
-export function RowActions({ actions, row, onRunAction }: {
+export function RowActions({ actions, row, runningActionID, actionRunning = false, onRunAction }: {
   actions: readonly ActionSpec[];
   row: CollectionRow;
+  runningActionID?: string;
+  actionRunning?: boolean;
   onRunAction(action: ActionSpec): void;
 }) {
   const ui = usePortalUI();
@@ -25,11 +27,12 @@ export function RowActions({ actions, row, onRunAction }: {
   const overflow = visible.slice(direct.length);
   const moreLabel = i18n.text(message(namespace, "action.moreRow", "更多行操作"));
   return <ui.Stack direction="row" gap="sm" align="center" justify="center">
-    {direct.map((action) => <ui.IconButton key={action.id} icon={action.icon} label={i18n.text(action.label)} size={rowActionSize} tone={action.tone === "danger" ? "danger" : "normal"} onClick={() => onRunAction(action)} />)}
-    <ActionMenuPopover label={moreLabel} items={overflow.map((action) => ({
+    {direct.map((action) => <ui.IconButton key={action.id} icon={action.icon} label={i18n.text(action.label)} size={rowActionSize} loading={runningActionID === action.id} disabled={actionRunning} tone={action.tone === "danger" ? "danger" : "normal"} onClick={() => onRunAction(action)} />)}
+    <ActionMenuPopover label={moreLabel} disabled={actionRunning} items={overflow.map((action) => ({
       id: action.id,
       label: i18n.text(action.label),
       icon: action.icon,
+      disabled: actionRunning,
       tone: action.tone === "danger" ? "danger" : "normal",
     }))} triggerSize={rowActionSize} menuSize={rowActionSize} iconSize={rowActionSize} onSelect={(id) => {
       const action = overflow.find((candidate) => candidate.id === id);

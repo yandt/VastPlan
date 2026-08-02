@@ -2,11 +2,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@vastplan/ui-primitives", () => ({
+  message: (_namespace: string, _key: string, fallback: string) => fallback,
   usePortalI18n: () => ({ text: (value: string) => value }),
   usePortalUI: () => ({ Dialog: ({ description, children }: { description?: string; children: unknown }) => <div data-description={description}>{children as never}</div> }),
 }));
 vi.mock("./FormActions.js", () => ({ FormActions: () => <span>actions</span> }));
 vi.mock("./FormContent.js", () => ({ FormContent: ({ showDescription }: { showDescription?: boolean }) => <span data-show-description={String(showDescription)}>content</span> }));
+vi.mock("../action/ActionExecutionFeedback.js", () => ({ ActionExecutionFeedback: () => null }));
 
 import { FormDialog } from "./FormDialog.js";
 

@@ -16,6 +16,7 @@ import { CollectionFormWorkflow } from "../form/CollectionFormWorkflow.js";
 import { evaluateFormCondition } from "../form/presentation.js";
 import { CollectionOverlayWorkflow } from "../overlay/CollectionOverlayWorkflow.js";
 import { WorkbenchPageFlow } from "../layout/WorkbenchRhythm.js";
+import { useActionExecution } from "../action/ActionExecutionFeedback.js";
 
 const emptyRefreshSignal: PageRefreshSignal = Object.freeze({ subscribe: () => () => undefined, getSnapshot: () => 0 });
 
@@ -35,6 +36,7 @@ export function CollectionPage({ page, preferenceScope, preferences, presentatio
   const [columns, setColumns] = useState(() => readCollectionColumns(preferenceScope, collection, initialPreference));
   const [activeForm, setActiveForm] = useState<{ id: string; selected: readonly CollectionRow[] }>();
   const [activeOverlay, setActiveOverlay] = useState<{ id: string; selected: readonly CollectionRow[] }>();
+  const execution = useActionExecution();
   const summaryRequestRef = useRef<AbortController>();
   const preferenceMutationRef = useRef(0);
   const keyOf = useCallback((row: CollectionRow) => String(row.id ?? row.key ?? ""), []);
@@ -75,6 +77,7 @@ export function CollectionPage({ page, preferenceScope, preferences, presentatio
   useEffect(() => { setSelectedKeys([]); }, [data.resetToken]);
   const refresh = useCallback(() => { data.refresh(); startSummaryRequest(); }, [data.refresh, startSummaryRequest]);
   const runAction = useCallback(async (action: ActionSpec, actionRows: readonly CollectionRow[]) => {
+    if (execution.running) return;
     if (action.requiresSelection && actionRows.length === 0) return;
     if (action.form !== undefined) {
       const definition = page.forms?.find((form) => form.id === action.form);
@@ -92,13 +95,15 @@ export function CollectionPage({ page, preferenceScope, preferences, presentatio
     if (action.confirm !== undefined && !await ui.confirm({ title, content: i18n.text(action.confirm) })) return;
     try {
       const context: CollectionActionContext = { action, selected: actionRows, refresh };
-      const result = await page.runAction?.(context, new AbortController().signal);
+      const outcome = await execution.run({ id: action.id, label: title }, (signal) => page.runAction?.(context, signal) ?? Promise.resolve(undefined));
+      if (!outcome.completed) return;
+      const result = outcome.value;
       if (result?.notify !== undefined) ui.notify({ title: i18n.text(result.notify.title), content: result.notify.content === undefined ? undefined : i18n.text(result.notify.content), kind: result.notify.kind });
       refresh();
     } catch (error) {
       ui.notify({ title, content: error instanceof Error ? error.message : String(error), kind: "error" });
     }
-  }, [i18n, page, refresh, ui]);
+  }, [execution, i18n, page, refresh, ui]);
   const actions = collection.actions ?? [];
   const visibleAction = (action: ActionSpec) => action.visibleWhen === undefined || (selected[0] !== undefined && evaluateFormCondition(action.visibleWhen, selected[0]));
   const updatePreferences = useCallback((nextColumns: typeof columns, nextDensity: CollectionDensity) => {
@@ -117,12 +122,12 @@ export function CollectionPage({ page, preferenceScope, preferences, presentatio
     <ui.Stack gap="sm">
       {summary === undefined ? null : <CollectionSummary summary={summary} />}
       {hasFilters ? <div style={{ width: "100%", minWidth: 0 }}><FilterPanel panel={collection.filterPanel!} value={filters} querying={data.loading || data.refreshing || data.loadingMore} size="xs" onApply={(value) => { setFilters(value); setPageNumber(1); }} /></div> : null}
-      <div style={{ width: "100%", minWidth: 0 }}><CollectionToolbar hasFilters={hasFilters} refreshing={data.refreshing} selectedCount={selected.length} toolbarActions={toolbarActions} bulkActions={bulkActions} onRefresh={refresh} preferences={collection.view === "table" && collection.preferences !== undefined ? <CollectionPreferencesPopover collection={collection} columns={columns} density={density} densityOptions={densityOptions} onChange={updatePreferences} /> : undefined} onRunAction={(action) => void runAction(action, selected)} /></div>
+      <div style={{ width: "100%", minWidth: 0 }}><CollectionToolbar hasFilters={hasFilters} refreshing={data.refreshing} selectedCount={selected.length} toolbarActions={toolbarActions} bulkActions={bulkActions} runningActionID={execution.active?.id} actionRunning={execution.running} onRefresh={refresh} preferences={collection.view === "table" && collection.preferences !== undefined ? <CollectionPreferencesPopover collection={collection} columns={columns} density={density} densityOptions={densityOptions} onChange={updatePreferences} /> : undefined} onRunAction={(action) => void runAction(action, selected)} /></div>
     </ui.Stack>
     {data.failure === undefined && summaryFailure === undefined ? null : <div style={{ width: "100%", minWidth: 0 }}><ui.ErrorState title={data.failure ?? summaryFailure!} retry={refresh} /></div>}
     <div style={{ width: "100%", minWidth: 0 }}>{collection.view === "cards"
-      ? <CollectionCards collection={collection} selectionMode={selectionMode} rows={rows} selectedKeys={selectedKeys} loading={data.loading} loadingMore={data.loadingMore} nextCursor={data.nextCursor} keyOf={keyOf} onSelectionChange={setSelectedKeys} onRunAction={(action, actionRows) => void runAction(action, actionRows)} onLoadMore={data.loadMore} />
-      : <CollectionTable collection={collection} selectionMode={selectionMode} columns={columns} rows={rows} selectedKeys={selectedKeys} loading={data.loading} density={density} keyOf={keyOf} onSelectionChange={setSelectedKeys} onRunAction={(action, actionRows) => void runAction(action, actionRows)} />}</div>
+      ? <CollectionCards collection={collection} selectionMode={selectionMode} rows={rows} selectedKeys={selectedKeys} loading={data.loading} loadingMore={data.loadingMore} nextCursor={data.nextCursor} keyOf={keyOf} onSelectionChange={setSelectedKeys} runningActionID={execution.active?.id} actionRunning={execution.running} onRunAction={(action, actionRows) => void runAction(action, actionRows)} onLoadMore={data.loadMore} />
+      : <CollectionTable collection={collection} selectionMode={selectionMode} columns={columns} rows={rows} selectedKeys={selectedKeys} loading={data.loading} density={density} keyOf={keyOf} onSelectionChange={setSelectedKeys} runningActionID={execution.active?.id} actionRunning={execution.running} onRunAction={(action, actionRows) => void runAction(action, actionRows)} />}</div>
     {collection.query.mode !== "page" ? null : <div style={{ width: "100%", minWidth: 0 }}><ui.Pagination align="end" page={pageNumber} pageSize={pageSize} pageSizeOptions={collection.query.pageSizeOptions} total={data.total} disabled={data.loading} onChange={(nextPage, requestedSize) => {
       const nextSize = validPageSize(collection, requestedSize);
       const previousSize = pageSize;
@@ -133,6 +138,7 @@ export function CollectionPage({ page, preferenceScope, preferences, presentatio
     {collection.view !== "table" || collection.query.mode !== "cursor" || data.nextCursor === undefined ? null : <ui.Stack direction="row" justify="center"><ui.Button kind="secondary" loading={data.loadingMore} disabled={data.loadingMore} onClick={data.loadMore}>{i18n.text({ namespace: "cn.vastplan.foundation.frontend.workflow.workbench", key: "cursor.more", fallback: "加载更多" })}</ui.Button></ui.Stack>}
     <CollectionFormWorkflow definition={page.forms?.find((form) => form.id === activeForm?.id)} selected={activeForm?.selected ?? []} open={activeForm !== undefined} onClose={() => setActiveForm(undefined)} onRefresh={refresh} />
     <CollectionOverlayWorkflow definition={page.overlays?.find((overlay) => overlay.id === activeOverlay?.id)} selected={activeOverlay?.selected ?? []} open={activeOverlay !== undefined} onClose={() => setActiveOverlay(undefined)} />
+    {execution.feedback}
   </ComponentSizeProvider></WorkbenchPageFlow>;
 }
 

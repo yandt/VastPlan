@@ -14,9 +14,10 @@ export interface ActionMenuEntry {
  * Governed overflow menu shared by Workbench patterns. Callers provide action
  * data only; the component owns compact layout, focus, closing, and truncation.
  */
-export function ActionMenuPopover({ label, items, triggerSize = "xs", menuSize = "xs", iconSize = menuSize, placement = "bottom-end", onSelect }: {
+export function ActionMenuPopover({ label, items, disabled = false, triggerSize = "xs", menuSize = "xs", iconSize = menuSize, placement = "bottom-end", onSelect }: {
   label: string;
   items: readonly ActionMenuEntry[];
+  disabled?: boolean;
   triggerSize?: ComponentSize;
   menuSize?: ComponentSize;
   /** Menu action glyphs follow the same governed scale as their trigger. */
@@ -42,7 +43,7 @@ export function ActionMenuPopover({ label, items, triggerSize = "xs", menuSize =
       onClick={props.onClick}
       onKeyDown={props.onKeyDown}
       style={{ display: "inline-flex", lineHeight: 0 }}
-    ><ui.IconButton icon="more" label={label} size={triggerSize} /></span>}
+    ><ui.IconButton icon="more" label={label} size={triggerSize} disabled={disabled} /></span>}
   ><ui.Menu
     size={menuSize}
     variant="action"

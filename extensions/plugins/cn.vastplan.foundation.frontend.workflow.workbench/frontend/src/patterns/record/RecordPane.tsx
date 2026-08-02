@@ -6,13 +6,15 @@ import { CollectionFormWorkflow } from "../form/CollectionFormWorkflow.js";
 
 const namespace = "cn.vastplan.foundation.frontend.workflow.workbench";
 
-export function RecordPane({ detail, record, editor, actions, loading, failure, onRetry, onAction, onDirtyChange, onBack }: {
+export function RecordPane({ detail, record, editor, actions, loading, failure, runningActionID, actionRunning = false, onRetry, onAction, onDirtyChange, onBack }: {
   detail: RecordDetailSpec;
   record?: Readonly<Record<string, unknown>>;
   editor?: WorkbenchFormDefinition;
   actions: readonly ActionSpec[];
   loading: boolean;
   failure?: string;
+  runningActionID?: string;
+  actionRunning?: boolean;
   onRetry(): void;
   onAction(action: ActionSpec): void;
   onDirtyChange(dirty: boolean): void;
@@ -34,7 +36,7 @@ export function RecordPane({ detail, record, editor, actions, loading, failure, 
         <div><strong>{title}</strong>{subtitle === undefined || subtitle === "" ? null : <div style={{ marginTop: 4, color: ui.theme.tokens.color.mutedText }}>{subtitle}</div>}</div>
         {status === undefined || status === "" ? null : <ui.Status tone={recordTone(detail.status?.toneKey === undefined ? undefined : record[detail.status.toneKey])}>{status}</ui.Status>}
       </ui.Stack>
-      <ui.Stack direction="row" gap="xs" align="center" wrap>{actions.map((action) => <ui.IconButton key={action.id} icon={action.icon} label={i18n.text(action.label)} tone={action.tone === "danger" ? "danger" : action.tone === "primary" ? "primary" : "normal"} onClick={() => onAction(action)} />)}</ui.Stack>
+      <ui.Stack direction="row" gap="xs" align="center" wrap>{actions.map((action) => <ui.IconButton key={action.id} icon={action.icon} label={i18n.text(action.label)} loading={runningActionID === action.id} disabled={actionRunning} tone={action.tone === "danger" ? "danger" : action.tone === "primary" ? "primary" : "normal"} onClick={() => onAction(action)} />)}</ui.Stack>
     </ui.Stack>
     {editor === undefined ? detail.sections.map((section) => <ui.Panel key={section.id} title={section.title === undefined ? undefined : i18n.text(section.title)}>
       {section.description === undefined ? null : <p>{i18n.text(section.description)}</p>}

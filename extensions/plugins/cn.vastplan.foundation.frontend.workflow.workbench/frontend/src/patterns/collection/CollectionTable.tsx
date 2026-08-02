@@ -7,7 +7,7 @@ import { resolveTableVirtualization } from "./table-virtualization.js";
 
 const namespace = "cn.vastplan.foundation.frontend.workflow.workbench";
 
-export function CollectionTable({ collection, selectionMode, columns, rows, selectedKeys, loading, density, keyOf, onSelectionChange, onRunAction }: {
+export function CollectionTable({ collection, selectionMode, columns, rows, selectedKeys, loading, density, keyOf, onSelectionChange, runningActionID, actionRunning = false, onRunAction }: {
   collection: CollectionSpec;
   selectionMode: CollectionSelectionMode;
   columns: readonly CollectionColumnPreference[];
@@ -17,6 +17,8 @@ export function CollectionTable({ collection, selectionMode, columns, rows, sele
   density: CollectionDensity;
   keyOf(row: CollectionRow): string;
   onSelectionChange(keys: readonly string[]): void;
+  runningActionID?: string;
+  actionRunning?: boolean;
   onRunAction(action: ActionSpec, rows: readonly CollectionRow[]): void;
 }) {
   const ui = usePortalUI();
@@ -25,7 +27,7 @@ export function CollectionTable({ collection, selectionMode, columns, rows, sele
   const rowActions = (collection.actions ?? []).filter((action) => action.placement === "record.row");
   const tableColumns = [
     ...visibleColumns.map((column) => ({ key: column.key, title: i18n.text(column.label), width: column.minWidth, render: (value: unknown) => <CollectionValue column={column} value={value} /> })),
-    ...(rowActions.length === 0 ? [] : [{ key: "__actions", title: i18n.text(message(namespace, "column.actions", "操作")), width: 152, align: "center" as const, fixed: "right" as const, render: (_value: unknown, row: CollectionRow) => <RowActions actions={rowActions} row={row} onRunAction={(action) => onRunAction(action, [row])} /> }]),
+    ...(rowActions.length === 0 ? [] : [{ key: "__actions", title: i18n.text(message(namespace, "column.actions", "操作")), width: 152, align: "center" as const, fixed: "right" as const, render: (_value: unknown, row: CollectionRow) => <RowActions actions={rowActions} row={row} runningActionID={runningActionID} actionRunning={actionRunning} onRunAction={(action) => onRunAction(action, [row])} /> }]),
   ];
   const virtualization = resolveTableVirtualization(collection, rows.length, density);
   return <ui.Table appearance="collection" columns={tableColumns} rows={rows} rowKey={keyOf} selection={selectionMode} selectedRowKeys={selectedKeys} onSelectionChange={onSelectionChange} loading={loading} density={density} virtualization={virtualization} empty={<ui.EmptyState title={i18n.text(message(namespace, "empty.title", "暂无数据"))} />} />;

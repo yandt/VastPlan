@@ -1,7 +1,10 @@
-import { usePortalI18n, usePortalUI } from "@vastplan/ui-primitives";
+import { message, usePortalI18n, usePortalUI } from "@vastplan/ui-primitives";
 import { FormActions } from "./FormActions.js";
 import { FormContent } from "./FormContent.js";
 import type { FormWorkflowController } from "./useFormWorkflow.js";
+import { ActionExecutionFeedback } from "../action/ActionExecutionFeedback.js";
+
+const namespace = "cn.vastplan.foundation.frontend.workflow.workbench";
 
 /** The default governed composition for every non-page form workflow. The adapter keeps only this body scrollable. */
 export function FormDialog({ form, open }: { form: FormWorkflowController; open: boolean }) {
@@ -22,5 +25,6 @@ export function FormDialog({ form, open }: { form: FormWorkflowController; open:
     onClose={() => { if (!form.submitting) void form.requestClose(); }}
   >
     <FormContent form={form} density="dialog" showDescription={false} />
+    <ActionExecutionFeedback active={form.submitting} actionLabel={i18n.text(definition.workflow.submitLabel ?? message(namespace, "action.submit", "提交"))} />
   </ui.Dialog>;
 }

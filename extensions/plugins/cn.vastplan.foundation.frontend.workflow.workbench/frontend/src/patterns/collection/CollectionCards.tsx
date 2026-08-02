@@ -7,7 +7,7 @@ import { evaluateFormCondition } from "../form/presentation.js";
 const namespace = "cn.vastplan.foundation.frontend.workflow.workbench";
 const tones = new Set<StatusTone>(["neutral", "info", "success", "warning", "error"]);
 
-export function CollectionCards({ collection, selectionMode, rows, selectedKeys, loading, loadingMore, nextCursor, keyOf, onSelectionChange, onRunAction, onLoadMore }: {
+export function CollectionCards({ collection, selectionMode, rows, selectedKeys, loading, loadingMore, nextCursor, keyOf, onSelectionChange, runningActionID, actionRunning = false, onRunAction, onLoadMore }: {
   collection: CollectionSpec;
   selectionMode: CollectionSelectionMode;
   rows: readonly CollectionRow[];
@@ -17,6 +17,8 @@ export function CollectionCards({ collection, selectionMode, rows, selectedKeys,
   nextCursor?: string;
   keyOf(row: CollectionRow): string;
   onSelectionChange(keys: readonly string[]): void;
+  runningActionID?: string;
+  actionRunning?: boolean;
   onRunAction(action: ActionSpec, rows: readonly CollectionRow[]): void;
   onLoadMore(): void;
 }) {
@@ -51,7 +53,7 @@ export function CollectionCards({ collection, selectionMode, rows, selectedKeys,
         const key = keyOf(row);
         const statusTone = card.status?.toneKey === undefined ? "neutral" : tone(row[card.status.toneKey]);
         const visibleActions = footerActions.filter((action) => action.visibleWhen === undefined || evaluateFormCondition(action.visibleWhen, row));
-        const actions = visibleActions.length === 0 ? undefined : <ui.Stack direction="row" gap="xs" align="center" justify="center" wrap>{visibleActions.map((action) => <ui.IconButton key={action.id} icon={action.icon} label={i18n.text(action.label)} tone={action.tone === "danger" ? "danger" : action.tone === "primary" ? "primary" : "normal"} onClick={() => onRunAction(action, [row])} />)}</ui.Stack>;
+        const actions = visibleActions.length === 0 ? undefined : <ui.Stack direction="row" gap="xs" align="center" justify="center" wrap>{visibleActions.map((action) => <ui.IconButton key={action.id} icon={action.icon} label={i18n.text(action.label)} loading={runningActionID === action.id} disabled={actionRunning} tone={action.tone === "danger" ? "danger" : action.tone === "primary" ? "primary" : "normal"} onClick={() => onRunAction(action, [row])} />)}</ui.Stack>;
         return <ui.GridItem key={key} span={1}><ui.DataCard
           title={value(row[card.titleKey], { key: card.titleKey }, i18n)}
           subtitle={card.subtitleKey === undefined ? undefined : value(row[card.subtitleKey], { key: card.subtitleKey }, i18n)}

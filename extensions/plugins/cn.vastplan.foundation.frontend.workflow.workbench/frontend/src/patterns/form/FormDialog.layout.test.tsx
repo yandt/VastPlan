@@ -2,11 +2,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@vastplan/ui-primitives", () => ({
+  message: (_namespace: string, _key: string, fallback: string) => fallback,
   usePortalI18n: () => ({ text: (value: string) => value }),
   usePortalUI: () => ({ Dialog: ({ children, variant }: { children: unknown; variant?: string }) => <div data-variant={variant}>{children as never}</div> }),
 }));
 vi.mock("./FormActions.js", () => ({ FormActions: () => <span>actions</span> }));
 vi.mock("./FormContent.js", () => ({ FormContent: ({ density }: { density?: string }) => <span data-density={density}>content</span> }));
+vi.mock("../action/ActionExecutionFeedback.js", () => ({ ActionExecutionFeedback: () => null }));
 
 import { FormDialog } from "./FormDialog.js";
 

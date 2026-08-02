@@ -109,6 +109,8 @@ Collection 可选的状态摘要由 `CollectionSummary` 数据驱动定义。`ap
 
 `ActionSpec` 只声明集合与记录语义：稳定 `id`、本地化标题、必填语义图标、tone、placement、selection 前置条件、confirm 文案和可见条件。页面不得提交按钮、React 节点或逐动作回调；表单与 Overlay 动作只引用已登记 ID，其他动作统一交给 `runAction(context, signal)` 工作流端口，并以 `action.id` 分派。独立的 `PageActionSpec` 只表达页面命令，不包含 selection 或 `visibleWhen`，由 `runPageAction(context, signal)` 执行。
 
+每个 Workbench 页面拥有唯一的动作执行生命周期：动作触发后立即显示可访问的非阻塞进度提示，并禁用同页其他动作以拒绝重复提交；持续超过 650ms 时自动显示等待 Dialog，直到请求完成、失败或被页面卸载取消。成功通知与刷新仍由 ActionHandler 的结果驱动，失败仍使用统一错误通知；功能插件不得自行添加第二套等待遮罩或用定时器猜测完成状态。FormDialog 与独立表单页复用同一反馈组件。
+
 | Placement | 规则 |
 |---|---|
 | 顶层 `pageActions` | 由可信宿主挂入 `page.header.end` 并整体右对齐；默认纯图标 + Tooltip，可选 `icon-label` / `label`，最多直接显示 4 个，其余进入更多菜单 |

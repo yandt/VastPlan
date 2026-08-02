@@ -5,12 +5,14 @@ import type { ReactNode } from "react";
 
 const namespace = "cn.vastplan.foundation.frontend.workflow.workbench";
 
-export function CollectionToolbar({ hasFilters, refreshing, selectedCount, toolbarActions, bulkActions, onRefresh, preferences, onRunAction }: {
+export function CollectionToolbar({ hasFilters, refreshing, selectedCount, toolbarActions, bulkActions, runningActionID, actionRunning = false, onRefresh, preferences, onRunAction }: {
   hasFilters: boolean;
   refreshing: boolean;
   selectedCount: number;
   toolbarActions: readonly ActionSpec[];
   bulkActions: readonly ActionSpec[];
+  runningActionID?: string;
+  actionRunning?: boolean;
   onRefresh(): void;
   preferences?: ReactNode;
   onRunAction(action: ActionSpec): void;
@@ -27,13 +29,13 @@ export function CollectionToolbar({ hasFilters, refreshing, selectedCount, toolb
       <div style={{ minWidth: 0, flex: "1 1 auto", display: "flex", alignItems: "center", flexWrap: "wrap", gap }}>
         {bulkActions.length === 0 ? null : <>
           <span>{i18n.text(message(namespace, "selection.count", "已选择 {count} 项", { count: selectedCount }))}</span>
-          <ui.Select ariaLabel={i18n.text(message(namespace, "bulk.select", "选择批量操作"))} placeholder={i18n.text(message(namespace, "bulk.placeholder", "选择批量操作"))} value={bulkActionID} disabled={selectedCount === 0} options={bulkActions.map((action) => ({ value: action.id, label: i18n.text(action.label) }))} onChange={setBulkActionID} />
-          <ui.IconButton icon={selectedBulkAction?.icon ?? "success"} label={i18n.text(message(namespace, "bulk.execute", "执行"))} disabled={selectedCount === 0 || selectedBulkAction === undefined} tone={selectedBulkAction?.tone === "danger" ? "danger" : selectedBulkAction?.tone === "primary" ? "primary" : "normal"} onClick={() => selectedBulkAction === undefined ? undefined : onRunAction(selectedBulkAction)} />
+          <ui.Select ariaLabel={i18n.text(message(namespace, "bulk.select", "选择批量操作"))} placeholder={i18n.text(message(namespace, "bulk.placeholder", "选择批量操作"))} value={bulkActionID} disabled={selectedCount === 0 || actionRunning} options={bulkActions.map((action) => ({ value: action.id, label: i18n.text(action.label) }))} onChange={setBulkActionID} />
+          <ui.IconButton icon={selectedBulkAction?.icon ?? "success"} label={i18n.text(message(namespace, "bulk.execute", "执行"))} loading={selectedBulkAction?.id === runningActionID} disabled={actionRunning || selectedCount === 0 || selectedBulkAction === undefined} tone={selectedBulkAction?.tone === "danger" ? "danger" : selectedBulkAction?.tone === "primary" ? "primary" : "normal"} onClick={() => selectedBulkAction === undefined ? undefined : onRunAction(selectedBulkAction)} />
         </>}
-        {toolbarActions.map((action) => <ui.IconButton key={action.id} icon={action.icon} label={i18n.text(action.label)} disabled={Boolean(action.requiresSelection && selectedCount === 0)} tone={action.tone === "danger" ? "danger" : action.tone === "primary" ? "primary" : "normal"} onClick={() => onRunAction(action)} />)}
+        {toolbarActions.map((action) => <ui.IconButton key={action.id} icon={action.icon} label={i18n.text(action.label)} loading={action.id === runningActionID} disabled={actionRunning || Boolean(action.requiresSelection && selectedCount === 0)} tone={action.tone === "danger" ? "danger" : action.tone === "primary" ? "primary" : "normal"} onClick={() => onRunAction(action)} />)}
       </div>
       <div style={{ flex: "0 0 auto", marginLeft: "auto", display: "flex", alignItems: "center", gap }}>
-        {hasFilters ? null : <ui.IconButton icon="refresh" label={i18n.text(message(namespace, "action.refresh", "刷新"))} onClick={onRefresh} loading={refreshing} />}
+        {hasFilters ? null : <ui.IconButton icon="refresh" label={i18n.text(message(namespace, "action.refresh", "刷新"))} onClick={onRefresh} loading={refreshing} disabled={actionRunning} />}
         {preferences}
       </div>
     </div>;
