@@ -35,7 +35,7 @@ export function PortalAccountMenu({ group, composition, activeID, onNavigate, on
   const ui = usePortalUI();
   const i18n = usePortalI18n();
   const items = accountMenuItems(group, composition, i18n, onLogout !== undefined).map((item) => item.id === accountLogoutMenuItemID
-    ? { ...item, icon: <ui.Icon name="logout" label={i18n.text(message(namespace, "account.logout", "退出登录"))} /> }
+    ? { ...item, icon: <ui.Icon name="logout" size="sm" label={i18n.text(message(namespace, "account.logout", "退出登录"))} /> }
     : item);
   if (items.length === 0) return <div className="vp-account-menu-empty">{i18n.text(message(namespace, "navigation.accountUnavailable", "个人中心尚未装配"))}</div>;
   return <ui.Menu variant="navigation" size="sm" items={items} activeID={activeID} onSelect={(id) => {
