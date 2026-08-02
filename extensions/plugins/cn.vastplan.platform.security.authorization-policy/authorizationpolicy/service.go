@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -19,10 +20,22 @@ type SnapshotWriter interface {
 	Write(authorizationv1.SignedPolicySnapshot) error
 }
 
+type SnapshotReader interface {
+	Read() (authorizationv1.SignedPolicySnapshot, error)
+}
+
 type FileSnapshotWriter struct{ Path string }
 
 func (w FileSnapshotWriter) Write(snapshot authorizationv1.SignedPolicySnapshot) error {
 	return WriteSignedSnapshot(w.Path, snapshot)
+}
+
+func (w FileSnapshotWriter) Read() (authorizationv1.SignedPolicySnapshot, error) {
+	raw, err := os.ReadFile(w.Path)
+	if err != nil {
+		return authorizationv1.SignedPolicySnapshot{}, err
+	}
+	return authorizationv1.ParseSignedPolicySnapshot(raw)
 }
 
 type ServiceOptions struct {
@@ -35,8 +48,7 @@ type ServiceOptions struct {
 	Catalog                 pluginv1.PermissionCatalog
 	ProviderProfile         authorizationv1.ProviderProfile
 	Domains                 []authorizationv1.PolicyDomain
-	DefaultAudience         []string
-	DefaultTTL              time.Duration
+	LeasePolicy             SnapshotLeasePolicy
 	Now                     func() time.Time
 }
 
@@ -50,15 +62,14 @@ type Service struct {
 	domains                 []authorizationv1.PolicyDomain
 	signer                  SnapshotSigner
 	snapshotWriter          SnapshotWriter
-	defaultAudience         []string
-	defaultTTL              time.Duration
+	leasePolicy             SnapshotLeasePolicy
 	now                     func() time.Time
 	mu                      sync.Mutex
 }
 
 func NewService(options ServiceOptions) (*Service, error) {
-	if (options.Store == nil) == (options.StoreFactory == nil) || options.Signer == nil || options.SnapshotWriter == nil {
-		return nil, errors.New("Authorization Policy 需要且只能配置一个 Store/StoreFactory，并配置 Signer 与 SnapshotWriter")
+	if (options.Store == nil) == (options.StoreFactory == nil) || options.Signer == nil || options.SnapshotWriter == nil || options.LeasePolicy == nil {
+		return nil, errors.New("Authorization Policy 需要且只能配置一个 Store/StoreFactory，并配置 Signer、SnapshotWriter 与 LeasePolicy")
 	}
 	if _, err := pluginv1.ParsePermissionCatalog(mustJSON(options.Catalog)); err != nil {
 		return nil, fmt.Errorf("Authorization Policy 权限目录无效: %w", err)
@@ -68,9 +79,6 @@ func NewService(options ServiceOptions) (*Service, error) {
 	}
 	if len(options.Domains) == 0 || rootDomainID(options.Domains) == "" {
 		return nil, errors.New("Authorization Policy 缺少根 Domain")
-	}
-	if options.DefaultTTL <= 0 {
-		options.DefaultTTL = 5 * time.Minute
 	}
 	if options.Now == nil {
 		options.Now = func() time.Time { return time.Now().UTC() }
@@ -86,7 +94,7 @@ func NewService(options ServiceOptions) (*Service, error) {
 		store: options.Store, storeFactory: options.StoreFactory, bootstrapState: bootstrapState, bootstrapReconciliation: options.BootstrapReconciliation,
 		catalog: options.Catalog, providerProfile: options.ProviderProfile, domains: append([]authorizationv1.PolicyDomain(nil), options.Domains...),
 		signer: options.Signer, snapshotWriter: options.SnapshotWriter,
-		defaultAudience: append([]string(nil), options.DefaultAudience...), defaultTTL: options.DefaultTTL, now: options.Now,
+		leasePolicy: options.LeasePolicy, now: options.Now,
 	}
 	if service.store != nil {
 		if err := service.initialize(service.store); err != nil {

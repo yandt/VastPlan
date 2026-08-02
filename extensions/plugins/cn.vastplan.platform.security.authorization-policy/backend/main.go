@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"strings"
-	"time"
 
 	authorizationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authorization/v1"
 	policy "cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.security.authorization-policy/authorizationpolicy"
@@ -14,6 +13,10 @@ import (
 )
 
 func main() {
+	configuration, leasePolicy, err := loadRuntimeConfiguration()
+	if err != nil {
+		log.Fatalf("加载 Authorization Policy 运行配置: %v", err)
+	}
 	catalog, err := policy.LoadPermissionCatalog(os.Getenv("VASTPLAN_AUTHORIZATION_PERMISSION_CATALOG"))
 	if err != nil {
 		log.Fatalf("加载 Permission Catalog: %v", err)
@@ -39,13 +42,14 @@ func main() {
 		StoreFactory: policy.SharedStateStoreFactory, BootstrapState: bootstrapState, BootstrapReconciliation: bootstrapReconciliation, Signer: signer,
 		SnapshotWriter: policy.FileSnapshotWriter{Path: os.Getenv("VASTPLAN_AUTHORIZATION_POLICY_SNAPSHOT")},
 		Catalog:        catalog, ProviderProfile: profile, Domains: []authorizationv1.PolicyDomain{root},
-		DefaultAudience: splitAudience(os.Getenv("VASTPLAN_AUTHORIZATION_POLICY_AUDIENCE")), DefaultTTL: 5 * time.Minute,
+		LeasePolicy: leasePolicy,
 	})
 	if err != nil {
 		log.Fatalf("初始化 Authorization Policy: %v", err)
 	}
 	plugin := sdk.New(policy.PluginID, policy.PluginVersion, map[string]string{"backend": "^0.1"})
 	plugin.Contribute(service.Contribution())
+	plugin.OnLifecycle(newLeaseLifecycle(service, plugin, configuration.TenantID).Handle)
 	if err := plugin.Serve(); err != nil {
 		log.Fatalf("Authorization Policy 退出: %v", err)
 	}
@@ -74,14 +78,4 @@ func loadBootstrapState(path string) (*policy.State, error) {
 		return nil, nil
 	}
 	return &state, nil
-}
-
-func splitAudience(value string) []string {
-	result := []string{}
-	for _, item := range strings.Split(value, ",") {
-		if trimmed := strings.TrimSpace(item); trimmed != "" {
-			result = append(result, trimmed)
-		}
-	}
-	return result
 }

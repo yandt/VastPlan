@@ -42,8 +42,8 @@ func (s *Service) revoke(store Store, subject string, request RevokeRequest, dec
 	publication, committed, err := s.publishState(
 		store, state,
 		request.ExpectedGeneration,
-		s.defaultAudience,
-		s.defaultTTL,
+		s.leasePolicy.Audiences(),
+		s.leasePolicy.SnapshotTTL(),
 		s.audit(subject, "revokeAndPublish", request.Kind, request.TargetID, revocation.Revision, request.ReasonCode),
 	)
 	if err != nil {
@@ -70,19 +70,18 @@ func (s *Service) publishSnapshot(store Store, subject string, request PublishSn
 	if err := ensureExpected(state, request.ExpectedGeneration); err != nil {
 		return nil, err
 	}
-	audience := append([]string(nil), request.Audience...)
-	if len(audience) == 0 {
-		audience = append([]string(nil), s.defaultAudience...)
+	audience := s.leasePolicy.Audiences()
+	if len(request.Audience) != 0 && !sameStrings(request.Audience, audience) {
+		return nil, errors.New("发布请求 audience 与服务 Snapshot Lease Policy 不一致")
 	}
-	ttl := s.defaultTTL
-	if request.TTLSeconds != 0 {
-		ttl = time.Duration(request.TTLSeconds) * time.Second
+	if request.TTLSeconds != 0 && request.TTLSeconds != int64(s.leasePolicy.SnapshotTTL().Seconds()) {
+		return nil, errors.New("发布请求 TTL 与服务 Snapshot Lease Policy 不一致")
 	}
 	publication, committed, err := s.publishState(
 		store, state,
 		request.ExpectedGeneration,
 		audience,
-		ttl,
+		s.leasePolicy.SnapshotTTL(),
 		s.audit(subject, "publishSnapshot", "policy", "current", state.PolicyRevision+1, request.Reason),
 	)
 	if err != nil {
@@ -107,14 +106,17 @@ func (s *Service) publishState(store Store, state State, expected uint64, audien
 	if err != nil {
 		return SnapshotPublication{}, State{}, err
 	}
-	if err := s.snapshotWriter.Write(publication.Snapshot); err != nil {
-		return SnapshotPublication{}, State{}, fmt.Errorf("写入 Policy Snapshot: %w", err)
-	}
 	state.CurrentSnapshot = &snapshot
 	event.Revision = snapshot.Revision
 	committed, err := s.commit(store, state, expected, event)
 	if err != nil {
 		return SnapshotPublication{}, State{}, err
+	}
+	// Shared State is authoritative. Projection must never advance before its
+	// CAS commit; a failed local write is repaired by the lease controller from
+	// committed CurrentSnapshot instead of leaving a newer file over older state.
+	if err := s.snapshotWriter.Write(publication.Snapshot); err != nil {
+		return publication, committed, fmt.Errorf("Policy 状态已提交但 Snapshot Projection 写入失败: %w", err)
 	}
 	return publication, committed, nil
 }

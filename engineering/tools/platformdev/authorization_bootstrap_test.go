@@ -1,8 +1,6 @@
 package main
 
 import (
-	"encoding/json"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -156,112 +154,6 @@ func TestDevelopmentGrantsKeepPortalLifecycleSeparated(t *testing.T) {
 		if !equalStrings(got, want[grant.SubjectID]) {
 			t.Fatalf("主体 %s 的 Portal 权限未与签名目录同步: got=%v want=%v", grant.SubjectID, got, want[grant.SubjectID])
 		}
-	}
-}
-
-func TestRenewPublishedDevelopmentAuthorizationWithoutPlatformPublication(t *testing.T) {
-	now := time.Date(2026, 7, 29, 6, 0, 0, 0, time.UTC)
-	root := t.TempDir()
-	if err := os.Chmod(root, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	catalog := developmentAuthorizationCatalog(t)
-	profile := policy.NativeProviderProfile(catalog)
-	domain, err := policy.RootDomain(catalog, profile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	issuedAt := now.Add(-48 * time.Hour)
-	state, err := policy.BuildBootstrapState(catalog, profile, []authorizationv1.PolicyDomain{domain}, developmentGrants(catalog, ""), issuedAt)
-	if err != nil {
-		t.Fatal(err)
-	}
-	snapshot, err := policy.CompileSnapshot(state, []string{developmentAuthorizationAudience}, issuedAt, developmentAuthorizationTTL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	signer, err := ensureAuthorizationSigner(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	publication, err := signer.Sign(snapshot)
-	if err != nil {
-		t.Fatal(err)
-	}
-	state.CurrentSnapshot = &snapshot
-	store := &policy.FileStore{Path: filepath.Join(root, "policy-state.json")}
-	if _, err := store.CompareAndSwap(0, state); err != nil {
-		t.Fatal(err)
-	}
-	if err := policy.WriteSignedSnapshot(filepath.Join(root, "policy-snapshot.json"), publication.Snapshot); err != nil {
-		t.Fatal(err)
-	}
-
-	renewed, err := renewPublishedDevelopmentAuthorization(root, catalog, now)
-	if err != nil || !renewed {
-		t.Fatalf("过期开发授权应在零发布启动中续签: renewed=%v err=%v", renewed, err)
-	}
-	renewedState, err := store.Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if renewedState.Generation != 2 || renewedState.PolicyRevision != 2 || renewedState.CurrentSnapshot == nil || !renewedState.CurrentSnapshot.ExpiresAt.Equal(now.Add(developmentAuthorizationTTL)) {
-		t.Fatalf("续签状态不完整: generation=%d policyRevision=%d snapshot=%+v", renewedState.Generation, renewedState.PolicyRevision, renewedState.CurrentSnapshot)
-	}
-	if len(renewedState.Bindings) != 1 || !renewedState.Bindings[0].ExpiresAt.Equal(now.Add(developmentAuthorizationTTL)) {
-		t.Fatalf("开发 Seed 绑定未与 Snapshot 同步续签: %+v", renewedState.Bindings)
-	}
-	if len(renewedState.Audit) == 0 || renewedState.Audit[len(renewedState.Audit)-1].Action != "developmentLeaseRenewed" {
-		t.Fatalf("续签必须留下独立审计: %+v", renewedState.Audit)
-	}
-	raw, err := os.ReadFile(filepath.Join(root, "policy-snapshot.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var signed authorizationv1.SignedPolicySnapshot
-	if err := json.Unmarshal(raw, &signed); err != nil || signed.Payload.Revision != 2 || !signed.Payload.ExpiresAt.Equal(now.Add(developmentAuthorizationTTL)) {
-		t.Fatalf("续签 Snapshot 文件未原子更新: %+v err=%v", signed.Payload, err)
-	}
-
-	renewed, err = renewPublishedDevelopmentAuthorization(root, catalog, now.Add(time.Hour))
-	if err != nil || renewed {
-		t.Fatalf("仍有充足有效期时不得产生启动 revision: renewed=%v err=%v", renewed, err)
-	}
-	unchanged, err := store.Load()
-	if err != nil || unchanged.Generation != renewedState.Generation {
-		t.Fatalf("无需续签时状态不得变化: generation=%d err=%v", unchanged.Generation, err)
-	}
-}
-
-func TestRenewPublishedDevelopmentAuthorizationRejectsCatalogDrift(t *testing.T) {
-	root := t.TempDir()
-	if err := os.Chmod(root, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	catalog := developmentAuthorizationCatalog(t)
-	profile := policy.NativeProviderProfile(catalog)
-	domain, err := policy.RootDomain(catalog, profile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	now := time.Date(2026, 7, 29, 6, 0, 0, 0, time.UTC)
-	state, err := policy.BuildBootstrapState(catalog, profile, []authorizationv1.PolicyDomain{domain}, developmentGrants(catalog, ""), now.Add(-48*time.Hour))
-	if err != nil {
-		t.Fatal(err)
-	}
-	snapshot, err := policy.CompileSnapshot(state, []string{developmentAuthorizationAudience}, now.Add(-48*time.Hour), developmentAuthorizationTTL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	state.CurrentSnapshot = &snapshot
-	store := &policy.FileStore{Path: filepath.Join(root, "policy-state.json")}
-	if _, err := store.CompareAndSwap(0, state); err != nil {
-		t.Fatal(err)
-	}
-	drifted := catalog
-	drifted.Digest = strings.Repeat("f", 64)
-	if _, err := renewPublishedDevelopmentAuthorization(root, drifted, now); err == nil || !strings.Contains(err.Error(), "显式执行 bootstrap") {
-		t.Fatalf("零发布启动不得吸收权限目录漂移: %v", err)
 	}
 }
 

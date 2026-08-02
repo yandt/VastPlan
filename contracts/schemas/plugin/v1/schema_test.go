@@ -563,6 +563,10 @@ func TestParseManifest_BackgroundServiceRequiresLeaderAndServiceConfiguration(t 
 	if err != nil || manifest.Runtime == nil || !manifest.Runtime.BackgroundService {
 		t.Fatalf("合法后台服务契约应通过: manifest=%+v err=%v", manifest, err)
 	}
+	externalShared := bytes.Replace(valid, []byte(`"stateModel":"leader-owned"`), []byte(`"stateModel":"external-shared"`), 1)
+	if _, err := ParseManifest(externalShared); err != nil {
+		t.Fatalf("leader external-shared 后台控制器应通过: %v", err)
+	}
 
 	for name, replacement := range map[string]string{
 		"非 leader":     `"instancePolicy":"active-active","stateModel":"external-shared","visibility":"cluster","routing":"queue","backgroundService":true`,

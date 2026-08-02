@@ -58,7 +58,7 @@ func TestRoleBindingApprovalAndSignedSnapshot(t *testing.T) {
 	}
 	store, writer := &memoryStore{state: State{Version: stateVersion}}, &memoryWriter{}
 	now := time.Date(2026, 7, 23, 1, 2, 3, 0, time.UTC)
-	service, err := NewService(ServiceOptions{Store: store, Signer: Ed25519Signer{KeyID: "policy.1", Private: private}, SnapshotWriter: writer, Catalog: catalog, ProviderProfile: profile, Domains: []authorizationv1.PolicyDomain{root}, DefaultAudience: []string{"service:platform"}, DefaultTTL: 5 * time.Minute, Now: func() time.Time { return now }})
+	service, err := NewService(ServiceOptions{Store: store, Signer: Ed25519Signer{KeyID: "policy.1", Private: private}, SnapshotWriter: writer, Catalog: catalog, ProviderProfile: profile, Domains: []authorizationv1.PolicyDomain{root}, LeasePolicy: testLeasePolicy(t), Now: func() time.Time { return now }})
 	if err != nil {
 		t.Fatal(err)
 	}

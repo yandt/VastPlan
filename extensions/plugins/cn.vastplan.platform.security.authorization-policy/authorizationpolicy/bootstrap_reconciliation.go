@@ -10,6 +10,7 @@ import (
 // root. Runtime workflows never branch on environment or deployment mode.
 type BootstrapReconciliationPolicy interface {
 	Reconcile(current *State, bootstrap *State, targetCatalogDigest string, now time.Time) (bool, error)
+	AllowSnapshotRecovery() bool
 }
 
 type DisabledBootstrapReconciliation struct{}
@@ -17,10 +18,13 @@ type DisabledBootstrapReconciliation struct{}
 func (DisabledBootstrapReconciliation) Reconcile(_ *State, _ *State, _ string, _ time.Time) (bool, error) {
 	return false, nil
 }
+func (DisabledBootstrapReconciliation) AllowSnapshotRecovery() bool { return false }
 
 // SeedOwnedBootstrapReconciliation synchronizes only objects owned by the
 // trusted Seed Authority. User-managed roles and bindings are never rewritten.
 type SeedOwnedBootstrapReconciliation struct{}
+
+func (SeedOwnedBootstrapReconciliation) AllowSnapshotRecovery() bool { return true }
 
 func (SeedOwnedBootstrapReconciliation) Reconcile(current *State, bootstrap *State, targetCatalogDigest string, now time.Time) (bool, error) {
 	if current == nil {

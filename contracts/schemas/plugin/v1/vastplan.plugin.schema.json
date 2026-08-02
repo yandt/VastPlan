@@ -576,7 +576,7 @@
           "then": {
             "properties": {
               "instancePolicy": { "const": "leader" },
-              "stateModel": { "const": "leader-owned" },
+              "stateModel": { "enum": ["leader-owned", "external-shared"] },
               "routing": { "const": "leader" }
             }
           }

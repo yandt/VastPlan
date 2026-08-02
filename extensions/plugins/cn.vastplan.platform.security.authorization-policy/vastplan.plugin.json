@@ -2,14 +2,46 @@
   "id": "cn.vastplan.platform.security.authorization-policy",
   "name": "VastPlan Authorization Policy",
   "description": "管理版本化角色、主体绑定、撤权、签名授权快照及其在线管理工作台",
-  "version": "0.7.0",
+  "version": "0.7.3",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
   "engines": { "backend": "^0.1", "frontend": "^0.1" },
   "contextAccess": { "required": ["caller", "subject.id", "scope.tenant"], "optional": ["authorization.roles", "scene", "trace", "request.deadline", "propagation.callPath"] },
-  "runtime": { "instancePolicy": "leader", "stateModel": "external-shared", "visibility": "cluster", "routing": "leader", "routingDomain": "security" },
+  "runtime": { "instancePolicy": "leader", "stateModel": "external-shared", "visibility": "cluster", "routing": "leader", "routingDomain": "security", "backgroundService": true },
+  "configuration": {
+    "scope": "service",
+    "applyMode": "restart",
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tenantId", "snapshotLease", "managedBindings"],
+      "properties": {
+        "tenantId": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "snapshotLease": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["audiences", "ttlSeconds", "renewalLeadSeconds"],
+          "properties": {
+            "audiences": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 256 }, "minItems": 1, "maxItems": 32, "uniqueItems": true },
+            "ttlSeconds": { "type": "integer", "minimum": 1, "maximum": 86400 },
+            "renewalLeadSeconds": { "type": "integer", "minimum": 1, "maximum": 86399 }
+          }
+        },
+        "managedBindings": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["creators", "ttlSeconds", "renewalLeadSeconds"],
+          "properties": {
+            "creators": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 256 }, "maxItems": 16, "uniqueItems": true },
+            "ttlSeconds": { "type": "integer", "minimum": 60, "maximum": 31536000 },
+            "renewalLeadSeconds": { "type": "integer", "minimum": 1, "maximum": 31535999 }
+          }
+        }
+      }
+    }
+  },
   "authorization": {
     "namespace": "platform.authorization",
     "permissions": [

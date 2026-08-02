@@ -64,7 +64,7 @@ func TestServiceImportsBootstrapOnlyIntoEmptySharedState(t *testing.T) {
 	bootstrap.Generation = 8
 	bootstrap.PolicyRevision = 3
 	_, private, _ := ed25519.GenerateKey(rand.Reader)
-	service, err := NewService(ServiceOptions{StoreFactory: SharedStateStoreFactory, BootstrapState: &bootstrap, Signer: Ed25519Signer{KeyID: "policy.1", Private: private}, SnapshotWriter: &memoryWriter{}, Catalog: catalog, ProviderProfile: profile, Domains: []authorizationv1.PolicyDomain{root}})
+	service, err := NewService(ServiceOptions{StoreFactory: SharedStateStoreFactory, BootstrapState: &bootstrap, Signer: Ed25519Signer{KeyID: "policy.1", Private: private}, SnapshotWriter: &memoryWriter{}, Catalog: catalog, ProviderProfile: profile, Domains: []authorizationv1.PolicyDomain{root}, LeasePolicy: testLeasePolicy(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestServiceNeverFallsBackWhenSharedStateUnavailable(t *testing.T) {
 	profile := NativeProviderProfile(catalog)
 	root, _ := RootDomain(catalog, profile)
 	_, private, _ := ed25519.GenerateKey(rand.Reader)
-	service, err := NewService(ServiceOptions{StoreFactory: SharedStateStoreFactory, BootstrapState: &State{Version: stateVersion, Generation: 9}, Signer: Ed25519Signer{KeyID: "policy.1", Private: private}, SnapshotWriter: &memoryWriter{}, Catalog: catalog, ProviderProfile: profile, Domains: []authorizationv1.PolicyDomain{root}})
+	service, err := NewService(ServiceOptions{StoreFactory: SharedStateStoreFactory, BootstrapState: &State{Version: stateVersion, Generation: 9}, Signer: Ed25519Signer{KeyID: "policy.1", Private: private}, SnapshotWriter: &memoryWriter{}, Catalog: catalog, ProviderProfile: profile, Domains: []authorizationv1.PolicyDomain{root}, LeasePolicy: testLeasePolicy(t)})
 	if err != nil {
 		t.Fatal(err)
 	}

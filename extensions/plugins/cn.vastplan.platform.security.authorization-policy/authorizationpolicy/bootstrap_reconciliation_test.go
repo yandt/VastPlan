@@ -37,7 +37,7 @@ func TestServiceReconcilesSeedOwnedBootstrapIntoExistingState(t *testing.T) {
 	service, err := NewService(ServiceOptions{
 		Store: store, BootstrapState: &bootstrap, BootstrapReconciliation: SeedOwnedBootstrapReconciliation{},
 		Signer: Ed25519Signer{KeyID: "policy.1", Private: private}, SnapshotWriter: writer,
-		Catalog: catalog, ProviderProfile: profile, Domains: []authorizationv1.PolicyDomain{root}, DefaultAudience: []string{"service:platform"}, DefaultTTL: 5 * time.Minute, Now: func() time.Time { return now },
+		Catalog: catalog, ProviderProfile: profile, Domains: []authorizationv1.PolicyDomain{root}, LeasePolicy: testLeasePolicy(t), Now: func() time.Time { return now },
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -73,7 +73,7 @@ func TestServiceDoesNotReconcileBootstrapByDefault(t *testing.T) {
 	}}, now)
 	store := &memoryStore{state: current}
 	_, private, _ := ed25519.GenerateKey(rand.Reader)
-	if _, err := NewService(ServiceOptions{Store: store, BootstrapState: &bootstrap, Signer: Ed25519Signer{KeyID: "policy.1", Private: private}, SnapshotWriter: &memoryWriter{}, Catalog: catalog, ProviderProfile: profile, Domains: []authorizationv1.PolicyDomain{root}}); err != nil {
+	if _, err := NewService(ServiceOptions{Store: store, BootstrapState: &bootstrap, Signer: Ed25519Signer{KeyID: "policy.1", Private: private}, SnapshotWriter: &memoryWriter{}, Catalog: catalog, ProviderProfile: profile, Domains: []authorizationv1.PolicyDomain{root}, LeasePolicy: testLeasePolicy(t)}); err != nil {
 		t.Fatal(err)
 	}
 	state, _ := store.Load()

@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -47,13 +46,6 @@ func (r *runtime) writeSessionsFromPublishedAuthorization() error {
 	}
 	if err := writeSessions(filepath.Join(r.runDir, "secrets", "portal-sessions.json"), ownerPermissions); err != nil {
 		return err
-	}
-	renewed, err := renewPublishedDevelopmentAuthorization(root, catalog, time.Now().UTC())
-	if err != nil {
-		return err
-	}
-	if renewed {
-		log.Printf("已续签开发授权 Snapshot 与 Seed 访问租约（未执行平台或业务发布）")
 	}
 	return nil
 }
@@ -146,11 +138,17 @@ func (r *runtime) writeAuthorizationBootstrap(repository *artifactrepository.Rep
 	} else if err != nil {
 		return err
 	} else {
+		leasePolicy, leaseErr := policy.NewFixedSnapshotLeasePolicy(policy.SnapshotLeasePolicyOptions{
+			Audiences: developmentAuthorizationAudiences, SnapshotTTL: 24 * time.Hour, RenewalLead: 6 * time.Hour,
+		})
+		if leaseErr != nil {
+			return leaseErr
+		}
 		transitionTime := time.Now().UTC()
 		if err := reconcileDevelopmentGrantsBeforeCatalogUpdate(store, catalog, grants, transitionTime); err != nil {
 			return err
 		}
-		service, initErr := policy.NewService(policy.ServiceOptions{Store: store, Signer: signer, SnapshotWriter: policy.FileSnapshotWriter{Path: snapshotPath}, Catalog: catalog, ProviderProfile: profile, Domains: []authorizationv1.PolicyDomain{domain}, DefaultAudience: developmentAuthorizationAudiences, DefaultTTL: 24 * time.Hour})
+		service, initErr := policy.NewService(policy.ServiceOptions{Store: store, Signer: signer, SnapshotWriter: policy.FileSnapshotWriter{Path: snapshotPath}, Catalog: catalog, ProviderProfile: profile, Domains: []authorizationv1.PolicyDomain{domain}, LeasePolicy: leasePolicy})
 		if initErr != nil {
 			return initErr
 		}

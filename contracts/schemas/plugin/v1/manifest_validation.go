@@ -11,8 +11,10 @@ func validateBackgroundService(manifest Manifest) error {
 	if manifest.Runtime == nil || !manifest.Runtime.BackgroundService {
 		return nil
 	}
-	if manifest.Runtime.InstancePolicy != "leader" || manifest.Runtime.StateModel != "leader-owned" || manifest.Runtime.Routing != "leader" {
-		return errors.New("runtime.backgroundService 首版只允许 leader/leader-owned/leader")
+	if manifest.Runtime.InstancePolicy != "leader" ||
+		(manifest.Runtime.StateModel != "leader-owned" && manifest.Runtime.StateModel != "external-shared") ||
+		manifest.Runtime.Routing != "leader" {
+		return errors.New("runtime.backgroundService 只允许 leader、leader routing，以及 leader-owned/external-shared 状态")
 	}
 	if manifest.Configuration == nil || manifest.Configuration.Scope != "service" || manifest.Configuration.ApplyMode != "restart" {
 		return errors.New("runtime.backgroundService 要求 service-scoped restart 配置")
