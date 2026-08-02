@@ -92,7 +92,7 @@ CollectionLoader(query, signal) -> CollectionResult
 └── facets? / permittedActions?    # 服务端事实，不是浏览器猜测
 ```
 
-Collection 可选的状态摘要由 `CollectionSummary` 数据驱动定义。`columns` 使用与 Grid 相同的 `xs…xl` 响应式列数，单项 `span` 可在各断点跨列；功能插件不能传 CSS Grid、Ant Design `Descriptions.Item` 或 React 节点。`appearance` 默认 `panel` 以兼容现有页面，信息已经拥有明确页面语境时可选择 `plain`，由 Workbench 去掉装饰性外层 Panel，但标题、标签、状态色和响应式行为仍由统一 Descriptions 语义负责。
+Collection 可选的状态摘要由 `CollectionSummary` 数据驱动定义。`appearance` 默认 `panel`：`columns` 使用与 Grid 相同的 `xs…xl` 响应式列数，单项 `span` 可在各断点跨列；功能插件不能传 CSS Grid、Ant Design `Descriptions.Item` 或 React 节点。信息已经拥有明确页面语境时可选择 `plain`，Workbench 将其投影为按内容宽度排列、可自动换行的无边框摘要条，标签使用次要文字、值使用中等字重，不再把少量指标拉伸为整行 Descriptions 单元格。CollectionPage 把摘要、FilterPanel 和工具栏统一纳入顶部区域并使用 `sm` 内部间距，与数据区之间继续使用页面级间距。
 
 表格行操作由 Workbench 统一投影：功能插件只声明 `placement: record.row` 的语义动作，Workbench 自动追加不可隐藏的末列“操作”，在横向滚动时固定在右侧并保持内容居中；每行先按 `visibleWhen` 过滤，最多两个动作以图标 + Tooltip 直接显示，剩余动作进入每行一个“图标 + 标签”的紧凑“更多行操作”浮层。直接动作、更多触发器和更多菜单内图标均使用同一 `sm` 操作配方（12px 图标），不能由渲染适配器默认尺寸漂移。`ActionMenuPopover` 是 Workbench 内部通用组合，统一记录级和页面级溢出动作的数据投影、内容宽度、截断、危险/禁用态、初始焦点和选择后关闭；具体 Pattern 不再自行拼装 Popover + Menu。页面级操作使用独立 `PageActionSpec` 并只挂载至 `page.header.end`，不得与行操作混用来规避这一布局规则。
 

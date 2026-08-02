@@ -114,11 +114,11 @@ export function CollectionPage({ page, preferenceScope, preferences, presentatio
   const hasFilters = collection.filterPanel !== undefined;
 
   return <WorkbenchPageFlow size={page.size}><ComponentSizeProvider size={collection.size}>
-    {summary === undefined ? null : <CollectionSummary summary={summary} />}
-    {hasFilters ? <ui.Stack gap="sm">
-      <div style={{ width: "100%", minWidth: 0 }}><FilterPanel panel={collection.filterPanel!} value={filters} querying={data.loading || data.refreshing || data.loadingMore} size="xs" onApply={(value) => { setFilters(value); setPageNumber(1); }} /></div>
+    <ui.Stack gap="sm">
+      {summary === undefined ? null : <CollectionSummary summary={summary} />}
+      {hasFilters ? <div style={{ width: "100%", minWidth: 0 }}><FilterPanel panel={collection.filterPanel!} value={filters} querying={data.loading || data.refreshing || data.loadingMore} size="xs" onApply={(value) => { setFilters(value); setPageNumber(1); }} /></div> : null}
       <div style={{ width: "100%", minWidth: 0 }}><CollectionToolbar hasFilters={hasFilters} refreshing={data.refreshing} selectedCount={selected.length} toolbarActions={toolbarActions} bulkActions={bulkActions} onRefresh={refresh} preferences={collection.view === "table" && collection.preferences !== undefined ? <CollectionPreferencesPopover collection={collection} columns={columns} density={density} densityOptions={densityOptions} onChange={updatePreferences} /> : undefined} onRunAction={(action) => void runAction(action, selected)} /></div>
-    </ui.Stack> : <div style={{ width: "100%", minWidth: 0 }}><CollectionToolbar hasFilters={false} refreshing={data.refreshing} selectedCount={selected.length} toolbarActions={toolbarActions} bulkActions={bulkActions} onRefresh={refresh} preferences={collection.view === "table" && collection.preferences !== undefined ? <CollectionPreferencesPopover collection={collection} columns={columns} density={density} densityOptions={densityOptions} onChange={updatePreferences} /> : undefined} onRunAction={(action) => void runAction(action, selected)} /></div>}
+    </ui.Stack>
     {data.failure === undefined && summaryFailure === undefined ? null : <div style={{ width: "100%", minWidth: 0 }}><ui.ErrorState title={data.failure ?? summaryFailure!} retry={refresh} /></div>}
     <div style={{ width: "100%", minWidth: 0 }}>{collection.view === "cards"
       ? <CollectionCards collection={collection} selectionMode={selectionMode} rows={rows} selectedKeys={selectedKeys} loading={data.loading} loadingMore={data.loadingMore} nextCursor={data.nextCursor} keyOf={keyOf} onSelectionChange={setSelectedKeys} onRunAction={(action, actionRows) => void runAction(action, actionRows)} onLoadMore={data.loadMore} />
