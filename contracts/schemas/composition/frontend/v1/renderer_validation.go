@@ -44,6 +44,9 @@ func ParsePlatformProfile(raw []byte) (PlatformProfile, error) {
 	if value.Localization != nil && !containsFold(value.Localization.SupportedLocales, value.Localization.DefaultLocale) {
 		return PlatformProfile{}, fmt.Errorf("Frontend Platform Profile 默认语言必须包含在 supportedLocales 中")
 	}
+	if err := ValidateNavigationLocales(value.Shell.Config.NavigationOverrides, value.Localization); err != nil {
+		return PlatformProfile{}, err
+	}
 	if value.Updates != nil && value.Updates.Mode != "refresh" && value.Updates.Mode != "notify" && value.Updates.Mode != "automatic" {
 		return PlatformProfile{}, fmt.Errorf("Frontend Platform Profile updates.mode 无效: %s", value.Updates.Mode)
 	}
@@ -124,57 +127,59 @@ func validateSelectableRendererOptions(renderer, selected string, allowed []stri
 }
 
 func ValidateNavigationConfig(config NavigationConfig) error {
-	groups := map[string]NavigationGroupDescriptor{
-		"primary":   {ID: "primary", Zone: "primary"},
-		"secondary": {ID: "secondary", Zone: "secondary"},
-		"settings":  {ID: "settings", Zone: "settings"},
-	}
-	configured := map[string]struct{}{}
-	for _, group := range config.NavigationGroups {
-		if !managementName.MatchString(group.ID) || strings.TrimSpace(group.Label) == "" {
-			return fmt.Errorf("导航分组 id 或 label 无效: %s", group.ID)
+	seen := map[string]struct{}{}
+	for _, override := range config.NavigationOverrides {
+		if !navigationGlobalID(override.Target) || (override.Parent != "" && !navigationGlobalID(override.Parent)) {
+			return fmt.Errorf("导航覆盖 target 或 parent 无效: %s/%s", override.Target, override.Parent)
 		}
-		if _, duplicate := configured[group.ID]; duplicate {
-			return fmt.Errorf("导航分组 id 重复: %s", group.ID)
+		if override.Parent == override.Target {
+			return fmt.Errorf("导航覆盖不能把节点挂到自身: %s", override.Target)
 		}
-		configured[group.ID] = struct{}{}
-		if previous, builtin := groups[group.ID]; builtin && (group.ParentID != "" || group.Zone != previous.Zone) {
-			return fmt.Errorf("内建导航分组不能跨语义区或改为子组: %s", group.ID)
+		if _, duplicate := seen[override.Target]; duplicate {
+			return fmt.Errorf("导航覆盖 target 重复: %s", override.Target)
 		}
-		groups[group.ID] = group
-	}
-	for _, group := range config.NavigationGroups {
-		if group.ParentID == "" {
-			continue
-		}
-		if group.ParentID == group.ID {
-			return fmt.Errorf("导航分组不能引用自身: %s", group.ID)
-		}
-		parent, ok := groups[group.ParentID]
-		if !ok {
-			return fmt.Errorf("导航子组引用了未知根组: %s/%s", group.ID, group.ParentID)
-		}
-		if parent.ParentID != "" {
-			return fmt.Errorf("导航深度超过 root group → child group → page: %s", group.ID)
-		}
-		if parent.Zone != group.Zone {
-			return fmt.Errorf("导航子组不能跨语义区: %s/%s", group.ID, group.ParentID)
-		}
-	}
-	placements := map[string]struct{}{}
-	for _, placement := range config.NavigationPlacements {
-		if !managementName.MatchString(placement.SemanticID) || !managementName.MatchString(placement.GroupID) {
-			return fmt.Errorf("导航语义映射 id 无效: %s/%s", placement.SemanticID, placement.GroupID)
-		}
-		if _, duplicate := placements[placement.SemanticID]; duplicate {
-			return fmt.Errorf("导航语义映射重复: %s", placement.SemanticID)
-		}
-		placements[placement.SemanticID] = struct{}{}
-		if _, ok := groups[placement.GroupID]; !ok {
-			return fmt.Errorf("导航语义映射引用了未知分组: %s/%s", placement.SemanticID, placement.GroupID)
+		seen[override.Target] = struct{}{}
+		for locale, label := range override.Labels {
+			if !localeName(locale) || strings.TrimSpace(label) == "" || len([]rune(label)) > 80 {
+				return fmt.Errorf("导航覆盖语言或名称无效: %s/%s", override.Target, locale)
+			}
 		}
 	}
 	return nil
+}
+
+func ValidateNavigationLocales(overrides []NavigationOverride, policy *LocalizationPolicy) error {
+	for _, override := range overrides {
+		for locale := range override.Labels {
+			if policy == nil || !containsFold(policy.SupportedLocales, locale) {
+				return fmt.Errorf("导航覆盖语言不属于 Portal supportedLocales: %s/%s", override.Target, locale)
+			}
+		}
+	}
+	return nil
+}
+
+func navigationGlobalID(value string) bool {
+	parts := strings.Split(value, "/")
+	return len(parts) == 2 && managementName.MatchString(parts[0]) && managementName.MatchString(parts[1])
+}
+
+func localeName(value string) bool {
+	parts := strings.Split(value, "-")
+	if len(parts) == 0 || len(parts[0]) < 2 || len(parts[0]) > 8 {
+		return false
+	}
+	for _, part := range parts {
+		if len(part) == 0 || len(part) > 8 {
+			return false
+		}
+		for _, character := range part {
+			if character < '0' || (character > '9' && character < 'A') || (character > 'Z' && character < 'a') || character > 'z' {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func ValidateShellConfig(config ShellConfig) error {

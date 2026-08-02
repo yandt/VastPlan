@@ -84,24 +84,17 @@ type Shell struct {
 }
 
 type NavigationConfig struct {
-	NavigationGroups     []NavigationGroupDescriptor `json:"navigationGroups,omitempty"`
-	NavigationPlacements []NavigationPlacement       `json:"navigationPlacements,omitempty"`
+	NavigationOverrides []NavigationOverride `json:"navigationOverrides,omitempty"`
 }
 
-type NavigationGroupDescriptor struct {
-	ID       string `json:"id"`
-	ParentID string `json:"parentID,omitempty"`
-	Label    string `json:"label"`
-	Zone     string `json:"zone"`
-	Icon     string `json:"icon"`
-	Order    int    `json:"order,omitempty"`
-}
-
-// NavigationPlacement lets one Portal Profile place a plugin-owned semantic
-// category without coupling the plugin to a concrete Portal menu tree.
-type NavigationPlacement struct {
-	SemanticID string `json:"semanticID"`
-	GroupID    string `json:"groupID"`
+// NavigationOverride can only adjust a signed plugin-owned navigation node.
+// It cannot create a node, enable a plugin, grant permissions or change routes.
+type NavigationOverride struct {
+	Target string            `json:"target"`
+	Hidden *bool             `json:"hidden,omitempty"`
+	Order  *int              `json:"order,omitempty"`
+	Parent string            `json:"parent,omitempty"`
+	Labels map[string]string `json:"labels,omitempty"`
 }
 
 type ShellConfig struct {

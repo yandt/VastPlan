@@ -79,7 +79,7 @@ const editor: WorkbenchFormDefinition<ServiceRecord> = {
 export function recordDetailPage(): RecordDetailPageDefinition<ServiceRecord> {
   return defineRecordDetailPage({
     id: "example.record-detail", path: "/examples/workbench/record-detail", pattern: "record-detail",
-    title: message(namespace, "page.detail", "记录详情"), navigation: { id: "example.record-detail", label: message(namespace, "page.detail", "记录详情"), zone: "secondary", order: 10 },
+    title: message(namespace, "page.detail", "记录详情"), navigation: { id: "example.record-detail", label: message(namespace, "page.detail", "记录详情"), parentMenuRef: { pluginID: namespace, nodeID: "workbench-gallery" }, order: 10 },
     detail, async load() { return { ...services[0] }; },
   });
 }
@@ -87,7 +87,7 @@ export function recordDetailPage(): RecordDetailPageDefinition<ServiceRecord> {
 export function masterDetailPage(): MasterDetailPageDefinition<ServiceRecord> {
   return defineMasterDetailPage({
     id: "example.master-detail", path: "/examples/workbench/master-detail", pattern: "master-detail",
-    title: message(namespace, "page.master", "列表与编辑"), navigation: { id: "example.master-detail", label: message(namespace, "page.master", "列表与编辑"), zone: "secondary", order: 20 },
+    title: message(namespace, "page.master", "列表与编辑"), navigation: { id: "example.master-detail", label: message(namespace, "page.master", "列表与编辑"), parentMenuRef: { pluginID: namespace, nodeID: "workbench-gallery" }, order: 20 },
     master: { id: "service", title: message(namespace, "master.services", "服务列表"), keyField: "id", titleField: "name", subtitleField: "owner", status: { labelField: "status", toneField: "tone" }, query: { mode: "page", defaultPageSize: 10, pageSizeOptions: [10, 20] }, filterPanel: { fields: [
       { id: "name", label: message(namespace, "filter.name", "服务名称"), kind: "text" },
       { id: "status", label: message(namespace, "filter.status", "状态"), kind: "select", options: ["运行中", "规划中", "待实施"].map((value) => ({ value, label: value })) },
@@ -109,7 +109,7 @@ export function masterDetailPage(): MasterDetailPageDefinition<ServiceRecord> {
 export function treeDetailPage(): TreeDetailPageDefinition<ServiceRecord> {
   return defineTreeDetailPage({
     id: "example.tree-detail", path: "/examples/workbench/tree-detail", pattern: "tree-detail",
-    title: message(namespace, "page.tree", "树形资源详情"), navigation: { id: "example.tree-detail", label: message(namespace, "page.tree", "树形资源详情"), zone: "secondary", order: 30 },
+    title: message(namespace, "page.tree", "树形资源详情"), navigation: { id: "example.tree-detail", label: message(namespace, "page.tree", "树形资源详情"), parentMenuRef: { pluginID: namespace, nodeID: "workbench-gallery" }, order: 30 },
     tree: { id: "service-tree", title: message(namespace, "tree.services", "服务分类"), defaultExpandedDepth: 2 }, detail,
     actions: [{ id: "preview", label: message(namespace, "action.preview", "查看 JSON"), icon: "info", placement: "record.detail", overlay: "preview", requiresSelection: true }],
     overlays: [{ id: "preview", surface: "drawer", title: message(namespace, "action.preview", "查看 JSON"), async load(selected) {
@@ -130,7 +130,7 @@ export function accountExtensionPage(): RecordDetailPageDefinition<ServiceRecord
   return defineRecordDetailPage({
     id: "example.account-extension", path: "/account/settings/workbench-extension", pattern: "record-detail",
     title: message(namespace, "page.accountExtension", "账户扩展示例"),
-    navigation: { id: "example.account-extension", label: message(namespace, "page.accountExtension", "账户扩展示例"), zone: "secondary", groupID: "account.settings", order: 90 },
+    navigation: { id: "example.account-extension", label: message(namespace, "page.accountExtension", "账户扩展示例"), parentMenuRef: { pluginID: "vastplan.host", nodeID: "account.settings" }, order: 90 },
     detail: { ...detail, emptyTitle: message(namespace, "empty.accountExtension", "账户扩展未提供数据") },
     async load() { return { ...services[0] }; },
   });

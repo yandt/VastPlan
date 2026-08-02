@@ -1,5 +1,6 @@
 export const messages = {
   "zh-CN": {
+    "navigation.marketplace": "插件市场",
     "market.title": "服务插件市场", "market.description": "从平台配置的多个受信市场发现插件，并为当前服务创建安装候选",
     "market.source": "市场", "market.plugin": "插件 ID", "market.name": "名称", "market.version": "版本", "market.publisher": "发布者", "market.channel": "通道", "market.updated": "发布时间", "market.availability": "安装状态", "market.installable": "可安装", "market.importRequired": "需导入受信仓库", "market.platformManaged": "由平台基线管理",
     "market.install": "申请安装", "market.installTitle": "安装服务插件", "market.installDescription": "目标服务由 Portal 管理绑定确定，不能在此表单中更改。",
@@ -8,6 +9,7 @@ export const messages = {
     "action.submit": "提交", "action.approve": "批准", "action.activate": "激活", "action.cancel": "取消", "action.rollback": "回滚", "action.preview": "查看预览"
   },
   "en-US": {
+    "navigation.marketplace": "Plugin marketplace",
     "market.title": "Service plugin marketplace", "market.description": "Discover plugins from governed marketplaces and create installation candidates for this service",
     "market.source": "Market", "market.plugin": "Plugin ID", "market.name": "Name", "market.version": "Version", "market.publisher": "Publisher", "market.channel": "Channel", "market.updated": "Published", "market.availability": "Availability", "market.installable": "Installable", "market.importRequired": "Import required", "market.platformManaged": "Managed by platform baseline",
     "market.install": "Request install", "market.installTitle": "Install service plugin", "market.installDescription": "The target service is fixed by the Portal management binding.",

@@ -15,8 +15,8 @@ export default {
   localization: {
     defaultLocale: "zh-CN",
     messages: {
-      "zh-CN": { "page.title": "Portal 管理", "page.description": "管理工作副本、发布审批、上线记录和可选版本历史", "page.navigation": "Portal 管理" },
-      "en-US": { "page.title": "Portal Management", "page.description": "Manage working copies, publications, releases, and optional version history", "page.navigation": "Portal Management" },
+      "zh-CN": { "navigation.portal-management": "Portal 管理", "page.title": "Portal 管理", "page.description": "管理工作副本、发布审批、上线记录和可选版本历史", "page.navigation": "Portal 管理" },
+      "en-US": { "navigation.portal-management": "Portal Management", "page.title": "Portal Management", "page.description": "Manage working copies, publications, releases, and optional version history", "page.navigation": "Portal Management" },
     },
   },
 };

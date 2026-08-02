@@ -64,9 +64,13 @@ describe("Portal recovery shell", () => {
 describe("Portal landing route", () => {
   const prepared = {
     portal: { route: "/operations" },
+    navigationCatalogs: [{ pluginID: "cn.vastplan.test", nodes: [
+      { id: "settings", ref: { pluginID: "cn.vastplan.test", nodeID: "settings" }, label: "设置", zone: "settings", icon: { kind: "semantic", name: "settings" } },
+      { id: "main", ref: { pluginID: "cn.vastplan.test", nodeID: "main" }, label: "概览", zone: "primary", icon: { kind: "semantic", name: "menu" } },
+    ] }],
     pages: [
-      { id: "settings", path: "/operations/settings", navigation: { id: "settings", label: "设置", zone: "settings" } },
-      { id: "dashboard", path: "/operations/dashboard", navigation: { id: "dashboard", label: "概览", zone: "primary" } },
+      { id: "settings", path: "/operations/settings", navigation: { id: "settings", label: "设置", parentMenuRef: { pluginID: "cn.vastplan.test", nodeID: "settings" } } },
+      { id: "dashboard", path: "/operations/dashboard", navigation: { id: "dashboard", label: "概览", parentMenuRef: { pluginID: "cn.vastplan.test", nodeID: "main" } } },
     ],
   } as unknown as PreparedPortal;
 

@@ -38,9 +38,7 @@ export function rolesPage(client: PlatformAdminClient): CollectionPageDefinition
     navigation: {
       id: "platform.authorization.roles",
       label: message(namespace, "roles.navigation", "角色"),
-      semanticID: "platform.security.authorization",
-      zone: "settings",
-      groupID: "platform.authorization",
+      parentMenuRef: { pluginID: "cn.vastplan.platform.security.authorization-policy", nodeID: "security" },
       order: 20,
     },
     collection: {

@@ -50,7 +50,7 @@ export function PortalI18nProvider({ policy, catalogs, candidates = [], storageK
     setLocaleState(resolved);
     if (storageKey !== undefined) safeStorageSet(storageKey, resolved);
   }, [normalizedPolicy, storageKey]);
-  const text = useCallback((value: LocalizedText) => translate(value, locale, catalogs), [catalogs, locale]);
+  const text = useCallback((value: LocalizedText) => translate(value, locale, catalogs, normalizedPolicy.defaultLocale), [catalogs, locale, normalizedPolicy.defaultLocale]);
   const value = useMemo<PortalI18n>(() => ({
     locale,
     direction: localeDirection(locale),
@@ -82,10 +82,10 @@ export function usePortalMessages(namespace: string): (key: string, fallback: st
   return useCallback((key, fallback, values) => i18n.text(message(namespace, key, fallback, values)), [i18n, namespace]);
 }
 
-export function translate(value: LocalizedText, locale: string, catalogs: PortalMessageCatalogs): string {
+export function translate(value: LocalizedText, locale: string, catalogs: PortalMessageCatalogs, portalDefaultLocale?: string): string {
   if (typeof value === "string") return value;
   const catalog = catalogs[value.namespace];
-  const template = catalog === undefined ? undefined : findMessage(catalog, locale, value.key);
+  const template = catalog === undefined ? undefined : findMessage(catalog, locale, portalDefaultLocale, value.key);
   return interpolate(template ?? value.fallback, value.values);
 }
 
@@ -101,12 +101,13 @@ function normalizePolicy(policy: PortalLocalizationPolicy): PortalLocalizationPo
   return Object.freeze({ defaultLocale, supportedLocales: Object.freeze(supportedLocales) });
 }
 
-function findMessage(catalog: PluginLocalization, locale: string, key: string): string | undefined {
+function findMessage(catalog: PluginLocalization, locale: string, portalDefaultLocale: string | undefined, key: string): string | undefined {
   const locales = Object.keys(catalog.messages);
   const exact = canonicalLocale(locale);
   const sameLanguage = exact === undefined ? undefined : locales.find((candidate) => canonicalLocale(candidate)?.split("-")[0] === exact.split("-")[0]);
-  const fallback = canonicalLocale(catalog.defaultLocale);
-  for (const candidate of [exact, sameLanguage, fallback, "zh-CN"]) {
+  const portalDefault = canonicalLocale(portalDefaultLocale ?? catalog.defaultLocale);
+  const portalDefaultLanguage = portalDefault === undefined ? undefined : locales.find((candidate) => canonicalLocale(candidate)?.split("-")[0] === portalDefault.split("-")[0]);
+  for (const candidate of [exact, sameLanguage, portalDefault, portalDefaultLanguage]) {
     if (candidate === undefined) continue;
     const match = locales.find((item) => canonicalLocale(item) === candidate);
     const value = match === undefined ? undefined : catalog.messages[match]?.[key];

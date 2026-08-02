@@ -10,8 +10,8 @@ import (
 )
 
 func TestFrontendInputsSeparatePlatformAndApplication(t *testing.T) {
-	profile, err := ParsePlatformProfile([]byte(validShellProfileJSON("portal-default", 2, `{"navigationGroups":[{"id":"operations","label":"运行管理","zone":"primary","icon":"menu"}],"defaultTemplate":"standard","allowedTemplates":["standard","top-navigation"],"userSelectable":true}`)))
-	if err != nil || profile.Plugins[0].Channel != "stable" || len(profile.Shell.Config.NavigationGroups) != 1 || len(profile.Digest()) != 64 {
+	profile, err := ParsePlatformProfile([]byte(validShellProfileJSON("portal-default", 2, `{"navigationOverrides":[{"target":"cn.example.operations/main","order":10}],"defaultTemplate":"standard","allowedTemplates":["standard","top-navigation"],"userSelectable":true}`)))
+	if err != nil || profile.Plugins[0].Channel != "stable" || len(profile.Shell.Config.NavigationOverrides) != 1 || len(profile.Digest()) != 64 {
 		t.Fatalf("profile 无效: %+v %v", profile, err)
 	}
 	app, err := ParseApplicationComposition([]byte(`{"version":1,"revision":3,"id":"operations","target":{"kernel":"frontend"},"route":"/operations","plugins":[{"id":"cn.vastplan.product.frontend.operations","version":"1.0.0"},{"id":"cn.vastplan.foundation.frontend.workflow.workbench","version":"1.0.0"}]}`))
@@ -58,33 +58,21 @@ func TestPlatformProfileUpdatePolicy(t *testing.T) {
 	}
 }
 
-func TestPlatformProfileValidatesBoundedNavigationTree(t *testing.T) {
-	valid := validShellProfileJSON("tree", 1, `{"navigationGroups":[{"id":"operations","label":"运行管理","zone":"primary","icon":"menu"},{"id":"deployments","parentID":"operations","label":"部署","zone":"primary","icon":"menu"}],"defaultTemplate":"standard","allowedTemplates":["standard"],"userSelectable":false}`)
-	if _, err := ParsePlatformProfile([]byte(valid)); err != nil {
-		t.Fatalf("两级导航组应有效: %v", err)
-	}
-
-	crossZone := validShellProfileJSON("tree", 1, `{"navigationGroups":[{"id":"operations","label":"运行管理","zone":"primary","icon":"menu"},{"id":"settings","parentID":"operations","label":"设置","zone":"settings","icon":"settings"}],"defaultTemplate":"standard","allowedTemplates":["standard"],"userSelectable":false}`)
-	if _, err := ParsePlatformProfile([]byte(crossZone)); err == nil {
-		t.Fatal("子导航组不得跨 zone 继承")
-	}
-}
-
-func TestPlatformProfileValidatesNavigationSemanticPlacements(t *testing.T) {
-	valid := validShellProfileJSON("navigation-policy", 1, `{"navigationGroups":[{"id":"operations","label":"运行管理","zone":"primary","icon":"menu"}],"navigationPlacements":[{"semanticID":"platform.operations.deployment","groupID":"operations"}],"defaultTemplate":"standard","allowedTemplates":["standard"],"userSelectable":false}`)
+func TestPlatformProfileValidatesNavigationOverrides(t *testing.T) {
+	valid := validShellProfileJSON("navigation-policy", 1, `{"navigationOverrides":[{"target":"cn.example.operations/deployment","parent":"cn.example.platform/operations","order":20,"labels":{"zh-CN":"部署"}}],"defaultTemplate":"standard","allowedTemplates":["standard"],"userSelectable":false}`, `{"defaultLocale":"zh-CN","supportedLocales":["zh-CN","en-US"]}`)
 	profile, err := ParsePlatformProfile([]byte(valid))
-	if err != nil || len(profile.Shell.Config.NavigationPlacements) != 1 {
-		t.Fatalf("导航语义映射应有效: %+v %v", profile.Shell.Config.NavigationPlacements, err)
+	if err != nil || len(profile.Shell.Config.NavigationOverrides) != 1 {
+		t.Fatalf("导航覆盖应有效: %+v %v", profile.Shell.Config.NavigationOverrides, err)
 	}
 
-	unknown := validShellProfileJSON("navigation-policy", 1, `{"navigationPlacements":[{"semanticID":"platform.operations.deployment","groupID":"missing"}],"defaultTemplate":"standard","allowedTemplates":["standard"],"userSelectable":false}`)
-	if _, err := ParsePlatformProfile([]byte(unknown)); err == nil {
-		t.Fatal("导航语义映射不得引用未知分组")
+	unknownLocale := validShellProfileJSON("navigation-policy", 1, `{"navigationOverrides":[{"target":"cn.example.operations/deployment","labels":{"fr-FR":"Deploiement"}}],"defaultTemplate":"standard","allowedTemplates":["standard"],"userSelectable":false}`, `{"defaultLocale":"zh-CN","supportedLocales":["zh-CN","en-US"]}`)
+	if _, err := ParsePlatformProfile([]byte(unknownLocale)); err == nil {
+		t.Fatal("导航覆盖语言必须属于 Portal supportedLocales")
 	}
 
-	duplicate := validShellProfileJSON("navigation-policy", 1, `{"navigationPlacements":[{"semanticID":"platform.operations.deployment","groupID":"primary"},{"semanticID":"platform.operations.deployment","groupID":"primary"}],"defaultTemplate":"standard","allowedTemplates":["standard"],"userSelectable":false}`)
+	duplicate := validShellProfileJSON("navigation-policy", 1, `{"navigationOverrides":[{"target":"cn.example.operations/deployment"},{"target":"cn.example.operations/deployment"}],"defaultTemplate":"standard","allowedTemplates":["standard"],"userSelectable":false}`)
 	if _, err := ParsePlatformProfile([]byte(duplicate)); err == nil {
-		t.Fatal("导航语义映射不得重复")
+		t.Fatal("导航覆盖不得重复")
 	}
 }
 

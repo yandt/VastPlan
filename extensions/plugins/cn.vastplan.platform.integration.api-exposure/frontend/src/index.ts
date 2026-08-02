@@ -28,5 +28,5 @@ export default {
       ));
     }
   },
-  localization: { defaultLocale: "zh-CN", messages: { "zh-CN": {}, "en-US": {} } },
+  localization: { defaultLocale: "zh-CN", messages: { "zh-CN": { "navigation.integration": "集成与 API" }, "en-US": { "navigation.integration": "Integration and APIs" } } },
 };

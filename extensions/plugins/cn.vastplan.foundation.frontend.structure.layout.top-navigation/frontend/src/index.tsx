@@ -1,10 +1,11 @@
 import { createElement, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { uiContractVersion } from "@vastplan/ui-contract";
 import {
-  accountNavigationGroupID,
+  accountNavigationNodeID,
   accountLogoutMenuItemID,
   accountMenuItems,
   message,
+  NavigationIcon,
   portalPageRhythm,
   PortalAccountControl,
   PortalAccountMenu,
@@ -31,8 +32,8 @@ export function TopNavigationShell(props: UIShellProps) {
   const [openRootID, setOpenRootID] = useState<string>();
   const centerRef = useRef<HTMLDivElement>(null);
   const centerWidth = useContainerWidth(centerRef, 1200);
-  const accountRoot = composition.navigation.secondary.find((group) => group.id === accountNavigationGroupID);
-  const mainRoots = useMemo(() => [...composition.navigation.primary, ...composition.navigation.secondary.filter((group) => group.id !== accountNavigationGroupID)], [composition]);
+  const accountRoot = composition.navigation.secondary.find((group) => group.id === accountNavigationNodeID);
+  const mainRoots = useMemo(() => [...composition.navigation.primary, ...composition.navigation.secondary.filter((group) => group.id !== accountNavigationNodeID)], [composition]);
   const settingsRoots = composition.navigation.settings;
   const activeRootID = composition.activeNavigationPath?.rootGroupID;
   const capacity = Math.max(1, Math.floor(centerWidth / 120));
@@ -65,9 +66,9 @@ export function TopNavigationShell(props: UIShellProps) {
 
   const mobileItems: MenuItem[] = groups(composition, ["primary", "secondary", "settings"]).map((group) => ({
     id: `group:${group.id}`,
-    label: i18n.text(group.label),
-    icon: <ui.Icon name={group.icon} label={i18n.text(group.label)} />,
-    children: group.id === accountNavigationGroupID ? accountMenuItems(group, composition, i18n, props.onLogout !== undefined) : [
+    label: navigationLabel(group, i18n),
+    icon: <NavigationIcon icon={group.icon} label={navigationLabel(group, i18n)} />,
+    children: group.id === accountNavigationNodeID ? accountMenuItems(group, composition, i18n, props.onLogout !== undefined) : [
       ...group.pages.map((item) => ({ id: item.id, label: i18n.text(item.label), href: pagePath(composition, item.id) })),
       ...group.children.map((child) => ({ id: `group:${child.id}`, label: i18n.text(child.label), children: child.pages.map((item) => ({ id: item.id, label: i18n.text(item.label), href: pagePath(composition, item.id) })) })),
     ],
@@ -134,8 +135,8 @@ function PageHeader({ className, page, composition }: { className: string; page:
 function RootPopover({ group, composition, open, active, onOpenChange, onNavigate }: { group: PortalNavigationGroup; composition: UIShellProps["composition"]; open: boolean; active: boolean; onOpenChange(open: boolean): void; onNavigate(id: string): void }) {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
-  const label = i18n.text(group.label);
-  return <ui.Popover open={open} placement="bottom-start" surface="compact" ariaLabel={label} initialFocus="current" onOpenChange={(next) => onOpenChange(next)} trigger={(props) => <button ref={(node) => props.ref(node)} type="button" className="vp-top-root-trigger" data-zone={group.zone} data-active={active || undefined} aria-label={label} title={label} aria-current={active ? "location" : undefined} aria-expanded={props["aria-expanded"]} aria-controls={props["aria-controls"]} onClick={props.onClick} onKeyDown={props.onKeyDown}><ui.Icon name={group.icon} size="md" /></button>}>
+  const label = navigationLabel(group, i18n);
+  return <ui.Popover open={open} placement="bottom-start" surface="compact" ariaLabel={label} initialFocus="current" onOpenChange={(next) => onOpenChange(next)} trigger={(props) => <button ref={(node) => props.ref(node)} type="button" className="vp-top-root-trigger" data-zone={group.zone} data-active={active || undefined} aria-label={label} title={label} aria-current={active ? "location" : undefined} aria-expanded={props["aria-expanded"]} aria-controls={props["aria-controls"]} onClick={props.onClick} onKeyDown={props.onKeyDown}><NavigationIcon icon={group.icon} state={active ? "active" : "normal"} size="md" /></button>}>
     <NavigationPopoverMenu groups={[group]} composition={composition} onNavigate={onNavigate} />
   </ui.Popover>;
 }
@@ -153,7 +154,7 @@ function AccountPopover({ group, account, composition, open, active, onOpenChang
 }) {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
-  return <ui.Popover open={open} placement="bottom-end" surface="compact" ariaLabel={i18n.text(group.label)} initialFocus="current" onOpenChange={onOpenChange} trigger={(trigger) => <PortalAccountControl account={account} selected={active} trigger={trigger} />}>
+  return <ui.Popover open={open} placement="bottom-end" surface="compact" ariaLabel={navigationLabel(group, i18n)} initialFocus="current" onOpenChange={onOpenChange} trigger={(trigger) => <PortalAccountControl account={account} selected={active} trigger={trigger} />}>
     <PortalAccountMenu group={group} composition={composition} activeID={composition.activeNavigationPath?.pageID} onNavigate={onNavigate} onLogout={onLogout} />
   </ui.Popover>;
 }
@@ -178,13 +179,13 @@ function NavigationPopoverMenu({ groups: menuGroups, composition, onNavigate }: 
 }
 
 /** Converts the composed navigation tree into the renderer-owned Menu contract. */
-export function navigationMenuItems(groups: readonly PortalNavigationGroup[], composition: UIShellProps["composition"], i18n: Pick<PortalI18n, "text">): MenuItem[] {
+export function navigationMenuItems(groups: readonly PortalNavigationGroup[], composition: UIShellProps["composition"], i18n: Pick<PortalI18n, "text" | "locale">): MenuItem[] {
   const groupItems = (group: PortalNavigationGroup): MenuItem[] => [
     ...group.pages.map((page) => navigationPageItem(page, composition, i18n)),
     ...group.children.filter((child) => child.pages.length > 0).map((child) => ({ id: `group:${child.id}`, label: i18n.text(child.label), children: child.pages.map((page) => navigationPageItem(page, composition, i18n)) })),
   ];
   if (groups.length === 1) return groupItems(groups[0]);
-  return groups.map((group) => ({ id: `group:${group.id}`, label: i18n.text(group.label), children: groupItems(group) }));
+  return groups.map((group) => ({ id: `group:${group.id}`, label: navigationLabel(group, i18n), children: groupItems(group) }));
 }
 
 function navigationPageItem(page: PortalPageNavigation, composition: UIShellProps["composition"], i18n: Pick<PortalI18n, "text">): MenuItem {
@@ -237,13 +238,18 @@ export const topNavigationShellCSS = `
 .vp-top-bar{height:var(--vp-top-bar-height);flex:0 0 var(--vp-top-bar-height);display:flex;align-items:center;gap:0;padding:0 20px;background:var(--vp-top-surface);border-bottom:1px solid var(--vp-top-border);z-index:20}.vp-top-start,.vp-top-end,.vp-top-center{display:flex;align-items:center;gap:6px;min-width:0}.vp-top-start,.vp-top-end{flex:0 0 auto}.vp-top-inline-page-header{box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:12px;flex:1 1 320px;min-width:160px}.vp-top-logo-page-divider,.vp-top-page-navigation-divider{align-self:center;width:1px;height:32px;flex:0 0 1px;margin:0 12px;background:var(--vp-top-border)}.vp-top-center{flex:0 1 auto;justify-content:flex-start;overflow:hidden}.vp-top-end{justify-content:flex-end;gap:0}.vp-top-account{display:flex;align-items:center;margin-left:12px;padding-left:12px;border-left:1px solid var(--vp-top-border)}.vp-top-mobile-controls{display:none;align-items:center;gap:4px}.vp-top-brand{display:flex;align-items:center;gap:10px;min-width:0;white-space:nowrap}.vp-top-brand-mark,.vp-top-brand-logo{width:32px;height:32px;flex:0 0 32px}.vp-top-brand-mark{display:grid;place-items:center;border-radius:9px;background:var(--vp-top-primary);color:var(--vp-top-surface)}.vp-top-brand-logo{object-fit:contain}.vp-top-root-trigger,.vp-top-mobile-trigger{position:relative;height:var(--vp-top-touch-minimum);min-width:var(--vp-top-touch-minimum);display:flex;align-items:center;justify-content:center;gap:7px;padding:0 12px;border:0;border-radius:9px;background:transparent;color:var(--vp-top-muted);font:inherit;cursor:pointer;white-space:nowrap}.vp-top-root-trigger[data-zone=secondary]{margin-left:6px;border-left:1px solid var(--vp-top-border)}.vp-top-root-trigger:hover{background:var(--vp-top-hover);color:var(--vp-top-primary)}.vp-top-root-trigger[data-active]{background:var(--vp-top-selected);color:var(--vp-top-primary);font-weight:600}.vp-top-root-trigger[data-active]:after{content:"";position:absolute;left:12px;right:12px;bottom:0;height:2px;border-radius:2px;background:var(--vp-top-primary)}.vp-top-root-trigger:focus-visible,.vp-top-mobile-trigger:focus-visible{outline:var(--vp-top-focus-width) solid var(--vp-top-focus);outline-offset:2px}.vp-top-mobile-trigger{display:none}
 .vp-top-navigation-menu-empty{min-width:220px;padding:8px;color:var(--vp-top-muted);font-size:13px;line-height:1.5}
 .vp-top-content{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column}.vp-top-page-header{display:none}.vp-top-page-header-side{display:flex;align-items:center;gap:12px;min-width:0}.vp-top-page-header-center{display:flex;justify-content:center;gap:12px}.vp-top-page-header-end{justify-content:flex-end}.vp-top-page-title-copy{min-width:0}.vp-top-page-title{font-size:22px;line-height:1.2;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vp-top-page-description{font-size:14px;color:var(--vp-top-muted);margin:2px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vp-top-inline-page-header .vp-top-page-title{font-size:18px}.vp-top-inline-page-header .vp-top-page-description{font-size:12px}.vp-top-page-scroller{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;background:var(--vp-top-surface)}.vp-top-page{box-sizing:border-box;width:100%;margin:0 auto;padding:var(--vp-page-content-start) 24px 24px}.vp-top-page-body-row{display:flex;align-items:flex-start;gap:20px}.vp-top-page-body-main{flex:1;min-width:0}.vp-top-page-aside{width:320px;flex:0 0 320px;max-height:calc(100dvh - 144px);overflow:auto}
+[data-vastplan-navigation-icon][data-motion=pulse]{animation:vp-top-nav-pulse 1.4s ease-in-out infinite}[data-vastplan-navigation-icon][data-motion=spin]{display:inline-flex;animation:vp-top-nav-spin 1s linear infinite}[data-vastplan-navigation-icon][data-motion=draw]{animation:vp-top-nav-draw 1.2s ease-in-out infinite}@keyframes vp-top-nav-pulse{50%{opacity:.45;transform:scale(.9)}}@keyframes vp-top-nav-spin{to{transform:rotate(360deg)}}@keyframes vp-top-nav-draw{50%{opacity:.55}}
 @media (max-width:1199px){.vp-top-bar{padding:0 14px}.vp-top-inline-page-header{min-width:120px;gap:8px}.vp-top-root-trigger{padding:0 9px}.vp-top-page{padding:var(--vp-page-content-start) 20px 20px}}
 @media (max-width:767px){.vp-top-bar{display:grid;grid-template-columns:minmax(0,1fr) auto;padding:0 12px}.vp-top-logo-page-divider,.vp-top-inline-page-header,.vp-top-page-navigation-divider,.vp-top-center,.vp-top-end{display:none}.vp-top-mobile-controls,.vp-top-mobile-trigger{display:flex}.vp-top-brand strong{overflow:hidden;text-overflow:ellipsis}.vp-top-page-header{height:auto;min-height:var(--vp-top-bar-height);flex:0 0 auto;box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:16px;padding:8px 16px;background:var(--vp-top-surface);border-bottom:1px solid var(--vp-top-border);z-index:10}.vp-top-page-header-center{grid-column:1/-1;justify-content:flex-start;overflow-x:auto}.vp-top-page-header-end{grid-column:2}.vp-top-page-title{font-size:20px}.vp-top-page{padding:var(--vp-page-content-start) 16px 16px}.vp-top-page-body-row{display:block}.vp-top-page-aside{width:auto;max-height:none;margin-top:16px;overflow:visible}}
 @media (max-width:520px){.vp-top-child-grid{grid-template-columns:minmax(0,1fr)}}
-@media (prefers-reduced-motion:reduce){.vp-top-shell *{scroll-behavior:auto!important;transition:none!important}}
+@media (prefers-reduced-motion:reduce){.vp-top-shell *{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 `;
 
 const namespace = "cn.vastplan.foundation.frontend.structure.layout.top-navigation";
+
+function navigationLabel(group: PortalNavigationGroup, i18n: Pick<PortalI18n, "text" | "locale">): string {
+  return group.labels?.[i18n.locale] ?? i18n.text(group.label);
+}
 export const shellLibrary = {
   id: "top-navigation", shell: "ui.structure.shell", uiContract: uiContractVersion, Shell: TopNavigationShell,
   localization: { defaultLocale: "zh-CN", messages: {

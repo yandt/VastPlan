@@ -28,6 +28,7 @@ function prepared(revision: number, hot?: FrontendPluginHotLifecycle, secondHot?
     shell: {} as PreparedPortal["shell"],
     shellLibrary: {} as PreparedPortal["shellLibrary"],
     workbench: {} as PreparedPortal["workbench"],
+    navigationCatalogs: [],
     pages: [],
     shellContributions: [],
     messageCatalogs: {},

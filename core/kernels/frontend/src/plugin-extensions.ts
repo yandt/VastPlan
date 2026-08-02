@@ -40,14 +40,14 @@ export function validateFrontendPageExtensions(pages: readonly PortalRegisteredP
     const pageID = stringField(contribution.descriptor, "pageId");
     const groupID = stringField(contribution.descriptor, "groupId");
     const page = pageByID.get(pageID);
-    if (page === undefined || page.pluginID !== contribution.pluginId || page.navigation?.groupID !== groupID || !(point.targets ?? []).includes(groupID)) {
+    if (page === undefined || page.pluginID !== contribution.pluginId || page.navigation?.parentMenuRef.nodeID !== groupID || !(point.targets ?? []).includes(groupID)) {
       throw new PortalAssemblyError("EXTENSION_PAGE_MISMATCH", `扩展页面未按签名 descriptor 注册: ${contribution.id}`);
     }
     authorized.add(`${contribution.pluginId}\u0000${pageID}\u0000${groupID}`);
   }
 
   for (const page of pages) {
-    const groupID = page.navigation?.groupID;
+    const groupID = page.navigation?.parentMenuRef.nodeID;
     if (groupID === undefined) continue;
     const point = points.find((candidate) => (candidate.targets ?? []).includes(groupID));
     if (point === undefined || page.pluginID === point.ownerPluginId) continue;

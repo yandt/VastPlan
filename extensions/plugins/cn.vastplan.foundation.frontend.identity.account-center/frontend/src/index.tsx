@@ -1,7 +1,7 @@
 import {
-  accountNavigationGroupID,
+  accountNavigationNodeRef,
   accountPageExtensionPointID,
-  accountSettingsNavigationGroupID,
+  accountSettingsNavigationNodeRef,
   PortalAccountProfilePage,
   PortalAppearanceSettingsPage,
   type FrontendPluginContext,
@@ -43,8 +43,7 @@ export default {
       navigation: {
         id: "account.profile",
         label: context.i18n.message("profile.navigation", "用户信息"),
-        zone: "secondary",
-        groupID: accountNavigationGroupID,
+        parentMenuRef: accountNavigationNodeRef,
         order: 10,
       },
       slots: [{ id: "account.profile.body", slot: "page.body.main", component: PortalAccountProfilePage }],
@@ -57,8 +56,7 @@ export default {
       navigation: {
         id: "account.settings.appearance",
         label: context.i18n.message("appearance.navigation", "外观"),
-        zone: "secondary",
-        groupID: accountSettingsNavigationGroupID,
+        parentMenuRef: accountSettingsNavigationNodeRef,
         order: 10,
       },
       slots: [{ id: "account.appearance.body", slot: "page.body.main", component: PortalAppearanceSettingsPage }],

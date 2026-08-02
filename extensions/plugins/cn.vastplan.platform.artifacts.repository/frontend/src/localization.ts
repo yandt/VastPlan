@@ -2,6 +2,7 @@ export const localization = {
   defaultLocale: "zh-CN",
   messages: {
     "zh-CN": {
+      "navigation.artifacts": "制品与交付",
       "page.title": "制品仓库", "page.titleService": "制品仓库 · {service}",
       "page.catalog.description": "查询可信制品、发布者、目标内核与生命周期",
       "page.capacity.title": "容量与配额", "page.capacity.navigation": "容量与配额", "page.capacity.description": "查看累积配额、活动用量与隔离占用",
@@ -64,6 +65,7 @@ export const localization = {
       "pythonLock.bound": "已闭合", "pythonLock.missing": "不适用",
     },
     "en-US": {
+      "navigation.artifacts": "Artifacts and delivery",
       "page.title": "Artifact repository", "page.titleService": "Artifact repository · {service}",
       "page.catalog.description": "Query trusted artifacts, publishers, targets, and lifecycle",
       "page.capacity.title": "Capacity and quotas", "page.capacity.navigation": "Capacity and quotas", "page.capacity.description": "Inspect cumulative quotas, active usage, and quarantine storage",

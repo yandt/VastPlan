@@ -33,9 +33,7 @@ export function bindingsPage(client: PlatformAdminClient): CollectionPageDefinit
     navigation: {
       id: "platform.authorization.bindings",
       label: message(namespace, "bindings.navigation", "主体绑定"),
-      semanticID: "platform.security.authorization",
-      zone: "settings",
-      groupID: "platform.authorization",
+      parentMenuRef: { pluginID: "cn.vastplan.platform.security.authorization-policy", nodeID: "security" },
       order: 30,
     },
     pageActions: [{ id: "create", label: message(namespace, "action.createBinding", "新建绑定"), icon: "add", tone: "primary", form: "create", requiredPermissions: ["platform.authorization.binding"] }],

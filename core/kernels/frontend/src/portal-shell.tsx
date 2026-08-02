@@ -291,6 +291,7 @@ function PortalContent({ prepared, appearance, themeTemplateID, iconThemeID, pat
   const composition = prepared.shell.compose({
     pages: prepared.pages,
     shellContributions: prepared.shellContributions,
+    navigationCatalogs: prepared.navigationCatalogs,
     activePageID: page?.id,
     config: prepared.portal.shell.config,
   });
@@ -470,10 +471,19 @@ export function resolvePortalPath(prepared: PreparedPortal, pathname: string): s
   const root = prepared.portal.route === "/" ? "/" : prepared.portal.route.replace(/\/$/, "");
   if (pathname !== root && (root === "/" || pathname !== `${root}/`)) return pathname;
   const zoneRank = { primary: 0, settings: 1, secondary: 2 } as const;
+  const navigationZones = new Map(prepared.navigationCatalogs.flatMap((catalog) => catalog.nodes.map((node) => [`${node.ref.pluginID}/${node.ref.nodeID}`, node.zone] as const)));
+  navigationZones.set("vastplan.host/account", "secondary");
+  navigationZones.set("vastplan.host/account.settings", "secondary");
   const navigable = prepared.pages
     .map((page, index) => ({ page, index }))
     .filter(({ page }) => page.navigation !== undefined)
-    .sort((left, right) => zoneRank[left.page.navigation!.zone] - zoneRank[right.page.navigation!.zone] || left.index - right.index);
+    .sort((left, right) => {
+      const leftRef = left.page.navigation!.parentMenuRef;
+      const rightRef = right.page.navigation!.parentMenuRef;
+      const leftZone = navigationZones.get(`${leftRef.pluginID}/${leftRef.nodeID}`) ?? "secondary";
+      const rightZone = navigationZones.get(`${rightRef.pluginID}/${rightRef.nodeID}`) ?? "secondary";
+      return zoneRank[leftZone] - zoneRank[rightZone] || left.index - right.index;
+    });
   return navigable[0]?.page.path ?? prepared.pages[0]?.path ?? pathname;
 }
 

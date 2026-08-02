@@ -20,17 +20,16 @@ describe("Portal aggregate workspace", () => {
 
   it("edits platform, application and services as one data-driven configuration", () => {
     const properties = portalConfigurationSchema.schema.properties as Record<string, unknown>;
-    expect(Object.keys(properties)).toEqual(expect.arrayContaining(["defaultRenderer", "defaultTemplate", "navigationGroups", "navigationPlacements", "applicationPlugins", "services"]));
+    expect(Object.keys(properties)).toEqual(expect.arrayContaining(["defaultRenderer", "defaultTemplate", "navigationOverrides", "applicationPlugins", "services"]));
     const updated = buildPortalConfiguration(configuration(), {
       route: "/new", defaultRenderer: "antd", allowedRenderers: ["antd"], defaultTemplate: "top-navigation",
-      navigationGroups: [{ id: "operations", label: "运行", zone: "primary", icon: "menu" }],
-      navigationPlacements: [{ semanticID: "platform.operations.deployment", groupID: "operations" }],
+      navigationOverrides: [{ target: "cn.example.dashboard/main", order: 10, labels: { "zh-CN": "仪表盘" } }],
       applicationPlugins: [{ id: "cn.example.dashboard", version: "1.2.3" }], services: [{ id: "backend" }],
     });
     expect(updated.application.route).toBe("/new");
     expect(updated.platform.renderAdapter.config.defaultRenderer).toBe("antd");
     expect(updated.platform.shell.config.defaultTemplate).toBe("top-navigation");
-    expect(updated.platform.shell.config.navigationPlacements).toEqual([{ semanticID: "platform.operations.deployment", groupID: "operations" }]);
+    expect(updated.platform.shell.config.navigationOverrides).toEqual([{ target: "cn.example.dashboard/main", order: 10, labels: { "zh-CN": "仪表盘" } }]);
     expect(updated.platform.plugins).toContainEqual(updated.platform.accountCenter);
     expect(updated.services).toEqual([{ id: "backend" }]);
   });

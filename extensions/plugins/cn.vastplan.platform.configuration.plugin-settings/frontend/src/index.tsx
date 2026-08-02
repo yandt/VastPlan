@@ -56,7 +56,7 @@ export function createPluginConfigurationPage(client: PlatformAdminClient, servi
       ? message(namespace, "page.baselineDescription", "独立管理由 Platform Profile 注入在线服务的公共基线配置；发布会生成新的 Profile 与 Deployment revision。")
       : message(namespace, "page.description", "管理在线服务自身配置；不会显示或修改本地 Seed Service 配置。"),
     requiredPermissions: ["platform.plugin-configuration.read"],
-    navigation: { id: `platform.plugin-configuration.${layer}.${serviceID}`, label: title, semanticID: "platform.configuration.plugin-settings", zone: "settings", order: layer === "baseline" ? 24 : 25 },
+    navigation: { id: `platform.plugin-configuration.${layer}.${serviceID}`, label: title, parentMenuRef: { pluginID: "cn.vastplan.platform.configuration.plugin-settings", nodeID: "plugin-settings" }, order: layer === "baseline" ? 24 : 25 },
     collection: {
       id: `platform.plugin-configuration.${layer}.${serviceID}`,
       title,
@@ -208,12 +208,14 @@ export default {
   },
   localization: { defaultLocale: "zh-CN", messages: {
     "zh-CN": {
+      "navigation.plugin-settings":"插件配置",
       "page.title":"服务配置","page.titleService":"服务配置 · {service}","page.baselineTitle":"公共基线配置","page.baselineTitleService":"公共基线配置 · {service}","page.description":"管理在线服务自身配置；不会显示或修改本地 Seed Service 配置。","page.baselineDescription":"独立管理由 Platform Profile 注入在线服务的公共基线配置；发布会生成新的 Profile 与 Deployment revision。",
       "filter.keyword":"插件或服务","filter.applyMode":"生效方式","mode.restart":"重启发布","mode.hot":"热配置",
       "column.plugin":"插件","column.deployment":"部署","column.unit":"服务单元","column.origin":"管理来源","column.baseline":"公共基线","column.scope":"作用域","column.applyMode":"生效方式","column.controller":"热控制器","column.credentials":"托管字段","column.candidate":"候选状态","column.external":"外部发布",
       "form.title":"编辑配置草稿","form.description":"保存只创建候选草稿，不会立即重启服务或改变活动配置。","action.saveDraft":"保存草稿","notice.draftSaved":"配置草稿已保存","action.edit":"编辑配置草稿","action.discard":"放弃草稿","confirm.discard":"放弃所选草稿？该操作使用候选 revision CAS。","action.submit":"提交审批","confirm.submit":"提交后将创建独立服务修订，并由另一位审批人审批。","action.activate":"发布并激活","confirm.activate":"发布已审批修订；readiness 失败将自动创建单调回滚修订。","action.submitProfile":"提交平台配置审批","confirm.submitProfile":"该变更会修改目标服务绑定的 Platform Profile，必须由另一位授权主体审批。","action.approveProfile":"批准平台配置","confirm.approveProfile":"确认以不同主体批准该 Platform Profile 配置候选？","action.activateProfile":"发布平台配置","confirm.activateProfile":"将依次激活 Catalog、发布 Deployment 并等待 readiness；失败会执行双重单调回滚。","action.abortProfile":"放弃平台配置","confirm.abortProfile":"放弃候选并释放目标服务的 Platform Profile 激活锁？","action.submitHot":"准备热配置","confirm.submitHot":"将托管凭证置为候选并要求目标插件准备新配置；当前活动配置不会改变。","action.approveHot":"批准热配置","confirm.approveHot":"确认以不同主体批准已由目标插件准备的服务级热配置？","action.activateHot":"激活热配置","confirm.activateHot":"由目标插件先原子切换配置，再激活候选凭证；中断后会依据已提交事实恢复。","action.abortHot":"放弃热配置","confirm.abortHot":"放弃已准备但未提交的热配置，并回滚候选凭证？"
     },
     "en-US": {
+      "navigation.plugin-settings":"Plugin configuration",
       "page.title":"Service configuration","page.titleService":"Service configuration · {service}","page.baselineTitle":"Common baseline configuration","page.baselineTitleService":"Common baseline configuration · {service}","page.description":"Manage online service-owned configuration; local Seed Service configuration is not exposed.","page.baselineDescription":"Manage Platform Profile baseline configuration independently; publication creates new Profile and Deployment revisions.",
       "filter.keyword":"Plugin or service","filter.applyMode":"Apply mode","mode.restart":"Restart publication","mode.hot":"Hot configuration",
       "column.plugin":"Plugin","column.deployment":"Deployment","column.unit":"Service unit","column.origin":"Managed by","column.baseline":"Common baseline","column.scope":"Scope","column.applyMode":"Apply mode","column.controller":"Hot controller","column.credentials":"Managed fields","column.candidate":"Candidate status","column.external":"External publication",

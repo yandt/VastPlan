@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.artifacts.repository",
   "name": "VastPlan 制品仓库服务",
-  "version": "0.38.2",
+  "version": "0.39.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -231,7 +231,9 @@
     },
     "frontend": {
       "views": [{ "id": "platform.artifact-repository", "title": "制品仓库" }],
-      "menus": [{ "id": "platform.artifact-repository.menu", "title": "制品仓库" }]
+      "navigations": [{ "id": "main", "contract": "1.0.0", "nodes": [
+        { "id": "artifacts", "zone": "primary", "label": { "key": "navigation.artifacts", "fallback": "制品与交付" }, "icon": { "kind": "semantic", "name": "publish" }, "order": 20 }
+      ], "icons": [] }]
     }
   }
 }

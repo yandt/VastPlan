@@ -3,6 +3,6 @@
   "$id": "https://schemas.cdsoft.com.cn/vastplan/composition/frontend/v1/vastplan.ui-contract.generated.schema.json",
   "title": "Generated VastPlan Frontend UI Contract Range",
   "type": "string",
-  "pattern": "^(?:\\^)?9\\.",
+  "pattern": "^(?:\\^)?10\\.",
   "maxLength": 128
 }

@@ -45,7 +45,7 @@ export function createPluginInstallationPage(deployment: PlatformAdminClient, re
     id: `platform.plugin-installations.${serviceID}`, path, title,
     description: message("installation.page.description", "跨逻辑服务生成插件变更预览，并复用统一审批、Generation 激活和单调回滚链"),
     requiredPermissions: ["platform.deployment.plugin.preview"],
-    navigation: { id: `platform.plugin-installations.${serviceID}`, label: title, semanticID: "platform.operations.deployment", zone: "primary", order: 12 },
+    navigation: { id: `platform.plugin-installations.${serviceID}`, label: title, parentMenuRef: { pluginID: "cn.vastplan.platform.infrastructure.deployment-manager", nodeID: "operations" }, order: 12 },
     pageActions: [{ id: "create", label: message("installation.action.new", "创建安装预览"), icon: "add", tone: "primary", form: "create-plugin-installation", requiredPermissions: ["platform.deployment.plugin.request"] }],
     collection: {
       id: `platform.plugin-installations.${serviceID}`, title, view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20, 50, 100] },

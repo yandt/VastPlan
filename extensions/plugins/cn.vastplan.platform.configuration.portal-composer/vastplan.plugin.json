@@ -2,7 +2,7 @@
   "id": "cn.vastplan.platform.configuration.portal-composer",
   "name": "VastPlan Portal Composer",
   "description": "以单一 Portal 聚合治理 WorkingCopy、Publication、Release 与用户级 PortalPreference",
-  "version": "5.1.1",
+  "version": "6.0.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -143,7 +143,9 @@
     },
     "frontend": {
       "views": [{ "id": "platform.portal-composer", "title": "门户与插件组合" }],
-      "menus": [{ "id": "platform.portal-composer.menu", "title": "系统配置" }]
+      "navigations": [{ "id": "main", "contract": "1.0.0", "nodes": [
+        { "id": "portal-management", "zone": "settings", "label": { "key": "navigation.portal-management", "fallback": "Portal 管理" }, "icon": { "kind": "semantic", "name": "settings" }, "order": 90 }
+      ], "icons": [] }]
     }
   }
 }

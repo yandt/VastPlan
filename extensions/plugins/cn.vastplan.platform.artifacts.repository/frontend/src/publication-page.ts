@@ -6,7 +6,7 @@ import { publicationTransitionForm } from "./publication-workflow.js";
 export function publicationPage(client: PlatformAdminClient, id: string, path: string): CollectionPageDefinition<Row> {
   return defineCollectionPage<Row>({
     id, path, title: text("page.publication.title", "发布审批"), description: text("page.publication.description", "以双人分离审批将已验签 testing 制品晋级到 stable"),
-    navigation: { id, label: text("page.publication.navigation", "发布审批"), semanticID: "platform.delivery.artifacts", zone: "settings", groupID: "platform.artifacts", order: 55 },
+    navigation: { id, label: text("page.publication.navigation", "发布审批"), parentMenuRef: { pluginID: "cn.vastplan.platform.artifacts.repository", nodeID: "artifacts" }, order: 55 },
     collection: {
       id: `${id}.collection`, title: text("panel.publications", "发布申请"), view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [10, 20, 50] },
       filterPanel: { fields: [{ id: "status", label: text("filter.publicationStatus", "审批状态"), kind: "select", options: ["PendingApproval", "Approved", "Published", "Rejected", "Cancelled", "Expired"].map((value) => ({ value, label: text(`publication.${value}`, value) })) }] },

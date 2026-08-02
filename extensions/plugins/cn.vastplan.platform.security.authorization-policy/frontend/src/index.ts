@@ -20,8 +20,8 @@ export default {
   localization: {
     defaultLocale: "zh-CN",
     messages: {
-      "zh-CN": { "permissions.title": "权限目录", "roles.title": "角色管理", "bindings.title": "主体绑定", "audit.title": "授权审计", "action.createRole": "新建角色", "action.createBinding": "新建绑定", "action.publishSnapshot": "发布策略快照" },
-      "en-US": { "permissions.title": "Permission catalog", "roles.title": "Roles", "bindings.title": "Subject bindings", "audit.title": "Authorization audit", "action.createRole": "New role", "action.createBinding": "New binding", "action.publishSnapshot": "Publish policy snapshot" },
+      "zh-CN": { "navigation.security": "安全与授权", "permissions.title": "权限目录", "roles.title": "角色管理", "bindings.title": "主体绑定", "audit.title": "授权审计", "action.createRole": "新建角色", "action.createBinding": "新建绑定", "action.publishSnapshot": "发布策略快照" },
+      "en-US": { "navigation.security": "Security and authorization", "permissions.title": "Permission catalog", "roles.title": "Roles", "bindings.title": "Subject bindings", "audit.title": "Authorization audit", "action.createRole": "New role", "action.createBinding": "New binding", "action.publishSnapshot": "Publish policy snapshot" },
     },
   },
 };

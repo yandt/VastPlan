@@ -34,7 +34,7 @@ export function createAPIExposurePage(
     path: `/settings/api-exposures${serviceLabel === undefined ? "" : `/${serviceID}`}`,
     title: serviceLabel === undefined ? text("page.title", "API 暴露") : `${text("page.title", "API 暴露")} · ${serviceLabel}`,
     description: text("page.description", "治理稳定公开地址、认证权限、资源限制与实现换代"),
-    navigation: { id: `platform.api-exposure.${serviceID}`, label: text("page.navigation", "HTTP API"), semanticID: "platform.integration.api-exposure", zone: "settings", groupID: "platform.api-exposure", order: 55 },
+    navigation: { id: `platform.api-exposure.${serviceID}`, label: text("page.navigation", "HTTP API"), parentMenuRef: { pluginID: "cn.vastplan.platform.integration.api-exposure", nodeID: "integration" }, order: 55 },
     collection: {
       id: `platform.api-exposure.${serviceID}.collection`,
       title: text("panel.revisions", "Exposure Revisions"),

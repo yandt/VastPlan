@@ -1,26 +1,52 @@
 import { describe, expect, it } from "vitest";
+import type { PortalNavigationCatalog, PortalRegisteredPage } from "@vastplan/ui-primitives";
 import { compose } from "./composition";
+
+const pluginID = "cn.vastplan.platform.test";
+const icon = { kind: "semantic" as const, name: "menu" as const };
+
+function catalog(nodes: PortalNavigationCatalog["nodes"]): PortalNavigationCatalog {
+  return { pluginID, nodes };
+}
+
+function node(id: string, zone: "primary" | "settings" | "secondary", parentID?: string) {
+  return {
+    id: `${pluginID}/${id}`,
+    ref: { pluginID, nodeID: id },
+    label: id,
+    zone,
+    icon,
+    ...(parentID === undefined ? {} : { parent: { pluginID, nodeID: parentID, mode: "required" as const } }),
+  };
+}
+
+function page(id: string, nodeID: string): PortalRegisteredPage {
+  return {
+    id,
+    pluginID,
+    path: `/${id}`,
+    title: id,
+    navigation: { id, label: id, parentMenuRef: { pluginID, nodeID } },
+    slots: [{ id: "body", slot: "page.body.main", component: () => null }],
+  };
+}
 
 describe("shell composition core", () => {
   it("owns stable slots and deterministic navigation/content order", () => {
     const Body = () => null;
     const Action = () => null;
+    const settings = { ...page("settings-page", "settings"), slots: [
+      { id: "body", slot: "page.body.main" as const, component: Body, order: 20 },
+      { id: "action", slot: "page.header.end" as const, component: Action, order: 10 },
+    ] };
     const model = compose({
-      activePageID: "settings",
+      activePageID: settings.id,
+      navigationCatalogs: [catalog([node("settings", "settings")])],
       shellContributions: [],
-      pages: [{
-        id: "settings", pluginID: "cn.vastplan.platform.test", path: "/settings", title: "设置",
-        navigation: { id: "settings", label: "设置", zone: "settings", order: 20 },
-        slots: [
-          { id: "body", slot: "page.body.main", component: Body, order: 20 },
-          { id: "action", slot: "page.header.end", component: Action, order: 10 },
-        ],
-      }],
+      pages: [settings],
     });
-    expect(model.activePage?.id).toBe("settings");
-    expect(model.navigation.settings.map((group) => group.id)).toEqual(["settings"]);
-    expect(model.navigation.settings[0].pages.map((item) => item.id)).toEqual(["settings"]);
-    expect(model.activeNavigationPath).toEqual({ zone: "settings", rootGroupID: "settings", pageID: "settings" });
+    expect(model.navigation.settings[0].id).toBe(`${pluginID}/settings`);
+    expect(model.activeNavigationPath).toEqual({ zone: "settings", rootGroupID: `${pluginID}/settings`, pageID: settings.id });
     expect(model.pageSlots["page.header.end"]?.[0].component).toBe(Action);
     expect(model.pageSlots["page.body.main"]?.[0].component).toBe(Body);
   });
@@ -28,116 +54,46 @@ describe("shell composition core", () => {
   it("builds one bounded child-group level and one authoritative active path", () => {
     const model = compose({
       activePageID: "workers",
+      navigationCatalogs: [catalog([node("operations", "primary"), node("compute", "primary", "operations")])],
       shellContributions: [],
-      config: { navigationGroups: [
-        { id: "operations", label: "运行管理", zone: "primary", icon: "menu", order: 5 },
-        { id: "compute", parentID: "operations", label: "计算资源", zone: "primary", icon: "settings", order: 10 },
-      ] },
-      pages: [
-        { id: "overview", pluginID: "cn.vastplan.platform.test", path: "/overview", title: "概览", navigation: { id: "overview", label: "概览", zone: "primary", groupID: "operations" }, slots: [{ id: "body", slot: "page.body.main", component: () => null }] },
-        { id: "workers", pluginID: "cn.vastplan.platform.test", path: "/workers", title: "工作节点", navigation: { id: "workers", label: "工作节点", zone: "primary", groupID: "compute" }, slots: [{ id: "body", slot: "page.body.main", component: () => null }] },
-      ],
+      pages: [page("overview", "operations"), page("workers", "compute")],
     });
-    expect(model.navigation.primary[0].pages.map((page) => page.id)).toEqual(["overview"]);
-    expect(model.navigation.primary[0].children[0].pages.map((page) => page.id)).toEqual(["workers"]);
-    expect(model.activeNavigationPath).toEqual({ zone: "primary", rootGroupID: "operations", childGroupID: "compute", pageID: "workers" });
+    expect(model.navigation.primary[0].pages.map((item) => item.id)).toEqual(["overview"]);
+    expect(model.navigation.primary[0].children[0].pages.map((item) => item.id)).toEqual(["workers"]);
+    expect(model.activeNavigationPath).toEqual({ zone: "primary", rootGroupID: `${pluginID}/operations`, childGroupID: `${pluginID}/compute`, pageID: "workers" });
   });
 
-  it("remaps stable plugin semantics through the selected Portal navigation policy", () => {
+  it("applies Portal overrides without creating navigation nodes", () => {
     const model = compose({
-      activePageID: "deployments",
+      activePageID: "workers",
+      navigationCatalogs: [catalog([node("operations", "primary"), node("compute", "primary")])],
       shellContributions: [],
-      config: {
-        navigationGroups: [
-          { id: "operations", label: "服务与部署", zone: "primary", icon: "menu", order: 10 },
-          { id: "operations.deployments", parentID: "operations", label: "部署管理", zone: "primary", icon: "menu", order: 10 },
-        ],
-        navigationPlacements: [{ semanticID: "platform.operations.deployment", groupID: "operations.deployments" }],
-      },
-      pages: [{
-        id: "deployments", pluginID: "cn.vastplan.platform.infrastructure.deployment-manager", path: "/deployments", title: "部署管理",
-        navigation: { id: "deployments", label: "部署管理", semanticID: "platform.operations.deployment", zone: "settings" },
-        slots: [{ id: "body", slot: "page.body.main", component: () => null }],
-      }],
+      config: { navigationOverrides: [{ target: `${pluginID}/compute`, parent: `${pluginID}/operations`, order: 5, labels: { "zh-CN": "计算资源" } }] },
+      pages: [page("workers", "compute")],
     });
-    expect(model.navigation.settings).toEqual([]);
-    expect(model.navigation.primary[0].children[0].pages[0]).toMatchObject({ id: "deployments", zone: "primary", groupID: "operations.deployments" });
-    expect(model.activeNavigationPath).toEqual({ zone: "primary", rootGroupID: "operations", childGroupID: "operations.deployments", pageID: "deployments" });
+    expect(model.navigation.primary[0].children[0]).toMatchObject({ id: `${pluginID}/compute`, parentID: `${pluginID}/operations`, labels: { "zh-CN": "计算资源" } });
+    expect(() => compose({ navigationCatalogs: [catalog([node("operations", "primary")])], pages: [], shellContributions: [], config: { navigationOverrides: [{ target: `${pluginID}/missing` }] } })).toThrow("未知覆盖");
   });
 
-  it("rejects duplicate and unknown semantic navigation mappings", () => {
-    const page = {
-      id: "deployments", pluginID: "cn.vastplan.platform.test", path: "/deployments", title: "部署管理",
-      navigation: { id: "deployments", label: "部署管理", semanticID: "platform.operations.deployment", zone: "settings" as const },
-      slots: [{ id: "body", slot: "page.body.main" as const, component: () => null }],
-    };
-    expect(() => compose({ pages: [page], shellContributions: [], config: { navigationPlacements: [
-      { semanticID: "platform.operations.deployment", groupID: "primary" },
-      { semanticID: "platform.operations.deployment", groupID: "primary" },
-    ] } })).toThrow("无效或重复映射");
-    expect(() => compose({ pages: [page], shellContributions: [], config: { navigationPlacements: [
-      { semanticID: "platform.operations.deployment", groupID: "missing" },
-    ] } })).toThrow("未知分组");
+  it("composes account pages through trusted host anchors", () => {
+    const accountPage = { ...page("profile", "unused"), navigation: { id: "profile", label: "用户信息", parentMenuRef: { pluginID: "vastplan.host", nodeID: "account" } } };
+    const appearancePage = { ...page("appearance", "unused"), navigation: { id: "appearance", label: "外观", parentMenuRef: { pluginID: "vastplan.host", nodeID: "account.settings" } } };
+    const model = compose({ activePageID: "appearance", navigationCatalogs: [], pages: [accountPage, appearancePage], shellContributions: [] });
+    const account = model.navigation.secondary.find((group) => group.id === "vastplan.host/account");
+    expect(account?.pages.map((item) => item.id)).toEqual(["profile"]);
+    expect(account?.children[0]).toMatchObject({ id: "vastplan.host/account.settings", parentID: "vastplan.host/account" });
+    expect(model.activeNavigationPath).toEqual({ zone: "secondary", rootGroupID: "vastplan.host/account", childGroupID: "vastplan.host/account.settings", pageID: "appearance" });
   });
 
-  it("composes account plugins through the same root-child-page navigation pipeline", () => {
-    const model = compose({
-      activePageID: "appearance",
-      shellContributions: [],
-      pages: [
-        { id: "profile", pluginID: "cn.vastplan.foundation.frontend.identity.account-center", path: "/account/profile", title: "用户信息", navigation: { id: "account.profile", label: "用户信息", zone: "secondary", groupID: "account" }, slots: [{ id: "body", slot: "page.body.main", component: () => null }] },
-        { id: "appearance", pluginID: "cn.vastplan.foundation.frontend.identity.account-center", path: "/account/settings/appearance", title: "外观", navigation: { id: "account.appearance", label: "外观", zone: "secondary", groupID: "account.settings" }, slots: [{ id: "body", slot: "page.body.main", component: () => null }] },
-      ],
-    });
-    const account = model.navigation.secondary.find((group) => group.id === "account");
-    expect(account?.pages.map((page) => page.id)).toEqual(["account.profile"]);
-    expect(account?.children[0]).toMatchObject({ id: "account.settings", parentID: "account" });
-    expect(account?.children[0].pages.map((page) => page.id)).toEqual(["account.appearance"]);
-    expect(model.activeNavigationPath).toEqual({ zone: "secondary", rootGroupID: "account", childGroupID: "account.settings", pageID: "account.appearance" });
-  });
-
-  it("keeps the account root available when the account feature plugin is absent", () => {
-    const model = compose({ pages: [], shellContributions: [] });
-    const account = model.navigation.secondary.find((group) => group.id === "account");
-    expect(account).toMatchObject({ id: "account", zone: "secondary" });
-    expect(account?.pages).toEqual([]);
-    expect(account?.children).toEqual([]);
-  });
-
-  it("rejects unknown parents, cross-zone children, and a third group level", () => {
-    const attempt = (navigationGroups: unknown[]) => () => compose({ pages: [], shellContributions: [], config: { navigationGroups } });
-    expect(attempt([{ id: "child", parentID: "missing", label: "子组", zone: "primary", icon: "menu" }])).toThrow("未知根组");
-    expect(attempt([
-      { id: "root", label: "根组", zone: "primary", icon: "menu" },
-      { id: "child", parentID: "root", label: "子组", zone: "settings", icon: "settings" },
-    ])).toThrow("不能跨语义区");
-    expect(attempt([
-      { id: "root", label: "根组", zone: "primary", icon: "menu" },
-      { id: "child", parentID: "root", label: "子组", zone: "primary", icon: "menu" },
-      { id: "too-deep", parentID: "child", label: "过深", zone: "primary", icon: "menu" },
-    ])).toThrow("导航深度超过");
-  });
-
-  it("uses governed group descriptors and rejects unknown groups", () => {
-    const page = {
-      id: "jobs", pluginID: "cn.vastplan.platform.test", path: "/jobs", title: "任务",
-      navigation: { id: "jobs", label: "任务", zone: "primary" as const, groupID: "operations" },
-      slots: [{ id: "body", slot: "page.body.main" as const, component: () => null }],
-    };
-    const model = compose({
-      pages: [page], shellContributions: [],
-      config: { navigationGroups: [{ id: "operations", label: "运行管理", zone: "primary", icon: "menu", order: 5 }] },
-    });
-    expect(model.navigation.primary[0]).toMatchObject({ id: "operations", label: "运行管理", icon: "menu" });
-    expect(() => compose({ pages: [page], shellContributions: [] })).toThrow("未治理的分组");
+  it("rejects unknown page nodes and cross-zone or overly deep catalogs", () => {
+    expect(() => compose({ navigationCatalogs: [], pages: [page("jobs", "missing")], shellContributions: [] })).toThrow("未安装菜单");
+    expect(() => compose({ navigationCatalogs: [catalog([node("root", "primary"), node("child", "settings", "root")])], pages: [], shellContributions: [] })).toThrow("跨 zone");
+    expect(() => compose({ navigationCatalogs: [catalog([node("root", "primary"), node("child", "primary", "root"), node("deep", "primary", "child")])], pages: [], shellContributions: [] })).toThrow("深度超过");
   });
 
   it("keeps global shell contributions independent from the active page", () => {
     const Logo = () => null;
-    const model = compose({
-      pages: [],
-      shellContributions: [{ id: "logo", pluginID: "cn.vastplan.foundation.brand", slot: "shell.navigation.start", component: Logo }],
-    });
+    const model = compose({ navigationCatalogs: [], pages: [], shellContributions: [{ id: "logo", pluginID: "cn.vastplan.foundation.brand", slot: "shell.navigation.start", component: Logo }] });
     expect(model.shellSlots["shell.navigation.start"]?.[0].component).toBe(Logo);
     expect(model.pageSlots).toEqual({});
   });

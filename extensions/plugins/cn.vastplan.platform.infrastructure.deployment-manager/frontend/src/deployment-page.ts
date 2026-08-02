@@ -33,7 +33,7 @@ export function createDeploymentPage(client: PlatformAdminClient, serviceID: str
   return defineCollectionPage<DeploymentRow>({
     id: `platform.deployment.${serviceID}`, path, title,
     description: message("page.description", "声明应用意图，由 Planner 派生依赖与运行策略，经审批后发布到 Node Agent 集群"),
-    navigation: { id: `platform.deployment.${serviceID}`, label: title, semanticID: "platform.operations.deployment", zone: "settings", order: 60 },
+    navigation: { id: `platform.deployment.${serviceID}`, label: title, parentMenuRef: { pluginID: "cn.vastplan.platform.infrastructure.deployment-manager", nodeID: "operations" }, order: 60 },
     pageActions: [{ id: "create", label: message("action.new", "新建应用意图"), icon: "add", tone: "primary", form: "create" }],
     collection: {
       id: `platform.deployment.${serviceID}`, title, view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20, 50, 100] },

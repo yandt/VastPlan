@@ -2,7 +2,7 @@
   "id": "cn.vastplan.foundation.frontend.identity.account-center",
   "name": "VastPlan 个人中心",
   "description": "以标准 Portal 页面契约提供用户信息、用户设置和本地外观管理",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -33,8 +33,7 @@
       "views": [
         { "id": "account.profile", "title": "用户信息" },
         { "id": "account.settings.appearance", "title": "外观" }
-      ],
-      "menus": [{ "id": "account.center.menu", "title": "个人中心" }]
+      ]
     }
   }
 }

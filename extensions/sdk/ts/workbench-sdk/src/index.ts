@@ -133,13 +133,11 @@ export interface WorkbenchPresentationConfig {
   collection?: { defaultDensity?: CollectionDensity; allowedDensities?: readonly CollectionDensity[] };
 }
 
-/** Framework-neutral navigation intent; the Portal Profile may remap semanticID to another governed group. */
+/** Owner-bound navigation intent. The trusted host resolves the referenced plugin catalog node. */
 export interface WorkbenchPageNavigation {
   id: string;
   label: LocalizedText;
-  semanticID?: string;
-  zone: "primary" | "settings" | "secondary";
-  groupID?: string;
+  parentMenuRef: { pluginID: string; nodeID: string };
   order?: number;
 }
 

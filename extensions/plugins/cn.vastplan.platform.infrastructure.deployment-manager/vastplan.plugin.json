@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.infrastructure.deployment-manager",
   "name": "VastPlan 部署与测试发布管理服务",
-  "version": "0.25.0",
+  "version": "0.26.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -171,10 +171,9 @@
         { "id": "platform.deployment", "title": "服务与节点部署" },
         { "id": "platform.plugin-installations", "title": "服务插件" }
       ],
-      "menus": [
-        { "id": "platform.deployment.menu", "title": "服务与节点部署" },
-        { "id": "platform.plugin-installations.menu", "title": "服务插件" }
-      ]
+      "navigations": [{ "id": "main", "contract": "1.0.0", "nodes": [
+        { "id": "operations", "zone": "primary", "label": { "key": "navigation.operations", "fallback": "服务与部署" }, "icon": { "kind": "semantic", "name": "menu" }, "order": 10 }
+      ], "icons": [] }]
     }
   }
 }

@@ -18,6 +18,12 @@ describe("Portal locale runtime", () => {
     expect(translate(message("cn.vastplan.test", "missing", "Fallback {name}", { name: "<b>" }), "en-US", catalogs)).toBe("Fallback <b>");
   });
 
+  it("falls back from the current locale to the Portal default before the manifest fallback", () => {
+    const descriptor = message("cn.vastplan.test", "greeting", "Manifest fallback", { name: "Ada" });
+    expect(translate(descriptor, "fr-FR", catalogs, "en-US")).toBe("Hello, Ada");
+    expect(translate(message("cn.vastplan.test", "missing", "Manifest fallback"), "fr-FR", catalogs, "en-US")).toBe("Manifest fallback");
+  });
+
   it("localizes a cloned JSON Schema through governed JSON pointers", () => {
     const source = { type: "object", properties: { name: { type: "string", title: "名称" } } };
     const localized = localizeJSONSchema(source, { "/properties/name/title": message("cn.vastplan.test", "greeting", "名称", { name: "field" }) }, (value) => translate(value, "en-US", catalogs));

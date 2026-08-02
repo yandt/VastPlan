@@ -47,7 +47,7 @@ function loader(overrides: Record<string, object> = {}): FrontendPluginLoader {
     if (ref.id === standardShellRef.id) return { ...base, shellLibrary: shellLibrary("standard"), ...overrides[ref.id] };
     if (ref.id === topShellRef.id) return { ...base, shellLibrary: shellLibrary("top-navigation"), ...overrides[ref.id] };
     if (ref.id === workbenchRef.id) return { ...base, workbench, ...overrides[ref.id] };
-    return { ...base, register(context: FrontendPluginContext) { context.addPage({ id: "home", path: "/home", title: "Home", navigation: { id: "home", label: "Home", zone: "primary" }, slots: [{ id: "body", slot: "page.body.main", component: () => null }] }); }, ...overrides[ref.id] };
+    return { ...base, register(context: FrontendPluginContext) { context.addPage({ id: "home", path: "/home", title: "Home", navigation: { id: "home", label: "Home", parentMenuRef: { pluginID: featureRef.id, nodeID: "main" } }, slots: [{ id: "body", slot: "page.body.main", component: () => null }] }); }, ...overrides[ref.id] };
   } };
 }
 
@@ -248,7 +248,7 @@ describe("PortalRuntime shell", () => {
     await expect(new PortalRuntime(loader({ [featureRef.id]: { register(context: FrontendPluginContext) {
       context.addPage({
         id: "bad-navigation", path: "/bad-navigation", title: "Bad navigation",
-        navigation: { id: "bad-navigation", label: "Bad navigation", semanticID: "bad semantic", zone: "primary" },
+        navigation: { id: "bad-navigation", label: "Bad navigation", parentMenuRef: { pluginID: "bad semantic", nodeID: "main" } },
         slots: [{ id: "body", slot: "page.body.main", component: () => null }],
       });
     } } })).prepare(portal)).rejects.toMatchObject({ code: "NAVIGATION_REJECTED" });

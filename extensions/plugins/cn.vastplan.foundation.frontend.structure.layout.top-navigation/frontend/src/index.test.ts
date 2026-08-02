@@ -3,7 +3,7 @@ import { uiContractVersion } from "@vastplan/ui-contract";
 import adapter, { navigationMenuItems, prioritizeRoots, topNavigationShellCSS } from "./index";
 import type { PortalNavigationGroup, UIShellProps } from "@vastplan/ui-primitives";
 
-const root = (id: string): PortalNavigationGroup => ({ id, label: id, zone: "primary", icon: "menu", pages: [], children: [] });
+const root = (id: string): PortalNavigationGroup => ({ id, label: id, zone: "primary", icon: { kind: "semantic", name: "menu" }, pages: [], children: [] });
 
 describe("top navigation shell layout", () => {
   it("exports an independent signed Shell Library", () => {
@@ -24,9 +24,10 @@ describe("top navigation shell layout", () => {
   });
 
   it("maps root, direct and nested pages into one Menu tree", () => {
-    const group: PortalNavigationGroup = { ...root("account"), pages: [{ id: "profile", label: "Profile", zone: "secondary" }], children: [{ ...root("preferences"), parentID: "account", pages: [{ id: "appearance", label: "Appearance", zone: "secondary" }] }] };
+    const page = (id: string) => ({ id, label: id, zone: "secondary" as const, groupID: "vastplan.host/account", parentMenuRef: { pluginID: "vastplan.host", nodeID: "account" } });
+    const group: PortalNavigationGroup = { ...root("vastplan.host/account"), pages: [page("profile")], children: [{ ...root("preferences"), parentID: "vastplan.host/account", pages: [page("appearance")] }] };
     const composition = { pages: [{ id: "profile-page", path: "/profile", navigation: { id: "profile" } }, { id: "appearance-page", path: "/appearance", navigation: { id: "appearance" } }] } as unknown as UIShellProps["composition"];
-    const items = navigationMenuItems([group], composition, { text: (value) => typeof value === "string" ? value : value.fallback });
+    const items = navigationMenuItems([group], composition, { locale: "zh-CN", text: (value) => typeof value === "string" ? value : value.fallback });
     expect(items).toMatchObject([{ id: "profile", href: "/profile" }, { id: "group:preferences", children: [{ id: "appearance", href: "/appearance" }] }]);
   });
 

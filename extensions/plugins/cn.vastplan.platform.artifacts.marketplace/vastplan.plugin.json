@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.artifacts.marketplace",
   "name": "VastPlan 插件市场",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -53,6 +53,8 @@
   "entry": { "backend": "backend/plugin-marketplace", "frontend": "frontend/dist/index.js" },
   "contributes": {
     "backend": { "tools": [{ "id": "platform.artifacts.marketplace", "service_role": "backend", "title": "插件市场", "subcommands": [{ "name": "listSources", "description": "列出受治理市场来源" }, { "name": "listCatalog", "description": "查询一个受治理市场目录" }] }] },
-    "frontend": { "views": [{ "id": "platform.service-plugin-marketplace", "title": "服务插件市场" }, { "id": "platform.service-plugin-tasks", "title": "安装任务" }], "menus": [{ "id": "platform.service-plugin-marketplace.menu", "title": "服务插件市场" }, { "id": "platform.service-plugin-tasks.menu", "title": "安装任务" }] }
+    "frontend": { "views": [{ "id": "platform.service-plugin-marketplace", "title": "服务插件市场" }, { "id": "platform.service-plugin-tasks", "title": "安装任务" }], "navigations": [{ "id": "main", "contract": "1.0.0", "nodes": [
+      { "id": "marketplace", "zone": "primary", "label": { "key": "navigation.marketplace", "fallback": "插件市场" }, "icon": { "kind": "semantic", "name": "download" }, "order": 15 }
+    ], "icons": [] }] }
   }
 }

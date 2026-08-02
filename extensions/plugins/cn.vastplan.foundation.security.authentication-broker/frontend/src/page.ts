@@ -31,7 +31,7 @@ export function createAuthenticationProviderPage(
     navigation: {
       id: `authentication.providers.${serviceID}`,
       label: title,
-      zone: "settings",
+      parentMenuRef: { pluginID: "cn.vastplan.foundation.security.authentication-broker", nodeID: "authentication" },
       order: 15,
     },
     pageActions: [

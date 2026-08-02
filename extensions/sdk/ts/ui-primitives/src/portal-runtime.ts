@@ -1,4 +1,5 @@
 import type { ComponentType, ReactNode } from "react";
+import type { IconGlyphDefinition } from "@vastplan/icon-catalog/semantic";
 import type { CollectionPreference } from "@vastplan/frontend-engine-contract";
 import type { PluginExtensionAccess } from "@vastplan/plugin-extension-contract";
 import type { DashboardGridLayouts, DashboardGridSpec, JSONValue, LocalizedText, MessageDescriptor, MessageValues, PageBodyLayout, PluginLocalization } from "@vastplan/ui-contract";
@@ -8,9 +9,45 @@ import type { SemanticIconName } from "./icon.js";
 export type NavigationZone = "primary" | "settings" | "secondary";
 
 /** Governed account-navigation identities shared by plugins, composition and Shell libraries. */
+export const hostNavigationPluginID = "vastplan.host" as const;
 export const accountNavigationGroupID = "account" as const;
 export const accountSettingsNavigationGroupID = "account.settings" as const;
+export const accountNavigationNodeID = `${hostNavigationPluginID}/${accountNavigationGroupID}` as const;
+export const accountSettingsNavigationNodeID = `${hostNavigationPluginID}/${accountSettingsNavigationGroupID}` as const;
+export const accountNavigationNodeRef: PortalNavigationNodeRef = Object.freeze({ pluginID: hostNavigationPluginID, nodeID: accountNavigationGroupID });
+export const accountSettingsNavigationNodeRef: PortalNavigationNodeRef = Object.freeze({ pluginID: hostNavigationPluginID, nodeID: accountSettingsNavigationGroupID });
 export const accountPageExtensionPointID = "cn.vastplan.foundation.frontend.identity.account-center.page" as const;
+
+export interface PortalNavigationNodeRef {
+  pluginID: string;
+  nodeID: string;
+}
+
+export type PortalNavigationIconState = "normal" | "active" | "loading" | "error";
+export type PortalNavigationIconMotion = "none" | "pulse" | "spin" | "draw";
+export type PortalNavigationIconSpec =
+  | { kind: "semantic"; name: SemanticIconName }
+  | { kind: "custom"; pluginID: string; name: string; states: Readonly<Partial<Record<PortalNavigationIconState, IconGlyphDefinition>>> & { normal: IconGlyphDefinition }; motion: PortalNavigationIconMotion };
+
+export interface PortalNavigationParentRef extends PortalNavigationNodeRef {
+  mode: "required" | "optional";
+  fallback?: PortalNavigationNodeRef;
+}
+
+export interface PortalNavigationCatalogNode {
+  id: string;
+  ref: PortalNavigationNodeRef;
+  label: LocalizedText;
+  zone: NavigationZone;
+  icon: PortalNavigationIconSpec;
+  parent?: PortalNavigationParentRef;
+  order?: number;
+}
+
+export interface PortalNavigationCatalog {
+  pluginID: string;
+  nodes: readonly PortalNavigationCatalogNode[];
+}
 
 export const shellSlotIDs = Object.freeze([
   "shell.header.start", "shell.header.center", "shell.header.end",
@@ -31,7 +68,11 @@ export interface PortalNavigationGroupDescriptor {
   id: string;
   label: LocalizedText;
   zone: NavigationZone;
-  icon: SemanticIconName;
+  icon: PortalNavigationIconSpec;
+  /** Portal-owned localized label overrides keyed by canonical locale. */
+  labels?: Readonly<Record<string, string>>;
+  /** Hides this node from navigation without changing page authorization. */
+  hidden?: boolean;
   /** Child groups reference a root group in the same zone. Omitted for roots. */
   parentID?: string;
   order?: number;
@@ -40,22 +81,24 @@ export interface PortalNavigationGroupDescriptor {
 export interface PortalPageNavigation {
   id: string;
   label: LocalizedText;
-  /** Stable functional classification resolved by the selected Portal navigation policy. */
-  semanticID?: string;
-  zone: NavigationZone;
-  /** References a group governed by the selected Shell composition. */
-  groupID?: string;
+  /** Owner-bound reference to a plugin menu node or a trusted host anchor. */
+  parentMenuRef: PortalNavigationNodeRef;
   order?: number;
+}
+
+export interface PortalResolvedPageNavigation extends PortalPageNavigation {
+  zone: NavigationZone;
+  groupID: string;
 }
 
 export interface PortalNavigationChildGroup extends PortalNavigationGroupDescriptor {
   parentID: string;
-  pages: readonly PortalPageNavigation[];
+  pages: readonly PortalResolvedPageNavigation[];
 }
 
 export interface PortalNavigationGroup extends PortalNavigationGroupDescriptor {
   parentID?: undefined;
-  pages: readonly PortalPageNavigation[];
+  pages: readonly PortalResolvedPageNavigation[];
   children: readonly PortalNavigationChildGroup[];
 }
 
@@ -218,6 +261,7 @@ export interface PortalRegisteredShellContribution extends PortalShellContributi
 export interface ShellCompositionInput {
   pages: readonly PortalRegisteredPage[];
   shellContributions: readonly PortalRegisteredShellContribution[];
+  navigationCatalogs: readonly PortalNavigationCatalog[];
   activePageID?: string;
   config?: Readonly<Record<string, unknown>>;
 }

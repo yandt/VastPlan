@@ -18,6 +18,7 @@ import type {
 } from "./portal-contracts";
 import { loadPortalFoundations } from "./portal-foundations";
 import { PageHelpButton } from "./page-help-button";
+import { navigationCatalogsFromIndex } from "./navigation-contributions";
 import { createPageRefreshController } from "./page-refresh-controller";
 import { createPluginExtensionAccess, emptyPortalExtensionGraph, validateExtensionGraphForPortal, validateFrontendPageExtensions } from "./plugin-extensions";
 import { snapshotPortal } from "./portal-snapshot";
@@ -80,6 +81,7 @@ export class PortalRuntime {
     }
 
     const messageCatalogs = collectLocalization(portal, foundations.loaded, foundations.renderer);
+    const navigationCatalogs = navigationCatalogsFromIndex(options.contributions);
     const portalSnapshot = snapshotPortal(portal);
     const registration = createRegistrationState();
     const generation = options.generation ?? `portal-${portal.revision}`;
@@ -121,6 +123,7 @@ export class PortalRuntime {
       shellLibrary: foundations.shellLibrary,
       workbench,
       pages: Object.freeze(registration.pages),
+      navigationCatalogs,
       shellContributions: Object.freeze(registration.shellContributions),
       modules: Object.freeze(preparedModules),
       messageCatalogs: Object.freeze(messageCatalogs),
@@ -341,9 +344,7 @@ function registerPage(
   }
   if (!page.slots.some((slot) => slot.slot === "page.body.main")) throw new PortalAssemblyError("PAGE_MAIN_MISSING", `页面必须填充 page.body.main: ${page.id}`);
   if (page.navigation !== undefined && (!managementName(page.navigation.id) || !validLocalizedText(page.navigation.label) || state.navigationIDs.has(page.navigation.id) ||
-      !["primary", "settings", "secondary"].includes(page.navigation.zone) ||
-      (page.navigation.semanticID !== undefined && !managementName(page.navigation.semanticID)) ||
-      (page.navigation.groupID !== undefined && !managementName(page.navigation.groupID)))) {
+      !managementName(page.navigation.parentMenuRef?.pluginID) || !managementName(page.navigation.parentMenuRef?.nodeID))) {
     throw new PortalAssemblyError("NAVIGATION_REJECTED", `导航 ID 重复或语义区无效: ${page.navigation.id}`);
   }
   const slots = [...page.slots, { id: "system.page.help", slot: "page.header.end" as const, component: PageHelpButton, order: 1_000_000 }];

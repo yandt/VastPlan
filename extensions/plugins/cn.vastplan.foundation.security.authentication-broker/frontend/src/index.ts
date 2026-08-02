@@ -34,8 +34,8 @@ export default {
   localization: {
     defaultLocale: "zh-CN",
     messages: {
-      "zh-CN": { "page.title": "企业认证 Provider" },
-      "en-US": { "page.title": "Enterprise authentication providers" },
+      "zh-CN": { "navigation.authentication": "企业认证", "page.title": "企业认证 Provider" },
+      "en-US": { "navigation.authentication": "Enterprise authentication", "page.title": "Enterprise authentication providers" },
     },
   },
 };

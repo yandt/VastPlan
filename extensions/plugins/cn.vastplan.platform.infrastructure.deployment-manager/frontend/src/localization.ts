@@ -8,6 +8,7 @@ export function message(key: string, fallback: string): LocalizedText {
 
 export const messages = {
   "zh-CN": {
+    "navigation.operations": "服务与部署",
     "form.deployment": "部署目标", "form.services": "应用服务", "form.serviceClass": "服务分类", "form.serviceId": "服务 ID",
     "form.rootPlugins": "根应用插件", "form.pluginId": "插件 ID", "form.versionPolicy": "版本策略", "form.versionExact": "固定版本", "form.versionCompatible": "兼容升级", "form.version": "基准版本", "form.channel": "通道",
     "form.stable": "稳定版", "form.preview": "预发布", "form.testing": "测试版", "form.features": "启用 Feature", "form.pluginConfig": "插件配置",
@@ -55,6 +56,7 @@ export const messages = {
     "installation.confirm.rollback": "回滚会创建更高的单调服务修订，不会覆盖历史版本。",
   },
   "en-US": {
+    "navigation.operations": "Services and deployment",
     "form.deployment": "Deployment target", "form.services": "Application services", "form.serviceClass": "Service class", "form.serviceId": "Service ID",
     "form.rootPlugins": "Root application plugins", "form.pluginId": "Plugin ID", "form.versionPolicy": "Version policy", "form.versionExact": "Exact version", "form.versionCompatible": "Compatible updates", "form.version": "Baseline version", "form.channel": "Channel",
     "form.stable": "Stable", "form.preview": "Preview", "form.testing": "Testing", "form.features": "Enabled features", "form.pluginConfig": "Plugin configuration",

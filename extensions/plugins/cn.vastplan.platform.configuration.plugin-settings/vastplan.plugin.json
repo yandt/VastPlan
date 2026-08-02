@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.configuration.plugin-settings",
   "name": "VastPlan 插件配置协调器",
-  "version": "0.13.13",
+  "version": "0.14.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -116,7 +116,9 @@
     },
     "frontend": {
       "views": [{ "id": "platform.plugin-configuration", "title": "插件配置" }],
-      "menus": [{ "id": "platform.plugin-configuration.menu", "title": "插件配置" }]
+      "navigations": [{ "id": "main", "contract": "1.0.0", "nodes": [
+        { "id": "plugin-settings", "zone": "primary", "label": { "key": "navigation.plugin-settings", "fallback": "插件配置" }, "icon": { "kind": "semantic", "name": "settings" }, "order": 35 }
+      ], "icons": [] }]
     }
   }
 }

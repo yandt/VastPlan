@@ -5,6 +5,7 @@ import type {
   PortalNavigationGroup,
   PortalNavigationChildGroup,
   PortalPageNavigation,
+  PortalResolvedPageNavigation,
   PortalPageSlotContribution,
   PortalRegisteredShellContribution,
   ShellCompositionInput,
@@ -24,13 +25,13 @@ function ordered<T extends { id: string; order?: number }>(values: readonly T[])
 export function compose(input: ShellCompositionInput): ShellCompositionModel {
   const pages = Object.freeze([...input.pages]);
   const activePage = pages.find((page) => page.id === input.activePageID);
-  const policy = compileNavigationPolicy(input.config);
+  const policy = compileNavigationPolicy(input.navigationCatalogs, input.config);
   const descriptors = policy.groups;
-  const pagesByGroup = new Map<string, PortalPageNavigation[]>();
+  const pagesByGroup = new Map<string, PortalResolvedPageNavigation[]>();
   for (const page of pages) {
     if (page.navigation === undefined) continue;
     const navigation = policy.resolve(page.navigation);
-    const groupID = navigation.groupID ?? navigation.zone;
+    const groupID = navigation.groupID;
     let groupPages = pagesByGroup.get(groupID);
     if (groupPages === undefined) {
       groupPages = [];
@@ -41,11 +42,11 @@ export function compose(input: ShellCompositionInput): ShellCompositionModel {
 
   const navigation: Record<NavigationZone, PortalNavigationGroup[]> = { primary: [], settings: [], secondary: [] };
   for (const descriptor of descriptors.values()) {
-    if (descriptor.parentID !== undefined) continue;
+    if (descriptor.parentID !== undefined || descriptor.hidden === true) continue;
     const rootPages = ordered(pagesByGroup.get(descriptor.id) ?? []);
     const children: PortalNavigationChildGroup[] = [];
     for (const child of descriptors.values()) {
-      if (child.parentID !== descriptor.id) continue;
+      if (child.parentID !== descriptor.id || child.hidden === true) continue;
       const childPages = ordered(pagesByGroup.get(child.id) ?? []);
       if (childPages.length === 0) continue;
       children.push(Object.freeze({ ...child, parentID: descriptor.id, pages: Object.freeze(childPages) }));
@@ -53,7 +54,7 @@ export function compose(input: ShellCompositionInput): ShellCompositionModel {
     const orderedChildren = ordered(children);
     // 账户根分组同时承载 Shell 的稳定身份入口。即使账户功能插件尚未装配，
     // 也必须保留该分组，让布局继续显示头像并给出明确的未装配状态。
-    if (rootPages.length === 0 && orderedChildren.length === 0 && descriptor.id !== accountNavigationGroupID) continue;
+    if (rootPages.length === 0 && orderedChildren.length === 0 && descriptor.id !== `vastplan.host/${accountNavigationGroupID}`) continue;
     navigation[descriptor.zone].push(Object.freeze({ ...descriptor, parentID: undefined, pages: Object.freeze(rootPages), children: Object.freeze(orderedChildren) }));
   }
   for (const zone of navigationZones) navigation[zone] = [...ordered(navigation[zone])];

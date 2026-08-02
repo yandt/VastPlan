@@ -390,7 +390,16 @@ func cloneRenderAdapterConfig(in frontendcompositionv1.RenderAdapterConfig) fron
 }
 func cloneShellConfig(in frontendcompositionv1.ShellConfig) frontendcompositionv1.ShellConfig {
 	out := in
-	out.NavigationGroups = append([]frontendcompositionv1.NavigationGroupDescriptor(nil), in.NavigationGroups...)
+	out.NavigationOverrides = make([]frontendcompositionv1.NavigationOverride, len(in.NavigationOverrides))
+	for index, override := range in.NavigationOverrides {
+		out.NavigationOverrides[index] = override
+		if override.Labels != nil {
+			out.NavigationOverrides[index].Labels = make(map[string]string, len(override.Labels))
+			for locale, label := range override.Labels {
+				out.NavigationOverrides[index].Labels[locale] = label
+			}
+		}
+	}
 	out.AllowedTemplates = append([]string(nil), in.AllowedTemplates...)
 	out.TemplateOptions = make(map[string]map[string]any, len(in.TemplateOptions))
 	for template, options := range in.TemplateOptions {

@@ -12,7 +12,7 @@ export function createMarketPage(marketplace: PlatformAdminClient, deployment: P
   return defineCollectionPage<MarketRow>({
     id: "platform.service-plugin-marketplace", path, title: text("market.title", "服务插件市场"), description: text("market.description", "从平台配置的多个受信市场发现插件，并为当前服务创建安装候选"),
     requiredPermissions: ["platform.artifacts.marketplace.read", "platform.deployment.plugin.preview"],
-    navigation: { id: "platform.service-plugin-marketplace", label: text("market.title", "服务插件市场"), semanticID: "platform.operations.deployment", zone: "primary", order: 11 },
+    navigation: { id: "platform.service-plugin-marketplace", label: text("market.title", "服务插件市场"), parentMenuRef: { pluginID: "cn.vastplan.platform.artifacts.marketplace", nodeID: "marketplace" }, order: 11 },
     collection: {
       id: "platform.service-plugin-marketplace", title: text("market.title", "服务插件市场"), view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20, 50, 100] }, selection: "single",
       filterPanel: { fields: [{ id: "source", label: text("market.source", "市场"), kind: "text" }, { id: "plugin", label: text("market.plugin", "插件 ID"), kind: "text" }] },

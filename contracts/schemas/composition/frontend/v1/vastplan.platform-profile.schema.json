@@ -80,13 +80,9 @@
     "navigationConfig": {
       "type": "object", "additionalProperties": false,
       "properties": {
-        "navigationGroups": {
-          "type": "array", "maxItems": 256,
-          "items": { "$ref": "#/$defs/navigationGroup" }
-        },
-        "navigationPlacements": {
-          "type": "array", "maxItems": 256,
-          "items": { "$ref": "#/$defs/navigationPlacement" }
+        "navigationOverrides": {
+          "type": "array", "maxItems": 512,
+          "items": { "$ref": "#/$defs/navigationOverride" }
         }
       }
     },
@@ -94,13 +90,9 @@
       "type": "object", "additionalProperties": false,
       "required": ["defaultTemplate", "allowedTemplates", "userSelectable"],
       "properties": {
-        "navigationGroups": {
-          "type": "array", "maxItems": 256,
-          "items": { "$ref": "#/$defs/navigationGroup" }
-        },
-        "navigationPlacements": {
-          "type": "array", "maxItems": 256,
-          "items": { "$ref": "#/$defs/navigationPlacement" }
+        "navigationOverrides": {
+          "type": "array", "maxItems": 512,
+          "items": { "$ref": "#/$defs/navigationOverride" }
         },
         "defaultTemplate": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
         "allowedTemplates": {
@@ -137,24 +129,19 @@
         }
       }
     },
-    "navigationGroup": {
+    "navigationOverride": {
       "type": "object", "additionalProperties": false,
-      "required": ["id", "label", "zone", "icon"],
+      "required": ["target"],
       "properties": {
-        "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$" },
-        "parentID": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$" },
-        "label": { "type": "string", "minLength": 1, "maxLength": 80 },
-        "zone": { "enum": ["primary", "secondary", "settings"] },
-        "icon": { "enum": ["add", "remove", "edit", "search", "settings", "success", "warning", "error", "info", "close", "menu", "import", "export", "publish", "refresh", "columns", "copy", "download", "upload", "more"] },
-        "order": { "type": "integer", "minimum": -1000000, "maximum": 1000000 }
-      }
-    },
-    "navigationPlacement": {
-      "type": "object", "additionalProperties": false,
-      "required": ["semanticID", "groupID"],
-      "properties": {
-        "semanticID": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$" },
-        "groupID": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$" }
+        "target": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,159}/[A-Za-z0-9][A-Za-z0-9._-]{0,159}$" },
+        "hidden": { "type": "boolean" },
+        "order": { "type": "integer", "minimum": -1000000, "maximum": 1000000 },
+        "parent": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,159}/[A-Za-z0-9][A-Za-z0-9._-]{0,159}$" },
+        "labels": {
+          "type": "object",
+          "propertyNames": { "pattern": "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$", "maxLength": 64 },
+          "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 80 }
+        }
       }
     },
     "localizationPolicy": {

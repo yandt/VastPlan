@@ -13,7 +13,7 @@ const graph = parsePortalExtensionGraph({
 
 const extensionPage: PortalRegisteredPage = {
   id: "account.security", pluginID: contributor, path: "/account/security", title: "Security",
-  navigation: { id: "account.security", label: "Security", zone: "secondary", groupID: "account.settings" },
+  navigation: { id: "account.security", label: "Security", parentMenuRef: { pluginID: "vastplan.host", nodeID: "account.settings" } },
   slots: [{ id: "body", slot: "page.body.main", component: () => null }],
 };
 
@@ -31,7 +31,7 @@ describe("Portal plugin extension graph", () => {
   it("rejects undeclared or mismatched pages in an owned navigation target", () => {
     const noContributions = parsePortalExtensionGraph({ points: graph.points, contributions: [] });
     expect(() => validateFrontendPageExtensions([{ ...extensionPage, pluginID: "cn.vastplan.example.other" }], noContributions)).toThrow(/未声明扩展关系/);
-    expect(() => validateFrontendPageExtensions([{ ...extensionPage, navigation: { ...extensionPage.navigation!, groupID: "account" } }], graph)).toThrow(/未按签名 descriptor/);
+    expect(() => validateFrontendPageExtensions([{ ...extensionPage, navigation: { ...extensionPage.navigation!, parentMenuRef: { pluginID: "vastplan.host", nodeID: "account" } } }], graph)).toThrow(/未按签名 descriptor/);
   });
 
   it("rejects duplicate extension identities before assembly", () => {

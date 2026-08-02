@@ -132,6 +132,9 @@ func ParseManifest(raw []byte) (Manifest, error) {
 	if err := validateFrontendModuleGraphs(manifest); err != nil {
 		return Manifest{}, err
 	}
+	if _, err := FrontendNavigationCatalogFor(manifest); err != nil {
+		return Manifest{}, err
+	}
 	if err := validateAuthenticationProviderDependencies(manifest); err != nil {
 		return Manifest{}, err
 	}
