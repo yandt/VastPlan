@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { uiContractVersion } from "@vastplan/ui-contract";
-import adapter, { prioritizeRoots, topNavigationShellCSS } from "./index";
-import type { PortalNavigationGroup } from "@vastplan/ui-primitives";
+import adapter, { navigationMenuItems, prioritizeRoots, topNavigationShellCSS } from "./index";
+import type { PortalNavigationGroup, UIShellProps } from "@vastplan/ui-primitives";
 
 const root = (id: string): PortalNavigationGroup => ({ id, label: id, zone: "primary", icon: "menu", pages: [], children: [] });
 
@@ -16,12 +16,18 @@ describe("top navigation shell layout", () => {
     expect(result.overflow.map((item) => item.id)).toEqual(["two", "three"]);
   });
 
-  it("uses one compact navigation menu surface and a fixed page header", () => {
-    expect(topNavigationShellCSS).toContain(".vp-top-navigation-menu{box-sizing:border-box;width:clamp(240px,28vw,400px)");
-    expect(topNavigationShellCSS).toContain("padding:4px");
-    expect(topNavigationShellCSS).toContain(".vp-top-navigation-menu-link:hover{background:var(--vp-top-selected)");
+  it("uses the renderer-owned compact navigation Menu and a fixed page header", () => {
+    expect(topNavigationShellCSS).toContain(".vp-top-navigation-menu-empty{min-width:220px;padding:8px");
+    expect(topNavigationShellCSS).not.toContain(".vp-top-navigation-menu-link:hover");
     expect(topNavigationShellCSS).toContain(".vp-top-page-scroller{flex:1;min-height:0;overflow:auto");
     expect(topNavigationShellCSS).toContain("@media (max-width:767px)");
+  });
+
+  it("maps root, direct and nested pages into one Menu tree", () => {
+    const group: PortalNavigationGroup = { ...root("account"), pages: [{ id: "profile", label: "Profile", zone: "secondary" }], children: [{ ...root("preferences"), parentID: "account", pages: [{ id: "appearance", label: "Appearance", zone: "secondary" }] }] };
+    const composition = { pages: [{ id: "profile-page", path: "/profile", navigation: { id: "profile" } }, { id: "appearance-page", path: "/appearance", navigation: { id: "appearance" } }] } as unknown as UIShellProps["composition"];
+    const items = navigationMenuItems([group], composition, { text: (value) => typeof value === "string" ? value : value.fallback });
+    expect(items).toMatchObject([{ id: "profile", href: "/profile" }, { id: "group:preferences", children: [{ id: "appearance", href: "/appearance" }] }]);
   });
 
   it("places desktop page context before the main menu with an explicit visual boundary", () => {
@@ -35,9 +41,8 @@ describe("top navigation shell layout", () => {
     expect(topNavigationShellCSS).toContain("padding:var(--vp-page-content-start) 24px 24px");
   });
 
-  it("keeps direct and nested entries in one compact menu rhythm", () => {
-    expect(topNavigationShellCSS).toContain(".vp-top-navigation-menu-group{display:grid;gap:2px");
-    expect(topNavigationShellCSS).toContain(".vp-top-navigation-menu-child-group{display:grid;gap:2px");
+  it("leaves navigation row hover behavior to the renderer Menu", () => {
     expect(topNavigationShellCSS).not.toContain(".vp-top-mega");
+    expect(topNavigationShellCSS).not.toContain(".vp-top-navigation-menu-group");
   });
 });
