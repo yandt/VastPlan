@@ -16,9 +16,10 @@ describe("top navigation shell layout", () => {
     expect(result.overflow.map((item) => item.id)).toEqual(["two", "three"]);
   });
 
-  it("uses one bounded mega popover and a fixed page header", () => {
-    expect(topNavigationShellCSS).toContain("--vp-top-mega-min");
-    expect(topNavigationShellCSS).toContain("grid-template-columns:repeat(auto-fit,minmax(220px,1fr))");
+  it("uses one compact navigation menu surface and a fixed page header", () => {
+    expect(topNavigationShellCSS).toContain(".vp-top-navigation-menu{box-sizing:border-box;width:clamp(240px,28vw,400px)");
+    expect(topNavigationShellCSS).toContain("padding:4px");
+    expect(topNavigationShellCSS).toContain(".vp-top-navigation-menu-link:hover{background:var(--vp-top-selected)");
     expect(topNavigationShellCSS).toContain(".vp-top-page-scroller{flex:1;min-height:0;overflow:auto");
     expect(topNavigationShellCSS).toContain("@media (max-width:767px)");
   });
@@ -34,10 +35,9 @@ describe("top navigation shell layout", () => {
     expect(topNavigationShellCSS).toContain("padding:var(--vp-page-content-start) 24px 24px");
   });
 
-  it("keeps direct and nested second-level entries in one visual rhythm", () => {
-    expect(topNavigationShellCSS).toContain(".vp-top-direct-pages,.vp-top-child-grid{display:grid");
-    expect(topNavigationShellCSS).toContain(".vp-top-child-group h3{box-sizing:border-box;display:flex;align-items:center;min-height:var(--vp-top-touch-minimum)");
-    expect(topNavigationShellCSS).not.toContain(".vp-top-direct-pages{display:flex");
-    expect(topNavigationShellCSS).not.toContain(".vp-top-direct-pages{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;padding-bottom:12px;border-bottom");
+  it("keeps direct and nested entries in one compact menu rhythm", () => {
+    expect(topNavigationShellCSS).toContain(".vp-top-navigation-menu-group{display:grid;gap:2px");
+    expect(topNavigationShellCSS).toContain(".vp-top-navigation-menu-child-group{display:grid;gap:2px");
+    expect(topNavigationShellCSS).not.toContain(".vp-top-mega");
   });
 });
