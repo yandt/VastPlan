@@ -325,18 +325,27 @@ EOF
 }
 
 orchestrator_needs_build() {
-  local source_root
+  local dependency_dirs source_root
   if [ ! -x "$BIN" ]; then
     return 0
   fi
   if [ "$ROOT/go.mod" -nt "$BIN" ] || [ "$ROOT/go.sum" -nt "$BIN" ]; then
     return 0
   fi
-  for source_root in "$ROOT/core" "$ROOT/contracts" "$ROOT/engineering/tools/platformdev"; do
-    if find "$source_root" -type f -name '*.go' -newer "$BIN" -print -quit | grep -q .; then
-      return 0
-    fi
-  done
+  # 从实际 Go 依赖图取本仓库包目录，避免手工维护 contracts、engineering/internal、
+  # extensions/libraries 等易漏清单。目录内的 JSON 等文件也可能经 go:embed 进入二进制。
+  if ! dependency_dirs="$(cd "$ROOT" && env GOCACHE="$GO_CACHE" go list -deps -f '{{if not .Standard}}{{.Dir}}{{end}}' ./engineering/tools/platformdev 2>/dev/null)"; then
+    return 0
+  fi
+  while IFS= read -r source_root; do
+    case "$source_root" in
+      "$ROOT"/*)
+        if find "$source_root" -maxdepth 1 -type f -newer "$BIN" -print -quit | grep -q .; then
+          return 0
+        fi
+        ;;
+    esac
+  done <<< "$dependency_dirs"
   return 1
 }
 

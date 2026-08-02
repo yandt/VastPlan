@@ -18,7 +18,10 @@ export type PortalRow = Record<string, unknown> & {
   hasRollback: boolean;
   canEdit: boolean;
   canSubmit: boolean;
-  canApprove: boolean;
+  canApproveDirect: boolean;
+  canApproveWithReview: boolean;
+  approvalLabel: string;
+  approvalReason: string;
   canPublish: boolean;
   canCreateWorkingCopy: boolean;
   auditAvailable: boolean;
@@ -48,6 +51,7 @@ export function toPortalRow(portal: Portal): PortalRow[] {
   const releaseAvailable = published !== undefined && !releasedPublicationIDs.has(published.id);
   const capabilities = new Set(portal.versionControl.capabilities ?? []);
   const versionControlAvailable = portal.versionControl.enabled && portal.versionControl.availability === "available";
+  const approval = portal.pendingPublication?.approval;
   return [{
     id: portal.id,
     portal,
@@ -65,7 +69,10 @@ export function toPortalRow(portal: Portal): PortalRow[] {
     hasRollback: releases.some((release) => release.status === "Superseded"),
     canEdit: portal.workingCopy !== undefined,
     canSubmit: portal.workingCopy !== undefined,
-    canApprove: portal.pendingPublication?.status === "PendingApproval",
+    canApproveDirect: portal.pendingPublication?.status === "PendingApproval" && approval?.status === "allowed",
+    canApproveWithReview: portal.pendingPublication?.status === "PendingApproval" && approval?.status === "review-required",
+    approvalLabel: approvalLabel(portal.pendingPublication?.status, approval?.status),
+    approvalReason: approval?.message ?? "",
     canPublish: portal.pendingPublication?.status === "Approved",
     canCreateWorkingCopy: portal.workingCopy === undefined && portal.pendingPublication === undefined && published !== undefined,
     auditAvailable: active.publication !== undefined,
@@ -75,6 +82,13 @@ export function toPortalRow(portal: Portal): PortalRow[] {
     versionControlAvailability: portal.versionControl.availability,
     updatedAt: portal.updatedAt,
   }];
+}
+
+function approvalLabel(status: PortalRevisionStatus | undefined, decision: "allowed" | "review-required" | "denied" | undefined): string {
+  if (status !== "PendingApproval") return "-";
+  if (decision === "allowed") return "策略允许";
+  if (decision === "review-required") return "需单人复验";
+  return "需其他审批人";
 }
 
 function activeConfiguration(portal: Portal): { configuration: PortalConfiguration; status: PortalRevisionStatus; publication?: PortalPublication } | undefined {

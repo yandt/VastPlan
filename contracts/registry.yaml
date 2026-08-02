@@ -4,3 +4,7 @@ contracts:
     version: 9.0.0
     compatibility: ^9.0.0
     description: Portal Render Adapter、Shell、Workbench 与功能视图共享的框架无关 UI 契约
+  governance.approval:
+    version: 1.0.0
+    compatibility: ^1.0.0
+    description: 授权之后的业务审批策略、复验证据与决定状态契约

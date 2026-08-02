@@ -3,6 +3,7 @@ import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { PortalAssets } from "../assets/portal-assets";
+import { CapabilityApplicationError } from "../capabilities/capability-invoker";
 import type { PortalComposerPort } from "../capabilities/portal-composer-client";
 import { FileIdentityProvider } from "../identity/file-identity-provider";
 import { createPortalFixture } from "../testing/portal-fixture";
@@ -26,7 +27,7 @@ describe("Portal aggregate routes", () => {
       ["/v1/portals/operations/working-copy", "POST", '{"route":"/operations-v2"}'],
       ["/v1/portals/operations/working-copy", "PUT", '{"expectedRevision":2,"configuration":{"route":"/operations-v3"}}'],
       ["/v1/portals/operations/publications", "POST", '{"expectedWorkingRevision":3}'],
-      ["/v1/portals/operations/publications/7/approve", "POST", "{}"],
+      ["/v1/portals/operations/publications/7/approve", "POST", `{"review":{"expectedDigest":"${"a".repeat(64)}","acknowledged":true,"reason":"reviewed"}}`],
       ["/v1/portals/operations/publications/7/publish", "POST", "{}"],
       ["/v1/portals/operations/publications/7/audit", "GET", undefined],
       ["/v1/portals/operations/releases", "POST", '{"publicationId":7,"expectedCurrentReleaseId":0}'],
@@ -46,7 +47,7 @@ describe("Portal aggregate routes", () => {
       { operation: "createPortalWorkingCopy", payload: { portalId: "operations", configuration: { route: "/operations-v2" } } },
       { operation: "savePortalWorkingCopy", payload: { portalId: "operations", workingCopy: { expectedRevision: 2, configuration: { route: "/operations-v3" } } } },
       { operation: "submitPortalPublication", payload: { portalId: "operations", publication: { expectedWorkingRevision: 3 } } },
-      { operation: "approvePortalPublication", payload: { portalId: "operations", publicationId: 7 } },
+      { operation: "approvePortalPublication", payload: { portalId: "operations", publicationId: 7, approval: { review: { expectedDigest: "a".repeat(64), acknowledged: true, reason: "reviewed" } } } },
       { operation: "publishPortalPublication", payload: { portalId: "operations", publicationId: 7 } },
       { operation: "audit", payload: { portalId: "operations", revisionId: 7 } },
       { operation: "releasePortalPublication", payload: { portalId: "operations", release: { publicationId: 7, expectedCurrentReleaseId: 0 } } },
@@ -67,6 +68,14 @@ describe("Portal aggregate routes", () => {
     expect(invalid.status).toBe(400);
     expect(await invalid.json()).toEqual({ error: "invalid_version_id" });
     expect(calls).toBe(0);
+  });
+
+  it("preserves approval policy rejection instead of reporting generic forbidden", async () => {
+		const composer: PortalComposerPort = { async call() { throw new CapabilityApplicationError("portal.approval.separation_required", "提交人不能自批"); } };
+		const { origin, headers } = await startServer(composer);
+		const response = await fetch(`${origin}/v1/portals/operations/publications/7/approve`, { method: "POST", headers, body: "{}" });
+		expect(response.status).toBe(409);
+		expect(await response.json()).toEqual({ error: "approval_separation_required" });
   });
 });
 

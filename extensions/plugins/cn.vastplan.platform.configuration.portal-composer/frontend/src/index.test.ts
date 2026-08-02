@@ -12,7 +12,7 @@ describe("Portal aggregate workspace", () => {
       "portal.edit", "portal.newWorkingCopy", "portal.publish", "portal.release", "portal.history", "portal.compare", "portal.restore", "portal.releases",
     ]));
     expect(page.collection.actions?.filter((action) => action.id === "portal.edit" || action.id === "portal.newWorkingCopy"))
-      .toEqual([{ id: "portal.edit", label: "编辑", icon: "edit", placement: "record.row", form: "edit", visibleWhen: { pointer: "/canEdit", equals: true } }, {
+			.toEqual([{ id: "portal.edit", label: "编辑", icon: "edit", placement: "record.row", form: "edit", requiredPermissions: ["platform.portal.compose"], visibleWhen: { pointer: "/canEdit", equals: true } }, {
         id: "portal.newWorkingCopy", label: "编辑", icon: "edit", placement: "record.row", form: "new-working-copy", visibleWhen: { pointer: "/canCreateWorkingCopy", equals: true },
       }]);
     expect(page.overlays?.map((overlay) => overlay.id)).toEqual(["history", "compare", "releases", "audit", "configuration"]);
@@ -85,6 +85,15 @@ describe("Portal aggregate workspace", () => {
     portal.versionControl = { enabled: true, availability: "unavailable", capabilities: ["history", "read", "diff", "restore"] };
     expect(toPortalRow(portal)[0]).toMatchObject({ historyAvailable: false, diffAvailable: false, restoreAvailable: false });
   });
+
+  it("projects server-owned approval requirements into data-driven actions", () => {
+		const source = { configuration: configuration(), kind: "inline" as const };
+		const publication: NonNullable<Portal["pendingPublication"]> = { id: 7, tenantId: "tenant-a", portalId: "operations", workingRevision: 2, status: "PendingApproval", digest: "a".repeat(64), source, resolved: {} as never, submittedBy: "seed-operator", createdAt: "2026-08-02T00:00:00Z", updatedAt: "2026-08-02T00:00:00Z", approval: { status: "review-required", policyId: "foundation.approval.seed-review", message: "需复验" } };
+		const portal: Portal = { id: "operations", tenantId: "tenant-a", pendingPublication: publication, versionControl: { enabled: false, availability: "disabled", capabilities: [] }, releases: [], createdAt: publication.createdAt, updatedAt: publication.updatedAt };
+		expect(toPortalRow(portal)[0]).toMatchObject({ canApproveDirect: false, canApproveWithReview: true, approvalLabel: "需单人复验", approvalReason: "需复验" });
+		publication.approval = { status: "denied", policyId: "foundation.approval.different-subject", message: "需要其他审批人" };
+		expect(toPortalRow(portal)[0]).toMatchObject({ canApproveDirect: false, canApproveWithReview: false, approvalLabel: "需其他审批人" });
+  });
 });
 
 describe("PortalControlClient", () => {
@@ -107,6 +116,16 @@ describe("PortalControlClient", () => {
     });
   });
 
+  it("submits single-operator review evidence without browser-owned resource identity", async () => {
+		const fetch = vi.fn().mockResolvedValueOnce(response({ token: "csrf-token" })).mockResolvedValueOnce(response({ id: 7 }));
+		const client = new PortalControlClient({ fetch });
+		const review = { expectedDigest: "a".repeat(64), acknowledged: true, reason: "已复核冻结配置" };
+		await client.approvePortalPublication("operations", 7, review);
+		expect(fetch).toHaveBeenNthCalledWith(2, "/v1/portals/operations/publications/7/approve", {
+			method: "POST", credentials: "include", headers: { "Content-Type": "application/json", "X-VastPlan-CSRF": "csrf-token" }, body: JSON.stringify({ review }),
+		});
+  });
+
   it("addresses version history by opaque ID and compares through query parameters", async () => {
     const fetch = vi.fn().mockResolvedValue(response({ dirty: true }));
     const client = new PortalControlClient({ fetch });
@@ -117,6 +136,11 @@ describe("PortalControlClient", () => {
   it("preserves stable BFF error codes", async () => {
     const client = new PortalControlClient({ fetch: async () => response({ error: "forbidden" }, 403) });
     await expect(client.governance()).rejects.toEqual(new PortalControlError(403, "forbidden"));
+  });
+
+  it("explains approval policy failures without generic forbidden", () => {
+		expect(new PortalControlError(409, "approval_separation_required").message).toBe("该内容由当前账号提交，需要其他审批人批准。");
+		expect(new PortalControlError(409, "approval_digest_mismatch").message).toBe("待审批内容已经变化，请刷新页面后重新复验。");
   });
 });
 

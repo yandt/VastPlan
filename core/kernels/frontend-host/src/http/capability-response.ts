@@ -26,6 +26,10 @@ export async function sendCapabilityResponse(
   } catch (error) {
     reportCapabilityFailure({ operation }, error);
 	if (error instanceof CapabilityApplicationError && error.code === "permission.denied") sendAPIError(response, 403, "forbidden", head);
+    else if (error instanceof CapabilityApplicationError && error.code === "portal.approval.separation_required") sendAPIError(response, 409, "approval_separation_required", head);
+    else if (error instanceof CapabilityApplicationError && error.code === "portal.approval.review_required") sendAPIError(response, 409, "approval_review_required", head);
+    else if (error instanceof CapabilityApplicationError && error.code === "portal.approval.digest_mismatch") sendAPIError(response, 409, "approval_digest_mismatch", head);
+    else if (error instanceof CapabilityApplicationError && error.code === "portal.approval.reason_required") sendAPIError(response, 400, "approval_reason_required", head);
     else sendAPIError(response, 400, "request_rejected", head);
   }
 }

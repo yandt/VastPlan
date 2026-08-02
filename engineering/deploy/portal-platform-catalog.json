@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "revision": 93,
+  "revision": 95,
   "id": "local-portal-platform",
   "profiles": [
     {
       "version": 1,
-      "revision": 93,
+      "revision": 95,
       "id": "portal-default",
       "target": { "kernel": "frontend" },
       "updates": { "mode": "automatic" },
@@ -70,12 +70,12 @@
         { "id": "cn.vastplan.foundation.frontend.structure.layout.top-navigation", "version": "6.0.1", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.workflow.workbench", "version": "6.0.1", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.identity.account-center", "version": "0.4.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "4.2.2", "channel": "stable" },
+        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "4.3.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.8.14", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.plugin-settings", "version": "0.13.11", "channel": "stable" },
         { "id": "cn.vastplan.platform.security.credentials", "version": "0.12.13", "channel": "stable" },
         { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.9.13", "channel": "stable" },
-        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.37.1", "channel": "stable" },
+        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.38.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.integration.api-exposure", "version": "0.5.13", "channel": "stable" },
         { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.21.10", "channel": "stable" },
         { "id": "cn.vastplan.platform.security.authorization-policy", "version": "0.7.3", "channel": "stable" }
@@ -89,8 +89,8 @@
       "portalId": "operations",
       "platformProfile": {
         "id": "portal-default",
-        "revision": 93,
-        "digest": "43226fe561c7281e54af293eba90e6630cc879d849cce444ddce9eb8c7f992b9"
+        "revision": 95,
+        "digest": "7ce68c86a788bc1ba8857f8eb4a8c858e7bb773623c1e9ee81e0912bae389b1b"
       },
       "services": [
         {

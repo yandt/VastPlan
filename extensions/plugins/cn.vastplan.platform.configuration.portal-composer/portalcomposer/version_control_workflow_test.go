@@ -128,7 +128,7 @@ func TestPortalOptionalVersionControlCommitHistoryCompareAndRestore(t *testing.T
 	if len(control.calls) != 2 || control.calls[0].OperationID != control.calls[1].OperationID {
 		t.Fatalf("重试必须复用持久 operationId: %+v", control.calls)
 	}
-	publication, err = service.ApprovePortalPublication(ctx, approver, portal.ID, publication.ID)
+	publication, err = service.ApprovePortalPublication(ctx, approver, portal.ID, publication.ID, portalapi.PortalApprovalRequest{})
 	if err == nil {
 		publication, err = service.PublishPortalPublication(ctx, publisher, portal.ID, publication.ID)
 	}
@@ -154,7 +154,7 @@ func TestPortalOptionalVersionControlCommitHistoryCompareAndRestore(t *testing.T
 	if err != nil || !comparison.Dirty || !comparison.DiffAvailable || len(comparison.ChangedPaths) != 1 {
 		t.Fatalf("历史比较错误: %+v err=%v", comparison, err)
 	}
-	if _, err := service.ApprovePortalPublication(ctx, approver, portal.ID, secondPublication.ID); err != nil {
+	if _, err := service.ApprovePortalPublication(ctx, approver, portal.ID, secondPublication.ID, portalapi.PortalApprovalRequest{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := service.PublishPortalPublication(ctx, publisher, portal.ID, secondPublication.ID); err != nil {

@@ -350,7 +350,7 @@ func (s *Service) bindingIndexLocked(tenantID string, id uint64) (int, error) {
 	return 0, ErrNotFound
 }
 
-func transitionStatus(principal portalapi.Principal, current portalapi.Status, submittedBy, action string) (portalapi.Status, error) {
+func transitionStatus(principal portalapi.Principal, current portalapi.Status, action string) (portalapi.Status, error) {
 	if err := requireTrustedPrincipal(principal); err != nil {
 		return "", err
 	}
@@ -359,9 +359,6 @@ func transitionStatus(principal portalapi.Principal, current portalapi.Status, s
 	case "submit":
 	case "approve":
 		expected, next = portalapi.StatusPendingApproval, portalapi.StatusApproved
-		if principal.ID == submittedBy {
-			return "", ErrSelfApproval
-		}
 	case "publish":
 		expected, next = portalapi.StatusApproved, portalapi.StatusPublished
 	default:

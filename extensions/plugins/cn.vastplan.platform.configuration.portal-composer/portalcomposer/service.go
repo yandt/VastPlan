@@ -12,6 +12,7 @@ import (
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/approvalpolicy"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
@@ -73,6 +74,7 @@ type Service struct {
 	versionControlDefault      *PortalVersionControlBinding
 	versionControlConfigLoaded bool
 	now                        func() time.Time
+	approvalPolicy             approvalpolicy.Policy
 }
 
 func (s *Service) BindPlatformCatalog(catalog frontendcompositionv1.PortalPlatformCatalog) error {
@@ -93,7 +95,14 @@ func (s *Service) BindPlatformCatalog(catalog frontendcompositionv1.PortalPlatfo
 }
 
 func New(catalog Catalog) *Service {
-	return &Service{state: emptyState(), artifactCatalog: catalog, now: time.Now}
+	return NewWithApprovalPolicy(catalog, approvalpolicy.MustDifferentSubject())
+}
+
+func NewWithApprovalPolicy(catalog Catalog, policy approvalpolicy.Policy) *Service {
+	if policy == nil {
+		panic("Portal Composer ApprovalPolicy 不能为空")
+	}
+	return &Service{state: emptyState(), artifactCatalog: catalog, approvalPolicy: policy, now: time.Now}
 }
 
 func (s *Service) BindVersionControl(binding *PortalVersionControlBinding) error {

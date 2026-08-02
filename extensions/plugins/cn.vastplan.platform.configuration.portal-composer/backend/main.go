@@ -11,7 +11,11 @@ import (
 )
 
 func main() {
-	service := portalcomposer.New(nil)
+	approval, err := loadApprovalPolicy()
+	if err != nil {
+		log.Fatalf("加载 Portal ApprovalPolicy: %v", err)
+	}
+	service := portalcomposer.NewWithApprovalPolicy(nil, approval)
 	p := sdk.New(portalcomposer.PluginID, portalcomposer.PluginVersion, map[string]string{"backend": "^0.1"})
 	p.Contribute(portalcomposer.Contribution(service))
 	p.Contribute(portalcomposer.PreferenceContribution(service))

@@ -4,7 +4,46 @@ import { buildPortalConfiguration, configurationToForm, portalConfigurationSchem
 import type { PortalRow } from "./portal-model";
 
 export function portalForms(client: PortalControlClient): WorkbenchFormDefinition<PortalRow>[] {
-  return [configurationForm(client, "create"), configurationForm(client, "edit"), configurationForm(client, "new-working-copy"), restoreForm(client)];
+  return [configurationForm(client, "create"), configurationForm(client, "edit"), configurationForm(client, "new-working-copy"), approvalReviewForm(client), restoreForm(client)];
+}
+
+function approvalReviewForm(client: PortalControlClient): WorkbenchFormDefinition<PortalRow> {
+  return {
+    id: "approval-review",
+    schema: {
+      id: "portal-approval-review.v1",
+      schema: {
+        $schema: jsonSchemaDialect, type: "object", additionalProperties: false,
+        required: ["expectedDigest", "acknowledged", "reason"],
+        properties: {
+          expectedDigest: { type: "string", title: "冻结配置摘要", pattern: "^[a-f0-9]{64}$", readOnly: true },
+          acknowledged: { type: "boolean", title: "我已复核上述冻结配置，确认内容准确" },
+          reason: { type: "string", title: "审批原因", minLength: 4, maxLength: 512 },
+        },
+      },
+    },
+    presentation: { layout: "vertical", fields: [
+      { pointer: "/expectedDigest", widget: "text", help: "提交后若冻结内容发生变化，审批会被拒绝。" },
+      { pointer: "/acknowledged", widget: "boolean" },
+      { pointer: "/reason", widget: "textarea" },
+    ] },
+    workflow: {
+      dialogWidth: "sm", title: "复验并批准", description: "当前种子策略允许同一管理员复验，但不会把它记录为异人审批。",
+      submitLabel: "确认批准", success: { notify: "Portal 已通过单人复验批准", refreshCollection: true, close: true },
+    },
+    async prepare(selected) {
+      const row = selected[0];
+      if (row === undefined || row.portal.pendingPublication === undefined) throw new Error("未选择待审批 Portal");
+      return { initialValue: { expectedDigest: row.portal.pendingPublication.digest, acknowledged: false, reason: "" } };
+    },
+    async submit({ value, selected }) {
+      const row = selected[0];
+      if (row === undefined || typeof value.expectedDigest !== "string" || value.acknowledged !== true || typeof value.reason !== "string") return;
+      await client.approvePortalPublication(row.id, row.publicationId, {
+        expectedDigest: value.expectedDigest, acknowledged: true, reason: value.reason,
+      });
+    },
+  };
 }
 
 function configurationForm(client: PortalControlClient, kind: "create" | "edit" | "new-working-copy"): WorkbenchFormDefinition<PortalRow> {

@@ -67,9 +67,35 @@ func (r *runtime) startPluginLibrarySource(ctx context.Context) error {
 	}
 	go func() {
 		defer client.CloseIdleConnections()
+		if err := waitForPluginLibraryRepository(ctx, 500*time.Millisecond, func(probeCtx context.Context) error {
+			_, probeErr := client.CatalogSnapshot(probeCtx)
+			return probeErr
+		}); err != nil {
+			return
+		}
 		if err := controller.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 			log.Printf("Local Plugin Library 源控制器退出: %v", err)
 		}
 	}()
 	return nil
+}
+
+func waitForPluginLibraryRepository(ctx context.Context, interval time.Duration, probe func(context.Context) error) error {
+	if interval <= 0 {
+		interval = 500 * time.Millisecond
+	}
+	for {
+		if err := probe(ctx); err == nil {
+			return nil
+		}
+		timer := time.NewTimer(interval)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
 }

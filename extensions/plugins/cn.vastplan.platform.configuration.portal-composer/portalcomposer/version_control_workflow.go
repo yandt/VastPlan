@@ -75,7 +75,7 @@ func (s *Service) submitVersionedPortalPublicationLocked(ctx context.Context, pr
 	control.Capabilities = committed.Capabilities
 	control.Pending = nil
 	s.state.VersionControls[revision.PortalID] = control
-	return s.transitionPublicationLocked(ctx, principal, index, "submit", "portal.publication.")
+	return s.transitionPublicationLocked(ctx, principal, index, "submit", "portal.publication.", "")
 }
 
 func (s *Service) PortalVersionHistory(_ context.Context, principal portalapi.Principal, portalID string) (portalapi.PortalVersionHistory, error) {

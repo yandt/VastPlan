@@ -268,6 +268,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [ADR-0185 四级组件尺寸与组合根继承](decisions/ADR-0185-四级组件尺寸与组合根继承.md)
 - [ADR-0186 页面正文默认使用 Large](decisions/ADR-0186-页面正文默认Large.md)
 - [ADR-0187 认证、会话、授权管理与权限判定完全解耦](decisions/ADR-0187-认证会话授权四域解耦与快照交付.md)
+- [ADR-0188 授权与业务审批策略解耦](decisions/ADR-0188-授权与业务审批策略解耦.md)
 
 ### 通用版本账本
 

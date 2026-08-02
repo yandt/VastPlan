@@ -109,6 +109,20 @@ export interface PortalPublication {
   publishedBy?: string;
   createdAt: string;
   updatedAt: string;
+  approval?: PortalApprovalDecision;
+}
+
+export type PortalApprovalDecisionStatus = "allowed" | "review-required" | "denied";
+export interface PortalApprovalDecision {
+  status: PortalApprovalDecisionStatus;
+  policyId: string;
+  code?: string;
+  message?: string;
+}
+export interface PortalApprovalReview {
+  expectedDigest: string;
+  acknowledged: boolean;
+  reason: string;
 }
 
 export interface PortalResolvedSpec {
@@ -306,8 +320,8 @@ export class PortalControlClient {
     return this.mutate<PortalPublication>(`${this.portalPath(portalId)}/publications`, "POST", { expectedWorkingRevision: this.validID(expectedWorkingRevision) });
   }
 
-  public approvePortalPublication(portalId: string, publicationId: number): Promise<PortalPublication> {
-    return this.mutate<PortalPublication>(`${this.portalPath(portalId)}/publications/${this.validID(publicationId)}/approve`, "POST", {});
+  public approvePortalPublication(portalId: string, publicationId: number, review?: PortalApprovalReview): Promise<PortalPublication> {
+		return this.mutate<PortalPublication>(`${this.portalPath(portalId)}/publications/${this.validID(publicationId)}/approve`, "POST", review === undefined ? {} : { review });
   }
 
   public publishPortalPublication(portalId: string, publicationId: number): Promise<PortalPublication> {
@@ -403,7 +417,17 @@ export class PortalControlClient {
 
 export class PortalControlError extends Error {
   public constructor(public readonly status: number, public readonly code: string) {
-    super(`Portal control request failed: ${code}`);
+    super(portalControlErrorMessage(code));
     this.name = "PortalControlError";
   }
+}
+
+function portalControlErrorMessage(code: string): string {
+  const message: Record<string, string> = {
+    approval_separation_required: "该内容由当前账号提交，需要其他审批人批准。",
+    approval_review_required: "当前审批需要先完成冻结内容复验。",
+    approval_digest_mismatch: "待审批内容已经变化，请刷新页面后重新复验。",
+    approval_reason_required: "请填写至少 4 个字符的审批原因。",
+  };
+  return message[code] ?? `Portal control request failed: ${code}`;
 }

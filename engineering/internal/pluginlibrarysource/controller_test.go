@@ -122,6 +122,52 @@ func TestControllerPublishesUpdatesThenWithdrawsDeletedSource(t *testing.T) {
 	}
 }
 
+func TestControllerRetriesPersistedFailureAfterRestart(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "extensions", "plugins"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, directory := range []string{"contracts", "core/shared/go", "extensions/sdk/go"} {
+		if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(directory)), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, filename := range []string{"go.mod", "go.sum"} {
+		if err := os.WriteFile(filepath.Join(root, filename), []byte("test\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	sourceID := "extensions/plugins/cn.vastplan.platform.testing.source-test"
+	writeSourcePlugin(t, filepath.Join(root, filepath.FromSlash(sourceID)), "")
+	observed, err := Scan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := observed[sourceID]
+	now := time.Date(2026, 8, 2, 1, 0, 0, 0, time.UTC)
+	store, builder, publisher, withdrawer := &memoryStateStore{}, &fakeBuilder{}, &fakePublisher{}, &fakeWithdrawer{}
+	controller := &Controller{
+		RepositoryRoot: root, Debounce: time.Second, Builder: builder, Publisher: publisher,
+		Withdrawer: withdrawer, Store: store, Now: func() time.Time { return now }, Logf: func(string, ...any) {}, pending: map[string]pendingChange{},
+	}
+	state := State{SchemaVersion: stateSchemaVersion, Initialized: true, Sources: map[string]SourceState{
+		sourceID: {SourceID: sourceID, PluginID: item.Spec.ID, Fingerprint: item.Fingerprint, Phase: PhaseFailed, LastError: "旧契约拒绝"},
+	}}
+
+	retryFailedSources(&state)
+	if err := controller.reconcile(context.Background(), &state, observed); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(2 * time.Second)
+	if err := controller.reconcile(context.Background(), &state, observed); err != nil {
+		t.Fatal(err)
+	}
+	if state.Sources[sourceID].Phase != PhaseReady || len(publisher.published) != 1 {
+		t.Fatalf("控制器重启后必须重试未变化的失败源码: state=%+v published=%d", state.Sources[sourceID], len(publisher.published))
+	}
+}
+
 func writeSourcePlugin(t *testing.T, directory, marker string) {
 	t.Helper()
 	if err := os.MkdirAll(directory, 0o700); err != nil {

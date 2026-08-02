@@ -316,7 +316,7 @@
           "items": { "$ref": "#/$defs/authorizationName" }
         },
         "access": { "enum": ["read", "write", "approve", "execute"] },
-        "approval": { "enum": ["none", "different-subject", "two-person"] }
+        "approval": { "enum": ["none", "different-subject", "two-person", "policy"] }
       }
     },
     "compositionContract": {

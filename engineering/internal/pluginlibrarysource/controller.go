@@ -56,6 +56,9 @@ func (c *Controller) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if exists && state.Initialized {
+		retryFailedSources(&state)
+	}
 	observed, err := Scan(c.RepositoryRoot)
 	if err != nil {
 		return err
@@ -91,6 +94,22 @@ func (c *Controller) Run(ctx context.Context) error {
 				c.Logf("调和 Local Plugin Library 源失败: %v", err)
 			}
 		}
+	}
+}
+
+// retryFailedSources reopens each persisted failure once when the controller
+// starts. A source may be unchanged while its builder, contract validator or
+// repository dependency has been fixed; keeping the old fingerprint closed
+// would otherwise make that failure permanent. If the retry fails again,
+// reconcile records the current fingerprint and suppresses further retries
+// until the next controller start or source change.
+func retryFailedSources(state *State) {
+	for sourceID, current := range state.Sources {
+		if current.Phase != PhaseFailed {
+			continue
+		}
+		current.Fingerprint = ""
+		state.Sources[sourceID] = current
 	}
 }
 

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "revision": 65,
+  "revision": 67,
   "id": "local-platform-management",
   "target": { "kernel": "backend" },
   "serviceClasses": ["application.backend"],
@@ -120,7 +120,7 @@
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.7", "channel": "stable" },
         { "id": "cn.vastplan.platform.artifacts.storage.file", "version": "0.2.7", "channel": "stable" },
-        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.37.1", "channel": "stable" }
+        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.38.0", "channel": "stable" }
       ]
     },
     {
@@ -400,7 +400,14 @@
       "config": {
         "plugins": {
           "cn.vastplan.platform.configuration.portal-composer": {
-            "platform.portal-composer.platformCatalog": "__VASTPLAN_PORTAL_PLATFORM_CATALOG__"
+            "platform.portal-composer.platformCatalog": "__VASTPLAN_PORTAL_PLATFORM_CATALOG__",
+            "platform.portal-composer.approvalPolicy": {
+              "protocol": "approval.policy.v1",
+              "id": "foundation.approval.seed-review",
+              "mode": "single-operator-review",
+              "requireReason": true,
+              "requireDigestAcknowledgement": true
+            }
           }
         },
         "environment_allowlist": {
@@ -412,7 +419,7 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.7", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "4.2.2", "channel": "stable" }
+        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "4.3.0", "channel": "stable" }
       ]
     },
     {

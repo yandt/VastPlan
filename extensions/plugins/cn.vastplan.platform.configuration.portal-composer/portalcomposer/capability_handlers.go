@@ -60,14 +60,15 @@ func (s *Service) handlePortalAggregateOperation(ctx context.Context, principal 
 		return s.SubmitPortalPublication(ctx, principal, request.PortalID, request.Publication)
 	case "approvePortalPublication", "publishPortalPublication":
 		var request struct {
-			PortalID      string `json:"portalId"`
-			PublicationID uint64 `json:"publicationId"`
+			PortalID      string                          `json:"portalId"`
+			PublicationID uint64                          `json:"publicationId"`
+			Approval      portalapi.PortalApprovalRequest `json:"approval"`
 		}
 		if err := decode(payload, &request); err != nil {
 			return nil, err
 		}
 		if operation == "approvePortalPublication" {
-			return s.ApprovePortalPublication(ctx, principal, request.PortalID, request.PublicationID)
+			return s.ApprovePortalPublication(ctx, principal, request.PortalID, request.PublicationID, request.Approval)
 		}
 		return s.PublishPortalPublication(ctx, principal, request.PortalID, request.PublicationID)
 	case "releasePortalPublication":

@@ -23,6 +23,7 @@ export function createPortalPage(client: PortalControlClient): CollectionPageDef
       columns: [
         { key: "id", label: "Portal", defaultVisible: true, minWidth: 180 },
         { key: "status", label: "配置状态", format: "status", valueLabels: statusLabels, statusTones: { Draft: "neutral", PendingApproval: "warning", Approved: "info", Published: "success" }, defaultVisible: true },
+        { key: "approvalLabel", label: "审批要求", defaultVisible: true },
         { key: "route", label: "访问路径", defaultVisible: true },
         { key: "renderer", label: "UI 框架", defaultVisible: true },
         { key: "layout", label: "布局", defaultVisible: true },
@@ -31,7 +32,7 @@ export function createPortalPage(client: PortalControlClient): CollectionPageDef
         { key: "updatedAt", label: "更新时间", format: "datetime", defaultVisible: true, minWidth: 180 },
       ],
       selection: "single",
-      preferences: { allowedColumns: ["id", "status", "route", "renderer", "layout", "versionControlAvailability", "currentReleaseId", "updatedAt"], density: true },
+      preferences: { allowedColumns: ["id", "status", "approvalLabel", "route", "renderer", "layout", "versionControlAvailability", "currentReleaseId", "updatedAt"], density: true },
       actions: portalActions(),
     },
     pageActions: [{ id: "portal.create", label: message(namespace, "action.createPortal", "新建 Portal"), icon: "add", tone: "primary", form: "create" }],
@@ -67,10 +68,11 @@ export function createPortalPage(client: PortalControlClient): CollectionPageDef
 
 function portalActions() {
   return [
-    { id: "portal.edit", label: "编辑", icon: "edit" as const, placement: "record.row" as const, form: "edit", visibleWhen: { pointer: "/canEdit", equals: true } },
-    { id: "portal.submit", label: "提交审批", icon: "upload" as const, placement: "record.row" as const, visibleWhen: { pointer: "/canSubmit", equals: true } },
-    { id: "portal.approve", label: "批准", icon: "success" as const, placement: "record.row" as const, tone: "primary" as const, visibleWhen: { pointer: "/canApprove", equals: true } },
-    { id: "portal.publish", label: "发布", icon: "publish" as const, placement: "record.row" as const, tone: "primary" as const, confirm: "发布只冻结该候选，不会改变线上 Portal。", visibleWhen: { pointer: "/canPublish", equals: true } },
+    { id: "portal.edit", label: "编辑", icon: "edit" as const, placement: "record.row" as const, form: "edit", requiredPermissions: ["platform.portal.compose"], visibleWhen: { pointer: "/canEdit", equals: true } },
+    { id: "portal.submit", label: "提交审批", icon: "upload" as const, placement: "record.row" as const, requiredPermissions: ["platform.portal.compose"], visibleWhen: { pointer: "/canSubmit", equals: true } },
+    { id: "portal.approve", label: "批准", icon: "success" as const, placement: "record.row" as const, tone: "primary" as const, requiredPermissions: ["platform.portal.approve"], visibleWhen: { pointer: "/canApproveDirect", equals: true } },
+    { id: "portal.approveReview", label: "复验并批准", icon: "success" as const, placement: "record.row" as const, tone: "primary" as const, form: "approval-review", requiredPermissions: ["platform.portal.approve"], visibleWhen: { pointer: "/canApproveWithReview", equals: true } },
+    { id: "portal.publish", label: "发布", icon: "publish" as const, placement: "record.row" as const, tone: "primary" as const, confirm: "发布只冻结该候选，不会改变线上 Portal。", requiredPermissions: ["platform.portal.publish"], visibleWhen: { pointer: "/canPublish", equals: true } },
     { id: "portal.release", label: "上线", icon: "publish" as const, placement: "record.row" as const, tone: "primary" as const, confirm: "将最近尚未上线的 Published Publication 上线。", visibleWhen: { pointer: "/releaseAvailable", equals: true } },
     { id: "portal.newWorkingCopy", label: "编辑", icon: "edit" as const, placement: "record.row" as const, form: "new-working-copy", visibleWhen: { pointer: "/canCreateWorkingCopy", equals: true } },
     { id: "portal.rollback", label: "回滚上线", icon: "refresh" as const, placement: "record.row" as const, tone: "danger" as const, confirm: "从历史 Release 创建一条新的上线记录。", visibleWhen: { pointer: "/hasRollback", equals: true } },

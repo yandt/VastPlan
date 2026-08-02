@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	approvalv1 "cdsoft.com.cn/VastPlan/contracts/schemas/approval/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
@@ -185,12 +186,22 @@ func (s *Service) transitionPortalVersion(ctx context.Context, principal portala
 		return portalapi.PortalVersion{}, ErrNotFound
 	}
 	if !allowTest {
-		if _, err := s.transitionPublicationLocked(ctx, principal, index, action, "portal.version."); err != nil {
+		if action == "approve" {
+			if err := s.requireApprovalLocked(principal, s.state.Revisions[index], portalapi.PortalApprovalRequest{}); err != nil {
+				return portalapi.PortalVersion{}, err
+			}
+		}
+		if _, err := s.transitionPublicationLocked(ctx, principal, index, action, "portal.version.", ""); err != nil {
 			return portalapi.PortalVersion{}, err
 		}
 		return s.portalVersionLocked(principal.TenantID, s.state.Revisions[index])
 	}
 	revision := &s.state.Revisions[index]
+	if action == "approve" {
+		if err := s.requireApprovalLocked(principal, *revision, portalapi.PortalApprovalRequest{}); err != nil {
+			return portalapi.PortalVersion{}, err
+		}
+	}
 	profileIndex, bindingIndex, err := s.versionPartsLocked(principal.TenantID, *revision)
 	if err != nil {
 		return portalapi.PortalVersion{}, err
@@ -199,7 +210,7 @@ func (s *Service) transitionPortalVersion(ctx context.Context, principal portala
 	if profile.Status != revision.Status || binding.Status != revision.Status {
 		return portalapi.PortalVersion{}, errors.New("PortalVersion 内部状态不一致")
 	}
-	next, err := transitionStatus(principal, revision.Status, revision.SubmittedBy, action)
+	next, err := transitionStatus(principal, revision.Status, action)
 	if err != nil {
 		return portalapi.PortalVersion{}, err
 	}
@@ -335,6 +346,15 @@ func (s *Service) PortalGovernance(ctx context.Context, principal portalapi.Prin
 		if err != nil {
 			s.mu.Unlock()
 			return portalapi.PortalGovernanceSnapshot{}, err
+		}
+		if portal.PendingPublication != nil && portal.PendingPublication.Status == portalapi.StatusPendingApproval {
+			index, indexErr := s.revisionIndex(principal.TenantID, portal.PendingPublication.ID)
+			if indexErr != nil {
+				s.mu.Unlock()
+				return portalapi.PortalGovernanceSnapshot{}, indexErr
+			}
+			decision := s.approvalDecision(principal, s.state.Revisions[index], approvalv1.ReviewEvidence{})
+			portal.PendingPublication.Approval = &decision
 		}
 		portals = append(portals, portal)
 	}

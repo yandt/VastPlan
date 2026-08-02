@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	approvalv1 "cdsoft.com.cn/VastPlan/contracts/schemas/approval/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
@@ -73,7 +74,7 @@ func (s *Service) SubmitPortalPublication(ctx context.Context, principal portala
 	}
 	control, versioned := s.state.VersionControls[portalID]
 	if !versioned {
-		publication, transitionErr := s.transitionPublicationLocked(ctx, principal, index, "submit", "portal.publication.")
+		publication, transitionErr := s.transitionPublicationLocked(ctx, principal, index, "submit", "portal.publication.", "")
 		s.mu.Unlock()
 		return publication, transitionErr
 	}
@@ -82,15 +83,15 @@ func (s *Service) SubmitPortalPublication(ctx context.Context, principal portala
 	return publication, err
 }
 
-func (s *Service) ApprovePortalPublication(ctx context.Context, principal portalapi.Principal, portalID string, publicationID uint64) (portalapi.PortalPublication, error) {
-	return s.transitionPortalPublication(ctx, principal, portalID, publicationID, "approve")
+func (s *Service) ApprovePortalPublication(ctx context.Context, principal portalapi.Principal, portalID string, publicationID uint64, request portalapi.PortalApprovalRequest) (portalapi.PortalPublication, error) {
+	return s.transitionPortalPublication(ctx, principal, portalID, publicationID, "approve", request)
 }
 
 func (s *Service) PublishPortalPublication(ctx context.Context, principal portalapi.Principal, portalID string, publicationID uint64) (portalapi.PortalPublication, error) {
-	return s.transitionPortalPublication(ctx, principal, portalID, publicationID, "publish")
+	return s.transitionPortalPublication(ctx, principal, portalID, publicationID, "publish", portalapi.PortalApprovalRequest{})
 }
 
-func (s *Service) transitionPortalPublication(ctx context.Context, principal portalapi.Principal, portalID string, publicationID uint64, action string) (portalapi.PortalPublication, error) {
+func (s *Service) transitionPortalPublication(ctx context.Context, principal portalapi.Principal, portalID string, publicationID uint64, action string, approval portalapi.PortalApprovalRequest) (portalapi.PortalPublication, error) {
 	if err := requireTrustedPrincipal(principal); err != nil {
 		return portalapi.PortalPublication{}, err
 	}
@@ -100,7 +101,16 @@ func (s *Service) transitionPortalPublication(ctx context.Context, principal por
 	if err != nil || s.state.Revisions[index].PortalID != portalID || s.isTestVersionLocked(publicationID) {
 		return portalapi.PortalPublication{}, ErrNotFound
 	}
-	return s.transitionPublicationLocked(ctx, principal, index, action, "portal.publication.")
+	auditReason := ""
+	if action == "approve" {
+		decision := s.approvalDecision(principal, s.state.Revisions[index], approval.Review)
+		if decision.Status != approvalv1.DecisionAllowed {
+			err := &ApprovalError{Decision: decision}
+			return portalapi.PortalPublication{}, err
+		}
+		auditReason = decision.AuditNote
+	}
+	return s.transitionPublicationLocked(ctx, principal, index, action, "portal.publication.", auditReason)
 }
 
 func (s *Service) ReleasePortalPublication(ctx context.Context, principal portalapi.Principal, portalID string, request portalapi.PortalPublicationReleaseRequest) (portalapi.PortalRelease, error) {
@@ -138,7 +148,7 @@ func (s *Service) updateWorkingCopyLocked(ctx context.Context, principal portala
 	return s.save()
 }
 
-func (s *Service) transitionPublicationLocked(ctx context.Context, principal portalapi.Principal, index int, action, auditPrefix string) (portalapi.PortalPublication, error) {
+func (s *Service) transitionPublicationLocked(ctx context.Context, principal portalapi.Principal, index int, action, auditPrefix, auditReason string) (portalapi.PortalPublication, error) {
 	revision := &s.state.Revisions[index]
 	if s.isTestVersionLocked(revision.ID) {
 		return portalapi.PortalPublication{}, ErrNotFound
@@ -151,7 +161,7 @@ func (s *Service) transitionPublicationLocked(ctx context.Context, principal por
 	if profile.Status != revision.Status || binding.Status != revision.Status {
 		return portalapi.PortalPublication{}, errors.New("Portal Publication 内部状态不一致")
 	}
-	next, err := transitionStatus(principal, revision.Status, revision.SubmittedBy, action)
+	next, err := transitionStatus(principal, revision.Status, action)
 	if err != nil {
 		return portalapi.PortalPublication{}, err
 	}
@@ -184,7 +194,7 @@ func (s *Service) transitionPublicationLocked(ctx context.Context, principal por
 	applyActors(&revision.SubmittedBy, &revision.ApprovedBy, &revision.PublishedBy, principal.ID, action)
 	applyActors(&profile.SubmittedBy, &profile.ApprovedBy, &profile.PublishedBy, principal.ID, action)
 	applyActors(&binding.SubmittedBy, &binding.ApprovedBy, &binding.PublishedBy, principal.ID, action)
-	s.auditLocked(*revision, auditPrefix+action, principal, "", "normal")
+	s.auditLocked(*revision, auditPrefix+action, principal, auditReason, "normal")
 	if err := s.save(); err != nil {
 		return portalapi.PortalPublication{}, err
 	}

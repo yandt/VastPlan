@@ -396,7 +396,7 @@ type Service interface {
 	CreatePortalWorkingCopy(context.Context, Principal, string, PortalConfiguration) (PortalWorkingCopy, error)
 	SavePortalWorkingCopy(context.Context, Principal, string, SavePortalWorkingCopyRequest) (PortalWorkingCopy, error)
 	SubmitPortalPublication(context.Context, Principal, string, SubmitPortalPublicationRequest) (PortalPublication, error)
-	ApprovePortalPublication(context.Context, Principal, string, uint64) (PortalPublication, error)
+	ApprovePortalPublication(context.Context, Principal, string, uint64, PortalApprovalRequest) (PortalPublication, error)
 	PublishPortalPublication(context.Context, Principal, string, uint64) (PortalPublication, error)
 	ReleasePortalPublication(context.Context, Principal, string, PortalPublicationReleaseRequest) (PortalRelease, error)
 	RollbackPortalRelease(context.Context, Principal, string, uint64, uint64, string) (PortalRelease, error)

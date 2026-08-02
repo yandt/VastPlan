@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/approval/v1/vastplan.approval-policy.schema.json",
+  "title": "VastPlan Approval Policy v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "id", "mode", "requireReason", "requireDigestAcknowledgement"],
+  "properties": {
+    "protocol": { "const": "approval.policy.v1" },
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 160 },
+    "mode": { "enum": ["different-subject", "single-operator-review"] },
+    "requireReason": { "type": "boolean" },
+    "requireDigestAcknowledgement": { "type": "boolean" }
+  },
+  "allOf": [{
+    "if": { "properties": { "mode": { "const": "single-operator-review" } }, "required": ["mode"] },
+    "then": {
+      "properties": {
+        "requireReason": { "const": true },
+        "requireDigestAcknowledgement": { "const": true }
+      }
+    }
+  }]
+}

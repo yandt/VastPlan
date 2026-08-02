@@ -341,7 +341,10 @@ func Contribution(service *Service) sdk.Contribution {
 				return handleErr
 			})
 			if err != nil {
-				if errors.Is(err, ErrForbidden) || errors.Is(err, ErrSelfApproval) {
+				if approval, ok := approvalError(err); ok {
+					return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: "portal." + approval.Decision.Code, Message: approval.Error()}}, nil, nil
+				}
+				if errors.Is(err, ErrForbidden) {
 					return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: errorcode.PermissionDenied, Message: err.Error()}}, nil, nil
 				}
 				if errors.Is(err, ErrStateConflict) {

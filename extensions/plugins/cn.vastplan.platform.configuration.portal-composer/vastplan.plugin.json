@@ -2,7 +2,7 @@
   "id": "cn.vastplan.platform.configuration.portal-composer",
   "name": "VastPlan Portal Composer",
   "description": "以单一 Portal 聚合治理 WorkingCopy、Publication、Release 与用户级 PortalPreference",
-  "version": "4.2.2",
+  "version": "4.3.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -33,7 +33,7 @@
       { "extensionPoint": "tool.package", "capability": "platform.portal-composer", "operation": "savePortalWorkingCopy", "permissions": ["platform.portal.compose"], "access": "write", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.portal-composer", "operation": "restorePortalVersion", "permissions": ["platform.portal.compose"], "access": "write", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.portal-composer", "operation": "submitPortalPublication", "permissions": ["platform.portal.compose"], "access": "execute", "approval": "none" },
-      { "extensionPoint": "tool.package", "capability": "platform.portal-composer", "operation": "approvePortalPublication", "permissions": ["platform.portal.approve"], "access": "approve", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.portal-composer", "operation": "approvePortalPublication", "permissions": ["platform.portal.approve"], "access": "approve", "approval": "policy" },
       { "extensionPoint": "tool.package", "capability": "platform.portal-composer", "operation": "publishPortalPublication", "permissions": ["platform.portal.publish"], "access": "execute", "approval": "different-subject" },
       { "extensionPoint": "tool.package", "capability": "platform.portal-composer", "operation": "releasePortalPublication", "permissions": ["platform.portal.publish"], "access": "execute", "approval": "different-subject" },
       { "extensionPoint": "tool.package", "capability": "platform.portal-composer", "operation": "putTestTargetBinding", "permissions": ["platform.portal.compose"], "access": "write", "approval": "none" },
@@ -63,9 +63,21 @@
     "schema": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["platform.portal-composer.platformCatalog"],
+      "required": ["platform.portal-composer.platformCatalog", "platform.portal-composer.approvalPolicy"],
       "properties": {
         "platform.portal-composer.platformCatalog": { "type": "string", "minLength": 2 },
+        "platform.portal-composer.approvalPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["protocol", "id", "mode", "requireReason", "requireDigestAcknowledgement"],
+          "properties": {
+            "protocol": { "const": "approval.policy.v1" },
+            "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$" },
+            "mode": { "enum": ["different-subject", "single-operator-review"] },
+            "requireReason": { "type": "boolean" },
+            "requireDigestAcknowledgement": { "type": "boolean" }
+          }
+        },
         "platform.portal-composer.versionControl": {
           "type": "object",
           "additionalProperties": false,
@@ -94,7 +106,7 @@
           { "name": "createPortalWorkingCopy", "description": "为已发布 Portal 创建下一轮 WorkingCopy", "audience": "user" },
           { "name": "savePortalWorkingCopy", "description": "以 revision CAS 保存当前 WorkingCopy", "audience": "user" },
           { "name": "submitPortalPublication", "description": "冻结 WorkingCopy 并提交 Publication", "audience": "user" },
-          { "name": "approvePortalPublication", "description": "异人审批 Publication", "audience": "user" },
+          { "name": "approvePortalPublication", "description": "按 ApprovalPolicy 审批 Publication", "audience": "user" },
           { "name": "publishPortalPublication", "description": "发布已审批的 Publication", "audience": "user" },
           { "name": "releasePortalPublication", "description": "将 Published Publication 上线", "audience": "user" },
           { "name": "portalVersionHistory", "description": "读取 Portal 聚合已确认的版本历史", "audience": "user" },

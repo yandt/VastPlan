@@ -139,7 +139,7 @@ func TestPortalReleaseAndHotProjectionSurviveColdVersionControlFailure(t *testin
 	portal, _ := createPortalAggregateForTest(t, service, ctx, author)
 	publication, err := service.SubmitPortalPublication(ctx, author, portal.ID, portalapi.SubmitPortalPublicationRequest{ExpectedWorkingRevision: portal.WorkingCopy.Revision})
 	if err == nil {
-		publication, err = service.ApprovePortalPublication(ctx, approver, portal.ID, publication.ID)
+		publication, err = service.ApprovePortalPublication(ctx, approver, portal.ID, publication.ID, portalapi.PortalApprovalRequest{})
 	}
 	if err == nil {
 		publication, err = service.PublishPortalPublication(ctx, publisher, portal.ID, publication.ID)

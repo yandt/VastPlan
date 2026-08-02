@@ -342,6 +342,15 @@ func (r *runtime) start(ctx context.Context) error {
 			if err := r.waitForRecoveryStage(ctx, recoveryv1.StageControlPlane, platformNodeStartedAt, 120*time.Second); err != nil {
 				return fmt.Errorf("显式发布的平台控制面未收敛: %w", err)
 			}
+			if err := r.waitForRecoveryStage(ctx, recoveryv1.StagePlatform, platformNodeStartedAt, 120*time.Second); err != nil {
+				return fmt.Errorf("显式发布的平台完整能力未收敛: %w", err)
+			}
+			// Deployment 已经引用本次 Seed 候选；必须先提交对应 LKG，再进入
+			// 独立的 Portal 业务发布。后者即使因用户的未完成 Publication
+			// 被安全拒绝，也不能留下“新 Deployment + 旧 LKG”的混合状态。
+			if err := r.commitSeedRuntimeSnapshot(); err != nil {
+				return fmt.Errorf("提交已收敛的 Seed Runtime 快照: %w", err)
+			}
 			return nil
 		}
 	}

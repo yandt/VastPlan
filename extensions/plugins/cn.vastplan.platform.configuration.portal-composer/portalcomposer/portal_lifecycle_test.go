@@ -3,8 +3,11 @@ package portalcomposer
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
+	approvalv1 "cdsoft.com.cn/VastPlan/contracts/schemas/approval/v1"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/approvalpolicy"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
@@ -47,10 +50,10 @@ func TestPortalNoVersionLifecycleUsesWorkingCopyPublicationAndRelease(t *testing
 	if _, err := service.SavePortalWorkingCopy(context.Background(), author, portal.ID, portalapi.SavePortalWorkingCopyRequest{ExpectedRevision: working.Revision, Configuration: configuration}); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("候选审批期间不得继续修改 WorkingCopy: %v", err)
 	}
-	if _, err := service.ApprovePortalPublication(context.Background(), author, portal.ID, publication.ID); !errors.Is(err, ErrSelfApproval) {
+	if _, err := service.ApprovePortalPublication(context.Background(), author, portal.ID, publication.ID, portalapi.PortalApprovalRequest{}); !errors.Is(err, ErrSelfApproval) {
 		t.Fatalf("Publication 必须异人审批: %v", err)
 	}
-	publication, err = service.ApprovePortalPublication(context.Background(), approver, portal.ID, publication.ID)
+	publication, err = service.ApprovePortalPublication(context.Background(), approver, portal.ID, publication.ID, portalapi.PortalApprovalRequest{})
 	if err != nil || publication.Status != portalapi.StatusApproved {
 		t.Fatalf("审批 Publication 失败: %+v err=%v", publication, err)
 	}
@@ -71,5 +74,50 @@ func TestPortalNoVersionLifecycleUsesWorkingCopyPublicationAndRelease(t *testing
 	audit, err := service.Audit(context.Background(), author, portal.ID, publication.ID)
 	if err != nil || len(audit) != 5 || audit[1].Action != "portal.working-copy.saved" || audit[2].Action != "portal.publication.submit" {
 		t.Fatalf("新生命周期审计不完整: %+v err=%v", audit, err)
+	}
+}
+
+func TestSeedSingleOperatorReviewRequiresFrozenDigestEvidence(t *testing.T) {
+	policy, err := approvalpolicy.New(approvalv1.Profile{
+		Protocol: approvalv1.Protocol, ID: "foundation.approval.seed-review", Mode: approvalv1.ModeSingleOperatorReview,
+		RequireReason: true, RequireDigestAcknowledgement: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := newTestService(t)
+	service.approvalPolicy = policy
+	operator := principal("seed-operator", "portal.compose", "portal.approve")
+	configuration, err := service.configurationFromCatalog(spec("/"), operator.TenantID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	portal, err := service.CreatePortal(context.Background(), operator, portalapi.CreatePortalRequest{PortalID: "seed", Configuration: configuration})
+	if err != nil {
+		t.Fatal(err)
+	}
+	publication, err := service.SubmitPortalPublication(context.Background(), operator, portal.ID, portalapi.SubmitPortalPublicationRequest{ExpectedWorkingRevision: portal.WorkingCopy.Revision})
+	if err != nil {
+		t.Fatal(err)
+	}
+	governance, err := service.PortalGovernance(context.Background(), operator)
+	if err != nil || governance.Portals[0].PendingPublication.Approval == nil || governance.Portals[0].PendingPublication.Approval.Status != approvalv1.DecisionReviewRequired {
+		t.Fatalf("同一 Seed Operator 应得到复验要求: %+v err=%v", governance, err)
+	}
+	if _, err := service.ApprovePortalPublication(context.Background(), operator, portal.ID, publication.ID, portalapi.PortalApprovalRequest{}); err == nil {
+		t.Fatal("缺少复验证据时不得批准")
+	}
+	wrong := portalapi.PortalApprovalRequest{Review: approvalv1.ReviewEvidence{ExpectedDigest: strings.Repeat("f", 64), Acknowledged: true, Reason: "已复核冻结配置"}}
+	if _, err := service.ApprovePortalPublication(context.Background(), operator, portal.ID, publication.ID, wrong); err == nil {
+		t.Fatal("摘要不匹配时不得批准")
+	}
+	valid := portalapi.PortalApprovalRequest{Review: approvalv1.ReviewEvidence{ExpectedDigest: publication.Digest, Acknowledged: true, Reason: "已复核冻结配置"}}
+	approved, err := service.ApprovePortalPublication(context.Background(), operator, portal.ID, publication.ID, valid)
+	if err != nil || approved.Status != portalapi.StatusApproved {
+		t.Fatalf("有效单人复验未批准: %+v err=%v", approved, err)
+	}
+	audit, err := service.Audit(context.Background(), operator, portal.ID, publication.ID)
+	if err != nil || !strings.Contains(audit[len(audit)-1].Reason, "single-operator-review") {
+		t.Fatalf("单人复验未写入明确审计: %+v err=%v", audit, err)
 	}
 }

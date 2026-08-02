@@ -83,7 +83,14 @@ export class PortalRoutes {
     }
     if (tail.length === 2 && (tail[1] === "approve" || tail[1] === "publish") && method === "POST") {
       const operation: PortalComposerOperation = tail[1] === "approve" ? "approvePortalPublication" : "publishPortalPublication";
-      await this.call(operation, { portalId, publicationId }, principal, response, signal);
+			if (operation === "approvePortalPublication") {
+				await withRequestJSON(request, response, async (body) => {
+					const value = requireJSONObject(body);
+					await this.call(operation, { portalId, publicationId, approval: { review: value.review ?? {} } }, principal, response, signal);
+				});
+			} else {
+				await this.call(operation, { portalId, publicationId }, principal, response, signal);
+			}
       return true;
     }
     sendAPIError(response, 405, "method_not_allowed", method === "HEAD");

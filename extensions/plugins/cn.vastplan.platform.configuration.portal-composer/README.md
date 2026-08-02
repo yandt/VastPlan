@@ -6,6 +6,20 @@
 
 WorkingCopy 保存使用独立 revision CAS，不产生业务版本；提交时冻结规范配置和 SHA-256 digest，形成 `PendingApproval → Approved → Published` Publication。审批期间没有可编辑 WorkingCopy。`PortalRelease` 引用精确 Published Publication，重新执行可信 Catalog 校验、制品物化、引用保护、路由冲突检查和 CAS 后才改变线上 Portal。
 
+审批资格和审批证据完全分开：内核只用 `platform.portal.approve` 判断当前主体是否具备资格，插件再消费组合根注入的 `approval.policy.v1`。`different-subject` 要求提交人与审批人不同；`single-operator-review` 允许 Seed Operator 在重新确认精确冻结摘要并填写审计原因后批准自己的候选，记录始终标明单人复验。治理读模型返回 `allowed/review-required/denied`，Workbench 据此显示直接批准、复验表单或“需其他审批人”，后端仍重复强制同一策略。
+
+```json
+{
+  "platform.portal-composer.approvalPolicy": {
+    "protocol": "approval.policy.v1",
+    "id": "foundation.approval.different-subject",
+    "mode": "different-subject",
+    "requireReason": false,
+    "requireDigestAcknowledgement": false
+  }
+}
+```
+
 版本控制是可选能力。未配置 `platform.portal-composer.versionControl` 时，`versionControl` 明确返回 `enabled=false / disabled`，不发出 Workspace 调用，也不创建 VersionRef、Head 或通用历史。配置可信 `environmentId + resourceType` 后，Portal 创建时固定绑定；提交 Publication 使用持久 operation ID 创建 detached VersionRef，Portal 聚合只公开自身 CAS 已确认的轻量历史。旧 `/versions`、PortalVersion 用户操作和浏览器兼容投影均已删除。
 
 ```json
@@ -34,4 +48,4 @@ pnpm --filter @vastplan/portal-composer typecheck
 pnpm --filter @vastplan/portal-composer test
 ```
 
-完整边界见[Portal 可选版本控制接入](../../../docs/dev/architecture/Portal可选版本控制接入.md)和 [ADR-0174](../../../docs/dev/decisions/ADR-0174-Portal可选版本控制与发布快照分离.md)。
+完整边界见[Portal 可选版本控制接入](../../../docs/dev/architecture/Portal可选版本控制接入.md)、[ADR-0174](../../../docs/dev/decisions/ADR-0174-Portal可选版本控制与发布快照分离.md)和 [ADR-0188](../../../docs/dev/decisions/ADR-0188-授权与业务审批策略解耦.md)。
