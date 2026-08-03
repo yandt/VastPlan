@@ -11,7 +11,7 @@ export interface MethodDescriptor {
 
 export interface AuthenticationStep {
   readonly stepId: string;
-  readonly kind: "identifier" | "password" | "one-time-code" | "redirect" | "context-selection";
+  readonly kind: "identifier" | "password" | "one-time-code" | "redirect" | "context-selection" | "enrollment";
   readonly redirectUri?: string;
   readonly expiresAt: string;
   readonly [key: string]: unknown;
@@ -71,7 +71,7 @@ function parseMethod(value: unknown): MethodDescriptor {
 function parseResult(value: Record<string, unknown>): BrokerMethodResult {
   if (!new Set(["challenge", "authenticated", "rejected", "locked", "expired", "cancelled"]).has(String(value.state))) throw new Error("Authentication Method 状态无效");
   if (value.state === "challenge") {
-    if (!isRecord(value.step) || !token(value.step.stepId) || !new Set(["identifier", "password", "one-time-code", "redirect", "context-selection"]).has(String(value.step.kind)) || typeof value.step.expiresAt !== "string") throw new Error("Authentication Step 无效");
+    if (!isRecord(value.step) || !token(value.step.stepId) || !new Set(["identifier", "password", "one-time-code", "redirect", "context-selection", "enrollment"]).has(String(value.step.kind)) || typeof value.step.expiresAt !== "string") throw new Error("Authentication Step 无效");
   }
   return Object.freeze({ ...value, ...(isRecord(value.step) ? { step: Object.freeze({ ...value.step }) as AuthenticationStep } : {}) }) as BrokerMethodResult;
 }

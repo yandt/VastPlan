@@ -459,6 +459,7 @@ func (r *runtime) serviceEnv() map[string]string {
 		"VASTPLAN_AUTHENTICATION_ASSERTION_KEY_FILE":    r.authenticationAssertionKeyPath(),
 		"VASTPLAN_AUTHENTICATION_ASSERTION_TRUST":       r.authenticationAssertionTrustPath(),
 		"VASTPLAN_SEED_ACCESS_STATE_FILE":               r.seedAccessStatePath(),
+		"VASTPLAN_SEED_ACCESS_ALLOW_INITIAL_SETUP":      "true",
 	}
 	if r.options.applyPlatform {
 		environment["VASTPLAN_AUTHORIZATION_POLICY_BOOTSTRAP_RECONCILIATION"] = "seed-owned"

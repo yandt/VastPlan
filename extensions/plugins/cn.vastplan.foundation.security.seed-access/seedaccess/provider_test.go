@@ -42,7 +42,7 @@ func TestSeedProviderUsesGenericAuthenticationMethod(t *testing.T) {
 	if _, err := authority.Initialize("owner", []byte("correct horse battery staple")); err != nil {
 		t.Fatal(err)
 	}
-	provider, _ := NewProvider(authority)
+	provider, _ := NewProvider(authority, ProviderOptions{})
 	provider.now = authority.now
 	contribution := provider.Contribution()
 	result, response, err := contribution.Handlers[authenticationv1.OperationDescribe](context.Background(), nil, &contractv1.CallContext{}, []byte(`{}`))
@@ -80,7 +80,7 @@ func TestSeedProviderUsesGenericAuthenticationMethod(t *testing.T) {
 		t.Fatal(err)
 	}
 	evidence := parsed.(*authenticationv1.ContinueResult).Result.Evidence
-	if evidence == nil || evidence.ProviderID != ProviderID || evidence.Subject.ID != "owner" {
+	if evidence == nil || evidence.ProviderID != ProviderID || evidence.Subject.ID != SeedOperatorSubjectID {
 		t.Fatalf("Seed Provider 未产生标准 Evidence: %+v", evidence)
 	}
 
@@ -88,6 +88,71 @@ func TestSeedProviderUsesGenericAuthenticationMethod(t *testing.T) {
 	parsed, _ = authenticationv1.ParseMethodResult(authenticationv1.OperationContinue, response)
 	if result.GetStatus() != contractv1.CallResult_STATUS_OK || parsed.(*authenticationv1.ContinueResult).Result.State != authenticationv1.StateExpired {
 		t.Fatal("Provider transaction 必须一次性消费")
+	}
+}
+
+func TestSeedProviderEnrollsAdministratorOnlyWhileUninitialized(t *testing.T) {
+	authority, err := NewAuthority(FileStore{Path: filepath.Join(t.TempDir(), "seed.json")}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 3, 0, 0, 0, 0, time.UTC)
+	authority.now = func() time.Time { return now }
+	provider, err := NewProvider(authority, ProviderOptions{AllowInitialSetup: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider.now = authority.now
+	begin := authenticationv1.BeginRequest{TransactionID: strings.Repeat("i", 32), MethodID: MethodID}
+	setup := provider.begin(begin)
+	if setup.Result.Step == nil || setup.Result.Step.Kind != authenticationv1.StepEnrollment || len(setup.Result.Step.Fields) != 3 {
+		t.Fatalf("未初始化状态必须下发一次性管理员设置表单: %+v", setup)
+	}
+	if setup.Result.Step.Fields[1].Autocomplete != "new-password" || setup.Result.Step.Fields[2].ID != "password-confirmation" {
+		t.Fatalf("管理员设置必须使用 new-password 与确认字段: %+v", setup.Result.Step.Fields)
+	}
+	completed := provider.continueAuthentication(authenticationv1.ContinueRequest{TransactionID: begin.TransactionID, StepID: setup.Result.Step.StepID, Responses: []authenticationv1.FieldResponse{
+		{FieldID: "operator", Value: "admin"}, {FieldID: "password", Value: "a sufficiently long password"}, {FieldID: "password-confirmation", Value: "a sufficiently long password"},
+	}})
+	if completed.Result.State != authenticationv1.StateAuthenticated || completed.Result.Evidence == nil {
+		t.Fatalf("管理员设置成功后必须直接返回认证 Evidence: %+v", completed)
+	}
+	if err := authority.Authenticate("admin", []byte("a sufficiently long password"), nil); err != nil {
+		t.Fatalf("一次性设置必须原子写入 Seed Authority: %v", err)
+	}
+	if next := provider.begin(authenticationv1.BeginRequest{TransactionID: strings.Repeat("n", 32), MethodID: MethodID}); next.Result.Step == nil || next.Result.Step.Kind == authenticationv1.StepEnrollment {
+		t.Fatalf("初始化后不得再次暴露管理员设置入口: %+v", next)
+	}
+}
+
+func TestSeedProviderRejectsEnrollmentWhenTrustedHostDisablesIt(t *testing.T) {
+	authority, _ := NewAuthority(FileStore{Path: filepath.Join(t.TempDir(), "seed.json")}, nil)
+	provider, _ := NewProvider(authority, ProviderOptions{})
+	result := provider.begin(authenticationv1.BeginRequest{TransactionID: strings.Repeat("d", 32), MethodID: MethodID})
+	if result.Result.State != authenticationv1.StateRejected || result.Result.ReasonCode != authenticationv1.ReasonMethodUnavailable {
+		t.Fatalf("未获宿主授权时不得开放首次管理员设置: %+v", result)
+	}
+}
+
+func TestSeedProviderIsReadyForTrustedInitialSetup(t *testing.T) {
+	authority, _ := NewAuthority(FileStore{Path: filepath.Join(t.TempDir(), "seed.json")}, nil)
+	provider, _ := NewProvider(authority, ProviderOptions{AllowInitialSetup: true})
+	result, raw, err := provider.handle(context.Background(), authenticationv1.OperationHealth, []byte(`{}`))
+	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK {
+		t.Fatalf("可信首次设置阶段的健康探针失败: result=%+v err=%v", result, err)
+	}
+	parsed, err := authenticationv1.ParseMethodResult(authenticationv1.OperationHealth, raw)
+	if err != nil || !parsed.(*authenticationv1.HealthResult).Ready {
+		t.Fatalf("未初始化且宿主已授权时 Seed Provider 必须保持 Ready: result=%s err=%v", raw, err)
+	}
+	provider, _ = NewProvider(authority, ProviderOptions{})
+	result, raw, err = provider.handle(context.Background(), authenticationv1.OperationHealth, []byte(`{}`))
+	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK {
+		t.Fatalf("禁用首次设置阶段的健康探针失败: result=%+v err=%v", result, err)
+	}
+	parsed, err = authenticationv1.ParseMethodResult(authenticationv1.OperationHealth, raw)
+	if err != nil || parsed.(*authenticationv1.HealthResult).Ready {
+		t.Fatalf("未获宿主授权时未初始化 Seed Provider 不得 Ready: result=%s err=%v", raw, err)
 	}
 }
 
@@ -124,7 +189,7 @@ func TestSeedProviderExposesRecoveryTokenOnlyForActiveLease(t *testing.T) {
 	if _, _, err := authority.OpenRecovery(state.Generation, []byte("console-proof"), time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	provider, err := NewProvider(authority)
+	provider, err := NewProvider(authority, ProviderOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -80,6 +80,26 @@ func TestAuthenticationStepEnforcesLoginSpecificSecretSemantics(t *testing.T) {
 	}
 }
 
+func TestEnrollmentStepAllowsOnlyNewPasswordPrompts(t *testing.T) {
+	now := time.Date(2026, 8, 3, 0, 0, 0, 0, time.UTC)
+	step := authenticationv1.AuthenticationStep{
+		StepID: strings.Repeat("e", 32), Kind: authenticationv1.StepEnrollment,
+		Title: localized("设置管理员"), Description: localized("仅首次启动可用"), SubmitLabel: localized("创建"), ExpiresAt: now.Add(5 * time.Minute),
+		Fields: []authenticationv1.AuthenticationField{
+			{ID: "operator", Kind: authenticationv1.FieldIdentifier, Label: localized("账号"), Help: localized("管理员账号"), Autocomplete: "username", Required: true, MinLength: 1, MaxLength: 256, Choices: []authenticationv1.FieldChoice{}},
+			{ID: "password", Kind: authenticationv1.FieldPassword, Label: localized("密码"), Help: localized("设置密码"), Autocomplete: "new-password", Required: true, MinLength: 12, MaxLength: 1024, Choices: []authenticationv1.FieldChoice{}},
+			{ID: "password-confirmation", Kind: authenticationv1.FieldPassword, Label: localized("确认密码"), Help: localized("再次输入"), Autocomplete: "new-password", Required: true, MinLength: 12, MaxLength: 1024, Choices: []authenticationv1.FieldChoice{}},
+		},
+	}
+	if _, err := authenticationv1.ParseMethodResult(authenticationv1.OperationBegin, marshal(t, authenticationv1.BeginResult{Result: authenticationv1.MethodResult{State: authenticationv1.StateChallenge, Step: &step}})); err != nil {
+		t.Fatalf("受限 enrollment Step 应接受 new-password: %v", err)
+	}
+	step.Fields[1].Autocomplete = "current-password"
+	if _, err := authenticationv1.ParseMethodResult(authenticationv1.OperationBegin, marshal(t, authenticationv1.BeginResult{Result: authenticationv1.MethodResult{State: authenticationv1.StateChallenge, Step: &step}})); err == nil {
+		t.Fatal("enrollment Step 不得伪装成当前密码登录")
+	}
+}
+
 func TestAuthenticationRedirectRequiresHTTPSOutsideLoopback(t *testing.T) {
 	now := time.Date(2026, 7, 23, 0, 0, 0, 0, time.UTC)
 	step := authenticationv1.AuthenticationStep{

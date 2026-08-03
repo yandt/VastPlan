@@ -54,3 +54,9 @@
 - 未发布但已 `Validated` 的 Provider Profile 可由授权管理员启动隔离真实认证测试。Broker 锁定测试用 Profile 与 audience，Node 原子消费 Assertion 后只写入短时密封测试证明，不创建、替换或提权正常 Session；管理 BFF 只接受该服务端证明，拒绝浏览器自报 Assertion。
 - 完成邮箱/短信 OTP Provider 和稳定 `authentication.delivery.v1` 窄端口；验证码 HMAC、重发换代、尝试锁定、TTL 和并发单次消费由 leader-owned Go Provider 管理。通用 Node Webhook Delivery 只访问 HTTPS，通过 Material Lease 获取企业网关凭证，且只接受 OTP Provider 调用链。
 - Access 品牌 Logo 完成 Host/returnTo/Generation/asset ID 四重绑定和服务端 SHA-256 复验；浏览器只使用同源内容寻址 URL，不获取内部 digest 或外部品牌 URL。
+
+## 实施补充（2026-08-03）：一次性管理员领取
+
+- 首次管理员设置收敛到 `authentication.method.v1` 的受限 `enrollment` Step，而不再把 `seed-admin init` 作为正常安装流程。该 Step 只允许 `Uninitialized` 的 Seed Authority 且必须由可信组合根显式启用；提交由 Authority 的 generation CAS 原子完成。
+- Seed Provider 把唯一 Seed Operator 投影为固定、非 PII 的 `seed.operator` 主体。实际账号仅保留在受保护的 Seed Store 中验证，避免将首次输入的账号复制进授权快照或 Portal Session；可信宿主可因此在未初始化阶段预置该主体的最小启动授权。
+- 成功领取仍沿用 Broker 签发 Assertion、一次性消费和 Authorization Session 解析，不创建前端特权旁路。进入 `SeedActive` 后 `enrollment` 不可再次取得；登录页不提供重置能力。生产默认关闭网络首次设置，部署控制面必须明确选择受限入口。

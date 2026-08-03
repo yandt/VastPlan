@@ -138,11 +138,11 @@ func validateStep(step AuthenticationStep) error {
 			return fmt.Errorf("Authentication Step 字段重复: %s", field.ID)
 		}
 		seen[field.ID] = struct{}{}
-		if err := validateField(field); err != nil {
+		if err := validateField(step.Kind, field); err != nil {
 			return fmt.Errorf("Authentication 字段 %s: %w", field.ID, err)
 		}
 	}
-	requiredKind := map[StepKind]FieldKind{StepIdentifier: FieldIdentifier, StepPassword: FieldPassword, StepOneTimeCode: FieldOneTimeCode, StepContextSelection: FieldSelect}[step.Kind]
+	requiredKind := map[StepKind]FieldKind{StepIdentifier: FieldIdentifier, StepPassword: FieldPassword, StepOneTimeCode: FieldOneTimeCode, StepContextSelection: FieldSelect, StepEnrollment: FieldPassword}[step.Kind]
 	for _, field := range step.Fields {
 		if field.Kind == requiredKind {
 			return nil
@@ -163,7 +163,7 @@ func isLoopbackHTTP(parsed *url.URL) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-func validateField(field AuthenticationField) error {
+func validateField(stepKind StepKind, field AuthenticationField) error {
 	if err := validateLocalizedText(field.Label); err != nil {
 		return err
 	}
@@ -184,8 +184,12 @@ func validateField(field AuthenticationField) error {
 			return errors.New("identifier 字段语义无效")
 		}
 	case FieldPassword:
-		if field.Autocomplete != "current-password" || len(field.Choices) != 0 || field.MaxLength > 1024 {
-			return errors.New("password 字段必须使用 current-password 且不携带 choices")
+		expectedAutocomplete := "current-password"
+		if stepKind == StepEnrollment {
+			expectedAutocomplete = "new-password"
+		}
+		if field.Autocomplete != expectedAutocomplete || len(field.Choices) != 0 || field.MaxLength > 1024 {
+			return fmt.Errorf("password 字段必须使用 %s 且不携带 choices", expectedAutocomplete)
 		}
 	case FieldOneTimeCode:
 		if field.Autocomplete != "one-time-code" || len(field.Choices) != 0 || field.MinLength < 4 || field.MaxLength > 32 {

@@ -4,6 +4,7 @@ package main
 import (
 	"log"
 	"os"
+	"strings"
 
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/authorizationtrust"
 	seedaccess "cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.foundation.security.seed-access/seedaccess"
@@ -16,7 +17,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("初始化 Seed Authority: %v", err)
 	}
-	provider, err := seedaccess.NewProvider(authority)
+	provider, err := seedaccess.NewProvider(authority, seedaccess.ProviderOptions{AllowInitialSetup: strings.EqualFold(strings.TrimSpace(os.Getenv("VASTPLAN_SEED_ACCESS_ALLOW_INITIAL_SETUP")), "true")})
 	if err != nil {
 		log.Fatalf("初始化 Seed Provider: %v", err)
 	}

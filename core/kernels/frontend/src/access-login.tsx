@@ -73,7 +73,7 @@ export function AccessLoginPage({ fetcher }: { fetcher: ModuleFetcher }) {
     try {
       const value = await client.continue(transactionId, step.stepId, responses);
       if (value.result.state === "authenticated") { globalThis.location?.assign(value.returnTo ?? "/"); return; }
-      setStep(value.result.step); setError(resultMessage(value.result.state));
+      setStep(value.result.step); setError(resultMessage(value.result.state, step.kind));
     } catch { setError("authenticationFailed"); }
     finally { setBusy(false); }
   };
@@ -105,11 +105,14 @@ export function AccessLoginPage({ fetcher }: { fetcher: ModuleFetcher }) {
 }
 
 function selectLocale(supported: readonly string[], fallback: string): string { for (const candidate of globalThis.navigator?.languages ?? []) { const match = supported.find((value) => value.toLowerCase() === candidate.toLowerCase() || value.split("-")[0].toLowerCase() === candidate.split("-")[0].toLowerCase()); if (match !== undefined) return match; } return fallback; }
-function resultMessage(state: string): MessageKey { return state === "locked" ? "locked" : state === "expired" ? "expired" : "invalid"; }
+function resultMessage(state: string, stepKind: AuthenticationStep["kind"]): MessageKey {
+  if (stepKind === "enrollment") return state === "expired" ? "expired" : "initializationFailed";
+  return state === "locked" ? "locked" : state === "expired" ? "expired" : "invalid";
+}
 function localizedMessages(locale: string): Readonly<Record<MessageKey, string>> { return locale.toLowerCase().startsWith("zh") ? messages["zh-CN"] : messages["en-US"]; }
 function beginAuthentication(client: AccessAuthenticationClient, providerTest: ReturnType<typeof providerTestSelection>, methodID: string, locale: string) { return providerTest === undefined ? client.begin(methodID, locale) : client.beginProviderTest(providerTest.providerProfileId, providerTest.methodId, locale); }
 
 const messages = {
-  "zh-CN": { language: "语言", login: "登录", chooseMethod: "请选择企业提供的登录方式", chooseMethodPlaceholder: "选择登录方式", methods: "登录方式", connecting: "正在连接…", retry: "重试", enterpriseLogin: "前往企业登录", verifying: "正在验证…", resend: "重新发送", privacy: "隐私", help: "帮助", serviceUnavailable: "登录服务暂时不可用，请稍后重试。", beginFailed: "无法开始登录，请稍后重试。", authenticationFailed: "登录未完成，请重新尝试。", resendFailed: "暂时无法重新发送，请稍后再试。", locked: "尝试次数过多，请稍后再试。", expired: "登录已过期，请重新开始。", invalid: "登录信息无效，请检查后重试。" },
-  "en-US": { language: "Language", login: "Sign in", chooseMethod: "Choose a sign-in method provided by your organization", chooseMethodPlaceholder: "Choose a sign-in method", methods: "Sign-in methods", connecting: "Connecting…", retry: "Retry", enterpriseLogin: "Continue to enterprise sign-in", verifying: "Verifying…", resend: "Resend", privacy: "Privacy", help: "Help", serviceUnavailable: "The sign-in service is temporarily unavailable. Try again later.", beginFailed: "Unable to start sign-in. Try again later.", authenticationFailed: "Sign-in was not completed. Try again.", resendFailed: "Unable to resend right now. Try again later.", locked: "Too many attempts. Try again.", expired: "Your sign-in expired. Start again.", invalid: "The sign-in information is invalid. Check it and try again." },
+  "zh-CN": { language: "语言", login: "登录", chooseMethod: "请选择企业提供的登录方式", chooseMethodPlaceholder: "选择登录方式", methods: "登录方式", connecting: "正在连接…", retry: "重试", enterpriseLogin: "前往企业登录", verifying: "正在验证…", resend: "重新发送", privacy: "隐私", help: "帮助", serviceUnavailable: "登录服务暂时不可用，请稍后重试。", beginFailed: "无法开始登录，请稍后重试。", authenticationFailed: "登录未完成，请重新尝试。", initializationFailed: "管理员设置未完成，请确认账号、密码和确认密码后重试。", resendFailed: "暂时无法重新发送，请稍后再试。", locked: "尝试次数过多，请稍后再试。", expired: "登录已过期，请重新开始。", invalid: "登录信息无效，请检查后重试。" },
+  "en-US": { language: "Language", login: "Sign in", chooseMethod: "Choose a sign-in method provided by your organization", chooseMethodPlaceholder: "Choose a sign-in method", methods: "Sign-in methods", connecting: "Connecting…", retry: "Retry", enterpriseLogin: "Continue to enterprise sign-in", verifying: "Verifying…", resend: "Resend", privacy: "Privacy", help: "Help", serviceUnavailable: "The sign-in service is temporarily unavailable. Try again later.", beginFailed: "Unable to start sign-in. Try again later.", authenticationFailed: "Sign-in was not completed. Try again.", initializationFailed: "Administrator setup was not completed. Check the account and both password entries, then try again.", resendFailed: "Unable to resend right now. Try again later.", locked: "Too many attempts. Try again.", expired: "Your sign-in expired. Start again.", invalid: "The sign-in information is invalid. Check it and try again." },
 } as const;

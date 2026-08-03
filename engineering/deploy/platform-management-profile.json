@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "revision": 75,
+  "revision": 76,
   "id": "local-platform-management",
   "target": { "kernel": "backend" },
   "serviceClasses": ["application.backend"],
@@ -215,13 +215,13 @@
         "environment_allowlist": {
           "cn.vastplan.foundation.security.authorization-enforcer": ["VASTPLAN_AUTHORIZATION_PERMISSION_CATALOG", "VASTPLAN_AUTHORIZATION_POLICY_SNAPSHOT", "VASTPLAN_AUTHORIZATION_POLICY_TRUST", "VASTPLAN_AUTHORIZATION_POLICY_AUDIENCE", "VASTPLAN_AUTHORIZATION_DIRECTORY_GROUPS"],
           "cn.vastplan.foundation.security.authentication-broker": ["VASTPLAN_AUTHENTICATION_PROVIDER_STATE", "VASTPLAN_AUTHENTICATION_ASSERTION_KEY_FILE"],
-          "cn.vastplan.foundation.security.seed-access": ["VASTPLAN_SEED_ACCESS_STATE_FILE", "VASTPLAN_AUTHENTICATION_ASSERTION_TRUST", "VASTPLAN_AUTHORIZATION_POLICY_SNAPSHOT", "VASTPLAN_AUTHORIZATION_POLICY_TRUST"]
+          "cn.vastplan.foundation.security.seed-access": ["VASTPLAN_SEED_ACCESS_STATE_FILE", "VASTPLAN_SEED_ACCESS_ALLOW_INITIAL_SETUP", "VASTPLAN_AUTHENTICATION_ASSERTION_TRUST", "VASTPLAN_AUTHORIZATION_POLICY_SNAPSHOT", "VASTPLAN_AUTHORIZATION_POLICY_TRUST"]
         }
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.11", "channel": "stable" },
         { "id": "cn.vastplan.foundation.security.authentication-broker", "version": "0.5.2", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.security.seed-access", "version": "0.1.5", "channel": "stable" }
+        { "id": "cn.vastplan.foundation.security.seed-access", "version": "0.1.6", "channel": "stable" }
       ]
     },
     {

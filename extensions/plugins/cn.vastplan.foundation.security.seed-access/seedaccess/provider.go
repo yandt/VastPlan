@@ -16,27 +16,34 @@ import (
 )
 
 const (
-	ProviderID = "seed-local"
-	MethodID   = "seed-password"
+	ProviderID            = "seed-local"
+	MethodID              = "seed-password"
+	SeedOperatorSubjectID = "seed.operator"
 )
 
 type providerTransaction struct {
-	stepID    string
-	expiresAt time.Time
+	stepID     string
+	expiresAt  time.Time
+	enrollment bool
 }
+
+// ProviderOptions are injected by the trusted composition root. Browser input
+// never decides whether the one-time enrollment path is available.
+type ProviderOptions struct{ AllowInitialSetup bool }
 
 type Provider struct {
-	authority *Authority
-	now       func() time.Time
-	mu        sync.Mutex
-	txns      map[string]providerTransaction
+	authority         *Authority
+	allowInitialSetup bool
+	now               func() time.Time
+	mu                sync.Mutex
+	txns              map[string]providerTransaction
 }
 
-func NewProvider(authority *Authority) (*Provider, error) {
+func NewProvider(authority *Authority, options ProviderOptions) (*Provider, error) {
 	if authority == nil {
 		return nil, errors.New("Seed Authority 不能为空")
 	}
-	return &Provider{authority: authority, now: func() time.Time { return time.Now().UTC() }, txns: map[string]providerTransaction{}}, nil
+	return &Provider{authority: authority, allowInitialSetup: options.AllowInitialSetup, now: func() time.Time { return time.Now().UTC() }, txns: map[string]providerTransaction{}}, nil
 }
 
 func ProviderDescriptor() []byte {
@@ -76,7 +83,8 @@ func (p *Provider) handle(_ context.Context, operation string, payload []byte) (
 		result = authenticationv1.CancelResult{Cancelled: true}
 	case *authenticationv1.HealthRequest:
 		state, loadErr := p.authority.store.Load()
-		result = authenticationv1.HealthResult{Ready: loadErr == nil && state.Phase != Uninitialized && state.Phase != EnterpriseActive, ProviderID: ProviderID}
+		ready := loadErr == nil && state.Phase != EnterpriseActive && (state.Phase != Uninitialized || p.allowInitialSetup)
+		result = authenticationv1.HealthResult{Ready: ready, ProviderID: ProviderID}
 	default:
 		return providerError("foundation.seed.invalid_request", errors.New("未知 Seed Provider 请求")), nil, nil
 	}
@@ -113,8 +121,16 @@ func (p *Provider) begin(request authenticationv1.BeginRequest) authenticationv1
 		p.mu.Unlock()
 		return authenticationv1.BeginResult{Result: authenticationv1.MethodResult{State: authenticationv1.StateRejected, ReasonCode: authenticationv1.ReasonRateLimited}}
 	}
-	p.txns[request.TransactionID] = providerTransaction{stepID: stepID, expiresAt: expires}
+	enrollment := state.Phase == Uninitialized
+	if enrollment && !p.allowInitialSetup {
+		p.mu.Unlock()
+		return authenticationv1.BeginResult{Result: authenticationv1.MethodResult{State: authenticationv1.StateRejected, ReasonCode: authenticationv1.ReasonMethodUnavailable}}
+	}
+	p.txns[request.TransactionID] = providerTransaction{stepID: stepID, expiresAt: expires, enrollment: enrollment}
 	p.mu.Unlock()
+	if enrollment {
+		return initialSetupStep(stepID, expires)
+	}
 	fields := []authenticationv1.AuthenticationField{
 		{ID: "operator", Kind: authenticationv1.FieldIdentifier, Label: authenticationv1.LocalizedText{"zh-CN": "种子操作员", "en-US": "Seed operator"}, Help: authenticationv1.LocalizedText{"zh-CN": "首次设置的种子操作员标识", "en-US": "Seed operator configured during setup"}, Autocomplete: "username", Required: true, MinLength: 1, MaxLength: 256, Choices: []authenticationv1.FieldChoice{}},
 		{ID: "password", Kind: authenticationv1.FieldPassword, Label: authenticationv1.LocalizedText{"zh-CN": "密码", "en-US": "Password"}, Help: authenticationv1.LocalizedText{"zh-CN": "不会写入日志或会话", "en-US": "Never stored in logs or sessions"}, Autocomplete: "current-password", Required: true, MinLength: 12, MaxLength: 1024, Choices: []authenticationv1.FieldChoice{}},
@@ -128,6 +144,20 @@ func (p *Provider) begin(request authenticationv1.BeginRequest) authenticationv1
 		Description: authenticationv1.LocalizedText{"zh-CN": "仅用于首次配置或本机授权的灾难恢复", "en-US": "Only for initial setup or locally authorized recovery"},
 		SubmitLabel: authenticationv1.LocalizedText{"zh-CN": "验证", "en-US": "Verify"}, ExpiresAt: expires,
 		Fields: fields,
+	}}}
+}
+
+func initialSetupStep(stepID string, expires time.Time) authenticationv1.BeginResult {
+	fields := []authenticationv1.AuthenticationField{
+		{ID: "operator", Kind: authenticationv1.FieldIdentifier, Label: authenticationv1.LocalizedText{"zh-CN": "管理员账号", "en-US": "Administrator account"}, Help: authenticationv1.LocalizedText{"zh-CN": "首次设置后不可由登录页修改", "en-US": "Cannot be changed from the sign-in page after setup"}, Autocomplete: "username", Required: true, MinLength: 1, MaxLength: 256, Choices: []authenticationv1.FieldChoice{}},
+		{ID: "password", Kind: authenticationv1.FieldPassword, Label: authenticationv1.LocalizedText{"zh-CN": "设置密码", "en-US": "Set password"}, Help: authenticationv1.LocalizedText{"zh-CN": "12–1024 个字符，不会写入日志或会话", "en-US": "12–1024 characters; never stored in logs or sessions"}, Autocomplete: "new-password", Required: true, MinLength: 12, MaxLength: 1024, Choices: []authenticationv1.FieldChoice{}},
+		{ID: "password-confirmation", Kind: authenticationv1.FieldPassword, Label: authenticationv1.LocalizedText{"zh-CN": "确认密码", "en-US": "Confirm password"}, Help: authenticationv1.LocalizedText{"zh-CN": "请再次输入相同密码", "en-US": "Enter the same password again"}, Autocomplete: "new-password", Required: true, MinLength: 12, MaxLength: 1024, Choices: []authenticationv1.FieldChoice{}},
+	}
+	return authenticationv1.BeginResult{Result: authenticationv1.MethodResult{State: authenticationv1.StateChallenge, Step: &authenticationv1.AuthenticationStep{
+		StepID: stepID, Kind: authenticationv1.StepEnrollment,
+		Title:       authenticationv1.LocalizedText{"zh-CN": "设置平台管理员", "en-US": "Set platform administrator"},
+		Description: authenticationv1.LocalizedText{"zh-CN": "此操作仅在平台尚未初始化时可用，完成后将直接进入平台。", "en-US": "Available only before platform initialization. You will enter the platform after completion."},
+		SubmitLabel: authenticationv1.LocalizedText{"zh-CN": "创建并进入平台", "en-US": "Create and enter platform"}, ExpiresAt: expires, Fields: fields,
 	}}}
 }
 
@@ -150,7 +180,14 @@ func (p *Provider) continueAuthentication(request authenticationv1.ContinueReque
 			clear(value)
 		}
 	}()
-	if err := p.authority.Authenticate(string(fields["operator"]), fields["password"], fields["recovery-token"]); err != nil {
+	if transaction.enrollment {
+		if len(fields["operator"]) == 0 || len(fields["password"]) == 0 || len(fields["password-confirmation"]) == 0 || string(fields["password"]) != string(fields["password-confirmation"]) {
+			return authenticationv1.ContinueResult{Result: authenticationv1.MethodResult{State: authenticationv1.StateRejected, ReasonCode: authenticationv1.ReasonChallengeRejected}}
+		}
+		if _, err := p.authority.Initialize(string(fields["operator"]), fields["password"]); err != nil {
+			return authenticationv1.ContinueResult{Result: authenticationv1.MethodResult{State: authenticationv1.StateRejected, ReasonCode: authenticationv1.ReasonChallengeRejected}}
+		}
+	} else if err := p.authority.Authenticate(string(fields["operator"]), fields["password"], fields["recovery-token"]); err != nil {
 		return authenticationv1.ContinueResult{Result: authenticationv1.MethodResult{State: authenticationv1.StateRejected, ReasonCode: authenticationv1.ReasonInvalidCredentials}}
 	}
 	now := p.now()
@@ -158,7 +195,11 @@ func (p *Provider) continueAuthentication(request authenticationv1.ContinueReque
 	nonce, _ := randomID()
 	return authenticationv1.ContinueResult{Result: authenticationv1.MethodResult{State: authenticationv1.StateAuthenticated, Evidence: &authenticationv1.AuthenticationEvidence{
 		EvidenceID: "seed." + evidenceID, TransactionID: request.TransactionID, MethodID: MethodID, ProviderID: ProviderID,
-		Subject: authenticationv1.SubjectIdentity{ID: string(fields["operator"]), Issuer: "vastplan://seed-access"},
+		// The one Seed operator is authenticated by the Authority, but its chosen
+		// account identifier must not become an authorization subject or leak into
+		// a Portal session. The trusted Seed Provider therefore always projects
+		// its single principal as this fixed non-PII identity.
+		Subject: authenticationv1.SubjectIdentity{ID: SeedOperatorSubjectID, Issuer: "vastplan://seed-access"},
 		AMR:     []string{"pwd"}, ACR: "seed", AuthenticatedAt: now, ExpiresAt: now.Add(30 * time.Second), Nonce: nonce,
 	}}}
 }

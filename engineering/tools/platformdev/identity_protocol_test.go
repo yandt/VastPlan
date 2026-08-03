@@ -82,18 +82,11 @@ func TestDevelopmentAuthenticationMaterialAndSeedSubject(t *testing.T) {
 	if info, err := os.Lstat(r.portalSessionKeyPath()); err != nil || info.Mode().Perm()&0o077 != 0 {
 		t.Fatalf("portal session key permissions are unsafe: info=%v err=%v", info, err)
 	}
-	authority, err := seedaccess.NewAuthority(seedaccess.FileStore{Path: r.seedAccessStatePath()}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := authority.Initialize("owner", []byte("local-development-password")); err != nil {
-		t.Fatal(err)
-	}
 	actual, err := r.developmentSeedSubjectID()
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := authenticationv1.StableSubjectID(developmentSeedProviderProfileID, developmentSeedIssuer, "owner")
+	expected := authenticationv1.StableSubjectID(developmentSeedProviderProfileID, developmentSeedIssuer, seedaccess.SeedOperatorSubjectID)
 	if actual != expected {
 		t.Fatalf("stable Seed subject mismatch: got=%s want=%s", actual, expected)
 	}

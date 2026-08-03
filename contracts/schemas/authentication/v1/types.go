@@ -81,6 +81,10 @@ const (
 	StepOneTimeCode      StepKind = "one-time-code"
 	StepRedirect         StepKind = "redirect"
 	StepContextSelection StepKind = "context-selection"
+	// StepEnrollment is a one-time credential enrollment step. It is not a
+	// password reset: Providers may emit it only while their own authority is
+	// explicitly uninitialized.
+	StepEnrollment StepKind = "enrollment"
 )
 
 type AuthenticationStep struct {

@@ -29,7 +29,7 @@ export interface AuthenticationField {
 
 export interface AuthenticationStep {
   readonly stepId: string;
-  readonly kind: "identifier" | "password" | "one-time-code" | "redirect" | "context-selection";
+  readonly kind: "identifier" | "password" | "one-time-code" | "redirect" | "context-selection" | "enrollment";
   readonly title: Readonly<Record<string, string>>;
   readonly description: Readonly<Record<string, string>>;
   readonly submitLabel: Readonly<Record<string, string>>;

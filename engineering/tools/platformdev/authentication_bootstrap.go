@@ -156,14 +156,12 @@ func ensureDevelopmentProviderState(path string) error {
 }
 
 func (r *runtime) developmentSeedSubjectID() (string, error) {
-	state, err := (seedaccess.FileStore{Path: r.seedAccessStatePath()}).Load()
-	if err != nil {
-		return "", err
-	}
-	if state.Phase == seedaccess.Uninitialized || state.Operator == nil {
-		return "", errors.New("Seed 管理员尚未初始化；先执行 ./engineering/tools/platform-dev.sh seed-admin init --operator <账号> --password-file <owner-only 文件>")
-	}
-	return authenticationv1.StableSubjectID(developmentSeedProviderProfileID, developmentSeedIssuer, state.Operator.ID), nil
+	// Seed Access owns exactly one operator. Its provider projects that operator
+	// as a fixed non-PII subject, so the authorization baseline can be prepared
+	// before the first password is enrolled. The actual account identifier stays
+	// inside the protected Seed Authority state and is never copied to a policy
+	// snapshot or Portal session.
+	return authenticationv1.StableSubjectID(developmentSeedProviderProfileID, developmentSeedIssuer, seedaccess.SeedOperatorSubjectID), nil
 }
 
 func fileExists(path string) bool {
