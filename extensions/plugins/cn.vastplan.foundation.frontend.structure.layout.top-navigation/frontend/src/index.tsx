@@ -109,7 +109,7 @@ export function TopNavigationShell(props: UIShellProps) {
         {shellSlot(composition.shellSlots, "shell.navigation.end")}
         {accountRoot === undefined ? null : <div className="vp-top-account"><AccountPopover group={accountRoot} account={props.account} composition={composition} open={openRootID === accountRoot.id} active={activeRootID === accountRoot.id} onOpenChange={(open) => setOpenRootID(open ? accountRoot.id : undefined)} onNavigate={navigate} onLogout={props.onLogout} /></div>}
       </div>
-      <div className="vp-top-mobile-controls"><PortalAccountControl account={props.account} onSelect={() => setMobileOpen(true)} /><button type="button" className="vp-top-mobile-trigger" aria-label={i18n.text(message(namespace, "navigation.open", "打开主菜单"))} onClick={() => setMobileOpen(true)}><ui.Icon name="menu" /></button></div>
+      <div className="vp-top-mobile-controls"><PortalAccountControl account={props.account} onSelect={() => setMobileOpen(true)} /><button type="button" className="vp-top-mobile-trigger" aria-label={i18n.text(message(namespace, "navigation.open", "打开主菜单"))} title={i18n.text(message(namespace, "navigation.open", "打开主菜单"))} onClick={() => setMobileOpen(true)}><ui.Icon name="menu" /></button></div>
     </header>
     <div className="vp-top-content">
       {page === undefined ? null : <PageHeader className="vp-top-page-header" page={page} composition={composition} />}

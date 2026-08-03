@@ -138,7 +138,7 @@ export function StandardShell(props: UIShellProps) {
         onLogout={props.onLogout}
       /> : null}
       <div className="vp-shell-content">
-        {navigationVisible ? <div className="vp-mobile-header"><button type="button" className="vp-mobile-menu-button" aria-label={i18n.text(message(namespace, "navigation.open", "打开主菜单"))} onClick={() => setMobileOpen(true)}><ui.Icon name="menu" /></button><Brand name={branding.name} shortName={branding.shortName} logoURL={branding.logoURL} /><span className="vp-mobile-preferences"><PortalAccountControl account={props.account} onSelect={() => setMobileOpen(true)} /></span></div> : null}
+        {navigationVisible ? <div className="vp-mobile-header"><button type="button" className="vp-mobile-menu-button" aria-label={i18n.text(message(namespace, "navigation.open", "打开主菜单"))} title={i18n.text(message(namespace, "navigation.open", "打开主菜单"))} onClick={() => setMobileOpen(true)}><ui.Icon name="menu" /></button><Brand name={branding.name} shortName={branding.shortName} logoURL={branding.logoURL} /><span className="vp-mobile-preferences"><PortalAccountControl account={props.account} onSelect={() => setMobileOpen(true)} /></span></div> : null}
         {pageHeader}
         {pageBody}
       </div>

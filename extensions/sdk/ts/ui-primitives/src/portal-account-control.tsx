@@ -16,13 +16,14 @@ export function PortalAccountControl({ account, selected, onSelect, trigger }: {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
   const label = i18n.text(message(namespace, "account.open", "打开用户功能"));
+  const summary = i18n.text(message(namespace, "account.tooltip", "用户信息：{name}", { name: account.displayName }));
   const initials = account.displayName.trim().slice(0, 1).toUpperCase() || "U";
   return <button
     ref={(node) => trigger?.ref(node)}
     type="button"
     className="vp-account-avatar"
-    aria-label={label}
-    title={account.displayName}
+    aria-label={`${label}：${account.displayName}`}
+    title={summary}
     aria-pressed={selected}
     aria-expanded={trigger?.["aria-expanded"]}
     aria-controls={trigger?.["aria-controls"]}
