@@ -17,6 +17,11 @@ export interface MenuProps extends SizeableProps {
   activeID?: string;
   /** Navigation retains framework navigation treatment; action removes navigation-only chrome. */
   variant?: "navigation" | "action";
+  /** Inline is a persistent nested tree; popup is a compact overlay menu. */
+  presentation?: "inline" | "popup";
+  /** Controlled expanded submenu IDs for the inline presentation. */
+  expandedIDs?: readonly string[];
+  onExpandedChange?(ids: readonly string[]): void;
   onSelect?(id: string): void;
 }
 

@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { accountLogoutMenuItemID, accountMenuItems } from "./portal-account-menu";
+import { accountNavigationNodeID } from "./portal-runtime";
 
 describe("PortalAccountMenu", () => {
   it("keeps account pages in the composed tree and appends logout as a non-route action", () => {
     const group = {
-      id: "account", label: "用户", zone: "secondary", icon: "info", order: 1,
+      id: accountNavigationNodeID, label: "用户", zone: "secondary", icon: "info", order: 1,
       pages: [{ id: "account.profile", label: "用户信息", zone: "secondary" }],
       children: [{ id: "account.settings", parentID: "account", label: "用户设置", zone: "secondary", icon: "settings", order: 1, pages: [{ id: "account.appearance", label: "外观", zone: "secondary" }], children: [] }],
     } as never;

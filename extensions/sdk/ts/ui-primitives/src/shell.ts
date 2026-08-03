@@ -50,7 +50,9 @@ export interface UIShellProps {
 export {
   PortalAccountControl,
 } from "./portal-account-control.js";
-export { PortalAccountMenu, accountLogoutMenuItemID, accountMenuItems } from "./portal-account-menu.js";
+export { PortalAccountMenu } from "./portal-account-menu.js";
+export { PortalNavigationMenu, accountLogoutMenuItemID, accountMenuItems, composedNavigationMenuItems } from "./portal-navigation-menu.js";
+export type { PortalNavigationMenuProps } from "./portal-navigation-menu.js";
 
 /** Owns stable shell semantics and a governed catalog of visual templates. */
 export interface UIShellAdapter {

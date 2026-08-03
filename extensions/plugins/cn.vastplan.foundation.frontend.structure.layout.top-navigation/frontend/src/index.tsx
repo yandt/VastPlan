@@ -6,6 +6,7 @@ import {
   accountMenuItems,
   message,
   NavigationIcon,
+  PortalNavigationMenu,
   portalPageRhythm,
   PortalAccountControl,
   resolvePageBodyMaxWidth,
@@ -16,7 +17,6 @@ import {
   type PageSlotID,
   type PortalI18n,
   type PortalNavigationGroup,
-  type PortalPageNavigation,
   type UIShellProps,
   type ShellSlotID,
 } from "@vastplan/ui-primitives";
@@ -169,37 +169,15 @@ function OverflowPopover({ groups: overflow, composition, open, active, onOpenCh
 
 /** One compact menu surface is shared by primary, account and overflow navigation. */
 function NavigationPopoverMenu({ groups: menuGroups, composition, onNavigate, onLogout }: { groups: readonly PortalNavigationGroup[]; composition: UIShellProps["composition"]; onNavigate(id: string): void; onLogout?(): Promise<void> }) {
-  const ui = usePortalUI();
   const i18n = usePortalI18n();
-  const hasAccountLogout = menuGroups.length === 1 && menuGroups[0]?.id === accountNavigationNodeID && onLogout !== undefined;
-  if (menuGroups.every((group) => group.pages.length === 0 && group.children.length === 0) && !hasAccountLogout) {
-    return <div className="vp-top-navigation-menu-empty">{i18n.text(message(namespace, "navigation.accountUnavailable", "个人中心尚未装配"))}</div>;
-  }
-  const items = navigationPopoverItems(menuGroups, composition, i18n, onLogout !== undefined);
-  return <ui.Menu variant="navigation" size="sm" items={items} activeID={composition.activeNavigationPath?.pageID} onSelect={(id) => {
-    if (id === accountLogoutMenuItemID) { void onLogout?.(); return; }
-    onNavigate(id);
-  }} />;
-}
-
-/** Builds the data consumed by the one shared top-navigation Menu surface. */
-export function navigationPopoverItems(groups: readonly PortalNavigationGroup[], composition: UIShellProps["composition"], i18n: Pick<PortalI18n, "text" | "locale">, includeLogout: boolean): MenuItem[] {
-  const accountGroup = groups.length === 1 && groups[0]?.id === accountNavigationNodeID ? groups[0] : undefined;
-  return accountGroup === undefined ? navigationMenuItems(groups, composition, i18n) : accountMenuItems(accountGroup, composition, i18n, includeLogout);
-}
-
-/** Converts the composed navigation tree into the renderer-owned Menu contract. */
-export function navigationMenuItems(groups: readonly PortalNavigationGroup[], composition: UIShellProps["composition"], i18n: Pick<PortalI18n, "text" | "locale">): MenuItem[] {
-  const groupItems = (group: PortalNavigationGroup): MenuItem[] => [
-    ...group.pages.map((page) => navigationPageItem(page, composition, i18n)),
-    ...group.children.filter((child) => child.pages.length > 0).map((child) => ({ id: `group:${child.id}`, label: i18n.text(child.label), children: child.pages.map((page) => navigationPageItem(page, composition, i18n)) })),
-  ];
-  if (groups.length === 1) return groupItems(groups[0]);
-  return groups.map((group) => ({ id: `group:${group.id}`, label: navigationLabel(group, i18n), children: groupItems(group) }));
-}
-
-function navigationPageItem(page: PortalPageNavigation, composition: UIShellProps["composition"], i18n: Pick<PortalI18n, "text">): MenuItem {
-  return { id: page.id, label: i18n.text(page.label), href: pagePath(composition, page.id) };
+  return <PortalNavigationMenu
+    groups={menuGroups}
+    composition={composition}
+    activeID={composition.activeNavigationPath?.pageID}
+    onNavigate={onNavigate}
+    onLogout={onLogout}
+    empty={<div className="vp-top-navigation-menu-empty">{i18n.text(message(namespace, "navigation.accountUnavailable", "个人中心尚未装配"))}</div>}
+  />;
 }
 
 function useContainerWidth(ref: React.RefObject<HTMLElement>, fallback: number): number {

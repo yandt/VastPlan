@@ -58,16 +58,14 @@ describe("standard shell layout", () => {
     expect(standardShellCSS).toContain(".vp-page-header{box-sizing:border-box;height:var(--vp-shell-bar-height);min-height:var(--vp-shell-bar-height);flex:0 0 var(--vp-shell-bar-height)");
   });
 
-  it("owns a multi-open child navigation tree with real page links", () => {
-    expect(standardShellCSS).toContain(".vp-navigation-child-trigger");
-    expect(standardShellCSS).toContain(".vp-navigation-link[aria-current=page]");
+  it("delegates the persistent child navigation tree to the shared renderer Menu", () => {
+    expect(standardShellCSS).not.toContain(".vp-navigation-child-trigger");
+    expect(standardShellCSS).not.toContain(".vp-navigation-link[aria-current=page]");
   });
 
-  it("keeps direct and expandable second-level items visually aligned without separators", () => {
-    expect(standardShellCSS).toContain(".vp-navigation-link,.vp-navigation-child-trigger{min-height:var(--vp-shell-touch-minimum)");
-    expect(standardShellCSS).toContain(".vp-navigation-action{display:flex;align-items:center;width:100%;min-height:var(--vp-shell-touch-minimum)");
-    expect(standardShellCSS).toContain(".vp-navigation-root-pages{margin:0}");
-    expect(standardShellCSS).not.toContain(".vp-navigation-root-pages{border-bottom");
+  it("does not retain a layout-owned navigation item skin", () => {
+    expect(standardShellCSS).not.toContain(".vp-navigation-tree");
+    expect(standardShellCSS).not.toContain(".vp-navigation-action");
     expect(standardShellCSS).not.toContain(".vp-navigation-child[data-active]");
   });
 

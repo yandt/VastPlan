@@ -23,7 +23,7 @@ function menuItems(items: MenuItem[], size: NonNullable<MenuProps["size"]>, vari
   });
 }
 
-export function Menu({ items, activeID, size: requestedSize, variant = "navigation", onSelect }: MenuProps) {
+export function Menu({ items, activeID, size: requestedSize, variant = "navigation", presentation = "popup", expandedIDs, onExpandedChange, onSelect }: MenuProps) {
   const size = useComponentSize(requestedSize);
   const recipe = componentSizeRecipes.menu[size];
   const style: CSSProperties = {
@@ -33,7 +33,7 @@ export function Menu({ items, activeID, size: requestedSize, variant = "navigati
     ...(variant === "action" ? componentVariantRecipes.menu.action : {}),
     ["--ant-menu-item-height" as string]: `${recipe.itemHeight}px`,
   };
-  return <>{variant === "action" ? <style>{actionMenuCSS}</style> : null}<AntdMenu className={variant === "action" ? actionMenuClass : undefined} selectedKeys={activeID === undefined ? [] : [activeID]} items={menuItems(items, size, variant, onSelect)} onClick={({ key }) => onSelect?.(key)} style={style} /></>;
+  return <>{variant === "action" ? <style>{actionMenuCSS}</style> : null}<AntdMenu className={variant === "action" ? actionMenuClass : undefined} mode={presentation === "inline" ? "inline" : "vertical"} selectedKeys={activeID === undefined ? [] : [activeID]} openKeys={presentation === "inline" && expandedIDs !== undefined ? [...expandedIDs] : undefined} items={menuItems(items, size, variant, onSelect)} onOpenChange={presentation === "inline" ? (ids) => onExpandedChange?.(ids) : undefined} onClick={({ key }) => onSelect?.(key)} style={style} /></>;
 }
 
 export function Breadcrumb({ items, size: requestedSize }: BreadcrumbProps) {

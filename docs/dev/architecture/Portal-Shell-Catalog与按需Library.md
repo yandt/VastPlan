@@ -39,7 +39,7 @@ Catalog 是可信 foundation 模块，声明稳定 ID、UI Contract、默认 Lib
 
 Library 是已签名、内容寻址、可延迟加载的纯前端模块。它消费统一 `ShellCompositionModel` 和宿主持有的 `ShellSurface`，提供 Chrome、导航呈现、响应式行为、溢出策略和布局计划。它不得注册页面/Slot、读取仓库、选择 Renderer 或持有 PageOutlet 子树。
 
-`standard` 与 `top-navigation` 是首批两个 Library，现已作为独立签名制品进入 Catalog，并在 RuntimeSpec 中作为 deferred 模块锁定。它们是可按需下载的 Shell Library，不是两套拥有 Slot、页面归并和导航语义的完整 Shell 基础插件。
+`standard` 与 `top-navigation` 是首批两个 Library，现已作为独立签名制品进入 Catalog，并在 RuntimeSpec 中作为 deferred 模块锁定。它们是可按需下载的 Shell Library，不是两套拥有 Slot、页面归并和导航语义的完整 Shell 基础插件。两者的二、三级菜单必须共同使用 `PortalNavigationMenu`：标准布局选择常驻 `inline` 呈现并保存本会话展开态，顶部布局选择 `popup` 呈现；菜单行、层级、图标、选中、悬停、账户退出和无障碍行为由同一 Renderer `Menu` 契约实现。
 
 ### 2.4 Stable PageOutlet
 

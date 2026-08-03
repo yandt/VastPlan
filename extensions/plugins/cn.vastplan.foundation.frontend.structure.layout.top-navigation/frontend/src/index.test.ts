@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { uiContractVersion } from "@vastplan/ui-contract";
-import adapter, { navigationMenuItems, navigationPopoverItems, prioritizeRoots, topNavigationShellCSS } from "./index";
-import type { PortalNavigationGroup, UIShellProps } from "@vastplan/ui-primitives";
+import { composedNavigationMenuItems, type PortalNavigationGroup, type UIShellProps } from "@vastplan/ui-primitives";
+import adapter, { prioritizeRoots, topNavigationShellCSS } from "./index";
 
 const root = (id: string): PortalNavigationGroup => ({ id, label: id, zone: "primary", icon: { kind: "semantic", name: "menu" }, pages: [], children: [] });
 
@@ -27,7 +27,7 @@ describe("top navigation shell layout", () => {
     const page = (id: string) => ({ id, label: id, zone: "secondary" as const, groupID: "vastplan.host/account", parentMenuRef: { pluginID: "vastplan.host", nodeID: "account" } });
     const group: PortalNavigationGroup = { ...root("vastplan.host/account"), pages: [page("profile")], children: [{ ...root("preferences"), parentID: "vastplan.host/account", pages: [page("appearance")] }] };
     const composition = { pages: [{ id: "profile-page", path: "/profile", navigation: { id: "profile" } }, { id: "appearance-page", path: "/appearance", navigation: { id: "appearance" } }] } as unknown as UIShellProps["composition"];
-    const items = navigationMenuItems([group], composition, { locale: "zh-CN", text: (value) => typeof value === "string" ? value : value.fallback });
+    const items = composedNavigationMenuItems([group], composition, { locale: "zh-CN", text: (value) => typeof value === "string" ? value : value.fallback }, false);
     expect(items).toMatchObject([{ id: "profile", href: "/profile" }, { id: "group:preferences", children: [{ id: "appearance", href: "/appearance" }] }]);
   });
 
@@ -51,7 +51,7 @@ describe("top navigation shell layout", () => {
   it("adds logout to the account data model consumed by the shared compact Menu", () => {
     const group: PortalNavigationGroup = { ...root("vastplan.host/account"), pages: [{ id: "profile", label: "profile", zone: "secondary", groupID: "vastplan.host/account", parentMenuRef: { pluginID: "vastplan.host", nodeID: "account" } }] };
     const composition = { pages: [{ id: "profile-page", path: "/profile", navigation: { id: "profile" } }] } as unknown as UIShellProps["composition"];
-    const items = navigationPopoverItems([group], composition, { locale: "zh-CN", text: (value) => typeof value === "string" ? value : value.fallback }, true);
+    const items = composedNavigationMenuItems([group], composition, { locale: "zh-CN", text: (value) => typeof value === "string" ? value : value.fallback }, true);
     expect(items).toMatchObject([{ id: "profile", href: "/profile" }, { id: "account.logout" }]);
   });
 });
