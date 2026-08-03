@@ -22,6 +22,8 @@ import {
 } from "@vastplan/ui-primitives";
 
 const shellHeaderSlots = ["shell.header.start", "shell.header.center", "shell.header.end"] as const;
+const topNavigationPageHeaderMinimum = 160;
+const topNavigationDividerFootprint = 25;
 
 export function TopNavigationShell(props: UIShellProps) {
   const { composition, branding, template, pathname, recoveryNotice, onNavigate } = props;
@@ -29,15 +31,19 @@ export function TopNavigationShell(props: UIShellProps) {
   const i18n = usePortalI18n();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openRootID, setOpenRootID] = useState<string>();
-  const centerRef = useRef<HTMLDivElement>(null);
-  const centerWidth = useContainerWidth(centerRef, 1200);
+  const barRef = useRef<HTMLElement>(null);
+  const startRef = useRef<HTMLDivElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);
+  const centerSlotRef = useRef<HTMLDivElement>(null);
   const accountRoot = composition.navigation.secondary.find((group) => group.id === accountNavigationNodeID);
   const mainRoots = useMemo(() => [...composition.navigation.primary, ...composition.navigation.secondary.filter((group) => group.id !== accountNavigationNodeID)], [composition]);
   const settingsRoots = composition.navigation.settings;
   const activeRootID = composition.activeNavigationPath?.rootGroupID;
-  const capacity = topNavigationCapacity(centerWidth, ui.theme.tokens.touch.minimum);
-  const { visible, overflow } = prioritizeRoots(mainRoots, capacity, activeRootID);
   const page = composition.activePage;
+  const centerSlotCount = composition.shellSlots["shell.navigation.center"]?.length ?? 0;
+  const navigationWidth = useTopNavigationWidth(barRef, startRef, endRef, centerSlotRef, page !== undefined, centerSlotCount, 1200);
+  const capacity = topNavigationCapacity(navigationWidth, ui.theme.tokens.touch.minimum);
+  const { visible, overflow } = prioritizeRoots(mainRoots, capacity, activeRootID);
   const pageWidth = resolvePageBodyMaxWidth(page?.bodyLayout, template.options.pageBodyWidth === "contained");
   const shellTheme = {
     "--vp-top-canvas": ui.theme.tokens.color.canvas,
@@ -88,17 +94,17 @@ export function TopNavigationShell(props: UIShellProps) {
       <div className="vp-top-shell-header-center">{shellSlot(composition.shellSlots, "shell.header.center")}</div>
       <div className="vp-top-shell-header-end">{shellSlot(composition.shellSlots, "shell.header.end")}</div>
     </header> : null}
-    <header className="vp-top-bar" onKeyDown={moveTopRootFocus}>
-      <div className="vp-top-start"><Brand name={branding.name} shortName={branding.shortName} logoURL={branding.logoURL} />{shellSlot(composition.shellSlots, "shell.navigation.start")}</div>
+    <header ref={barRef} className="vp-top-bar" onKeyDown={moveTopRootFocus}>
+      <div ref={startRef} className="vp-top-start"><Brand name={branding.name} shortName={branding.shortName} logoURL={branding.logoURL} />{shellSlot(composition.shellSlots, "shell.navigation.start")}</div>
       {page === undefined ? null : <span className="vp-top-logo-page-divider" aria-hidden="true" />}
       {page === undefined ? null : <PageHeader className="vp-top-inline-page-header" page={page} composition={composition} />}
       {page === undefined ? null : <span className="vp-top-page-navigation-divider" aria-hidden="true" />}
-      <nav ref={centerRef} className="vp-top-center" aria-label={i18n.text(message(namespace, "navigation.main", "主导航"))}>
+      <nav className="vp-top-center" aria-label={i18n.text(message(namespace, "navigation.main", "主导航"))}>
         {visible.map((group) => <RootPopover key={group.id} group={group} composition={composition} open={openRootID === group.id} active={activeRootID === group.id} onOpenChange={(open) => setOpenRootID(open ? group.id : undefined)} onNavigate={navigate} />)}
         {overflow.length === 0 ? null : <OverflowPopover groups={overflow} composition={composition} open={openRootID === "__more"} active={overflow.some((group) => group.id === activeRootID)} onOpenChange={(open) => setOpenRootID(open ? "__more" : undefined)} onNavigate={navigate} />}
-        {shellSlot(composition.shellSlots, "shell.navigation.center")}
+        {centerSlotCount === 0 ? null : <div ref={centerSlotRef} className="vp-top-center-slot">{shellSlot(composition.shellSlots, "shell.navigation.center")}</div>}
       </nav>
-      <div className="vp-top-end">
+      <div ref={endRef} className="vp-top-end">
         {settingsRoots.map((group) => <RootPopover key={group.id} group={group} composition={composition} open={openRootID === group.id} active={activeRootID === group.id} onOpenChange={(open) => setOpenRootID(open ? group.id : undefined)} onNavigate={navigate} />)}
         {shellSlot(composition.shellSlots, "shell.navigation.end")}
         {accountRoot === undefined ? null : <div className="vp-top-account"><AccountPopover group={accountRoot} account={props.account} composition={composition} open={openRootID === accountRoot.id} active={activeRootID === accountRoot.id} onOpenChange={(open) => setOpenRootID(open ? accountRoot.id : undefined)} onNavigate={navigate} onLogout={props.onLogout} /></div>}
@@ -180,17 +186,18 @@ function NavigationPopoverMenu({ groups: menuGroups, composition, onNavigate, on
   />;
 }
 
-function useContainerWidth(ref: React.RefObject<HTMLElement>, fallback: number): number {
+function useTopNavigationWidth(barRef: React.RefObject<HTMLElement>, startRef: React.RefObject<HTMLElement>, endRef: React.RefObject<HTMLElement>, centerSlotRef: React.RefObject<HTMLElement>, hasPageHeader: boolean, centerSlotCount: number, fallback: number): number {
   const [width, setWidth] = useState(fallback);
   useEffect(() => {
-    const node = ref.current;
-    if (node === null || typeof ResizeObserver === "undefined") return;
-    const update = () => setWidth(node.clientWidth || fallback);
+    const nodes = [barRef.current, startRef.current, endRef.current, centerSlotRef.current].filter((node): node is HTMLElement => node !== null);
+    const bar = barRef.current;
+    if (bar === null || typeof ResizeObserver === "undefined") return;
+    const update = () => setWidth(topNavigationAvailableWidth(bar.clientWidth || fallback, startRef.current?.clientWidth ?? 0, endRef.current?.clientWidth ?? 0, centerSlotRef.current?.clientWidth ?? 0, hasPageHeader));
     update();
     const observer = new ResizeObserver(update);
-    observer.observe(node);
+    nodes.forEach((node) => observer.observe(node));
     return () => observer.disconnect();
-  }, [fallback, ref]);
+  }, [barRef, centerSlotCount, centerSlotRef, endRef, fallback, hasPageHeader, startRef]);
   return width;
 }
 
@@ -219,6 +226,12 @@ export function topNavigationCapacity(availableWidth: number, triggerWidth: numb
   return Math.max(1, Math.floor((availableWidth + gap) / (triggerWidth + gap)));
 }
 
+/** Reserve only immutable header chrome; the page header receives every remaining pixel after visible root icons. */
+export function topNavigationAvailableWidth(barWidth: number, startWidth: number, endWidth: number, centerSlotWidth: number, hasPageHeader: boolean): number {
+  const pageHeaderWidth = hasPageHeader ? topNavigationPageHeaderMinimum + topNavigationDividerFootprint * 2 : 0;
+  return Math.max(0, barWidth - startWidth - endWidth - centerSlotWidth - pageHeaderWidth);
+}
+
 function groups(composition: UIShellProps["composition"], zones: readonly NavigationZone[]): readonly PortalNavigationGroup[] { return zones.flatMap((zone) => composition.navigation[zone]); }
 function pagePath(composition: UIShellProps["composition"], navigationID: string): string | undefined { return composition.pages.find((candidate) => candidate.navigation?.id === navigationID)?.path; }
 function Brand({ name, shortName, logoURL }: { name: string; shortName?: string; logoURL?: string }) { const label = shortName ?? name; return <div className="vp-top-brand" title={name}>{logoURL === undefined ? <span className="vp-top-brand-mark">{label.slice(0, 1).toUpperCase()}</span> : <img src={logoURL} alt="" className="vp-top-brand-logo" />}<strong>{label}</strong></div>; }
@@ -228,7 +241,7 @@ function pageSlot(values: UIShellProps["composition"]["pageSlots"], id: PageSlot
 export const topNavigationShellCSS = `
 .vp-top-shell{height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden;background:var(--vp-top-canvas);color:var(--vp-top-text)}
 .vp-top-shell-header{height:var(--vp-top-bar-height);flex:0 0 var(--vp-top-bar-height);display:grid;grid-template-columns:minmax(180px,auto) 1fr minmax(180px,auto);align-items:center;gap:16px;padding:0 24px;background:var(--vp-top-surface);border-bottom:1px solid var(--vp-top-border)}.vp-top-shell-header-center{display:flex;justify-content:center}.vp-top-shell-header-end{display:flex;justify-content:flex-end}
-.vp-top-bar{height:var(--vp-top-bar-height);flex:0 0 var(--vp-top-bar-height);display:flex;align-items:center;gap:0;padding:0 20px;background:var(--vp-top-surface);border-bottom:1px solid var(--vp-top-border);z-index:20}.vp-top-start,.vp-top-end,.vp-top-center{display:flex;align-items:center;gap:6px;min-width:0}.vp-top-start,.vp-top-end{flex:0 0 auto}.vp-top-inline-page-header{box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:12px;flex:0 1 320px;min-width:160px}.vp-top-logo-page-divider,.vp-top-page-navigation-divider{align-self:center;width:1px;height:32px;flex:0 0 1px;margin:0 12px;background:var(--vp-top-border)}.vp-top-center{flex:1 1 0;justify-content:flex-start;overflow:hidden}.vp-top-end{justify-content:flex-end;gap:0}.vp-top-account{display:flex;align-items:center;margin-left:12px;padding-left:12px;border-left:1px solid var(--vp-top-border)}.vp-top-mobile-controls{display:none;align-items:center;gap:4px}.vp-top-brand{display:flex;align-items:center;gap:10px;min-width:0;white-space:nowrap}.vp-top-brand-mark,.vp-top-brand-logo{width:32px;height:32px;flex:0 0 32px}.vp-top-brand-mark{display:grid;place-items:center;border-radius:9px;background:var(--vp-top-primary);color:var(--vp-top-surface)}.vp-top-brand-logo{object-fit:contain}.vp-top-root-trigger,.vp-top-mobile-trigger{position:relative;height:var(--vp-top-touch-minimum);min-width:var(--vp-top-touch-minimum);display:flex;align-items:center;justify-content:center;gap:7px;padding:0 12px;border:0;border-radius:9px;background:transparent;color:var(--vp-top-muted);font:inherit;cursor:pointer;white-space:nowrap}.vp-top-root-trigger[data-zone=secondary]{margin-left:6px;border-left:1px solid var(--vp-top-border)}.vp-top-root-trigger:hover{background:var(--vp-top-hover);color:var(--vp-top-primary)}.vp-top-root-trigger[data-active]{background:var(--vp-top-selected);color:var(--vp-top-primary);font-weight:600}.vp-top-root-trigger[data-active]:after{content:"";position:absolute;left:12px;right:12px;bottom:0;height:2px;border-radius:2px;background:var(--vp-top-primary)}.vp-top-root-trigger:focus-visible,.vp-top-mobile-trigger:focus-visible{outline:var(--vp-top-focus-width) solid var(--vp-top-focus);outline-offset:2px}.vp-top-mobile-trigger{display:none}
+.vp-top-bar{height:var(--vp-top-bar-height);flex:0 0 var(--vp-top-bar-height);display:flex;align-items:center;gap:0;padding:0 20px;background:var(--vp-top-surface);border-bottom:1px solid var(--vp-top-border);z-index:20}.vp-top-start,.vp-top-end,.vp-top-center{display:flex;align-items:center;gap:6px;min-width:0}.vp-top-start,.vp-top-end{flex:0 0 auto}.vp-top-inline-page-header{box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:12px;flex:1 1 320px;min-width:160px}.vp-top-logo-page-divider,.vp-top-page-navigation-divider{align-self:center;width:1px;height:32px;flex:0 0 1px;margin:0 12px;background:var(--vp-top-border)}.vp-top-center{flex:0 1 auto;justify-content:flex-end;overflow:hidden}.vp-top-center-slot{display:flex;align-items:center}.vp-top-end{justify-content:flex-end;gap:0}.vp-top-account{display:flex;align-items:center;margin-left:12px;padding-left:12px;border-left:1px solid var(--vp-top-border)}.vp-top-mobile-controls{display:none;align-items:center;gap:4px}.vp-top-brand{display:flex;align-items:center;gap:10px;min-width:0;white-space:nowrap}.vp-top-brand-mark,.vp-top-brand-logo{width:32px;height:32px;flex:0 0 32px}.vp-top-brand-mark{display:grid;place-items:center;border-radius:9px;background:var(--vp-top-primary);color:var(--vp-top-surface)}.vp-top-brand-logo{object-fit:contain}.vp-top-root-trigger,.vp-top-mobile-trigger{position:relative;height:var(--vp-top-touch-minimum);min-width:var(--vp-top-touch-minimum);display:flex;align-items:center;justify-content:center;gap:7px;padding:0 12px;border:0;border-radius:9px;background:transparent;color:var(--vp-top-muted);font:inherit;cursor:pointer;white-space:nowrap}.vp-top-root-trigger[data-zone=secondary]{margin-left:6px;border-left:1px solid var(--vp-top-border)}.vp-top-root-trigger:hover{background:var(--vp-top-hover);color:var(--vp-top-primary)}.vp-top-root-trigger[data-active]{background:var(--vp-top-selected);color:var(--vp-top-primary);font-weight:600}.vp-top-root-trigger[data-active]:after{content:"";position:absolute;left:12px;right:12px;bottom:0;height:2px;border-radius:2px;background:var(--vp-top-primary)}.vp-top-root-trigger:focus-visible,.vp-top-mobile-trigger:focus-visible{outline:var(--vp-top-focus-width) solid var(--vp-top-focus);outline-offset:2px}.vp-top-mobile-trigger{display:none}
 .vp-top-navigation-menu-empty{min-width:220px;padding:8px;color:var(--vp-top-muted);font-size:13px;line-height:1.5}
 .vp-top-content{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column}.vp-top-page-header{display:none}.vp-top-page-header-side{display:flex;align-items:center;gap:12px;min-width:0}.vp-top-page-header-center{display:flex;justify-content:center;gap:12px}.vp-top-page-header-end{justify-content:flex-end}.vp-top-page-title-copy{min-width:0}.vp-top-page-title{font-size:22px;line-height:1.2;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vp-top-page-description{font-size:14px;color:var(--vp-top-muted);margin:2px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vp-top-inline-page-header .vp-top-page-title{font-size:18px}.vp-top-inline-page-header .vp-top-page-description{font-size:12px}.vp-top-page-scroller{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;background:var(--vp-top-surface)}.vp-top-page{box-sizing:border-box;width:100%;margin:0 auto;padding:var(--vp-page-content-start) 24px 24px}.vp-top-page-body-row{display:flex;align-items:flex-start;gap:20px}.vp-top-page-body-main{flex:1;min-width:0}.vp-top-page-aside{width:320px;flex:0 0 320px;max-height:calc(100dvh - 144px);overflow:auto}
 [data-vastplan-navigation-icon][data-motion=pulse]{animation:vp-top-nav-pulse 1.4s ease-in-out infinite}[data-vastplan-navigation-icon][data-motion=spin]{display:inline-flex;animation:vp-top-nav-spin 1s linear infinite}[data-vastplan-navigation-icon][data-motion=draw]{animation:vp-top-nav-draw 1.2s ease-in-out infinite}@keyframes vp-top-nav-pulse{50%{opacity:.45;transform:scale(.9)}}@keyframes vp-top-nav-spin{to{transform:rotate(360deg)}}@keyframes vp-top-nav-draw{50%{opacity:.55}}
