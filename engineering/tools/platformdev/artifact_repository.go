@@ -34,6 +34,16 @@ func (r *runtime) prepareTestingRepositoryProtocol() (artifactrepositoryv1.Profi
 	}
 	r.repositoryProfile = profile
 	if profile.Protocol == artifactrepositoryv1.ProtocolLocalTest {
+		quarantined, err := quarantineIncompatibleDevelopmentWorkspaceArtifacts(r.testingRepositoryData())
+		if err != nil {
+			return artifactrepositoryv1.Profile{}, err
+		}
+		if quarantined.Artifacts > 0 {
+			fmt.Printf("已隔离 %d 个不兼容当前 Manifest Schema 的旧 workspace 制品\n", quarantined.Artifacts)
+		}
+		if quarantined.CatalogRebuilt {
+			fmt.Println("已归档旧 local-test Catalog；将从剩余不可变制品重建开发态流水账")
+		}
 		if err := removeStaleDevelopmentSocket(r.testingRepositorySocket()); err != nil {
 			return artifactrepositoryv1.Profile{}, err
 		}

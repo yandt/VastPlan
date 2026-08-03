@@ -19,6 +19,7 @@ import (
 const (
 	composerStateNamespace  = "portal.composition.v4"
 	composerStateKey        = "tenant"
+	composerDataFormatV5    = 5
 	composerBlobPrefix      = "blob/"
 	composerRootFormat      = "portal-composer-root.v3"
 	composerChunkBytes      = 512 << 10
@@ -45,7 +46,10 @@ type composerStateSession struct {
 	revision   uint64
 }
 
-type composerStateRepository struct{ client *sharedstatesdk.Client }
+type composerStateRepository struct {
+	client          *sharedstatesdk.Client
+	requiresRewrite bool
+}
 
 func newComposerStateRepository(host sdk.Host) (*composerStateRepository, error) {
 	client, err := sharedstatesdk.New(host, "tenant", composerStateNamespace)
@@ -68,7 +72,8 @@ func (r *composerStateRepository) load(ctx context.Context, call *contractv1.Cal
 		return state{}, 0, err
 	}
 	if !isRoot {
-		value, err := decodeComposerState(entry.Value)
+		value, migrated, err := decodeComposerState(entry.Value)
+		r.requiresRewrite = migrated || err == nil
 		return value, entry.Revision, err
 	}
 	root, err := decodeComposerRoot(entry.Value)
@@ -89,7 +94,8 @@ func (r *composerStateRepository) load(ctx context.Context, call *contractv1.Cal
 	if len(raw) != root.Size || composerDigest(raw) != root.Digest {
 		return state{}, 0, errors.New("Portal Composer Shared State 快照摘要或大小不一致")
 	}
-	value, err := decodeComposerState(raw)
+	value, migrated, err := decodeComposerState(raw)
+	r.requiresRewrite = migrated
 	return value, entry.Revision, err
 }
 
@@ -140,12 +146,33 @@ func (r *composerStateRepository) save(ctx context.Context, call *contractv1.Cal
 	return entry.Revision, nil
 }
 
-func decodeComposerState(raw []byte) (state, error) {
-	value := emptyState()
-	if err := decodeComposerJSON(raw, &value); err != nil {
-		return state{}, fmt.Errorf("解析 Portal Composer Shared State: %w", err)
+func decodeComposerState(raw []byte) (state, bool, error) {
+	formatVersion, err := composerStateDataFormat(raw)
+	if err != nil {
+		return state{}, false, fmt.Errorf("读取 Portal Composer 数据格式: %w", err)
 	}
-	return value, nil
+	if formatVersion != 0 && formatVersion != composerDataFormatV5 {
+		return state{}, false, fmt.Errorf("不支持 Portal Composer 数据格式版本 %d", formatVersion)
+	}
+	normalized := raw
+	migrated := formatVersion == 0
+	if migrated {
+		normalized, _, err = normalizeLegacyComposerNavigation(raw)
+		if err != nil {
+			return state{}, false, fmt.Errorf("迁移 Portal Composer Shared State: %w", err)
+		}
+	}
+	value := emptyState()
+	if err := decodeComposerJSON(normalized, &value); err != nil {
+		return state{}, false, fmt.Errorf("解析 Portal Composer Shared State: %w", err)
+	}
+	if migrated {
+		value.DataFormatVersion = composerDataFormatV5
+		if err := migrateComposerConfigurationDigests(&value); err != nil {
+			return state{}, false, fmt.Errorf("迁移 Portal Composer 冻结摘要: %w", err)
+		}
+	}
+	return value, migrated, nil
 }
 
 func decodeComposerRoot(raw []byte) (composerStateRoot, error) {
@@ -204,6 +231,7 @@ func composerDigest(raw []byte) string { return fmt.Sprintf("%x", sha256.Sum256(
 
 func emptyState() state {
 	return state{
+		DataFormatVersion:         composerDataFormatV5,
 		TestBindings:              map[string]portalapi.TestTargetBinding{},
 		TestVersionOwners:         map[uint64]uint64{},
 		InstallationVersionOwners: map[uint64]string{},
@@ -213,7 +241,7 @@ func emptyState() state {
 }
 
 func validateComposerTenantState(value state, tenant string) error {
-	if tenant == "" || value.TestBindings == nil || value.TestVersionOwners == nil || value.InstallationVersionOwners == nil || value.InstallationPreparations == nil || value.VersionControls == nil {
+	if tenant == "" || value.DataFormatVersion != composerDataFormatV5 || value.TestBindings == nil || value.TestVersionOwners == nil || value.InstallationVersionOwners == nil || value.InstallationPreparations == nil || value.VersionControls == nil {
 		return errors.New("Portal Composer tenant 状态无效")
 	}
 	openPublications := map[string]int{}

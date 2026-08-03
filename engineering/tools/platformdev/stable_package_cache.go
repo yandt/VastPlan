@@ -13,11 +13,17 @@ import (
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
+	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
 var errRecordedStablePackageUnavailable = errors.New("已登记 stable 制品缓存缺失")
 
 var stableCachePluginIDPattern = regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)+$`)
+
+func isCurrentManifestSchemaIncompatible(err error) bool {
+	var validationError *jsonschema.ValidationError
+	return errors.As(err, &validationError)
+}
 
 func stablePackageCacheRoot(ledgerPath string) string {
 	return filepath.Join(filepath.Dir(ledgerPath), "stable-packages", "objects")

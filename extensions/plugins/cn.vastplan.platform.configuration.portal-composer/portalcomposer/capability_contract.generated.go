@@ -4,7 +4,7 @@ package portalcomposer
 
 const (
 	PluginID      = "cn.vastplan.platform.configuration.portal-composer"
-	PluginVersion = "6.1.0"
+	PluginVersion = "6.1.3"
 )
 
 var signedToolDescriptors = map[string]string{

@@ -76,7 +76,7 @@ func hydrateDevelopmentStableArchive(repositoryRoot, ledgerPath, privateKeyPath,
 		}
 		packageBytes, err := loadRecordedStablePackage(workspaceStateRoot, cacheRoot, identity)
 		if err != nil {
-			if errors.Is(err, errRecordedStablePackageUnavailable) {
+			if errors.Is(err, errRecordedStablePackageUnavailable) || isCurrentManifestSchemaIncompatible(err) {
 				unavailable++
 				continue
 			}

@@ -54,6 +54,9 @@ func TestComposerStateMigratesLegacySingleDocumentOnNextCAS(t *testing.T) {
 	if err != nil || revision != entry.Revision {
 		t.Fatalf("旧单文档必须保持可读: revision=%d err=%v", revision, err)
 	}
+	if !repository.requiresRewrite {
+		t.Fatal("旧单文档必须标记为待原位升级")
+	}
 	if _, err := repository.save(context.Background(), call, loaded, revision); err != nil {
 		t.Fatalf("旧单文档迁移 Root 失败: %v", err)
 	}

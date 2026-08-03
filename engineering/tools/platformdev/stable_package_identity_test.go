@@ -1,7 +1,11 @@
 package main
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -151,6 +155,75 @@ func TestDevelopmentStableArchiveSkipsUnavailableUnreferencedHistory(t *testing.
 	if err != nil || count != 0 || unavailable != 1 {
 		t.Fatalf("无关历史对象缺失不得阻断启动: count=%d unavailable=%d err=%v", count, unavailable, err)
 	}
+}
+
+func TestDevelopmentStableArchiveSkipsUnreferencedHistoryFromOlderManifestSchema(t *testing.T) {
+	root := t.TempDir()
+	ledgerPath := filepath.Join(root, "stable.json")
+	packageBytes := legacyStablePackage(t)
+	digest := sha256.Sum256(packageBytes)
+	identity := stablePackageIdentity{
+		PluginID: "cn.vastplan.test.legacy", Version: "0.9.0", Channel: "stable", SHA256: hex.EncodeToString(digest[:]),
+	}
+	if err := writeStablePackageIdentityLedger(ledgerPath, stablePackageIdentityLedger{Schema: developmentStablePackageIdentitySchema, Artifacts: []stablePackageIdentity{identity}}); err != nil {
+		t.Fatal(err)
+	}
+	cacheFile := stablePackageCacheObject(stablePackageCacheRoot(ledgerPath), identity.SHA256)
+	if err := os.MkdirAll(filepath.Dir(cacheFile), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(cacheFile, packageBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	privateKeyPath := filepath.Join(root, "secrets", "artifact-signing.pem")
+	trustPath := filepath.Join(root, "secrets", "seed-artifact-trust.json")
+	trustKey, err := ensureSigningIdentity(privateKeyPath, "vastplan", "local-development")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeTrustDocument(trustPath, trustKey); err != nil {
+		t.Fatal(err)
+	}
+	count, unavailable, err := hydrateDevelopmentStableArchive(filepath.Join(root, "repository"), ledgerPath, privateKeyPath, trustPath)
+	if err != nil || count != 0 || unavailable != 1 {
+		t.Fatalf("未引用的旧 Manifest Schema 历史对象不得阻断启动: count=%d unavailable=%d err=%v", count, unavailable, err)
+	}
+}
+
+func legacyStablePackage(t *testing.T) []byte {
+	t.Helper()
+	manifest := []byte(`{
+  "id":"cn.vastplan.test.legacy",
+  "name":"Legacy stable fixture",
+  "description":"legacy stable fixture",
+  "version":"0.9.0",
+  "publisher":"vastplan",
+  "engines":{"frontend":"^1.0"},
+  "activation":["onPortalStartup"],
+  "entry":{"frontend":"frontend/dist/index.js"},
+  "contributes":{"frontend":{"views":[],"menus":[]}}
+}`)
+	var out bytes.Buffer
+	gz := gzip.NewWriter(&out)
+	tw := tar.NewWriter(gz)
+	for name, content := range map[string][]byte{
+		"vastplan.plugin.json":   manifest,
+		"frontend/dist/index.js": []byte(`export default {};`),
+	} {
+		if err := tw.WriteHeader(&tar.Header{Name: name, Mode: 0o600, Size: int64(len(content))}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tw.Write(content); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return out.Bytes()
 }
 
 func TestStablePackageIdentityLedgerFailsClosedWhenCorrupted(t *testing.T) {

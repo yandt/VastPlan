@@ -17,6 +17,7 @@ func main() {
 	}
 	service := portalcomposer.NewWithApprovalBinding(nil, approval)
 	p := sdk.New(portalcomposer.PluginID, portalcomposer.PluginVersion, map[string]string{"backend": "^0.1"})
+	p.OnMigration(portalcomposer.MigrateState)
 	p.Contribute(portalcomposer.Contribution(service))
 	p.Contribute(portalcomposer.PreferenceContribution(service))
 	if err := p.Serve(); err != nil {

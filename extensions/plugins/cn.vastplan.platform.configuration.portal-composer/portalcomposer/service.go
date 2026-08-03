@@ -46,6 +46,7 @@ type TestArtifactCatalog interface {
 }
 
 type state struct {
+	DataFormatVersion         int                                                `json:"dataFormatVersion"`
 	NextRevision              uint64                                             `json:"nextRevision"`
 	NextGovernance            uint64                                             `json:"nextGovernanceRevision"`
 	NextActivation            uint64                                             `json:"nextActivation"`
@@ -168,7 +169,7 @@ func (s *Service) withTenantState(ctx context.Context, host sdk.Host, call *cont
 	s.mu.Lock()
 	s.state = value
 	s.session = &composerStateSession{ctx: ctx, call: call, repository: repository, tenant: tenant, revision: revision}
-	changed := s.recoverInterruptedTestReleases()
+	changed := repository.requiresRewrite || s.recoverInterruptedTestReleases()
 	var seedErr error
 	if changed {
 		seedErr = s.save()
