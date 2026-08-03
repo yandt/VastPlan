@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "revision": 102,
+  "revision": 103,
   "id": "local-portal-platform",
   "profiles": [
     {
       "version": 1,
-      "revision": 102,
+      "revision": 103,
       "id": "portal-default",
       "target": { "kernel": "frontend" },
       "updates": { "mode": "automatic" },
@@ -18,9 +18,9 @@
       },
       "renderAdapter": {
         "id": "cn.vastplan.foundation.frontend.render.adapter",
-        "version": "6.1.0",
+        "version": "6.1.1",
         "channel": "stable",
-        "uiContract": "^10.0.0",
+        "uiContract": "^10.1.0",
         "config": {
           "defaultRenderer": "antd",
           "allowedRenderers": ["antd"],
@@ -32,9 +32,9 @@
       },
       "shell": {
         "id": "cn.vastplan.foundation.frontend.structure.shell",
-        "version": "9.0.1",
+        "version": "9.0.2",
         "channel": "stable",
-        "uiContract": "^10.0.0",
+        "uiContract": "^10.1.0",
         "config": {
           "defaultTemplate": "standard",
           "allowedTemplates": ["standard", "top-navigation"],
@@ -48,9 +48,9 @@
       },
       "workbench": {
         "id": "cn.vastplan.foundation.frontend.workflow.workbench",
-        "version": "7.0.0",
+        "version": "7.0.1",
         "channel": "stable",
-        "uiContract": "^10.0.0"
+        "uiContract": "^10.1.0"
       },
       "accountCenter": {
         "id": "cn.vastplan.foundation.frontend.identity.account-center",
@@ -59,12 +59,12 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.frontend.runtime.engine.react", "version": "1.1.3", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.frontend.render.adapter", "version": "6.1.0", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.frontend.render.adapter.antd", "version": "6.1.1", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.frontend.structure.shell", "version": "9.0.1", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.frontend.structure.layout.standard", "version": "6.1.1", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.frontend.structure.layout.top-navigation", "version": "6.1.1", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.frontend.workflow.workbench", "version": "7.0.0", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.frontend.render.adapter", "version": "6.1.1", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.frontend.render.adapter.antd", "version": "6.1.2", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.frontend.structure.shell", "version": "9.0.2", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.frontend.structure.layout.standard", "version": "6.1.2", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.frontend.structure.layout.top-navigation", "version": "6.1.2", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.frontend.workflow.workbench", "version": "7.0.1", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.identity.account-center", "version": "0.7.1", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "6.1.4", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.9.1", "channel": "stable" },
@@ -86,8 +86,8 @@
       "portalId": "operations",
       "platformProfile": {
         "id": "portal-default",
-        "revision": 102,
-        "digest": "ba421808f90b58002762a45985ffda19b313648e5fe7f730ef1b9f8fb161ff14"
+        "revision": 103,
+        "digest": "d46b60f07449487ce810c4aed8ff368dd3b67479118d338e2006fe05902e14ae"
       },
       "services": [
         {

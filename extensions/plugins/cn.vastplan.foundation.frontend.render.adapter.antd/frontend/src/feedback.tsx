@@ -1,6 +1,6 @@
-import { Alert, Button as AntdButton, Drawer as AntdDrawer, Empty, Modal, Skeleton as AntdSkeleton, Spin, Tooltip, Typography } from "antd";
+import { Alert, Button as AntdButton, Drawer as AntdDrawer, Empty, Modal, Skeleton as AntdSkeleton, Spin, Tooltip as AntdTooltip, Typography } from "antd";
 import type { ComponentType, CSSProperties } from "react";
-import type { BusyProps, ButtonProps, DialogProps, DrawerProps, EmptyStateProps, ErrorStateProps, IconButtonProps, SkeletonProps, VastPlanIconProps } from "@vastplan/ui-primitives";
+import type { BusyProps, ButtonProps, DialogProps, DrawerProps, EmptyStateProps, ErrorStateProps, IconButtonProps, SkeletonProps, TooltipProps, VastPlanIconProps } from "@vastplan/ui-primitives";
 import { ComponentSizeProvider, componentSizeRecipes, dialogBodyStyle, dialogFrameStyle, message, useComponentSize, usePortalI18n, VastPlanIcon } from "@vastplan/ui-primitives";
 import { antdComponentSize } from "./component-size";
 import { dialogWidths, namespace } from "./theme";
@@ -18,10 +18,24 @@ export function Button({ children, kind, size: requestedSize, ...props }: Button
   return <AntdButton {...buttonStyle(kind)} size={antdComponentSize[size]} style={{ height: recipe.height, paddingInline: recipe.inlinePadding, borderRadius: recipe.radius, fontSize: recipe.fontSize }} {...props}>{children}</AntdButton>;
 }
 
+const tooltipPlacements = {
+  "top-start": "topLeft",
+  top: "top",
+  "top-end": "topRight",
+  "bottom-start": "bottomLeft",
+  bottom: "bottom",
+  "bottom-end": "bottomRight",
+} as const;
+
+/** Maps the governed Tooltip contract onto Ant Design without leaking Ant props to Shell code. */
+export function Tooltip({ title, children, placement = "top" }: TooltipProps) {
+  return <AntdTooltip title={title} placement={tooltipPlacements[placement]}>{children}</AntdTooltip>;
+}
+
 export function iconButtonWith(Icon: ComponentType<VastPlanIconProps>, { icon, label, size: requestedSize, onClick, disabled, loading, tone = "normal" }: IconButtonProps) {
   const size = useComponentSize(requestedSize);
   const recipe = componentSizeRecipes.iconButton[size];
-  return <Tooltip title={label}><AntdButton
+  return <AntdTooltip title={label}><AntdButton
     aria-label={label}
     type={tone === "primary" ? "primary" : "text"}
     danger={tone === "danger"}
@@ -31,7 +45,7 @@ export function iconButtonWith(Icon: ComponentType<VastPlanIconProps>, { icon, l
     disabled={disabled}
     onClick={onClick}
     style={{ width: recipe.edge, height: recipe.edge, borderRadius: recipe.radius }}
-  /></Tooltip>;
+  /></AntdTooltip>;
 }
 
 export function IconButton(props: IconButtonProps) { return iconButtonWith(VastPlanIcon, props); }

@@ -109,7 +109,7 @@ export function TopNavigationShell(props: UIShellProps) {
         {shellSlot(composition.shellSlots, "shell.navigation.end")}
         {accountRoot === undefined ? null : <div className="vp-top-account"><AccountPopover group={accountRoot} account={props.account} composition={composition} open={openRootID === accountRoot.id} active={activeRootID === accountRoot.id} onOpenChange={(open) => setOpenRootID(open ? accountRoot.id : undefined)} onNavigate={navigate} onLogout={props.onLogout} /></div>}
       </div>
-      <div className="vp-top-mobile-controls"><PortalAccountControl account={props.account} onSelect={() => setMobileOpen(true)} /><button type="button" className="vp-top-mobile-trigger" aria-label={i18n.text(message(namespace, "navigation.open", "打开主菜单"))} title={i18n.text(message(namespace, "navigation.open", "打开主菜单"))} onClick={() => setMobileOpen(true)}><ui.Icon name="menu" /></button></div>
+      <div className="vp-top-mobile-controls"><PortalAccountControl account={props.account} onSelect={() => setMobileOpen(true)} /><ui.Tooltip title={i18n.text(message(namespace, "navigation.open", "打开主菜单"))}><button type="button" className="vp-top-mobile-trigger" aria-label={i18n.text(message(namespace, "navigation.open", "打开主菜单"))} title={i18n.text(message(namespace, "navigation.open", "打开主菜单"))} onClick={() => setMobileOpen(true)}><ui.Icon name="menu" /></button></ui.Tooltip></div>
     </header>
     <div className="vp-top-content">
       {page === undefined ? null : <PageHeader className="vp-top-page-header" page={page} composition={composition} />}
@@ -141,7 +141,7 @@ function RootPopover({ group, composition, open, active, onOpenChange, onNavigat
   const ui = usePortalUI();
   const i18n = usePortalI18n();
   const label = navigationLabel(group, i18n);
-  return <ui.Popover open={open} placement="bottom-start" surface="compact" ariaLabel={label} initialFocus="current" onOpenChange={(next) => onOpenChange(next)} trigger={(props) => <button ref={(node) => props.ref(node)} type="button" className="vp-top-root-trigger" data-zone={group.zone} data-active={active || undefined} aria-label={label} title={label} aria-current={active ? "location" : undefined} aria-expanded={props["aria-expanded"]} aria-controls={props["aria-controls"]} onClick={props.onClick} onKeyDown={props.onKeyDown}><NavigationIcon icon={group.icon} state={active ? "active" : "normal"} size="md" /></button>}>
+  return <ui.Popover open={open} placement="bottom-start" surface="compact" ariaLabel={label} initialFocus="current" onOpenChange={(next) => onOpenChange(next)} trigger={(props) => <ui.Tooltip title={label}><button ref={(node) => props.ref(node)} type="button" className="vp-top-root-trigger" data-zone={group.zone} data-active={active || undefined} aria-label={label} title={label} aria-current={active ? "location" : undefined} aria-expanded={props["aria-expanded"]} aria-controls={props["aria-controls"]} onClick={props.onClick} onKeyDown={props.onKeyDown}><NavigationIcon icon={group.icon} state={active ? "active" : "normal"} size="md" /></button></ui.Tooltip>}>
     <NavigationPopoverMenu groups={[group]} composition={composition} onNavigate={onNavigate} />
   </ui.Popover>;
 }
@@ -168,7 +168,7 @@ function OverflowPopover({ groups: overflow, composition, open, active, onOpenCh
   const ui = usePortalUI();
   const i18n = usePortalI18n();
   const label = i18n.text(message(namespace, "navigation.more", "更多导航"));
-  return <ui.Popover open={open} placement="bottom-end" surface="compact" ariaLabel={label} initialFocus="current" onOpenChange={(next) => onOpenChange(next)} trigger={(props) => <button ref={(node) => props.ref(node)} type="button" className="vp-top-root-trigger" data-active={active || undefined} aria-label={label} title={label} aria-expanded={props["aria-expanded"]} aria-controls={props["aria-controls"]} onClick={props.onClick} onKeyDown={props.onKeyDown}><ui.Icon name="menu" size="md" /></button>}>
+  return <ui.Popover open={open} placement="bottom-end" surface="compact" ariaLabel={label} initialFocus="current" onOpenChange={(next) => onOpenChange(next)} trigger={(props) => <ui.Tooltip title={label}><button ref={(node) => props.ref(node)} type="button" className="vp-top-root-trigger" data-active={active || undefined} aria-label={label} title={label} aria-expanded={props["aria-expanded"]} aria-controls={props["aria-controls"]} onClick={props.onClick} onKeyDown={props.onKeyDown}><ui.Icon name="menu" size="md" /></button></ui.Tooltip>}>
     <NavigationPopoverMenu groups={overflow} composition={composition} onNavigate={onNavigate} />
   </ui.Popover>;
 }

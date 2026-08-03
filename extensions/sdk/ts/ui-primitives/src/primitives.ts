@@ -136,6 +136,16 @@ export interface DialogProps extends SizeableProps {
 export interface DrawerProps extends DialogProps { placement?: "top" | "right" | "bottom" | "left"; }
 
 export type PopoverPlacement = "bottom-start" | "bottom" | "bottom-end" | "top-start" | "top" | "top-end";
+/**
+ * A non-interactive explanatory overlay for a single visible trigger.
+ * Render adapters own their framework-native implementation (Ant Design
+ * Tooltip today), while Shell and Workbench code stay framework-neutral.
+ */
+export interface TooltipProps {
+  title: ReactNode;
+  children: ReactNode;
+  placement?: PopoverPlacement;
+}
 export type PopoverCloseReason = "trigger" | "escape" | "outside" | "selection";
 export interface PopoverTriggerProps {
   ref(node: HTMLElement | null): void;
@@ -324,6 +334,7 @@ export interface PortalUI {
   Breadcrumb: ComponentType<BreadcrumbProps>;
   Tabs: ComponentType<TabsProps>;
   CommandPalette: ComponentType<CommandPaletteProps>;
+  Tooltip: ComponentType<TooltipProps>;
   Popover: ComponentType<PopoverProps>;
   Dialog: ComponentType<DialogProps>;
   Drawer: ComponentType<DrawerProps>;

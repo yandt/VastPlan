@@ -10,7 +10,7 @@ import { namespace } from "./theme";
 describe("Ant Design portal UI renderer", () => {
   it("implements the complete framework-neutral component surface", () => {
     const required: Array<keyof Omit<PortalUI, "notify" | "confirm" | "theme">> = [
-      "PortalShell", "Page", "Panel", "BodySections", "Stack", "Grid", "GridItem", "Divider", "Button", "IconButton", "Select", "Menu", "Breadcrumb", "Tabs", "CommandPalette", "Popover", "Dialog", "Drawer", "FormRenderer", "FilterBar", "Table", "DataCard", "SplitView", "RecordNavigationList", "RecordTree", "Pagination", "Descriptions", "Status", "Icon", "EmptyState", "ErrorState", "Skeleton", "Busy",
+      "PortalShell", "Page", "Panel", "BodySections", "Stack", "Grid", "GridItem", "Divider", "Button", "IconButton", "Select", "Menu", "Breadcrumb", "Tabs", "CommandPalette", "Tooltip", "Popover", "Dialog", "Drawer", "FormRenderer", "FilterBar", "Table", "DataCard", "SplitView", "RecordNavigationList", "RecordTree", "Pagination", "Descriptions", "Status", "Icon", "EmptyState", "ErrorState", "Skeleton", "Busy",
     ];
     expect(antdRenderer).toMatchObject({ id: "antd", framework: "antd" });
     expect(required.every((name) => typeof antdPortalUIComponents[name] === "function")).toBe(true);

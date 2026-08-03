@@ -138,7 +138,7 @@ export function StandardShell(props: UIShellProps) {
         onLogout={props.onLogout}
       /> : null}
       <div className="vp-shell-content">
-        {navigationVisible ? <div className="vp-mobile-header"><button type="button" className="vp-mobile-menu-button" aria-label={i18n.text(message(namespace, "navigation.open", "打开主菜单"))} title={i18n.text(message(namespace, "navigation.open", "打开主菜单"))} onClick={() => setMobileOpen(true)}><ui.Icon name="menu" /></button><Brand name={branding.name} shortName={branding.shortName} logoURL={branding.logoURL} /><span className="vp-mobile-preferences"><PortalAccountControl account={props.account} onSelect={() => setMobileOpen(true)} /></span></div> : null}
+        {navigationVisible ? <div className="vp-mobile-header"><ui.Tooltip title={i18n.text(message(namespace, "navigation.open", "打开主菜单"))}><button type="button" className="vp-mobile-menu-button" aria-label={i18n.text(message(namespace, "navigation.open", "打开主菜单"))} title={i18n.text(message(namespace, "navigation.open", "打开主菜单"))} onClick={() => setMobileOpen(true)}><ui.Icon name="menu" /></button></ui.Tooltip><Brand name={branding.name} shortName={branding.shortName} logoURL={branding.logoURL} /><span className="vp-mobile-preferences"><PortalAccountControl account={props.account} onSelect={() => setMobileOpen(true)} /></span></div> : null}
         {pageHeader}
         {pageBody}
       </div>
@@ -198,10 +198,11 @@ function RailButton({ group, selected, controls, buttonRef, onSelect, onOpen }: 
   onOpen(): void;
 }) {
   const i18n = usePortalI18n();
+  const ui = usePortalUI();
   const label = navigationLabel(group, i18n);
-  return <button ref={buttonRef} type="button" className="vp-rail-button" data-selected={selected || undefined} aria-label={label} title={label} aria-pressed={selected} aria-controls={controls} onClick={onSelect} onKeyDown={(event) => {
+  return <ui.Tooltip title={label}><button ref={buttonRef} type="button" className="vp-rail-button" data-selected={selected || undefined} aria-label={label} title={label} aria-pressed={selected} aria-controls={controls} onClick={onSelect} onKeyDown={(event) => {
     if (event.key === "ArrowRight" && selected) { event.preventDefault(); onOpen(); }
-  }}><NavigationIcon icon={group.icon} state={selected ? "active" : "normal"} size="lg" /></button>;
+  }}><NavigationIcon icon={group.icon} state={selected ? "active" : "normal"} size="lg" /></button></ui.Tooltip>;
 }
 
 function IconForGroup({ group }: { group: PortalNavigationGroup }) {

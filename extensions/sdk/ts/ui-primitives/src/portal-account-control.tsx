@@ -18,7 +18,8 @@ export function PortalAccountControl({ account, selected, onSelect, trigger }: {
   const label = i18n.text(message(namespace, "account.open", "打开用户功能"));
   const summary = i18n.text(message(namespace, "account.tooltip", "用户信息：{name}", { name: account.displayName }));
   const initials = account.displayName.trim().slice(0, 1).toUpperCase() || "U";
-  return <button
+  return <ui.Tooltip title={summary}>
+    <button
     ref={(node) => trigger?.ref(node)}
     type="button"
     className="vp-account-avatar"
@@ -30,5 +31,6 @@ export function PortalAccountControl({ account, selected, onSelect, trigger }: {
     onClick={trigger?.onClick ?? onSelect}
     onKeyDown={trigger?.onKeyDown}
     style={{ width: 32, height: 32, borderRadius: "50%", border: selected ? `2px solid ${ui.theme.tokens.color.primary}` : 0, display: "grid", placeItems: "center", color: "#fff", background: ui.theme.tokens.color.primary, fontWeight: 700, cursor: "pointer", boxSizing: "border-box" }}
-  >{initials}</button>;
+    >{initials}</button>
+  </ui.Tooltip>;
 }
