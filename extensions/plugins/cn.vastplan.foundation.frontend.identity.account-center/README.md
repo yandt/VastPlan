@@ -3,7 +3,7 @@
 `cn.vastplan.foundation.frontend.identity.account-center` 是一个独立签名、独立版本的 Portal 基础插件。它通过与其他插件相同的页面、导航、路由和热替换契约提供：
 
 - 用户信息页面；
-- 用户设置分组；
+- 用户设置页面；
 - 仅保存在当前浏览器、修改后即时生效的外观设置页面；页面声明受治理的 `small` Page Body，在两种 Shell 中以 720px 上限居中，不额外创建卡片边框或重复标题。“主题与颜色”和“偏好设置”复用设计系统 `BodySections`，主题模式位于主题区域内；主题模式使用“跟随系统 / 浅色 / 深色”的可访问视觉预览选择器，模板通过可替换的专用 Select 选择，其他字段采用标签同行、控件右对齐的单行式布局。
 
 插件不拥有 Shell 布局。它被归类为 `foundation.frontend`，因为外观页面需要可信 Host 的本地个性化窄端口和语义 UI 原语；它不作为普通应用插件暴露。Shell 只把统一组合模型中的 `account` 根分组渲染成专用账户入口：标准布局位于左下角，顶部布局位于右上角。
@@ -14,7 +14,7 @@
 2. 通过 Manifest `extensions` 声明页面 ID、目标分组和扩展契约范围；
 3. 在自身前端入口用 Workbench 数据契约注册同一页面。
 
-可信 Catalog 会在发布前校验所有者版本、扩展契约和 descriptor，Portal Runtime 会在同一 Generation 中核对实际页面、贡献插件和导航分组。未声明扩展关系的插件不能直接把页面挂入 `account` 或 `account.settings`。插件之间不得导入源码、共享 React 节点或借用主插件权限。
+可信 Catalog 会在发布前校验所有者版本、扩展契约和 descriptor，Portal Runtime 会在同一 Generation 中核对实际页面、贡献插件和导航分组。未声明扩展关系的插件不能直接把页面挂入唯一的 `account` 锚点。插件之间不得导入源码、共享 React 节点或借用主插件权限。
 
 每个 Frontend Platform Profile 必须通过 `accountCenter` 选择一个个人中心实现，并在平台 `plugins` 中精确包含同一制品引用。默认 Profile 选择本插件；应用插件配置不能删除、降级或覆盖它。未来替换实现时只更换 Profile 中的语义选择，不需要修改 Portal 内核或 Shell。
 

@@ -7,13 +7,13 @@ const contributor = "cn.vastplan.example.account-security";
 const pointID = `${owner}.page`;
 
 const graph = parsePortalExtensionGraph({
-  points: [{ id: pointID, ownerPluginId: owner, surface: "frontend", contract: "1.0.0", kind: "frontend.page", dispatch: "mount", targets: ["account", "account.settings"] }],
-  contributions: [{ point: pointID, id: `${contributor}.page`, pluginId: contributor, contract: "^1.0.0", order: 20, descriptor: { pageId: "account.security", groupId: "account.settings" } }],
+  points: [{ id: pointID, ownerPluginId: owner, surface: "frontend", contract: "1.0.0", kind: "frontend.page", dispatch: "mount", targets: ["account"] }],
+  contributions: [{ point: pointID, id: `${contributor}.page`, pluginId: contributor, contract: "^1.0.0", order: 20, descriptor: { pageId: "account.security", groupId: "account" } }],
 });
 
 const extensionPage: PortalRegisteredPage = {
   id: "account.security", pluginID: contributor, path: "/account/security", title: "Security",
-  navigation: { id: "account.security", label: "Security", parentMenuRef: { pluginID: "vastplan.host", nodeID: "account.settings" } },
+  navigation: { id: "account.security", label: "Security", parentMenuRef: { pluginID: "vastplan.host", nodeID: "account" } },
   slots: [{ id: "body", slot: "page.body.main", component: () => null }],
 };
 
@@ -31,7 +31,7 @@ describe("Portal plugin extension graph", () => {
   it("rejects undeclared or mismatched pages in an owned navigation target", () => {
     const noContributions = parsePortalExtensionGraph({ points: graph.points, contributions: [] });
     expect(() => validateFrontendPageExtensions([{ ...extensionPage, pluginID: "cn.vastplan.example.other" }], noContributions)).toThrow(/未声明扩展关系/);
-    expect(() => validateFrontendPageExtensions([{ ...extensionPage, navigation: { ...extensionPage.navigation!, parentMenuRef: { pluginID: "vastplan.host", nodeID: "account" } } }], graph)).toThrow(/未按签名 descriptor/);
+    expect(() => validateFrontendPageExtensions([{ ...extensionPage, navigation: { ...extensionPage.navigation!, parentMenuRef: { pluginID: "vastplan.host", nodeID: "other" } } }], graph)).toThrow(/未按签名 descriptor/);
   });
 
   it("rejects duplicate extension identities before assembly", () => {

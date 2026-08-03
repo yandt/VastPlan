@@ -482,7 +482,6 @@ export function resolvePortalPath(prepared: PreparedPortal, pathname: string): s
   const zoneRank = { primary: 0, settings: 1, secondary: 2 } as const;
   const navigationZones = new Map(prepared.navigationCatalogs.flatMap((catalog) => catalog.nodes.map((node) => [`${node.ref.pluginID}/${node.ref.nodeID}`, node.zone] as const)));
   navigationZones.set("vastplan.host/account", "secondary");
-  navigationZones.set("vastplan.host/account.settings", "secondary");
   const navigable = prepared.pages
     .map((page, index) => ({ page, index }))
     .filter(({ page }) => page.navigation !== undefined)

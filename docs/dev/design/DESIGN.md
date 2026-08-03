@@ -76,17 +76,17 @@ UI Contract 9.0 暴露语义 token、账户外观契约与四级 `ComponentSize`
 - FilterPanel 使用 `inside-inline` 持久 Label：Label 与输入控件共同消费一个筛选单元格宽度，Label 按内容取宽但桌面最大宽度为 `clamp(48px, 18%, 112px)`、移动端为 `clamp(56px, 32%, 128px)`，始终单行；超长文案省略并由 Tooltip 与可访问名称提供全文。输入区域必须 `flex: 1; min-width: 0`，输入后 Label 不消失。Ant Design 实现必须遵守该语义，功能插件不能配置像素宽度或注入框架样式。
 - Page Header 右侧的页面功能动作使用 VastPlan 语义图标、Tooltip 和 `aria-label`，点击区至少 44px；桌面最多直接显示 4 个，超出后进入“更多”，不得在 Table 工具栏重复显示新增、导入或发布。
 - 图标风格由 Renderer 的 `iconTheme` 统一决定：`canonical` 使用锁定的 MIT Ant Design 语义入口保持跨框架几何一致，`renderer-native` 使用当前 UI 框架原生图形并在缺项时回退。846 个原始目录名称不属于页面契约，只能由 Foundation 图标工具按 27 个分片延迟读取；单个页面和功能插件不得混指定图标来源。
-- 已认证 Shell 只提供一个圆形账户头像入口；头像固定映射到统一组合模型中的 `account` 根分组。标准侧栏点击后在右侧常驻面板加载二级/三级菜单，顶部布局复用同一分组数据；头像本身不得硬编码功能项。Frontend Platform Profile 通过必填 `accountCenter` 选择个人中心实现，默认基础插件 `cn.vastplan.foundation.frontend.identity.account-center` 注册“用户信息”和“用户设置/外观”页面，且不能由 Application 删除或覆盖；后续账户功能继续走相同页面契约。`settings` 区域显示为“系统管理”，必须是最后一个一级导航项；企业用户、组织和角色管理属于该区域，不与个人中心合并。外观配置只保存在当前浏览器，并明确提示不会上传服务器。
+- 已认证 Shell 只提供一个圆形账户头像入口；它固定映射到统一组合模型中的唯一 `account` 根分组。标准侧栏点击后在右侧常驻面板加载账户页面，顶部布局复用同一分组数据；头像本身不得硬编码功能项、二级组或页面。Frontend Platform Profile 通过必填 `accountCenter` 选择个人中心实现，默认基础插件 `cn.vastplan.foundation.frontend.identity.account-center` 注册“用户信息”和“外观”页面，且不能由 Application 删除或覆盖；后续账户功能继续走受治理的账户扩展点。除此之外，所有一级/二级业务菜单均必须由插件 Manifest 自治声明；`primary`、`secondary`、`settings` 仅是插件选择的布局区域，不对应 Shell 固化的业务名称、图标或根菜单。外观配置只保存在当前浏览器，并明确提示不会上传服务器。
 
 ### 4.2 顶部导航
 
-- 64px 顶栏：Logo 在 start；桌面端以竖分隔线连接 Page Header（标题、描述与页面 slots），其后为 `primary` 和 `secondary` 根组；`settings` 和账户区在 end。移动端仍将 Page Header 保持为独立第二行，避免与菜单争夺可用宽度。
+- 64px 顶栏：Logo 在 start；桌面端以竖分隔线连接 Page Header（标题、描述与页面 slots），其后为插件声明在 `primary` 与 `secondary` 布局区域的根组；插件声明在 `settings` 布局区域的根组和账户区在 end。移动端仍将 Page Header 保持为独立第二行，避免与菜单争夺可用宽度。
 - 顶部布局的根组与“更多”触发器仅显示语义图标，并使用与 Page Header 操作一致的 `md` 图标规格；可访问名称与原生 Tooltip 使用完整本地化菜单名称。账户区保持圆形头像，二、三级页面名称只在展开菜单中显示。
 - 顶部账户区与前方一级菜单之间固定使用一条边界色竖分隔线，分隔线两侧均保留 12px 间距，不依赖菜单数量或图标宽度。
 - Logo 与页面 Header、页面 Header 与主菜单、主菜单与账户区的三条竖分隔线均使用统一的 12px 内侧间距；顶栏不得用全局 `gap` 参与这些边界的定位，避免左右视觉不均衡。
 - `primary` 与 `secondary` 之间有视觉分隔。活动根组同时显示 selected surface、位置标记和 `aria-expanded/aria-current` 关联状态。
 - 主菜单、用户菜单与“更多”共用 `ui.Menu` 导航组件，当前 Ant Design Renderer 映射为原生 `Menu`：Popover 外层不附加内边距，`sm` 菜单自身管理紧凑内边距、整行 hover、选中和子菜单状态。顶部布局不得自行复刻菜单项 hover 或选中样式。
-- 种子平台默认主菜单按任务分为“服务与部署、制品与交付、资源与配置、集成与 API、安全与授权”；Portal 管理保留在系统设置。同一 Portal 管理的多个服务共享该分类，不同 Portal 可通过 Platform Profile 的语义导航策略独立调整，布局不得硬编码这些业务名称。
+- 种子平台的菜单分类由已安装插件各自在 Manifest 中声明；同一 Portal 管理的多个服务共享同一组已安装贡献，不同 Portal 可通过 `navigationOverrides` 对插件节点隐藏、排序、改父级或覆盖名称。布局不得硬编码业务名称或中央菜单树。
 - 只允许一个 Overlay；不使用 hover 打开、不使用嵌套 Popover。重新点击触发器关闭，切换触发器替换内容。
 - 空间不足时尾部根组进入“更多”；活动根组优先留在顶栏。“更多”不改变导航树，只改变视觉承载。
 

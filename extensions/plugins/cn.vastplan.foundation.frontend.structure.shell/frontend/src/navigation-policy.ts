@@ -1,4 +1,4 @@
-import { accountNavigationGroupID, accountSettingsNavigationGroupID, hostNavigationPluginID, message } from "@vastplan/ui-primitives";
+import { accountNavigationGroupID, hostNavigationPluginID, message } from "@vastplan/ui-primitives";
 import type {
   ActiveNavigationPath,
   NavigationZone,
@@ -15,13 +15,10 @@ const navigationZones = new Set<NavigationZone>(["primary", "secondary", "settin
 
 const semantic = (name: Extract<PortalNavigationIconSpec, { kind: "semantic" }>["name"]): PortalNavigationIconSpec => Object.freeze({ kind: "semantic", name });
 const hostID = (nodeID: string): string => navigationNodeKey({ pluginID: hostNavigationPluginID, nodeID });
+const accountAnchorID = hostID(accountNavigationGroupID);
 
 const defaultGroups: readonly PortalNavigationGroupDescriptor[] = [
-  { id: hostID("primary"), label: message(namespace, "navigation.primary", "主要功能"), zone: "primary", icon: semantic("menu"), order: -1000 },
-  { id: hostID("secondary"), label: message(namespace, "navigation.secondary", "辅助功能"), zone: "secondary", icon: semantic("info"), order: -1000 },
-  { id: hostID("settings"), label: message(namespace, "navigation.settings", "系统管理"), zone: "settings", icon: semantic("settings"), order: 1000 },
-  { id: hostID(accountNavigationGroupID), label: message(namespace, "navigation.account", "用户"), zone: "secondary", icon: semantic("info"), order: 2000 },
-  { id: hostID(accountSettingsNavigationGroupID), parentID: hostID(accountNavigationGroupID), label: message(namespace, "navigation.accountSettings", "用户设置"), zone: "secondary", icon: semantic("settings"), order: 20 },
+  { id: accountAnchorID, label: message(namespace, "navigation.account", "用户"), zone: "secondary", icon: semantic("info"), order: 2000 },
 ];
 
 export interface NavigationPolicy {
@@ -78,10 +75,10 @@ function applyOverrides(groups: Map<string, PortalNavigationGroupDescriptor>, co
   if (!Array.isArray(configured) || configured.length > 512) throw new Error("shell.config.navigationOverrides 必须是有界数组");
   const seen = new Set<string>();
   for (const value of configured) {
-    if (!isRecord(value) || typeof value.target !== "string" || !validGlobalID(value.target) || seen.has(value.target) || !groups.has(value.target) ||
+    if (!isRecord(value) || typeof value.target !== "string" || !validGlobalID(value.target) || value.target === accountAnchorID || seen.has(value.target) || !groups.has(value.target) ||
         (value.hidden !== undefined && typeof value.hidden !== "boolean") ||
         (value.order !== undefined && (!Number.isSafeInteger(value.order) || Math.abs(Number(value.order)) > 1_000_000)) ||
-        (value.parent !== undefined && (typeof value.parent !== "string" || !validGlobalID(value.parent) || !groups.has(value.parent) || value.parent === value.target)) ||
+        (value.parent !== undefined && (typeof value.parent !== "string" || !validGlobalID(value.parent) || value.parent === accountAnchorID || !groups.has(value.parent) || value.parent === value.target)) ||
         (value.labels !== undefined && !validLabels(value.labels))) throw new Error("shell.config.navigationOverrides 包含无效、重复或未知覆盖");
     seen.add(value.target);
     const previous = groups.get(value.target)!;

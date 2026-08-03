@@ -8,14 +8,11 @@ import type { SemanticIconName } from "./icon.js";
 
 export type NavigationZone = "primary" | "settings" | "secondary";
 
-/** Governed account-navigation identities shared by plugins, composition and Shell libraries. */
+/** The authenticated account avatar is the only Shell-owned navigation anchor. */
 export const hostNavigationPluginID = "vastplan.host" as const;
 export const accountNavigationGroupID = "account" as const;
-export const accountSettingsNavigationGroupID = "account.settings" as const;
 export const accountNavigationNodeID = `${hostNavigationPluginID}/${accountNavigationGroupID}` as const;
-export const accountSettingsNavigationNodeID = `${hostNavigationPluginID}/${accountSettingsNavigationGroupID}` as const;
 export const accountNavigationNodeRef: PortalNavigationNodeRef = Object.freeze({ pluginID: hostNavigationPluginID, nodeID: accountNavigationGroupID });
-export const accountSettingsNavigationNodeRef: PortalNavigationNodeRef = Object.freeze({ pluginID: hostNavigationPluginID, nodeID: accountSettingsNavigationGroupID });
 export const accountPageExtensionPointID = "cn.vastplan.foundation.frontend.identity.account-center.page" as const;
 
 export interface PortalNavigationNodeRef {

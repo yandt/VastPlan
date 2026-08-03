@@ -12,7 +12,7 @@ describe("account center plugin", () => {
     expect(addPage).toHaveBeenCalledTimes(2);
     expect(addPage.mock.calls.map(([page]) => page.navigation)).toEqual([
       expect.objectContaining({ id: "account.profile", parentMenuRef: { pluginID: "vastplan.host", nodeID: "account" } }),
-      expect.objectContaining({ id: "account.settings.appearance", parentMenuRef: { pluginID: "vastplan.host", nodeID: "account.settings" } }),
+      expect.objectContaining({ id: "account.settings.appearance", parentMenuRef: { pluginID: "vastplan.host", nodeID: "account" } }),
     ]);
     expect(addPage.mock.calls[1]?.[0]).toMatchObject({ id: "account.settings.appearance", bodyLayout: "small" });
   });

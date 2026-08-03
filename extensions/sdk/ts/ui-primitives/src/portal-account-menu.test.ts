@@ -7,7 +7,7 @@ describe("PortalAccountMenu", () => {
     const group = {
       id: accountNavigationNodeID, label: "用户", zone: "secondary", icon: "info", order: 1,
       pages: [{ id: "account.profile", label: "用户信息", zone: "secondary" }],
-      children: [{ id: "account.settings", parentID: "account", label: "用户设置", zone: "secondary", icon: "settings", order: 1, pages: [{ id: "account.appearance", label: "外观", zone: "secondary" }], children: [] }],
+      children: [{ id: "preferences", parentID: "account", label: "偏好设置", zone: "secondary", icon: "settings", order: 1, pages: [{ id: "account.appearance", label: "外观", zone: "secondary" }], children: [] }],
     } as never;
     const composition = {
       pages: [
@@ -18,7 +18,7 @@ describe("PortalAccountMenu", () => {
     const items = accountMenuItems(group, composition, { text: (value: unknown) => typeof value === "string" ? value : (value as { fallback: string }).fallback }, true);
     expect(items).toMatchObject([
       { id: "account.profile", href: "/account/profile" },
-      { id: "group:account.settings", children: [{ id: "account.appearance", href: "/account/settings/appearance" }] },
+      { id: "group:preferences", children: [{ id: "account.appearance", href: "/account/settings/appearance" }] },
       { id: accountLogoutMenuItemID },
     ]);
   });

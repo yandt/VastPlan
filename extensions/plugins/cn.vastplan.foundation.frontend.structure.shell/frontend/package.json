@@ -1,6 +1,6 @@
 {
   "name": "@vastplan/ui-structure-shell",
-  "version": "7.0.0",
+  "version": "8.0.0",
   "private": true,
   "type": "module",
   "exports": { ".": "./src/index.tsx" },

@@ -13,13 +13,11 @@ const adapter: UIShellAdapter = {
     messages: {
       "zh-CN": {
         "template.standard": "标准侧栏", "template.top-navigation": "顶部导航",
-        "navigation.primary": "主要功能", "navigation.secondary": "辅助功能", "navigation.settings": "系统设置",
-        "navigation.account": "用户", "navigation.accountSettings": "用户设置", "account.open": "打开用户功能",
+        "navigation.account": "用户", "account.open": "打开用户功能",
       },
       "en-US": {
         "template.standard": "Standard sidebar", "template.top-navigation": "Top navigation",
-        "navigation.primary": "Primary", "navigation.secondary": "Secondary", "navigation.settings": "System settings",
-        "navigation.account": "Account", "navigation.accountSettings": "User settings", "account.open": "Open account functions",
+        "navigation.account": "Account", "account.open": "Open account functions",
       },
     },
   },

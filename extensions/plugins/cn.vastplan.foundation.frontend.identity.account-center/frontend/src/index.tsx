@@ -1,7 +1,6 @@
 import {
   accountNavigationNodeRef,
   accountPageExtensionPointID,
-  accountSettingsNavigationNodeRef,
   PortalAccountProfilePage,
   PortalAppearanceSettingsPage,
   type FrontendPluginContext,
@@ -56,7 +55,7 @@ export default {
       navigation: {
         id: "account.settings.appearance",
         label: context.i18n.message("appearance.navigation", "外观"),
-        parentMenuRef: accountSettingsNavigationNodeRef,
+        parentMenuRef: accountNavigationNodeRef,
         order: 10,
       },
       slots: [{ id: "account.appearance.body", slot: "page.body.main", component: PortalAppearanceSettingsPage }],
