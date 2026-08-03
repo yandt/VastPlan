@@ -17,11 +17,28 @@ import (
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository/localtest"
 )
 
-type localWorkspaceWithdrawer struct{ client *localtest.Client }
+type localWorkspaceClient interface {
+	WithdrawWorkspace(context.Context, pluginv1.ArtifactRef) (artifactrepositoryv1.WorkspaceWithdrawalRecord, error)
+	CatalogSnapshot(context.Context) (artifactrepositoryv1.CatalogSnapshot, error)
+}
+
+type localWorkspaceWithdrawer struct{ client localWorkspaceClient }
 
 func (w localWorkspaceWithdrawer) WithdrawWorkspace(ctx context.Context, ref pluginv1.ArtifactRef) error {
-	_, err := w.client.WithdrawWorkspace(ctx, ref)
-	return err
+	_, withdrawErr := w.client.WithdrawWorkspace(ctx, ref)
+	if withdrawErr == nil {
+		return nil
+	}
+	snapshot, listErr := w.client.CatalogSnapshot(ctx)
+	if listErr != nil {
+		return errors.Join(withdrawErr, fmt.Errorf("复核 workspace 撤回结果: %w", listErr))
+	}
+	for _, receipt := range snapshot.Items {
+		if receipt.Ref == ref {
+			return withdrawErr
+		}
+	}
+	return nil
 }
 
 func (w localWorkspaceWithdrawer) WorkspaceCandidates(ctx context.Context, pluginID string) ([]artifactrepositoryv1.Receipt, error) {
