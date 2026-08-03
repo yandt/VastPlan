@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { uiContractVersion } from "@vastplan/ui-contract";
 import { composedNavigationMenuItems, type PortalNavigationGroup, type UIShellProps } from "@vastplan/ui-primitives";
-import adapter, { prioritizeRoots, topNavigationShellCSS } from "./index";
+import adapter, { prioritizeRoots, topNavigationCapacity, topNavigationShellCSS } from "./index";
 
 const root = (id: string): PortalNavigationGroup => ({ id, label: id, zone: "primary", icon: { kind: "semantic", name: "menu" }, pages: [], children: [] });
 
@@ -14,6 +14,11 @@ describe("top navigation shell layout", () => {
     const result = prioritizeRoots([root("one"), root("two"), root("three"), root("four")], 3, "four");
     expect(result.visible.map((item) => item.id)).toEqual(["one", "four"]);
     expect(result.overflow.map((item) => item.id)).toEqual(["two", "three"]);
+  });
+
+  it("sizes icon-only root navigation by the shared touch target instead of a text-menu estimate", () => {
+    expect(topNavigationCapacity(294, 44)).toBe(6);
+    expect(topNavigationCapacity(44, 44)).toBe(1);
   });
 
   it("uses the renderer-owned compact navigation Menu and a fixed page header", () => {
@@ -36,6 +41,8 @@ describe("top navigation shell layout", () => {
     expect(topNavigationShellCSS).toContain(".vp-top-logo-page-divider,.vp-top-page-navigation-divider{align-self:center;width:1px;height:32px;flex:0 0 1px;margin:0 12px");
     expect(topNavigationShellCSS).toContain(".vp-top-account{display:flex;align-items:center;margin-left:12px;padding-left:12px");
     expect(topNavigationShellCSS).toContain(".vp-top-page-header{display:none}");
+    expect(topNavigationShellCSS).toContain(".vp-top-inline-page-header{box-sizing:border-box;display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:12px;flex:0 1 320px");
+    expect(topNavigationShellCSS).toContain(".vp-top-center{flex:1 1 0;justify-content:flex-start;overflow:hidden}");
   });
 
   it("uses the renderer surface token for the page body", () => {
