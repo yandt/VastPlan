@@ -947,7 +947,7 @@
           "type": "object", "additionalProperties": false, "required": ["kind", "name"],
           "properties": {
             "kind": { "const": "semantic" },
-            "name": { "enum": ["add", "remove", "edit", "search", "settings", "success", "warning", "error", "info", "close", "menu", "import", "export", "publish", "refresh", "columns", "visibility", "visibilityOff", "drag", "copy", "download", "upload", "more", "help", "logout"] }
+            "name": { "enum": ["add", "remove", "edit", "search", "settings", "success", "warning", "error", "info", "close", "menu", "import", "export", "publish", "refresh", "columns", "visibility", "visibilityOff", "drag", "copy", "download", "upload", "more", "help", "logout", "user", "sliders", "authentication", "marketplace", "repository", "resources", "plugins", "portal", "database", "deployment", "api", "security", "credential", "workbench", "extension"] }
           }
         },
         {

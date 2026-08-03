@@ -2,7 +2,7 @@
   "id": "cn.vastplan.foundation.frontend.identity.account-center",
   "name": "VastPlan 个人中心",
   "description": "以标准 Portal 页面契约提供用户信息、用户设置和本地外观管理",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -35,8 +35,8 @@
         { "id": "account.settings.appearance", "title": "外观" }
       ],
       "navigations": [{ "id": "main", "contract": "1.0.0", "nodes": [
-        { "id": "profile", "zone": "secondary", "label": { "key": "navigation.profile", "fallback": "用户信息" }, "icon": { "kind": "semantic", "name": "info" }, "parent": { "pluginId": "vastplan.host", "nodeId": "account", "mode": "required" }, "order": 10 },
-        { "id": "preferences", "zone": "secondary", "label": { "key": "navigation.preferences", "fallback": "偏好设置" }, "icon": { "kind": "semantic", "name": "settings" }, "parent": { "pluginId": "vastplan.host", "nodeId": "account", "mode": "required" }, "order": 20 }
+        { "id": "profile", "zone": "secondary", "label": { "key": "navigation.profile", "fallback": "用户信息" }, "icon": { "kind": "semantic", "name": "user" }, "parent": { "pluginId": "vastplan.host", "nodeId": "account", "mode": "required" }, "order": 10 },
+        { "id": "preferences", "zone": "secondary", "label": { "key": "navigation.preferences", "fallback": "偏好设置" }, "icon": { "kind": "semantic", "name": "sliders" }, "parent": { "pluginId": "vastplan.host", "nodeId": "account", "mode": "required" }, "order": 20 }
       ], "icons": [] }]
     }
   }

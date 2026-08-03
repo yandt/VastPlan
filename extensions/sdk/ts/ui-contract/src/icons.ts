@@ -28,6 +28,21 @@ export const semanticIconNames = Object.freeze([
   "more",
   "help",
   "logout",
+  "user",
+  "sliders",
+  "authentication",
+  "marketplace",
+  "repository",
+  "resources",
+  "plugins",
+  "portal",
+  "database",
+  "deployment",
+  "api",
+  "security",
+  "credential",
+  "workbench",
+  "extension",
 ] as const);
 
 export type SemanticIconName = (typeof semanticIconNames)[number];

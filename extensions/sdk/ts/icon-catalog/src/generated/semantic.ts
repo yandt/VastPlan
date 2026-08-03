@@ -26,6 +26,21 @@ import icon21 from "@ant-design/icons-svg/es/asn/UploadOutlined.js";
 import icon22 from "@ant-design/icons-svg/es/asn/MoreOutlined.js";
 import icon23 from "@ant-design/icons-svg/es/asn/QuestionCircleOutlined.js";
 import icon24 from "@ant-design/icons-svg/es/asn/LogoutOutlined.js";
+import icon25 from "@ant-design/icons-svg/es/asn/UserOutlined.js";
+import icon26 from "@ant-design/icons-svg/es/asn/SlidersOutlined.js";
+import icon27 from "@ant-design/icons-svg/es/asn/SafetyCertificateOutlined.js";
+import icon28 from "@ant-design/icons-svg/es/asn/ShopOutlined.js";
+import icon29 from "@ant-design/icons-svg/es/asn/InboxOutlined.js";
+import icon30 from "@ant-design/icons-svg/es/asn/AppstoreOutlined.js";
+import icon31 from "@ant-design/icons-svg/es/asn/DeploymentUnitOutlined.js";
+import icon32 from "@ant-design/icons-svg/es/asn/LayoutOutlined.js";
+import icon33 from "@ant-design/icons-svg/es/asn/DatabaseOutlined.js";
+import icon34 from "@ant-design/icons-svg/es/asn/ClusterOutlined.js";
+import icon35 from "@ant-design/icons-svg/es/asn/ApiOutlined.js";
+import icon36 from "@ant-design/icons-svg/es/asn/SafetyOutlined.js";
+import icon37 from "@ant-design/icons-svg/es/asn/KeyOutlined.js";
+import icon38 from "@ant-design/icons-svg/es/asn/TableOutlined.js";
+import icon39 from "@ant-design/icons-svg/es/asn/ExperimentOutlined.js";
 
 const glyphs: Readonly<Record<SemanticIconName, IconGlyphDefinition>> = Object.freeze({
   "add": normalizeAntIcon(icon0),
@@ -53,6 +68,21 @@ const glyphs: Readonly<Record<SemanticIconName, IconGlyphDefinition>> = Object.f
   "more": normalizeAntIcon(icon22),
   "help": normalizeAntIcon(icon23),
   "logout": normalizeAntIcon(icon24),
+  "user": normalizeAntIcon(icon25),
+  "sliders": normalizeAntIcon(icon26),
+  "authentication": normalizeAntIcon(icon27),
+  "marketplace": normalizeAntIcon(icon28),
+  "repository": normalizeAntIcon(icon29),
+  "resources": normalizeAntIcon(icon30),
+  "plugins": normalizeAntIcon(icon31),
+  "portal": normalizeAntIcon(icon32),
+  "database": normalizeAntIcon(icon33),
+  "deployment": normalizeAntIcon(icon34),
+  "api": normalizeAntIcon(icon35),
+  "security": normalizeAntIcon(icon36),
+  "credential": normalizeAntIcon(icon37),
+  "workbench": normalizeAntIcon(icon38),
+  "extension": normalizeAntIcon(icon39),
 });
 
 export function semanticIconGlyph(name: SemanticIconName): IconGlyphDefinition { return glyphs[name]; }

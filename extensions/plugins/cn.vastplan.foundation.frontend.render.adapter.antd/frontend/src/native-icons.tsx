@@ -23,6 +23,21 @@ import EyeOutlined from "@ant-design/icons/EyeOutlined";
 import EyeInvisibleOutlined from "@ant-design/icons/EyeInvisibleOutlined";
 import HolderOutlined from "@ant-design/icons/HolderOutlined";
 import LogoutOutlined from "@ant-design/icons/LogoutOutlined";
+import UserOutlined from "@ant-design/icons/UserOutlined";
+import SlidersOutlined from "@ant-design/icons/SlidersOutlined";
+import SafetyCertificateOutlined from "@ant-design/icons/SafetyCertificateOutlined";
+import ShopOutlined from "@ant-design/icons/ShopOutlined";
+import InboxOutlined from "@ant-design/icons/InboxOutlined";
+import AppstoreOutlined from "@ant-design/icons/AppstoreOutlined";
+import DeploymentUnitOutlined from "@ant-design/icons/DeploymentUnitOutlined";
+import LayoutOutlined from "@ant-design/icons/LayoutOutlined";
+import DatabaseOutlined from "@ant-design/icons/DatabaseOutlined";
+import ClusterOutlined from "@ant-design/icons/ClusterOutlined";
+import ApiOutlined from "@ant-design/icons/ApiOutlined";
+import SafetyOutlined from "@ant-design/icons/SafetyOutlined";
+import KeyOutlined from "@ant-design/icons/KeyOutlined";
+import TableOutlined from "@ant-design/icons/TableOutlined";
+import ExperimentOutlined from "@ant-design/icons/ExperimentOutlined";
 import { useComponentSize, type SemanticIconName, type VastPlanIconProps } from "@vastplan/ui-primitives";
 
 const icons: Record<SemanticIconName, typeof PlusOutlined> = {
@@ -31,6 +46,9 @@ const icons: Record<SemanticIconName, typeof PlusOutlined> = {
   close: CloseOutlined, menu: MenuOutlined, import: ImportOutlined, export: ExportOutlined, publish: CloudUploadOutlined,
   refresh: ReloadOutlined, columns: ColumnHeightOutlined, visibility: EyeOutlined, visibilityOff: EyeInvisibleOutlined, drag: HolderOutlined,
   copy: CopyOutlined, download: DownloadOutlined, upload: UploadOutlined, more: MoreOutlined, help: QuestionCircleOutlined, logout: LogoutOutlined,
+  user: UserOutlined, sliders: SlidersOutlined, authentication: SafetyCertificateOutlined, marketplace: ShopOutlined, repository: InboxOutlined,
+  resources: AppstoreOutlined, plugins: DeploymentUnitOutlined, portal: LayoutOutlined, database: DatabaseOutlined, deployment: ClusterOutlined,
+  api: ApiOutlined, security: SafetyOutlined, credential: KeyOutlined, workbench: TableOutlined, extension: ExperimentOutlined,
 };
 
 const pixels = { xs: 14, sm: 16, md: 20, lg: 24 } as const;

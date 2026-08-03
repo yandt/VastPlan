@@ -86,6 +86,9 @@ function semanticModule(values) {
     close: "CloseOutlined", menu: "MenuOutlined", import: "ImportOutlined", export: "ExportOutlined", publish: "CloudUploadOutlined",
     refresh: "ReloadOutlined", columns: "ColumnHeightOutlined", visibility: "EyeOutlined", visibilityOff: "EyeInvisibleOutlined",
     drag: "HolderOutlined", copy: "CopyOutlined", download: "DownloadOutlined", upload: "UploadOutlined", more: "MoreOutlined", help: "QuestionCircleOutlined", logout: "LogoutOutlined",
+    user: "UserOutlined", sliders: "SlidersOutlined", authentication: "SafetyCertificateOutlined", marketplace: "ShopOutlined", repository: "InboxOutlined",
+    resources: "AppstoreOutlined", plugins: "DeploymentUnitOutlined", portal: "LayoutOutlined", database: "DatabaseOutlined", deployment: "ClusterOutlined",
+    api: "ApiOutlined", security: "SafetyOutlined", credential: "KeyOutlined", workbench: "TableOutlined", extension: "ExperimentOutlined",
   };
   const components = new Set(values.map((entry) => entry.component));
   for (const component of Object.values(mapping)) if (!components.has(component)) throw new Error(`语义图标不存在: ${component}`);

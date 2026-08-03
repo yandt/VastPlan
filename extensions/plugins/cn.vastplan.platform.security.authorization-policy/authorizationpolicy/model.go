@@ -11,7 +11,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.platform.security.authorization-policy"
-	PluginVersion = "0.8.1"
+	PluginVersion = "0.8.2"
 	Capability    = "platform.authorization"
 	stateVersion  = 1
 )

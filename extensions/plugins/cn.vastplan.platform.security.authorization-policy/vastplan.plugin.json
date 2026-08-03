@@ -2,7 +2,7 @@
   "id": "cn.vastplan.platform.security.authorization-policy",
   "name": "VastPlan Authorization Policy",
   "description": "管理版本化角色、主体绑定、撤权、签名授权快照及其在线管理工作台",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -88,7 +88,7 @@
     { "name": "revoke", "description": "即时撤权" }, { "name": "publishSnapshot", "description": "签发策略快照" }
     ] }] },
     "frontend": { "views": [{ "id": "platform.authorization.roles", "route": "/settings/authorization/roles", "engineFamily": "react", "uiContract": "^10.0.0" }], "navigations": [{ "id": "main", "contract": "1.0.0", "nodes": [
-      { "id": "security", "zone": "primary", "label": { "key": "navigation.security", "fallback": "安全与授权" }, "icon": { "kind": "semantic", "name": "success" }, "order": 60 }
+      { "id": "security", "zone": "primary", "label": { "key": "navigation.security", "fallback": "安全与授权" }, "icon": { "kind": "semantic", "name": "security" }, "order": 60 }
     ], "icons": [] }] }
   }
 }

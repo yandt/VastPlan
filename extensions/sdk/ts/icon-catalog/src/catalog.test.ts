@@ -16,7 +16,11 @@ describe("Ant Design icon catalog", () => {
   it("provides every stable semantic icon synchronously", () => {
     for (const name of semanticIconNames) {
       const glyph = semanticIconGlyph(name);
-      expect(glyph.viewBox).toBe("64 64 896 896");
+      const viewBox = glyph.viewBox.split(" ").map(Number);
+      expect(viewBox).toHaveLength(4);
+      expect(viewBox.every(Number.isFinite)).toBe(true);
+      expect(viewBox[2]).toBeGreaterThan(0);
+      expect(viewBox[3]).toBeGreaterThan(0);
       expect(glyph.nodes.length).toBeGreaterThan(0);
     }
   });
