@@ -72,9 +72,9 @@ describe("signed navigation contributions", () => {
     ] })))).toThrow(/深度超过/);
   });
 
-  it("reserves the account avatar anchor for the Profile-selected account center", () => {
+  it("allows an enabled signed plugin to contribute a menu below the account avatar anchor", () => {
     const accountNode = descriptor({ nodes: [{ id: "profile", zone: "secondary", label: { key: "navigation.profile", fallback: "Profile" }, icon: { kind: "semantic", name: "info" }, parent: { pluginId: "vastplan.host", nodeId: "account", mode: "required" } }] });
-    expect(() => navigationCatalogsFromIndex(index(accountNode), "cn.vastplan.foundation.frontend.identity.account-center")).toThrow(/非个人中心插件/);
+    expect(navigationCatalogsFromIndex(index(accountNode))[0]?.nodes[0]?.parent).toMatchObject({ pluginID: "vastplan.host", nodeID: "account", mode: "required" });
   });
 
   it("parses and translates a 500-node Portal catalog within the bounded budget", () => {

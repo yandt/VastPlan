@@ -76,7 +76,7 @@ UI Contract 9.0 暴露语义 token、账户外观契约与四级 `ComponentSize`
 - FilterPanel 使用 `inside-inline` 持久 Label：Label 与输入控件共同消费一个筛选单元格宽度，Label 按内容取宽但桌面最大宽度为 `clamp(48px, 18%, 112px)`、移动端为 `clamp(56px, 32%, 128px)`，始终单行；超长文案省略并由 Tooltip 与可访问名称提供全文。输入区域必须 `flex: 1; min-width: 0`，输入后 Label 不消失。Ant Design 实现必须遵守该语义，功能插件不能配置像素宽度或注入框架样式。
 - Page Header 右侧的页面功能动作使用 VastPlan 语义图标、Tooltip 和 `aria-label`，点击区至少 44px；桌面最多直接显示 4 个，超出后进入“更多”，不得在 Table 工具栏重复显示新增、导入或发布。
 - 图标风格由 Renderer 的 `iconTheme` 统一决定：`canonical` 使用锁定的 MIT Ant Design 语义入口保持跨框架几何一致，`renderer-native` 使用当前 UI 框架原生图形并在缺项时回退。846 个原始目录名称不属于页面契约，只能由 Foundation 图标工具按 27 个分片延迟读取；单个页面和功能插件不得混指定图标来源。
-- 已认证 Shell 只提供一个圆形账户头像入口；它固定映射到统一组合模型中的唯一 `account` 根分组。标准侧栏点击后在右侧常驻面板加载账户页面，顶部布局复用同一分组数据；头像本身不得硬编码功能项或页面。Frontend Platform Profile 通过必填 `accountCenter` 选择个人中心实现，默认基础插件 `cn.vastplan.foundation.frontend.identity.account-center` 在账户根下声明“用户信息”和“偏好设置”二级菜单并注册相应页面，且不能由 Application 删除或覆盖；其余插件仍与普通菜单完全一致，只能在普通导航区域声明一级/二级菜单，若需要扩展个人中心已有页面才走受治理账户扩展点。`primary`、`secondary`、`settings` 仅是插件选择的布局区域，不对应 Shell 固化的业务名称、图标或根菜单。外观配置只保存在当前浏览器，并明确提示不会上传服务器。
+- 已认证 Shell 只提供一个圆形账户头像入口；它固定映射到统一组合模型中的唯一 `account` 根分组。标准侧栏点击后在右侧常驻面板加载账户页面，顶部布局复用同一分组数据；头像本身不得硬编码功能项或页面。Frontend Platform Profile 通过必填 `accountCenter` 选择个人中心实现，默认基础插件 `cn.vastplan.foundation.frontend.identity.account-center` 在账户根下声明“用户信息”和“偏好设置”二级菜单并注册相应页面，且不能由 Application 删除或覆盖；其他已启用、签名可信的插件也可直接在账户根下声明自己的二级菜单，或通过受治理账户扩展点向个人中心已有菜单增加页面。`primary`、`secondary`、`settings` 仅是插件选择的布局区域，不对应 Shell 固化的业务名称、图标或根菜单。外观配置只保存在当前浏览器，并明确提示不会上传服务器。
 
 ### 4.2 顶部导航
 

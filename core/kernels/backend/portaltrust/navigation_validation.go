@@ -42,8 +42,8 @@ func validateNavigationCandidates(spec portalapi.PortalSpec, index pluginv1.Cont
 				}
 				parentID := navigationNodeID(owner, candidate.Parent.NodeID)
 				if parentID == "vastplan.host/account" {
-					if candidate.Parent.Mode != "required" || candidate.Zone != "secondary" || spec.AccountCenter.ID == "" || contribution.Owner.Ref.PluginID != spec.AccountCenter.ID {
-						return fmt.Errorf("只有 Platform Profile 选定的个人中心可以挂载账户头像菜单: %s", contribution.Owner.Ref.PluginID)
+					if candidate.Parent.Mode != "required" || candidate.Zone != "secondary" {
+						return fmt.Errorf("账户头像菜单必须位于 secondary 区域且使用 required 父级: %s", contribution.Owner.Ref.PluginID)
 					}
 				} else {
 					node.parent = parentID

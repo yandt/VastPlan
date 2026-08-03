@@ -6,6 +6,6 @@ describe("Workbench pattern gallery", () => {
     expect(recordDetailPage().pattern).toBe("record-detail");
     expect(masterDetailPage()).toMatchObject({ pattern: "master-detail", editor: { workflow: { surface: "page" } } });
     expect(treeDetailPage()).toMatchObject({ pattern: "tree-detail", tree: { defaultExpandedDepth: 2 } });
-    expect(accountExtensionPage()).toMatchObject({ id: "example.account-extension", navigation: { parentMenuRef: { pluginID: "cn.vastplan.foundation.frontend.identity.account-center", nodeID: "preferences" } } });
+    expect(accountExtensionPage()).toMatchObject({ id: "example.account-extension", navigation: { parentMenuRef: { pluginID: "cn.vastplan.example.frontend.workbench-gallery", nodeID: "account-gallery" } } });
   });
 });

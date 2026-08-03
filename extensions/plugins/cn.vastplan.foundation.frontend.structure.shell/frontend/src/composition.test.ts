@@ -87,13 +87,12 @@ describe("shell composition core", () => {
     };
     const accountPage = page("profile", "profile");
     const appearancePage = page("appearance", "preferences");
-    const model = compose({ activePageID: "appearance", navigationCatalogs: [accountCatalog], accountNavigationOwnerID: pluginID, pages: [accountPage, appearancePage], shellContributions: [] });
+    const model = compose({ activePageID: "appearance", navigationCatalogs: [accountCatalog], pages: [accountPage, appearancePage], shellContributions: [] });
     const account = model.navigation.secondary.find((group) => group.id === "vastplan.host/account");
     expect(account?.pages).toEqual([]);
     expect(account?.children.map((child) => child.id)).toEqual([`${pluginID}/preferences`, `${pluginID}/profile`]);
     expect(account?.children.find((child) => child.id === `${pluginID}/preferences`)?.pages.map((item) => item.id)).toEqual(["appearance"]);
     expect(model.activeNavigationPath).toEqual({ zone: "secondary", rootGroupID: "vastplan.host/account", childGroupID: `${pluginID}/preferences`, pageID: "appearance" });
-    expect(() => compose({ navigationCatalogs: [accountCatalog], accountNavigationOwnerID: "cn.vastplan.other", pages: [accountPage], shellContributions: [] })).toThrow("只有当前个人中心插件");
   });
 
   it("rejects unknown page nodes and cross-zone or overly deep catalogs", () => {

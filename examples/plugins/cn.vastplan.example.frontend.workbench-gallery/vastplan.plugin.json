@@ -11,15 +11,6 @@
   "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
   "activation": ["onPortalStartup"],
   "entry": { "frontend": "frontend/dist/index.js" },
-  "dependencies": { "cn.vastplan.foundation.frontend.identity.account-center": "^0.7.0" },
-  "extensions": [{
-    "point": "cn.vastplan.foundation.frontend.identity.account-center.page",
-    "surface": "frontend",
-    "contract": "^1.0.0",
-    "id": "cn.vastplan.example.frontend.workbench-gallery.account-page",
-    "order": 90,
-    "descriptor": { "pageId": "example.account-extension", "groupId": "preferences" }
-  }],
   "contributes": { "frontend": {
     "views": [
       { "id": "example.workbench.record-detail", "title": "记录详情示例" },
@@ -35,6 +26,13 @@
         "zone": "secondary",
         "label": { "key": "navigation.workbench-gallery", "fallback": "Workbench 记录模式" },
         "icon": { "kind": "semantic", "name": "menu" },
+        "order": 90
+      }, {
+        "id": "account-gallery",
+        "zone": "secondary",
+        "label": { "key": "navigation.account-gallery", "fallback": "扩展功能" },
+        "icon": { "kind": "semantic", "name": "menu" },
+        "parent": { "pluginId": "vastplan.host", "nodeId": "account", "mode": "required" },
         "order": 90
       }],
       "icons": []

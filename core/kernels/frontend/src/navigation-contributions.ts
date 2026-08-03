@@ -13,7 +13,7 @@ const motions = new Set(["none", "pulse", "spin", "draw"]);
 const states = new Set(["normal", "active", "loading", "error"]);
 
 /** Parses code-free signed navigation contributions before any plugin registers pages. */
-export function navigationCatalogsFromIndex(index: ContributionIndexSnapshot | undefined, accountNavigationOwnerID?: string): readonly PortalNavigationCatalog[] {
+export function navigationCatalogsFromIndex(index: ContributionIndexSnapshot | undefined): readonly PortalNavigationCatalog[] {
   if (index === undefined) return Object.freeze([]);
   const contributions = contributionsByKind(index, "frontend.navigations");
   if (contributions.length > 512) throw invalid("Portal 导航贡献超过 512 个");
@@ -33,7 +33,7 @@ export function navigationCatalogsFromIndex(index: ContributionIndexSnapshot | u
     const nodes = descriptor.nodes.map((value) => parseNode(contribution.owner.ref.pluginId, value, icons, nodeIDs));
     return Object.freeze({ pluginID: contribution.owner.ref.pluginId, nodes: Object.freeze(nodes) });
   });
-  assertCatalogGraph(catalogs, accountNavigationOwnerID);
+  assertCatalogGraph(catalogs);
   return Object.freeze(catalogs);
 }
 
@@ -80,15 +80,12 @@ function parseParent(pluginID: string, value: unknown): PortalNavigationCatalogN
   return Object.freeze({ pluginID: owner, nodeID: value.nodeId, mode: "required" });
 }
 
-function assertCatalogGraph(catalogs: readonly PortalNavigationCatalog[], accountNavigationOwnerID: string | undefined): void {
+function assertCatalogGraph(catalogs: readonly PortalNavigationCatalog[]): void {
   const nodes = new Map(catalogs.flatMap((catalog) => catalog.nodes.map((node) => [node.id, node] as const)));
   if (nodes.size !== catalogs.reduce((count, catalog) => count + catalog.nodes.length, 0)) throw invalid("Portal 导航节点全局身份重复");
   const resolvedParent = (node: PortalNavigationCatalogNode): PortalNavigationCatalogNode | undefined => {
     if (node.parent === undefined) return undefined;
-    if (navigationNodeKey(node.parent) === "vastplan.host/account" && node.parent.mode === "required") {
-      if (node.ref.pluginID !== accountNavigationOwnerID) throw invalid(`非个人中心插件不能挂载账户头像菜单: ${node.ref.pluginID}`);
-      return undefined;
-    }
+    if (navigationNodeKey(node.parent) === "vastplan.host/account" && node.parent.mode === "required") return undefined;
     const target = nodes.get(navigationNodeKey(node.parent));
     if (target !== undefined) return target;
     if (node.parent.mode === "optional" && node.parent.fallback !== undefined) return nodes.get(navigationNodeKey(node.parent.fallback));

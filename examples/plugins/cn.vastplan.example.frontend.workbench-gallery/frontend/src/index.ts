@@ -15,7 +15,6 @@ import {
 } from "@vastplan/workbench-sdk";
 
 const namespace = "cn.vastplan.example.frontend.workbench-gallery";
-const accountPageExtensionPointID = "cn.vastplan.foundation.frontend.identity.account-center.page";
 
 type ServiceRecord = Record<string, unknown> & {
   id: string; name: string; kind: string; status: string; tone: string;
@@ -130,7 +129,7 @@ export function accountExtensionPage(): RecordDetailPageDefinition<ServiceRecord
   return defineRecordDetailPage({
     id: "example.account-extension", path: "/account/settings/workbench-extension", pattern: "record-detail",
     title: message(namespace, "page.accountExtension", "账户扩展示例"),
-    navigation: { id: "example.account-extension", label: message(namespace, "page.accountExtension", "账户扩展示例"), parentMenuRef: { pluginID: "cn.vastplan.foundation.frontend.identity.account-center", nodeID: "preferences" }, order: 90 },
+    navigation: { id: "example.account-extension", label: message(namespace, "page.accountExtension", "账户扩展示例"), parentMenuRef: { pluginID: "cn.vastplan.example.frontend.workbench-gallery", nodeID: "account-gallery" }, order: 90 },
     detail: { ...detail, emptyTitle: message(namespace, "empty.accountExtension", "账户扩展未提供数据") },
     async load() { return { ...services[0] }; },
   });
@@ -141,7 +140,7 @@ export default {
     context.addRecordPage(recordDetailPage());
     context.addRecordPage(masterDetailPage());
     context.addRecordPage(treeDetailPage());
-    if (context.extensions.contributes(accountPageExtensionPointID)) context.addRecordPage(accountExtensionPage());
+    context.addRecordPage(accountExtensionPage());
   },
   localization: { defaultLocale: "zh-CN", messages: {
     "zh-CN": { "page.detail":"记录详情","page.master":"列表与编辑","page.tree":"树形资源详情","page.accountExtension":"账户扩展示例","master.services":"服务列表","tree.services":"服务分类","section.identity":"基本信息","section.state":"运行状态","field.id":"服务 ID","field.name":"服务名称","field.kind":"服务类型","field.owner":"责任团队","field.description":"说明","field.updated":"更新时间","field.status":"状态","field.active":"已启用","editor.title":"编辑服务","action.save":"保存","action.refresh":"刷新记录","action.preview":"查看 JSON","notice.saved":"示例记录已保存","empty.record":"请选择一个服务","empty.accountExtension":"账户扩展未提供数据","filter.name":"服务名称","filter.status":"状态" },

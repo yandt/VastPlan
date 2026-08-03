@@ -25,7 +25,7 @@ function ordered<T extends { id: string; order?: number }>(values: readonly T[])
 export function compose(input: ShellCompositionInput): ShellCompositionModel {
   const pages = Object.freeze([...input.pages]);
   const activePage = pages.find((page) => page.id === input.activePageID);
-  const policy = compileNavigationPolicy(input.navigationCatalogs, input.config, input.accountNavigationOwnerID);
+  const policy = compileNavigationPolicy(input.navigationCatalogs, input.config);
   const descriptors = policy.groups;
   const pagesByGroup = new Map<string, PortalResolvedPageNavigation[]>();
   for (const page of pages) {

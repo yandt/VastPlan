@@ -81,7 +81,7 @@ export class PortalRuntime {
     }
 
     const messageCatalogs = collectLocalization(portal, foundations.loaded, foundations.renderer);
-    const navigationCatalogs = navigationCatalogsFromIndex(options.contributions, portal.accountCenter?.id);
+    const navigationCatalogs = navigationCatalogsFromIndex(options.contributions);
     const portalSnapshot = snapshotPortal(portal);
     const registration = createRegistrationState();
     const generation = options.generation ?? `portal-${portal.revision}`;
