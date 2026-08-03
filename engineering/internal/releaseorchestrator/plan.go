@@ -22,9 +22,10 @@ const (
 )
 
 type ReleaseSpec struct {
-	SchemaVersion int                    `yaml:"schemaVersion"`
-	Mode          ReleaseMode            `yaml:"mode"`
-	Plugins       []ReleasePluginRequest `yaml:"plugins"`
+	SchemaVersion     int                    `yaml:"schemaVersion"`
+	Mode              ReleaseMode            `yaml:"mode"`
+	BaselineInventory string                 `yaml:"baselineInventory,omitempty"`
+	Plugins           []ReleasePluginRequest `yaml:"plugins"`
 }
 
 type ReleasePluginRequest struct {
@@ -44,12 +45,22 @@ type ReleasePlan struct {
 	Contracts           map[string]string           `json:"contracts"`
 	Plugins             []ReleasePluginPlan         `json:"plugins"`
 	Impacts             []ReleaseImpact             `json:"impacts"`
+	InterfaceBaseline   *InterfaceBaselinePlan      `json:"interfaceBaseline,omitempty"`
 	DeploymentChanges   []DeploymentReferenceChange `json:"deploymentChanges,omitempty"`
 	GeneratedFiles      []string                    `json:"generatedFiles,omitempty"`
 	ExecutionOrder      []string                    `json:"executionOrder"`
 	Actions             []string                    `json:"actions"`
 	RequiresApproval    bool                        `json:"requiresApproval"`
 	ProductionExecution bool                        `json:"productionExecution"`
+}
+
+// InterfaceBaselinePlan identifies the immutable Inventory used to verify
+// compatibility. The raw Inventory is intentionally not copied into a Release
+// Plan because it is already an independently verifiable activation record.
+type InterfaceBaselinePlan struct {
+	Source          string `json:"source"`
+	Generation      uint64 `json:"generation"`
+	InventoryDigest string `json:"inventoryDigest"`
 }
 
 type ReleasePluginPlan struct {
@@ -86,6 +97,7 @@ func LoadReleaseSpec(path string) (ReleaseSpec, error) {
 		return ReleaseSpec{}, errors.New("Release Spec schemaVersion、mode 或 plugins 无效")
 	}
 	seen := map[string]struct{}{}
+	spec.BaselineInventory = strings.TrimSpace(spec.BaselineInventory)
 	for index := range spec.Plugins {
 		request := &spec.Plugins[index]
 		request.ID = strings.TrimSpace(request.ID)
@@ -116,6 +128,21 @@ func LoadReleaseSpec(path string) (ReleaseSpec, error) {
 }
 
 func BuildReleasePlan(repositoryRoot string, spec ReleaseSpec) (ReleasePlan, error) {
+	baseline, err := loadInterfaceBaseline(repositoryRoot, spec)
+	if err != nil {
+		return ReleasePlan{}, err
+	}
+	return BuildReleasePlanWithBaseline(repositoryRoot, spec, baseline)
+}
+
+// BuildReleasePlanWithBaseline lets a production release controller inject the
+// active Generation it resolved through its trusted Inventory port. CLI users
+// normally call BuildReleasePlan, which adapts the optional baselineInventory
+// file from the Release Spec once at its composition boundary.
+func BuildReleasePlanWithBaseline(repositoryRoot string, spec ReleaseSpec, baseline *InterfaceBaseline) (ReleasePlan, error) {
+	if spec.Mode == ReleaseModeProduction && baseline == nil {
+		return ReleasePlan{}, errors.New("生产发布必须注入活动 Plugin Inventory 基线")
+	}
 	workspace, err := LoadPluginWorkspace(repositoryRoot)
 	if err != nil {
 		return ReleasePlan{}, err
@@ -138,7 +165,7 @@ func BuildReleasePlan(repositoryRoot string, spec ReleaseSpec) (ReleasePlan, err
 		versions[request.ID] = plugin.Version
 		requests[request.ID] = request
 	}
-	impacts, err := AnalyzeReleaseImpact(workspace, requests)
+	impacts, err := AnalyzeReleaseImpactWithBaseline(workspace, requests, baseline)
 	if err != nil {
 		return ReleasePlan{}, err
 	}
@@ -163,6 +190,9 @@ func BuildReleasePlan(repositoryRoot string, spec ReleaseSpec) (ReleasePlan, err
 		Contracts: map[string]string{}, DeploymentChanges: deploymentChanges, Impacts: impacts,
 		ExecutionOrder: releaseExecutionOrder(workspace, versions), RequiresApproval: spec.Mode == ReleaseModeProduction,
 		ProductionExecution: false,
+	}
+	if baseline != nil {
+		plan.InterfaceBaseline = &InterfaceBaselinePlan{Source: baseline.Source, Generation: baseline.Inventory.Generation, InventoryDigest: baseline.Inventory.Digest}
 	}
 	contractIDs := make([]string, 0, len(registry.Contracts))
 	for id := range registry.Contracts {
@@ -203,7 +233,7 @@ func BuildReleasePlan(repositoryRoot string, spec ReleaseSpec) (ReleasePlan, err
 			FrontendTarget: request.FrontendTarget, FrontendBinding: request.FrontendBinding, FrontendScope: request.FrontendScope,
 		})
 	}
-	plan.Actions = []string{"sync-contract-registry", "sync-capability-contract-projections", "sync-package-version-projections", "sync-deployment-exact-references", "validate-dependency-impact", "build-immutable-candidates"}
+	plan.Actions = []string{"sync-contract-registry", "sync-capability-contract-projections", "sync-package-version-projections", "sync-deployment-exact-references", "validate-public-interface-compatibility", "validate-dependency-impact", "build-immutable-candidates"}
 	if spec.Mode == ReleaseModeDevelopment {
 		plan.Actions = append(plan.Actions, "publish-local-test-workspace", "submit-test-release", "activate-candidate-generation")
 	} else {

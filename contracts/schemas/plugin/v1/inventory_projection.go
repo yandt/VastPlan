@@ -15,7 +15,11 @@ func exactArtifactIdentity(value VerifiedArtifactManifest) (PluginArtifactIdenti
 }
 
 func inventoryItem(identity PluginArtifactIdentity, manifest Manifest) (PluginInventoryItem, error) {
-	interfaceFingerprint, err := PublicInterfaceFingerprint(manifest)
+	publicInterface, err := PublicInterfaceSurface(manifest)
+	if err != nil {
+		return PluginInventoryItem{}, err
+	}
+	interfaceFingerprint, err := PublicInterfaceFingerprintFromSurface(publicInterface)
 	if err != nil {
 		return PluginInventoryItem{}, err
 	}
@@ -44,7 +48,7 @@ func inventoryItem(identity PluginArtifactIdentity, manifest Manifest) (PluginIn
 	sort.Slice(requires, func(i, j int) bool {
 		return requires[i].Capability+"\x00"+requires[i].LogicalService < requires[j].Capability+"\x00"+requires[j].LogicalService
 	})
-	return PluginInventoryItem{Artifact: identity, InterfaceFingerprint: interfaceFingerprint, Targets: targets, Dependencies: dependencies, RuntimeProvides: provides, RuntimeRequires: requires, ConfigurationProtocols: configurationProtocols(manifest)}, nil
+	return PluginInventoryItem{Artifact: identity, InterfaceFingerprint: interfaceFingerprint, PublicInterface: publicInterface, Targets: targets, Dependencies: dependencies, RuntimeProvides: provides, RuntimeRequires: requires, ConfigurationProtocols: configurationProtocols(manifest)}, nil
 }
 
 func configurationProtocols(manifest Manifest) []string {

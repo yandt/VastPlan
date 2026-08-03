@@ -1,5 +1,9 @@
 schemaVersion: 1
 mode: development
+# Releasing over an active Generation may provide its verified Plugin Inventory
+# here. In production the release controller injects the same baseline through
+# its trusted active-generation port rather than accepting a caller path.
+# baselineInventory: .vastplan/release/active-plugin-inventory.json
 plugins:
   - id: cn.vastplan.foundation.frontend.workflow.workbench
     # implementation: only package bytes change; consumers are reused.

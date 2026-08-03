@@ -1,6 +1,7 @@
 package releaseorchestrator
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -23,11 +24,13 @@ const (
 )
 
 type ReleaseImpact struct {
-	PluginID             string             `json:"pluginId"`
-	Change               ReleaseChangeClass `json:"change"`
-	InterfaceFingerprint string             `json:"interfaceFingerprint"`
-	ReusedConsumers      []string           `json:"reusedConsumers,omitempty"`
-	RequiredConsumers    []string           `json:"requiredConsumers,omitempty"`
+	PluginID                     string                         `json:"pluginId"`
+	Change                       ReleaseChangeClass             `json:"change"`
+	InterfaceFingerprint         string                         `json:"interfaceFingerprint"`
+	BaselineInterfaceFingerprint string                         `json:"baselineInterfaceFingerprint,omitempty"`
+	InterfaceChange              pluginv1.PublicInterfaceChange `json:"interfaceChange,omitempty"`
+	ReusedConsumers              []string                       `json:"reusedConsumers,omitempty"`
+	RequiredConsumers            []string                       `json:"requiredConsumers,omitempty"`
 }
 
 // AnalyzeReleaseImpact keeps upgrade closure minimal. Dependencies are a
@@ -37,6 +40,19 @@ type ReleaseImpact struct {
 // consumer must join the release selection so its new compatibility assertion
 // and tests are part of the same candidate generation.
 func AnalyzeReleaseImpact(workspace PluginWorkspace, requests map[string]ReleasePluginRequest) ([]ReleaseImpact, error) {
+	return AnalyzeReleaseImpactWithBaseline(workspace, requests, nil)
+}
+
+// AnalyzeReleaseImpactWithBaseline cross-checks the publisher's declared
+// change class against the active generation exactly once, before dependency
+// closure is calculated. A missing development baseline remains observable as
+// an unverified comparison; production callers must inject one.
+func AnalyzeReleaseImpactWithBaseline(workspace PluginWorkspace, requests map[string]ReleasePluginRequest, baseline *InterfaceBaseline) ([]ReleaseImpact, error) {
+	if baseline != nil {
+		if err := pluginv1.ValidatePluginInventory(baseline.Inventory); err != nil {
+			return nil, fmt.Errorf("活动 Plugin Inventory 基线无效: %w", err)
+		}
+	}
 	ids := make([]string, 0, len(requests))
 	for id := range requests {
 		ids = append(ids, id)
@@ -54,6 +70,9 @@ func AnalyzeReleaseImpact(workspace PluginWorkspace, requests map[string]Release
 			return nil, fmt.Errorf("计算 %s 的公共接口指纹: %w", id, err)
 		}
 		impact := ReleaseImpact{PluginID: id, Change: change, InterfaceFingerprint: fingerprint}
+		if err := verifyDeclaredInterfaceChange(&impact, plugin.Manifest, baseline); err != nil {
+			return nil, fmt.Errorf("校验插件 %s 的 %s 变更: %w", id, change, err)
+		}
 		for _, consumerID := range workspace.ReverseDependencies(id) {
 			if _, selected := requests[consumerID]; selected {
 				continue
@@ -81,6 +100,82 @@ func AnalyzeReleaseImpact(workspace PluginWorkspace, requests map[string]Release
 		impacts = append(impacts, impact)
 	}
 	return impacts, nil
+}
+
+func verifyDeclaredInterfaceChange(impact *ReleaseImpact, candidate pluginv1.Manifest, baseline *InterfaceBaseline) error {
+	if baseline == nil {
+		impact.InterfaceChange = "unverified"
+		return nil
+	}
+	previous, exists, err := baselinePlugin(baseline.Inventory, impact.PluginID)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		impact.InterfaceChange = "initial"
+		return nil
+	}
+	impact.BaselineInterfaceFingerprint = previous.InterfaceFingerprint
+	if previous.InterfaceFingerprint == "" {
+		return errors.New("活动 Inventory 缺少公开接口指纹，不能安全判定升级")
+	}
+	if impact.Change == ReleaseChangeImplementation {
+		if previous.InterfaceFingerprint != impact.InterfaceFingerprint {
+			return fmt.Errorf("implementation 声明要求公开接口不变: active=%s candidate=%s；请改为 additive 或 breaking", previous.InterfaceFingerprint, impact.InterfaceFingerprint)
+		}
+		impact.InterfaceChange = pluginv1.PublicInterfaceUnchanged
+		return nil
+	}
+	if impact.Change == ReleaseChangeBreaking {
+		if len(previous.PublicInterface) == 0 {
+			impact.InterfaceChange = "unverified"
+			return nil
+		}
+		candidateSurface, err := pluginv1.PublicInterfaceSurface(candidate)
+		if err != nil {
+			return err
+		}
+		observed, err := pluginv1.ComparePublicInterfaceSurfaces(previous.PublicInterface, candidateSurface)
+		if err != nil {
+			return err
+		}
+		impact.InterfaceChange = observed
+		return nil
+	}
+	if len(previous.PublicInterface) == 0 {
+		return errors.New("活动 Inventory 缺少公开接口描述，不能证明 additive 兼容性；请按 breaking 发布或先重建基线")
+	}
+	candidateSurface, err := pluginv1.PublicInterfaceSurface(candidate)
+	if err != nil {
+		return err
+	}
+	change, err := pluginv1.ComparePublicInterfaceSurfaces(previous.PublicInterface, candidateSurface)
+	if err != nil {
+		return err
+	}
+	if change == pluginv1.PublicInterfaceBreaking {
+		return errors.New("additive 声明修改或删除了既有公开接口；请改为 breaking 并同时选择直接消费者")
+	}
+	impact.InterfaceChange = change
+	return nil
+}
+
+func baselinePlugin(inventory pluginv1.PluginInventorySnapshot, pluginID string) (pluginv1.PluginInventoryItem, bool, error) {
+	var found *pluginv1.PluginInventoryItem
+	for index := range inventory.Plugins {
+		item := &inventory.Plugins[index]
+		if item.Artifact.Ref.PluginID != pluginID {
+			continue
+		}
+		if found != nil {
+			return pluginv1.PluginInventoryItem{}, false, fmt.Errorf("活动 Inventory 对插件 %s 包含多个精确制品，必须注入已激活 Selection 的 Inventory", pluginID)
+		}
+		found = item
+	}
+	if found == nil {
+		return pluginv1.PluginInventoryItem{}, false, nil
+	}
+	return *found, true, nil
 }
 
 func acceptsVersion(constraintText, version string) error {

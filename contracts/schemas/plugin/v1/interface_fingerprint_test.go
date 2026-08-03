@@ -34,6 +34,34 @@ func TestPublicInterfaceFingerprintChangesWithPublicContribution(t *testing.T) {
 	}
 }
 
+func TestComparePublicInterfaceSurfacesClassifiesUnchangedAdditiveAndBreaking(t *testing.T) {
+	previous, err := PublicInterfaceSurface(fingerprintManifest(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := ComparePublicInterfaceSurfaces(previous, previous); err != nil || got != PublicInterfaceUnchanged {
+		t.Fatalf("same surface=%q err=%v", got, err)
+	}
+	additive := fingerprintManifest(t)
+	additive.Contributes["frontend"] = json.RawMessage(`{"views":[{"id":"home","route":"/","uiContract":"^10.0.0"},{"id":"settings","route":"/settings","uiContract":"^10.0.0"}]}`)
+	additiveSurface, err := PublicInterfaceSurface(additive)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := ComparePublicInterfaceSurfaces(previous, additiveSurface); err != nil || got != PublicInterfaceAdditive {
+		t.Fatalf("additive surface=%q err=%v", got, err)
+	}
+	breaking := fingerprintManifest(t)
+	breaking.Contributes["frontend"] = json.RawMessage(`{"views":[{"id":"home","route":"/home","uiContract":"^10.0.0"}]}`)
+	breakingSurface, err := PublicInterfaceSurface(breaking)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := ComparePublicInterfaceSurfaces(previous, breakingSurface); err != nil || got != PublicInterfaceBreaking {
+		t.Fatalf("breaking surface=%q err=%v", got, err)
+	}
+}
+
 func fingerprintManifest(t *testing.T) Manifest {
 	t.Helper()
 	return Manifest{
