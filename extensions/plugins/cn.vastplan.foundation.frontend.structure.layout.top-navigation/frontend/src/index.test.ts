@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { uiContractVersion } from "@vastplan/ui-contract";
-import adapter, { navigationMenuItems, prioritizeRoots, topNavigationShellCSS } from "./index";
+import adapter, { navigationMenuItems, navigationPopoverItems, prioritizeRoots, topNavigationShellCSS } from "./index";
 import type { PortalNavigationGroup, UIShellProps } from "@vastplan/ui-primitives";
 
 const root = (id: string): PortalNavigationGroup => ({ id, label: id, zone: "primary", icon: { kind: "semantic", name: "menu" }, pages: [], children: [] });
@@ -46,5 +46,12 @@ describe("top navigation shell layout", () => {
   it("leaves navigation row hover behavior to the renderer Menu", () => {
     expect(topNavigationShellCSS).not.toContain(".vp-top-mega");
     expect(topNavigationShellCSS).not.toContain(".vp-top-navigation-menu-group");
+  });
+
+  it("adds logout to the account data model consumed by the shared compact Menu", () => {
+    const group: PortalNavigationGroup = { ...root("vastplan.host/account"), pages: [{ id: "profile", label: "profile", zone: "secondary", groupID: "vastplan.host/account", parentMenuRef: { pluginID: "vastplan.host", nodeID: "account" } }] };
+    const composition = { pages: [{ id: "profile-page", path: "/profile", navigation: { id: "profile" } }] } as unknown as UIShellProps["composition"];
+    const items = navigationPopoverItems([group], composition, { locale: "zh-CN", text: (value) => typeof value === "string" ? value : value.fallback }, true);
+    expect(items).toMatchObject([{ id: "profile", href: "/profile" }, { id: "account.logout" }]);
   });
 });

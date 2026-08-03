@@ -8,7 +8,6 @@ import {
   NavigationIcon,
   portalPageRhythm,
   PortalAccountControl,
-  PortalAccountMenu,
   resolvePageBodyMaxWidth,
   usePortalI18n,
   usePortalUI,
@@ -141,7 +140,7 @@ function RootPopover({ group, composition, open, active, onOpenChange, onNavigat
   </ui.Popover>;
 }
 
-/** Top layout reuses the same composed account group; only its visual carrier differs. */
+/** The avatar is only a trigger; its contents use the same top navigation popover as every root group. */
 function AccountPopover({ group, account, composition, open, active, onOpenChange, onNavigate, onLogout }: {
   group: PortalNavigationGroup;
   account: UIShellProps["account"];
@@ -155,7 +154,7 @@ function AccountPopover({ group, account, composition, open, active, onOpenChang
   const ui = usePortalUI();
   const i18n = usePortalI18n();
   return <ui.Popover open={open} placement="bottom-end" surface="compact" ariaLabel={navigationLabel(group, i18n)} initialFocus="current" onOpenChange={onOpenChange} trigger={(trigger) => <PortalAccountControl account={account} selected={active} trigger={trigger} />}>
-    <PortalAccountMenu group={group} composition={composition} activeID={composition.activeNavigationPath?.pageID} onNavigate={onNavigate} onLogout={onLogout} />
+    <NavigationPopoverMenu groups={[group]} composition={composition} onNavigate={onNavigate} onLogout={onLogout} />
   </ui.Popover>;
 }
 
@@ -169,13 +168,24 @@ function OverflowPopover({ groups: overflow, composition, open, active, onOpenCh
 }
 
 /** One compact menu surface is shared by primary, account and overflow navigation. */
-function NavigationPopoverMenu({ groups: menuGroups, composition, onNavigate }: { groups: readonly PortalNavigationGroup[]; composition: UIShellProps["composition"]; onNavigate(id: string): void }) {
+function NavigationPopoverMenu({ groups: menuGroups, composition, onNavigate, onLogout }: { groups: readonly PortalNavigationGroup[]; composition: UIShellProps["composition"]; onNavigate(id: string): void; onLogout?(): Promise<void> }) {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
-  if (menuGroups.every((group) => group.pages.length === 0 && group.children.length === 0)) {
+  const hasAccountLogout = menuGroups.length === 1 && menuGroups[0]?.id === accountNavigationNodeID && onLogout !== undefined;
+  if (menuGroups.every((group) => group.pages.length === 0 && group.children.length === 0) && !hasAccountLogout) {
     return <div className="vp-top-navigation-menu-empty">{i18n.text(message(namespace, "navigation.accountUnavailable", "个人中心尚未装配"))}</div>;
   }
-  return <ui.Menu variant="navigation" size="sm" items={navigationMenuItems(menuGroups, composition, i18n)} activeID={composition.activeNavigationPath?.pageID} onSelect={onNavigate} />;
+  const items = navigationPopoverItems(menuGroups, composition, i18n, onLogout !== undefined);
+  return <ui.Menu variant="navigation" size="sm" items={items} activeID={composition.activeNavigationPath?.pageID} onSelect={(id) => {
+    if (id === accountLogoutMenuItemID) { void onLogout?.(); return; }
+    onNavigate(id);
+  }} />;
+}
+
+/** Builds the data consumed by the one shared top-navigation Menu surface. */
+export function navigationPopoverItems(groups: readonly PortalNavigationGroup[], composition: UIShellProps["composition"], i18n: Pick<PortalI18n, "text" | "locale">, includeLogout: boolean): MenuItem[] {
+  const accountGroup = groups.length === 1 && groups[0]?.id === accountNavigationNodeID ? groups[0] : undefined;
+  return accountGroup === undefined ? navigationMenuItems(groups, composition, i18n) : accountMenuItems(accountGroup, composition, i18n, includeLogout);
 }
 
 /** Converts the composed navigation tree into the renderer-owned Menu contract. */
