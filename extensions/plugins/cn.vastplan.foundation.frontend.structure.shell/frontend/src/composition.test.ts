@@ -76,14 +76,24 @@ describe("shell composition core", () => {
     expect(() => compose({ navigationCatalogs: [catalog([node("operations", "primary")])], pages: [], shellContributions: [], config: { navigationOverrides: [{ target: `${pluginID}/operations`, parent: "vastplan.host/account" }] } })).toThrow("无效、重复或未知覆盖");
   });
 
-  it("composes account pages through the only trusted host navigation anchor", () => {
-    const accountPage = { ...page("profile", "unused"), navigation: { id: "profile", label: "用户信息", parentMenuRef: { pluginID: "vastplan.host", nodeID: "account" } } };
-    const appearancePage = { ...page("appearance", "unused"), navigation: { id: "appearance", label: "外观", parentMenuRef: { pluginID: "vastplan.host", nodeID: "account" } } };
-    const model = compose({ activePageID: "appearance", navigationCatalogs: [], pages: [accountPage, appearancePage], shellContributions: [] });
+  it("accepts plugin-owned account menus beneath the only trusted host anchor", () => {
+    const accountParent = { pluginID: "vastplan.host", nodeID: "account", mode: "required" as const };
+    const accountCatalog: PortalNavigationCatalog = {
+      pluginID,
+      nodes: [
+        { ...node("profile", "secondary"), parent: accountParent },
+        { ...node("preferences", "secondary"), parent: accountParent },
+      ],
+    };
+    const accountPage = page("profile", "profile");
+    const appearancePage = page("appearance", "preferences");
+    const model = compose({ activePageID: "appearance", navigationCatalogs: [accountCatalog], accountNavigationOwnerID: pluginID, pages: [accountPage, appearancePage], shellContributions: [] });
     const account = model.navigation.secondary.find((group) => group.id === "vastplan.host/account");
-    expect(account?.pages.map((item) => item.id)).toEqual(["appearance", "profile"]);
-    expect(account?.children).toEqual([]);
-    expect(model.activeNavigationPath).toEqual({ zone: "secondary", rootGroupID: "vastplan.host/account", pageID: "appearance" });
+    expect(account?.pages).toEqual([]);
+    expect(account?.children.map((child) => child.id)).toEqual([`${pluginID}/preferences`, `${pluginID}/profile`]);
+    expect(account?.children.find((child) => child.id === `${pluginID}/preferences`)?.pages.map((item) => item.id)).toEqual(["appearance"]);
+    expect(model.activeNavigationPath).toEqual({ zone: "secondary", rootGroupID: "vastplan.host/account", childGroupID: `${pluginID}/preferences`, pageID: "appearance" });
+    expect(() => compose({ navigationCatalogs: [accountCatalog], accountNavigationOwnerID: "cn.vastplan.other", pages: [accountPage], shellContributions: [] })).toThrow("只有当前个人中心插件");
   });
 
   it("rejects unknown page nodes and cross-zone or overly deep catalogs", () => {

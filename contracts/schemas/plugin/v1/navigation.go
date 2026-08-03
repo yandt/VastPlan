@@ -193,6 +193,9 @@ func validateNavigationParent(manifest Manifest, node FrontendNavigationNode, no
 		}
 		return nil
 	}
+	if owner == "vastplan.host" && parent.NodeID == "account" && parent.Mode == "required" && parent.FallbackNodeID == "" {
+		return nil
+	}
 	if parent.Mode == "required" {
 		if _, declared := manifest.Dependencies[owner]; !declared {
 			return fmt.Errorf("frontend.navigations required 跨插件父级未声明依赖: %s/%s", node.ID, owner)

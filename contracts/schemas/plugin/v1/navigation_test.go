@@ -46,6 +46,21 @@ func TestFrontendNavigationCatalogRequiresDeclaredCrossPluginParent(t *testing.T
 	}
 }
 
+func TestFrontendNavigationCatalogAllowsPluginMenuUnderAccountHostAnchor(t *testing.T) {
+	manifest, err := ParseManifest(navigationManifest(`{
+      "navigations":[{"id":"main","contract":"1.0.0","nodes":[
+        {"id":"profile","zone":"secondary","label":{"key":"navigation.profile","fallback":"用户信息"},"icon":{"kind":"semantic","name":"info"},"parent":{"pluginId":"vastplan.host","nodeId":"account","mode":"required"}}
+      ],"icons":[]}]
+    }`, ""))
+	if err != nil {
+		t.Fatalf("账户根锚点应允许插件声明二级菜单: %v", err)
+	}
+	catalog, err := FrontendNavigationCatalogFor(manifest)
+	if err != nil || catalog == nil || catalog.Nodes[0].Parent == nil || catalog.Nodes[0].Parent.PluginID != "vastplan.host" {
+		t.Fatalf("账户根锚点菜单没有保留在导航目录中: %+v %v", catalog, err)
+	}
+}
+
 func TestFrontendNavigationCatalogValidatesOptionalFallback(t *testing.T) {
 	valid := `{
       "navigations":[{"id":"main","contract":"1.0.0","nodes":[

@@ -1,5 +1,4 @@
 import {
-  accountNavigationNodeRef,
   accountPageExtensionPointID,
   PortalAccountProfilePage,
   PortalAppearanceSettingsPage,
@@ -42,7 +41,7 @@ export default {
       navigation: {
         id: "account.profile",
         label: context.i18n.message("profile.navigation", "用户信息"),
-        parentMenuRef: accountNavigationNodeRef,
+        parentMenuRef: { pluginID: "cn.vastplan.foundation.frontend.identity.account-center", nodeID: "profile" },
         order: 10,
       },
       slots: [{ id: "account.profile.body", slot: "page.body.main", component: PortalAccountProfilePage }],
@@ -55,7 +54,7 @@ export default {
       navigation: {
         id: "account.settings.appearance",
         label: context.i18n.message("appearance.navigation", "外观"),
-        parentMenuRef: accountNavigationNodeRef,
+        parentMenuRef: { pluginID: "cn.vastplan.foundation.frontend.identity.account-center", nodeID: "preferences" },
         order: 10,
       },
       slots: [{ id: "account.appearance.body", slot: "page.body.main", component: PortalAppearanceSettingsPage }],

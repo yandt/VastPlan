@@ -130,7 +130,7 @@ export function accountExtensionPage(): RecordDetailPageDefinition<ServiceRecord
   return defineRecordDetailPage({
     id: "example.account-extension", path: "/account/settings/workbench-extension", pattern: "record-detail",
     title: message(namespace, "page.accountExtension", "账户扩展示例"),
-    navigation: { id: "example.account-extension", label: message(namespace, "page.accountExtension", "账户扩展示例"), parentMenuRef: { pluginID: "vastplan.host", nodeID: "account" }, order: 90 },
+    navigation: { id: "example.account-extension", label: message(namespace, "page.accountExtension", "账户扩展示例"), parentMenuRef: { pluginID: "cn.vastplan.foundation.frontend.identity.account-center", nodeID: "preferences" }, order: 90 },
     detail: { ...detail, emptyTitle: message(namespace, "empty.accountExtension", "账户扩展未提供数据") },
     async load() { return { ...services[0] }; },
   });

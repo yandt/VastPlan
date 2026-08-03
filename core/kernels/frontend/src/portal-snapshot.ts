@@ -47,6 +47,7 @@ export function snapshotPortal(portal: PortalSpec): Readonly<PortalSpec> {
       ...portal.workbench,
       config: portal.workbench.config === undefined ? undefined : freezeJSONRecord(portal.workbench.config),
     }),
+    accountCenter: portal.accountCenter === undefined ? undefined : Object.freeze({ ...portal.accountCenter }),
     plugins: Object.freeze(portal.plugins.map((ref) => Object.freeze({ ...ref }))),
     management: Object.freeze({ ...portal.management, services: Object.freeze(services) }),
     resolution: Object.freeze({ ...portal.resolution, pluginOrigins: Object.freeze({ ...portal.resolution.pluginOrigins }) }),

@@ -99,6 +99,7 @@ type PortalSpec struct {
 	RenderAdapter RenderAdapter                            `json:"renderAdapter"`
 	Shell         Shell                                    `json:"shell"`
 	Workbench     Workbench                                `json:"workbench"`
+	AccountCenter PluginRef                                `json:"accountCenter,omitempty"`
 	Plugins       []PluginRef                              `json:"plugins"`
 	Config        map[string]any                           `json:"config,omitempty"`
 	Management    frontendcompositionv1.PortalBinding      `json:"management"`

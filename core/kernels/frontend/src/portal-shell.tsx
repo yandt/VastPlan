@@ -301,6 +301,7 @@ function PortalContent({ prepared, appearance, themeTemplateID, iconThemeID, pat
     pages: prepared.pages,
     shellContributions: prepared.shellContributions,
     navigationCatalogs: prepared.navigationCatalogs,
+    accountNavigationOwnerID: prepared.portal.accountCenter?.id,
     activePageID: page?.id,
     config: prepared.portal.shell.config,
   });
@@ -500,8 +501,8 @@ export function resolvePortalPath(prepared: PreparedPortal, pathname: string): s
 export function resolveDeactivatedPagePath(previous: PreparedPortal, next: PreparedPortal, pathname: string): string {
 	const previousPage = selectPage(previous, pathname);
 	if (previousPage === undefined || selectPage(next, pathname) !== undefined) return pathname;
-	const nextComposition = next.shell.compose({ pages: next.pages, shellContributions: next.shellContributions, navigationCatalogs: next.navigationCatalogs, config: next.portal.shell.config });
-	const previousComposition = previous.shell.compose({ pages: previous.pages, shellContributions: previous.shellContributions, navigationCatalogs: previous.navigationCatalogs, activePageID: previousPage.id, config: previous.portal.shell.config });
+	const nextComposition = next.shell.compose({ pages: next.pages, shellContributions: next.shellContributions, navigationCatalogs: next.navigationCatalogs, accountNavigationOwnerID: next.portal.accountCenter?.id, config: next.portal.shell.config });
+	const previousComposition = previous.shell.compose({ pages: previous.pages, shellContributions: previous.shellContributions, navigationCatalogs: previous.navigationCatalogs, accountNavigationOwnerID: previous.portal.accountCenter?.id, activePageID: previousPage.id, config: previous.portal.shell.config });
 	const groupID = previousPage.navigation === undefined ? undefined : `${previousPage.navigation.parentMenuRef.pluginID}/${previousPage.navigation.parentMenuRef.nodeID}`;
 	if (groupID !== undefined) {
 		const sameGroup = orderedFallbackPages(next.pages.filter((page) => page.navigation !== undefined && `${page.navigation.parentMenuRef.pluginID}/${page.navigation.parentMenuRef.nodeID}` === groupID));

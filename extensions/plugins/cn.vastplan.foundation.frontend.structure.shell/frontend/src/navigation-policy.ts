@@ -10,13 +10,11 @@ import type {
   PortalResolvedPageNavigation,
 } from "@vastplan/ui-primitives";
 
-const namespace = "cn.vastplan.foundation.frontend.structure.shell";
 const navigationZones = new Set<NavigationZone>(["primary", "secondary", "settings"]);
-
+const namespace = "cn.vastplan.foundation.frontend.structure.shell";
 const semantic = (name: Extract<PortalNavigationIconSpec, { kind: "semantic" }>["name"]): PortalNavigationIconSpec => Object.freeze({ kind: "semantic", name });
 const hostID = (nodeID: string): string => navigationNodeKey({ pluginID: hostNavigationPluginID, nodeID });
 const accountAnchorID = hostID(accountNavigationGroupID);
-
 const defaultGroups: readonly PortalNavigationGroupDescriptor[] = [
   { id: accountAnchorID, label: message(namespace, "navigation.account", "用户"), zone: "secondary", icon: semantic("info"), order: 2000 },
 ];
@@ -28,8 +26,8 @@ export interface NavigationPolicy {
 }
 
 /** Compiles signed plugin defaults and the current Portal's bounded overrides once. */
-export function compileNavigationPolicy(catalogs: readonly PortalNavigationCatalog[], config: Readonly<Record<string, unknown>> | undefined): NavigationPolicy {
-  const groups = compileNavigationNodes(catalogs, config?.navigationOverrides);
+export function compileNavigationPolicy(catalogs: readonly PortalNavigationCatalog[], config: Readonly<Record<string, unknown>> | undefined, accountNavigationOwnerID?: string): NavigationPolicy {
+  const groups = compileNavigationNodes(catalogs, config?.navigationOverrides, accountNavigationOwnerID);
 
   function resolve(page: PortalPageNavigation): PortalResolvedPageNavigation {
     const groupID = navigationNodeKey(page.parentMenuRef);
@@ -47,12 +45,12 @@ export function compileNavigationPolicy(catalogs: readonly PortalNavigationCatal
   return Object.freeze({ groups, resolve, path });
 }
 
-function compileNavigationNodes(catalogs: readonly PortalNavigationCatalog[], configured: unknown): ReadonlyMap<string, PortalNavigationGroupDescriptor> {
+function compileNavigationNodes(catalogs: readonly PortalNavigationCatalog[], configured: unknown, accountNavigationOwnerID: string | undefined): ReadonlyMap<string, PortalNavigationGroupDescriptor> {
   const groups = new Map(defaultGroups.map((group) => [group.id, group]));
   for (const catalog of catalogs) {
     for (const node of catalog.nodes) {
       if (groups.has(node.id)) throw new Error(`导航节点全局身份重复: ${node.id}`);
-      const parent = resolveDeclaredParent(node.parent, catalogs);
+      const parent = resolveDeclaredParent(node.parent, catalogs, node.ref.pluginID, accountNavigationOwnerID);
       groups.set(node.id, Object.freeze({ id: node.id, label: node.label, zone: node.zone, icon: node.icon, ...(parent === undefined ? {} : { parentID: navigationNodeKey(parent) }), ...(node.order === undefined ? {} : { order: node.order }) }));
     }
   }
@@ -61,8 +59,12 @@ function compileNavigationNodes(catalogs: readonly PortalNavigationCatalog[], co
   return groups;
 }
 
-function resolveDeclaredParent(parent: PortalNavigationCatalog["nodes"][number]["parent"], catalogs: readonly PortalNavigationCatalog[]): PortalNavigationNodeRef | undefined {
+function resolveDeclaredParent(parent: PortalNavigationCatalog["nodes"][number]["parent"], catalogs: readonly PortalNavigationCatalog[], nodeOwnerID: string, accountNavigationOwnerID: string | undefined): PortalNavigationNodeRef | undefined {
   if (parent === undefined) return undefined;
+  if (navigationNodeKey(parent) === accountAnchorID && parent.mode === "required") {
+    if (nodeOwnerID !== accountNavigationOwnerID) throw new Error(`只有当前个人中心插件可以挂载账户头像菜单: ${nodeOwnerID}`);
+    return parent;
+  }
   const keys = new Set(catalogs.flatMap((catalog) => catalog.nodes.map((node) => node.id)));
   const target = navigationNodeKey(parent);
   if (keys.has(target)) return parent;

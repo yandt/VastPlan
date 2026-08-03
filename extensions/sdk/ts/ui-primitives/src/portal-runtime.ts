@@ -259,6 +259,8 @@ export interface ShellCompositionInput {
   pages: readonly PortalRegisteredPage[];
   shellContributions: readonly PortalRegisteredShellContribution[];
   navigationCatalogs: readonly PortalNavigationCatalog[];
+  /** The Platform Profile selected account-center implementation. Only it may attach menus below the host avatar anchor. */
+  accountNavigationOwnerID?: string;
   activePageID?: string;
   config?: Readonly<Record<string, unknown>>;
 }

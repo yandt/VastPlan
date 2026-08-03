@@ -40,10 +40,17 @@ func validateNavigationCandidates(spec portalapi.PortalSpec, index pluginv1.Cont
 				if owner == "" {
 					owner = contribution.Owner.Ref.PluginID
 				}
-				node.parent = navigationNodeID(owner, candidate.Parent.NodeID)
-				node.optional = candidate.Parent.Mode == "optional"
-				if node.optional {
-					node.fallback = navigationNodeID(contribution.Owner.Ref.PluginID, candidate.Parent.FallbackNodeID)
+				parentID := navigationNodeID(owner, candidate.Parent.NodeID)
+				if parentID == "vastplan.host/account" {
+					if candidate.Parent.Mode != "required" || candidate.Zone != "secondary" || spec.AccountCenter.ID == "" || contribution.Owner.Ref.PluginID != spec.AccountCenter.ID {
+						return fmt.Errorf("只有 Platform Profile 选定的个人中心可以挂载账户头像菜单: %s", contribution.Owner.Ref.PluginID)
+					}
+				} else {
+					node.parent = parentID
+					node.optional = candidate.Parent.Mode == "optional"
+					if node.optional {
+						node.fallback = navigationNodeID(contribution.Owner.Ref.PluginID, candidate.Parent.FallbackNodeID)
+					}
 				}
 			}
 			nodes[id] = node

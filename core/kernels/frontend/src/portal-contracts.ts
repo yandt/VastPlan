@@ -85,6 +85,8 @@ export interface PortalSpec {
   renderAdapter: RenderAdapterSelection;
   shell: ShellSelection;
   workbench: WorkbenchSelection;
+  /** Platform Profile selected account-center implementation; absent only in legacy fixtures. */
+  accountCenter?: PluginRef;
   plugins: readonly PluginRef[];
   management: {
     tenantId: string;
