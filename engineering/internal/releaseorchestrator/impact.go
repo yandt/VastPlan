@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	semver "github.com/Masterminds/semver/v3"
+
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 )
 
 // ReleaseChangeClass is the publisher's compatibility assertion for this
@@ -21,10 +23,11 @@ const (
 )
 
 type ReleaseImpact struct {
-	PluginID          string             `json:"pluginId"`
-	Change            ReleaseChangeClass `json:"change"`
-	ReusedConsumers   []string           `json:"reusedConsumers,omitempty"`
-	RequiredConsumers []string           `json:"requiredConsumers,omitempty"`
+	PluginID             string             `json:"pluginId"`
+	Change               ReleaseChangeClass `json:"change"`
+	InterfaceFingerprint string             `json:"interfaceFingerprint"`
+	ReusedConsumers      []string           `json:"reusedConsumers,omitempty"`
+	RequiredConsumers    []string           `json:"requiredConsumers,omitempty"`
 }
 
 // AnalyzeReleaseImpact keeps upgrade closure minimal. Dependencies are a
@@ -46,7 +49,11 @@ func AnalyzeReleaseImpact(workspace PluginWorkspace, requests map[string]Release
 			return nil, fmt.Errorf("影响分析引用了不存在的插件 %s", id)
 		}
 		change := requests[id].Change
-		impact := ReleaseImpact{PluginID: id, Change: change}
+		fingerprint, err := pluginv1.PublicInterfaceFingerprint(plugin.Manifest)
+		if err != nil {
+			return nil, fmt.Errorf("计算 %s 的公共接口指纹: %w", id, err)
+		}
+		impact := ReleaseImpact{PluginID: id, Change: change, InterfaceFingerprint: fingerprint}
 		for _, consumerID := range workspace.ReverseDependencies(id) {
 			if _, selected := requests[consumerID]; selected {
 				continue

@@ -14,7 +14,11 @@ func exactArtifactIdentity(value VerifiedArtifactManifest) (PluginArtifactIdenti
 	return PluginArtifactIdentity{Ref: ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel}, SHA256: artifact.SHA256, Publisher: manifest.Publisher}, nil
 }
 
-func inventoryItem(identity PluginArtifactIdentity, manifest Manifest) PluginInventoryItem {
+func inventoryItem(identity PluginArtifactIdentity, manifest Manifest) (PluginInventoryItem, error) {
+	interfaceFingerprint, err := PublicInterfaceFingerprint(manifest)
+	if err != nil {
+		return PluginInventoryItem{}, err
+	}
 	targets := make([]PluginTarget, 0, len(manifest.Entry))
 	for surface, entry := range manifest.Entry {
 		driver := surface + "-module"
@@ -40,7 +44,7 @@ func inventoryItem(identity PluginArtifactIdentity, manifest Manifest) PluginInv
 	sort.Slice(requires, func(i, j int) bool {
 		return requires[i].Capability+"\x00"+requires[i].LogicalService < requires[j].Capability+"\x00"+requires[j].LogicalService
 	})
-	return PluginInventoryItem{Artifact: identity, Targets: targets, Dependencies: dependencies, RuntimeProvides: provides, RuntimeRequires: requires, ConfigurationProtocols: configurationProtocols(manifest)}
+	return PluginInventoryItem{Artifact: identity, InterfaceFingerprint: interfaceFingerprint, Targets: targets, Dependencies: dependencies, RuntimeProvides: provides, RuntimeRequires: requires, ConfigurationProtocols: configurationProtocols(manifest)}, nil
 }
 
 func configurationProtocols(manifest Manifest) []string {

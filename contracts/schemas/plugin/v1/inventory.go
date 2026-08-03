@@ -40,6 +40,7 @@ type PluginDependency struct {
 
 type PluginInventoryItem struct {
 	Artifact               PluginArtifactIdentity    `json:"artifact"`
+	InterfaceFingerprint   string                    `json:"interfaceFingerprint"`
 	Targets                []PluginTarget            `json:"targets"`
 	Dependencies           []PluginDependency        `json:"dependencies"`
 	RuntimeProvides        []RuntimeCapabilityPolicy `json:"runtimeProvides"`
@@ -100,7 +101,11 @@ func BuildPluginInventory(generation uint64, sourceDigest string, values []Verif
 			return PluginInventorySnapshot{}, fmt.Errorf("Plugin Inventory 制品重复: %s", key)
 		}
 		seen[key] = struct{}{}
-		items = append(items, inventoryItem(identity, value.Manifest))
+		item, err := inventoryItem(identity, value.Manifest)
+		if err != nil {
+			return PluginInventorySnapshot{}, fmt.Errorf("计算插件 %s 的公共接口指纹: %w", identity.Ref.PluginID, err)
+		}
+		items = append(items, item)
 	}
 	sort.Slice(items, func(i, j int) bool {
 		return artifactIdentityKey(items[i].Artifact) < artifactIdentityKey(items[j].Artifact)
@@ -176,6 +181,10 @@ func ValidatePluginInventory(snapshot PluginInventorySnapshot) error {
 	if err != nil || expected != snapshot.Digest {
 		return errors.New("Plugin Inventory 摘要失配")
 	}
+	// Older v1 snapshots predate interface fingerprints and remain readable.
+	// New projections always populate the field; consumers that require minimum
+	// upgrade analysis must fail closed when it is absent rather than making a
+	// running historical Generation unreadable.
 	return nil
 }
 

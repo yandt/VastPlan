@@ -18,6 +18,9 @@ func TestInventoryProjectsUnknownContributionKindsDeterministically(t *testing.T
 	if err := ValidatePluginInventory(inventory); err != nil {
 		t.Fatal(err)
 	}
+	if len(inventory.Plugins) != 1 || !isSHA256(inventory.Plugins[0].InterfaceFingerprint) {
+		t.Fatalf("Inventory 未投影公共接口指纹: %+v", inventory.Plugins)
+	}
 	index, err := BuildContributionIndex(inventory, []VerifiedArtifactManifest{value})
 	if err != nil {
 		t.Fatal(err)
