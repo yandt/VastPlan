@@ -17,6 +17,8 @@ export interface MenuProps extends SizeableProps {
   activeID?: string;
   /** Navigation retains framework navigation treatment; action removes navigation-only chrome. */
   variant?: "navigation" | "action";
+  /** Shell navigation preserves the Portal's 44px tree-row visual baseline across placements. */
+  appearance?: "default" | "shell-navigation";
   /** Inline is a persistent nested tree; popup is a compact overlay menu. */
   presentation?: "inline" | "popup";
   /** Controlled expanded submenu IDs for the inline presentation. */

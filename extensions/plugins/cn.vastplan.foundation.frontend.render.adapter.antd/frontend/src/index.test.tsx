@@ -105,8 +105,10 @@ describe("Ant Design portal UI renderer", () => {
 
   it("renders a controlled inline navigation tree for persistent Shell panels", () => {
     const Menu = antdPortalUIComponents.Menu;
-    const markup = renderToStaticMarkup(<Menu presentation="inline" expandedIDs={["group:settings"]} items={[{ id: "group:settings", label: "设置", children: [{ id: "profile", label: "个人信息" }] }]} />);
+    const markup = renderToStaticMarkup(<Menu appearance="shell-navigation" presentation="inline" expandedIDs={["group:settings"]} items={[{ id: "group:settings", label: "设置", children: [{ id: "profile", label: "个人信息" }] }]} />);
     expect(markup).toContain("ant-menu-inline");
+    expect(markup).toContain("vp-antd-shell-navigation-menu");
+    expect(markup).toContain("height:44px");
     expect(markup).toContain("个人信息");
   });
 

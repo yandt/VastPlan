@@ -9,9 +9,18 @@ import { antdComponentSize } from "./component-size";
 
 const actionMenuClass = "vp-antd-action-menu";
 const actionMenuCSS = `.${actionMenuClass} > .ant-menu-item > .ant-menu-title-content { margin-inline-start: 0 !important; }`;
+const shellNavigationMenuClass = "vp-antd-shell-navigation-menu";
+const shellNavigationMenuCSS = `
+  .${shellNavigationMenuClass}.ant-menu{border-inline-end:0!important;width:100%}
+  .${shellNavigationMenuClass}.ant-menu .ant-menu-item,
+  .${shellNavigationMenuClass}.ant-menu .ant-menu-submenu-title{min-height:var(--vp-shell-navigation-item-height)!important;height:var(--vp-shell-navigation-item-height)!important;line-height:var(--vp-shell-navigation-item-height)!important;margin:0!important;padding-inline:var(--vp-shell-navigation-item-padding)!important;border-radius:var(--vp-shell-navigation-radius)!important}
+  .${shellNavigationMenuClass}.ant-menu .ant-menu-item:hover,
+  .${shellNavigationMenuClass}.ant-menu .ant-menu-submenu-title:hover{background:var(--ant-color-fill-tertiary)!important;color:var(--ant-color-primary)!important}
+  .${shellNavigationMenuClass}.ant-menu .ant-menu-item-selected{background:var(--ant-color-primary-bg)!important;color:var(--ant-color-primary)!important;font-weight:600}
+  .${shellNavigationMenuClass}.ant-menu-inline .ant-menu-sub.ant-menu-inline{padding:2px 0 2px var(--vp-shell-navigation-child-indent)!important;background:transparent!important}
+`;
 
-function menuItems(items: MenuItem[], size: NonNullable<MenuProps["size"]>, variant: NonNullable<MenuProps["variant"]>, onSelect?: (id: string) => void, parentDisabled = false): NonNullable<AntdMenuProps["items"]> {
-  const recipe = componentSizeRecipes.menu[size];
+function menuItems(items: MenuItem[], recipe: Readonly<{ itemHeight: number; itemInlinePadding: number; radius: number }>, variant: NonNullable<MenuProps["variant"]>, onSelect?: (id: string) => void, parentDisabled = false): NonNullable<AntdMenuProps["items"]> {
   return items.map((item) => {
     const disabled = parentDisabled || item.disabled === true;
     const label = item.href === undefined ? item.label : <a href={item.href} onClick={(event) => {
@@ -19,21 +28,43 @@ function menuItems(items: MenuItem[], size: NonNullable<MenuProps["size"]>, vari
       event.stopPropagation();
       if (!disabled) onSelect?.(item.id);
     }}>{item.label}</a>;
-    return { key: item.id, label, icon: item.icon, disabled, style: { height: recipe.itemHeight, lineHeight: `${recipe.itemHeight}px`, margin: 0, paddingInline: recipe.itemInlinePadding, ...(variant === "action" ? componentVariantRecipes.menu.actionItem : {}) }, children: item.children?.length ? menuItems(item.children, size, variant, onSelect, disabled) : undefined };
+    return { key: item.id, label, icon: item.icon, disabled, style: { height: recipe.itemHeight, lineHeight: `${recipe.itemHeight}px`, margin: 0, paddingInline: recipe.itemInlinePadding, borderRadius: recipe.radius, ...(variant === "action" ? componentVariantRecipes.menu.actionItem : {}) }, children: item.children?.length ? menuItems(item.children, recipe, variant, onSelect, disabled) : undefined };
   });
 }
 
-export function Menu({ items, activeID, size: requestedSize, variant = "navigation", presentation = "popup", expandedIDs, onExpandedChange, onSelect }: MenuProps) {
+export function Menu({ items, activeID, size: requestedSize, variant = "navigation", appearance = "default", presentation = "popup", expandedIDs, onExpandedChange, onSelect }: MenuProps) {
   const size = useComponentSize(requestedSize);
-  const recipe = componentSizeRecipes.menu[size];
+  const shellRecipe = appearance === "shell-navigation" ? componentVariantRecipes.menu.shellNavigation : undefined;
+  const recipe = shellRecipe ?? componentSizeRecipes.menu[size];
+  const className = [variant === "action" ? actionMenuClass : undefined, appearance === "shell-navigation" ? shellNavigationMenuClass : undefined].filter(Boolean).join(" ") || undefined;
   const style: CSSProperties = {
     minWidth: recipe.minWidth,
     padding: recipe.surfacePadding,
     borderRadius: recipe.radius,
     ...(variant === "action" ? componentVariantRecipes.menu.action : {}),
+    ...(appearance === "shell-navigation" ? { borderInlineEnd: 0, width: "100%" } : {}),
+    ...(shellRecipe === undefined ? {} : {
+      ["--vp-shell-navigation-item-height" as string]: `${shellRecipe.itemHeight}px`,
+      ["--vp-shell-navigation-item-padding" as string]: `${shellRecipe.itemInlinePadding}px`,
+      ["--vp-shell-navigation-radius" as string]: `${shellRecipe.radius}px`,
+      ["--vp-shell-navigation-child-indent" as string]: `${shellRecipe.childIndent}px`,
+    }),
     ["--ant-menu-item-height" as string]: `${recipe.itemHeight}px`,
   };
-  return <>{variant === "action" ? <style>{actionMenuCSS}</style> : null}<AntdMenu className={variant === "action" ? actionMenuClass : undefined} mode={presentation === "inline" ? "inline" : "vertical"} selectedKeys={activeID === undefined ? [] : [activeID]} openKeys={presentation === "inline" && expandedIDs !== undefined ? [...expandedIDs] : undefined} items={menuItems(items, size, variant, onSelect)} onOpenChange={presentation === "inline" ? (ids) => onExpandedChange?.(ids) : undefined} onClick={({ key }) => onSelect?.(key)} style={style} /></>;
+  return <>
+    {variant === "action" ? <style>{actionMenuCSS}</style> : null}
+    {appearance === "shell-navigation" ? <style>{shellNavigationMenuCSS}</style> : null}
+    <AntdMenu
+      className={className}
+      mode={presentation === "inline" ? "inline" : "vertical"}
+      selectedKeys={activeID === undefined ? [] : [activeID]}
+      openKeys={presentation === "inline" && expandedIDs !== undefined ? [...expandedIDs] : undefined}
+      items={menuItems(items, recipe, variant, onSelect)}
+      onOpenChange={presentation === "inline" ? (ids) => onExpandedChange?.(ids) : undefined}
+      onClick={({ key }) => onSelect?.(key)}
+      style={style}
+    />
+  </>;
 }
 
 export function Breadcrumb({ items, size: requestedSize }: BreadcrumbProps) {

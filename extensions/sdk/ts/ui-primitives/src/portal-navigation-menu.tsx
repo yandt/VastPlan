@@ -55,6 +55,7 @@ export function PortalNavigationMenu({ groups, composition, activeID, presentati
   if (items.length === 0) return <>{empty ?? null}</>;
   return <ui.Menu
     variant="navigation"
+    appearance="shell-navigation"
     size="sm"
     presentation={presentation}
     items={items}

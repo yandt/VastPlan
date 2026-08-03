@@ -68,6 +68,8 @@ export const componentVariantRecipes = Object.freeze({
   menu: Object.freeze({
     action: Object.freeze({ borderInlineEnd: 0, width: "max-content", minWidth: 112, maxWidth: 280, overflow: "hidden", padding: "4px" }),
     actionItem: Object.freeze({ display: "flex", alignItems: "center", width: "100%", gap: "6px", paddingInline: "12px 6px" }),
+    /** Original standard-sidebar geometry; shared by persistent and popup Shell navigation. */
+    shellNavigation: Object.freeze({ itemHeight: 44, itemInlinePadding: 12, minWidth: 220, surfacePadding: 4, radius: 8, childIndent: 12 }),
   }),
 });
 
