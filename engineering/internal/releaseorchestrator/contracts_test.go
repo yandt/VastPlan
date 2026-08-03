@@ -34,6 +34,29 @@ func TestSyncContractsGeneratesOutputsAndDoesNotRewritePluginClaims(t *testing.T
 	}
 }
 
+func TestSyncContractsKeepsCompatiblePortalProfileRangeOnMinorRelease(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, ContractRegistryPath, "schemaVersion: 1\ncontracts:\n  frontend.ui:\n    version: 6.1.0\n    compatibility: ^6.1.0\n    description: test\n")
+	writeFile(t, root, "engineering/deploy/portal-platform-catalog.json", `{"uiContract":"^6.0.0"}`)
+	writeFile(t, root, "extensions/plugins/cn.vastplan.foundation.frontend.test/vastplan.plugin.json", `{"contributes":{"frontend":{"views":[{"uiContract":"^6.0.0"}]}}}`)
+	writeFile(t, root, "extensions/plugins/cn.vastplan.foundation.frontend.test/frontend/src/index.ts", `export const value = { uiContract: uiContractVersion };`)
+	writeFile(t, root, "examples/plugins/.keep/vastplan.plugin.json", `{}`)
+
+	changes, err := SyncContracts(root, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, change := range changes {
+		if change.Path == "engineering/deploy/portal-platform-catalog.json" {
+			t.Fatalf("兼容 minor 不得重写 Portal Profile: %+v", changes)
+		}
+	}
+	catalog, err := os.ReadFile(filepath.Join(root, "engineering/deploy/portal-platform-catalog.json"))
+	if err != nil || string(catalog) != `{"uiContract":"^6.0.0"}` {
+		t.Fatalf("兼容 Profile 范围被改写: %s err=%v", catalog, err)
+	}
+}
+
 func TestSyncContractsRejectsIncompatiblePluginClaim(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, ContractRegistryPath, "schemaVersion: 1\ncontracts:\n  frontend.ui:\n    version: 6.0.0\n    compatibility: ^6.0.0\n    description: test\n")

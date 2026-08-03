@@ -136,7 +136,7 @@ func SyncContracts(repositoryRoot string, write bool) ([]DerivedChange, error) {
 			}
 		}
 	}
-	catalogChange, err := syncPortalCatalogContract(repositoryRoot, definition.Compatibility, write)
+	catalogChange, err := syncPortalCatalogContract(repositoryRoot, definition, write)
 	if err != nil {
 		return nil, err
 	}
@@ -165,18 +165,33 @@ func generatedUIContractSchema(major uint64) []byte {
 	return []byte(fmt.Sprintf("{\n  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n  \"$id\": \"https://schemas.cdsoft.com.cn/vastplan/composition/frontend/v1/vastplan.ui-contract.generated.schema.json\",\n  \"title\": \"Generated VastPlan Frontend UI Contract Range\",\n  \"type\": \"string\",\n  \"pattern\": \"^(?:\\\\^)?%d\\\\.\",\n  \"maxLength\": 128\n}\n", major))
 }
 
-func syncPortalCatalogContract(repositoryRoot, expected string, write bool) (*DerivedChange, error) {
+// syncPortalCatalogContract advances a Profile only when its declared range can
+// no longer run the canonical contract. A compatible minor release must not
+// create a new Portal Profile/Activation merely because the registry learned a
+// new optional capability.
+func syncPortalCatalogContract(repositoryRoot string, definition ContractDefinition, write bool) (*DerivedChange, error) {
 	relative := "engineering/deploy/portal-platform-catalog.json"
 	path := filepath.Join(repositoryRoot, filepath.FromSlash(relative))
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
+	version, err := semver.StrictNewVersion(definition.Version)
+	if err != nil {
+		return nil, fmt.Errorf("解析 frontend.ui 版本: %w", err)
+	}
 	count := 0
+	updated := 0
 	next := uiContractJSONPattern.ReplaceAllFunc(raw, func(value []byte) []byte {
 		count++
 		match := uiContractJSONPattern.FindSubmatch(value)
-		return append(append(append([]byte(nil), match[1]...), expected...), match[3]...)
+		current := string(match[2])
+		constraint, constraintErr := semver.NewConstraint(current)
+		if constraintErr == nil && constraint.Check(version) {
+			return value
+		}
+		updated++
+		return append(append(append([]byte(nil), match[1]...), definition.Compatibility...), match[3]...)
 	})
 	if count == 0 {
 		return nil, errors.New("Portal Platform Catalog 未声明 UI Contract")
@@ -184,7 +199,10 @@ func syncPortalCatalogContract(repositoryRoot, expected string, write bool) (*De
 	if bytes.Equal(raw, next) {
 		return nil, nil
 	}
-	change := &DerivedChange{Path: relative, Reason: "frontend.ui compatibility range"}
+	if updated == 0 {
+		return nil, nil
+	}
+	change := &DerivedChange{Path: relative, Reason: "frontend.ui compatibility range no longer accepts canonical version"}
 	if write {
 		if err := os.WriteFile(path, next, 0o644); err != nil {
 			return nil, err

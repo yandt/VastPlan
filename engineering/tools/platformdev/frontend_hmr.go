@@ -123,11 +123,12 @@ func (h *frontendHMR) watch(ctx context.Context, signatures frontendSourceSignat
 				continue
 			}
 			hostChanged := next.host != signatures.host
+			sharedChanged := next.shared != signatures.shared
 			pluginsChanged := next.plugins != signatures.plugins
 			signatures = next
 			if hostChanged {
 				err = h.buildHost(ctx)
-			} else if pluginsChanged {
+			} else if sharedChanged || pluginsChanged {
 				nextPluginState, stateErr := h.pluginWatchState()
 				if stateErr != nil {
 					h.publishError(stateErr)
@@ -135,8 +136,12 @@ func (h *frontendHMR) watch(ctx context.Context, signatures frontendSourceSignat
 				}
 				changed, rebuildAll := changedFrontendPlugins(pluginState, nextPluginState)
 				pluginState = nextPluginState
-				if rebuildAll || len(changed) > 0 {
+				if rebuildAll {
 					err = h.buildPlugins(ctx, changed, rebuildAll)
+				} else if sharedChanged {
+					err = h.buildSharedHost(ctx, changed)
+				} else if len(changed) > 0 {
+					err = h.buildPlugins(ctx, changed, false)
 				}
 			}
 			if err != nil {
@@ -147,6 +152,21 @@ func (h *frontendHMR) watch(ctx context.Context, signatures frontendSourceSignat
 }
 
 func (h *frontendHMR) buildPlugins(ctx context.Context, pluginIDs []string, rebuildAll bool) error {
+	candidate, err := h.buildPluginCandidate(ctx, pluginIDs, rebuildAll)
+	if err != nil {
+		return err
+	}
+	h.commitCandidate(candidate, "generation", nil, rebuildAll)
+	generation, _ := h.status()
+	if rebuildAll {
+		log.Printf("前端插件热替换候选 generation=%d 已就绪（全量）", generation)
+	} else {
+		log.Printf("前端插件热替换候选 generation=%d 已就绪 plugins=%s", generation, strings.Join(pluginIDs, ","))
+	}
+	return nil
+}
+
+func (h *frontendHMR) buildPluginCandidate(ctx context.Context, pluginIDs []string, rebuildAll bool) (frontendHMRCandidate, error) {
 	h.mu.RLock()
 	nextGeneration := h.generation + 1
 	h.mu.RUnlock()
@@ -164,17 +184,13 @@ func (h *frontendHMR) buildPlugins(ctx context.Context, pluginIDs []string, rebu
 	command.Stdout = io.MultiWriter(os.Stdout, &output)
 	command.Stderr = io.MultiWriter(os.Stderr, &output)
 	if err := command.Run(); err != nil {
-		return fmt.Errorf("前端插件候选构建失败: %w\n%s", err, strings.TrimSpace(output.String()))
+		return frontendHMRCandidate{}, fmt.Errorf("前端插件候选构建失败: %w\n%s", err, strings.TrimSpace(output.String()))
 	}
-	if err := h.installCandidate(manifest, rebuildAll); err != nil {
-		return err
+	candidate, err := h.loadCandidate(manifest)
+	if err != nil {
+		return frontendHMRCandidate{}, err
 	}
-	if rebuildAll {
-		log.Printf("前端插件热替换候选 generation=%d 已就绪（全量）", nextGeneration)
-	} else {
-		log.Printf("前端插件热替换候选 generation=%d 已就绪 plugins=%s", nextGeneration, strings.Join(pluginIDs, ","))
-	}
-	return nil
+	return candidate, nil
 }
 
 func (h *frontendHMR) buildHost(ctx context.Context) error {
@@ -203,6 +219,42 @@ func (h *frontendHMR) buildHost(ctx context.Context) error {
 	}
 	h.commitCandidate(candidate, "reload", assets, true)
 	log.Printf("Portal 宿主与插件候选 generation=%d 已原子切换", nextGeneration)
+	return nil
+}
+
+// buildSharedHost refreshes host-provided SDK singletons and only the plugin
+// modules that actually changed. Contract validation remains fail-closed; a
+// breaking UI range is rejected before a mixed generation can be exposed.
+func (h *frontendHMR) buildSharedHost(ctx context.Context, pluginIDs []string) error {
+	h.mu.RLock()
+	nextGeneration := h.generation + 1
+	h.mu.RUnlock()
+	directory := filepath.Join(h.runDir, fmt.Sprintf("shared-generation-%06d", nextGeneration))
+	portalCandidate := filepath.Join(directory, "portal-assets")
+	if err := h.runCommand(ctx, map[string]string{"PORTAL_OUT_DIR": portalCandidate, "PORTAL_DEV_HMR": "1"}, "./engineering/tools/build-frontend.sh"); err != nil {
+		return fmt.Errorf("构建开发态共享 Portal 宿主候选: %w", err)
+	}
+	if err := validateFrontendUIContractSources(h.root); err != nil {
+		return fmt.Errorf("验证共享 UI 契约兼容性: %w", err)
+	}
+	candidate := frontendHMRCandidate{current: map[string]frontendHMRModule{}, objects: map[string]frontendHMRObject{}}
+	if len(pluginIDs) > 0 {
+		var err error
+		candidate, err = h.buildPluginCandidate(ctx, pluginIDs, false)
+		if err != nil {
+			return err
+		}
+	}
+	assets, err := newDevelopmentPortalAssets(portalCandidate)
+	if err != nil {
+		return fmt.Errorf("验证开发态共享 Portal 宿主候选: %w", err)
+	}
+	if err := replaceDirectory(portalCandidate, h.portalAssetsDir); err != nil {
+		return fmt.Errorf("切换开发态共享 Portal 宿主候选: %w", err)
+	}
+	h.commitCandidate(candidate, "reload", assets, false)
+	generation, _ := h.status()
+	log.Printf("Portal 共享 SDK 与兼容插件候选 generation=%d 已原子切换 plugins=%s", generation, strings.Join(pluginIDs, ","))
 	return nil
 }
 

@@ -336,12 +336,12 @@ func TestFrontendHMRSeparatesPluginAndHostSourceChanges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if pluginChange.plugins == initial.plugins || pluginChange.host != initial.host {
+	if pluginChange.plugins == initial.plugins || pluginChange.host != initial.host || pluginChange.shared != initial.shared {
 		t.Fatalf("plugin change signatures = %#v, initial = %#v", pluginChange, initial)
 	}
 	write("examples/plugins/cn.vastplan.example.frontend.gallery/frontend/src/index.ts", "example-v2")
 	exampleChange, err := hmr.sourceSignatures()
-	if err != nil || exampleChange.plugins == pluginChange.plugins || exampleChange.host != pluginChange.host {
+	if err != nil || exampleChange.plugins == pluginChange.plugins || exampleChange.host != pluginChange.host || exampleChange.shared != pluginChange.shared {
 		t.Fatalf("example change signatures = %#v, plugin = %#v, err=%v", exampleChange, pluginChange, err)
 	}
 	pluginChange = exampleChange
@@ -350,16 +350,16 @@ func TestFrontendHMRSeparatesPluginAndHostSourceChanges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if hostChange.host == pluginChange.host || hostChange.plugins != pluginChange.plugins {
-		t.Fatalf("host change signatures = %#v, plugin = %#v", hostChange, pluginChange)
+	if hostChange.shared == pluginChange.shared || hostChange.host != pluginChange.host || hostChange.plugins != pluginChange.plugins {
+		t.Fatalf("shared SDK change signatures = %#v, plugin = %#v", hostChange, pluginChange)
 	}
 	write("extensions/sdk/ts/icon-catalog/src/index.ts", "icon-catalog-v2")
 	iconCatalogChange, err := hmr.sourceSignatures()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if iconCatalogChange.host == hostChange.host || iconCatalogChange.plugins != hostChange.plugins {
-		t.Fatalf("icon catalog change signatures = %#v, host = %#v", iconCatalogChange, hostChange)
+	if iconCatalogChange.shared == hostChange.shared || iconCatalogChange.host != hostChange.host || iconCatalogChange.plugins != hostChange.plugins {
+		t.Fatalf("icon catalog shared change signatures = %#v, previous = %#v", iconCatalogChange, hostChange)
 	}
 	hostChange = iconCatalogChange
 	write("extensions/sdk/ts/workbench-sdk/src/index.ts", "workbench-v2")
@@ -367,16 +367,16 @@ func TestFrontendHMRSeparatesPluginAndHostSourceChanges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if workbenchChange.host == hostChange.host || workbenchChange.plugins != hostChange.plugins {
-		t.Fatalf("workbench change signatures = %#v, host = %#v", workbenchChange, hostChange)
+	if workbenchChange.shared == hostChange.shared || workbenchChange.host != hostChange.host || workbenchChange.plugins != hostChange.plugins {
+		t.Fatalf("workbench shared change signatures = %#v, previous = %#v", workbenchChange, hostChange)
 	}
 	write("extensions/sdk/ts/rjsf-csp-validator/src/index.ts", "rjsf-validator-v2")
 	validatorChange, err := hmr.sourceSignatures()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if validatorChange.host == workbenchChange.host || validatorChange.plugins != workbenchChange.plugins {
-		t.Fatalf("RJSF validator change signatures = %#v, workbench = %#v", validatorChange, workbenchChange)
+	if validatorChange.shared == workbenchChange.shared || validatorChange.host != workbenchChange.host || validatorChange.plugins != workbenchChange.plugins {
+		t.Fatalf("RJSF validator shared change signatures = %#v, previous = %#v", validatorChange, workbenchChange)
 	}
 }
 

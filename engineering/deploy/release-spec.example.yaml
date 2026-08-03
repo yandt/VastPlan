@@ -2,5 +2,9 @@ schemaVersion: 1
 mode: development
 plugins:
   - id: cn.vastplan.foundation.frontend.workflow.workbench
+    # implementation: only package bytes change; consumers are reused.
+    # additive: new optional public surface; consumers opt in independently.
+    # breaking: direct consumers must be included in this same release spec.
+    change: implementation
     frontendTarget: operations
     frontendScope: platform-profile-plugin

@@ -13,7 +13,11 @@ import (
 	"strings"
 )
 
-type frontendSourceSignatures struct{ plugins, host string }
+// Host changes may alter the Portal bootstrap/runtime behavior and therefore
+// require a full module candidate. Shared SDK changes are different: when the
+// public contract remains compatible, already-built plugin modules can reuse
+// the new host-provided singleton without being rebuilt.
+type frontendSourceSignatures struct{ plugins, host, shared string }
 
 type frontendPluginWatchState struct {
 	shared  string
@@ -107,11 +111,6 @@ func (h *frontendHMR) sourceSignaturesFor(pluginIDs []string) (frontendSourceSig
 	}
 	host, err := sourceSignature(h.root, []string{
 		"core/kernels/frontend/src", "core/kernels/frontend/static", "core/kernels/frontend/package.json",
-		"extensions/sdk/ts/icon-catalog/src", "extensions/sdk/ts/icon-catalog/package.json",
-		"extensions/sdk/ts/ui-primitives/src", "extensions/sdk/ts/ui-primitives/package.json",
-		"extensions/sdk/ts/rjsf-csp-validator/src", "extensions/sdk/ts/rjsf-csp-validator/package.json",
-		"extensions/sdk/ts/ui-contract/src", "extensions/sdk/ts/ui-contract/package.json",
-		"extensions/sdk/ts/workbench-sdk/src", "extensions/sdk/ts/workbench-sdk/package.json",
 		"engineering/tools/build-frontend.sh", "engineering/tools/build-frontend-plugins.mjs", "engineering/tools/check-ant-icon-catalog-on-demand.mjs",
 		"engineering/tools/frontend-module-graph.mjs", "engineering/tools/frontend-server-build.mjs",
 		"package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "tsconfig.base.json",
@@ -119,7 +118,17 @@ func (h *frontendHMR) sourceSignaturesFor(pluginIDs []string) (frontendSourceSig
 	if err != nil {
 		return frontendSourceSignatures{}, fmt.Errorf("扫描 Portal 宿主源码: %w", err)
 	}
-	return frontendSourceSignatures{plugins: plugins, host: host}, nil
+	shared, err := sourceSignature(h.root, []string{
+		"extensions/sdk/ts/icon-catalog/src", "extensions/sdk/ts/icon-catalog/package.json",
+		"extensions/sdk/ts/ui-primitives/src", "extensions/sdk/ts/ui-primitives/package.json",
+		"extensions/sdk/ts/rjsf-csp-validator/src", "extensions/sdk/ts/rjsf-csp-validator/package.json",
+		"extensions/sdk/ts/ui-contract/src", "extensions/sdk/ts/ui-contract/package.json",
+		"extensions/sdk/ts/workbench-sdk/src", "extensions/sdk/ts/workbench-sdk/package.json",
+	})
+	if err != nil {
+		return frontendSourceSignatures{}, fmt.Errorf("扫描 Portal 共享 SDK: %w", err)
+	}
+	return frontendSourceSignatures{plugins: plugins, host: host, shared: shared}, nil
 }
 
 func developmentFrontendPluginPath(root, id string) (string, error) {

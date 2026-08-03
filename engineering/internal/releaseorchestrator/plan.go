@@ -28,12 +28,13 @@ type ReleaseSpec struct {
 }
 
 type ReleasePluginRequest struct {
-	ID              string `yaml:"id"`
-	BackendTarget   string `yaml:"backendTarget,omitempty"`
-	BackendBinding  string `yaml:"backendBinding,omitempty"`
-	FrontendTarget  string `yaml:"frontendTarget,omitempty"`
-	FrontendBinding string `yaml:"frontendBinding,omitempty"`
-	FrontendScope   string `yaml:"frontendScope,omitempty"`
+	ID              string             `yaml:"id"`
+	Change          ReleaseChangeClass `yaml:"change,omitempty"`
+	BackendTarget   string             `yaml:"backendTarget,omitempty"`
+	BackendBinding  string             `yaml:"backendBinding,omitempty"`
+	FrontendTarget  string             `yaml:"frontendTarget,omitempty"`
+	FrontendBinding string             `yaml:"frontendBinding,omitempty"`
+	FrontendScope   string             `yaml:"frontendScope,omitempty"`
 }
 
 type ReleasePlan struct {
@@ -42,6 +43,7 @@ type ReleasePlan struct {
 	ContractRegistry    string                      `json:"contractRegistry"`
 	Contracts           map[string]string           `json:"contracts"`
 	Plugins             []ReleasePluginPlan         `json:"plugins"`
+	Impacts             []ReleaseImpact             `json:"impacts"`
 	DeploymentChanges   []DeploymentReferenceChange `json:"deploymentChanges,omitempty"`
 	GeneratedFiles      []string                    `json:"generatedFiles,omitempty"`
 	ExecutionOrder      []string                    `json:"executionOrder"`
@@ -51,17 +53,18 @@ type ReleasePlan struct {
 }
 
 type ReleasePluginPlan struct {
-	ID                  string            `json:"id"`
-	Version             string            `json:"version"`
-	SourcePath          string            `json:"sourcePath"`
-	Faces               []string          `json:"faces"`
-	Dependencies        map[string]string `json:"dependencies,omitempty"`
-	ReverseDependencies []string          `json:"reverseDependencies,omitempty"`
-	BackendTarget       string            `json:"backendTarget,omitempty"`
-	BackendBinding      string            `json:"backendBinding,omitempty"`
-	FrontendTarget      string            `json:"frontendTarget,omitempty"`
-	FrontendBinding     string            `json:"frontendBinding,omitempty"`
-	FrontendScope       string            `json:"frontendScope,omitempty"`
+	ID                  string             `json:"id"`
+	Version             string             `json:"version"`
+	Change              ReleaseChangeClass `json:"change"`
+	SourcePath          string             `json:"sourcePath"`
+	Faces               []string           `json:"faces"`
+	Dependencies        map[string]string  `json:"dependencies,omitempty"`
+	ReverseDependencies []string           `json:"reverseDependencies,omitempty"`
+	BackendTarget       string             `json:"backendTarget,omitempty"`
+	BackendBinding      string             `json:"backendBinding,omitempty"`
+	FrontendTarget      string             `json:"frontendTarget,omitempty"`
+	FrontendBinding     string             `json:"frontendBinding,omitempty"`
+	FrontendScope       string             `json:"frontendScope,omitempty"`
 }
 
 func LoadReleaseSpec(path string) (ReleaseSpec, error) {
@@ -93,6 +96,12 @@ func LoadReleaseSpec(path string) (ReleaseSpec, error) {
 			return ReleaseSpec{}, fmt.Errorf("Release Spec 插件重复: %s", request.ID)
 		}
 		seen[request.ID] = struct{}{}
+		if request.Change == "" {
+			request.Change = ReleaseChangeImplementation
+		}
+		if request.Change != ReleaseChangeImplementation && request.Change != ReleaseChangeAdditive && request.Change != ReleaseChangeBreaking {
+			return ReleaseSpec{}, fmt.Errorf("插件 %s 的 change 必须是 implementation、additive 或 breaking", request.ID)
+		}
 		if request.FrontendScope == "" && (request.FrontendTarget != "" || request.FrontendBinding != "") {
 			request.FrontendScope = "application-plugin"
 		}
@@ -129,6 +138,10 @@ func BuildReleasePlan(repositoryRoot string, spec ReleaseSpec) (ReleasePlan, err
 		versions[request.ID] = plugin.Version
 		requests[request.ID] = request
 	}
+	impacts, err := AnalyzeReleaseImpact(workspace, requests)
+	if err != nil {
+		return ReleasePlan{}, err
+	}
 	deploymentChanges, err := DeploymentReferenceChanges(repositoryRoot, versions)
 	if err != nil {
 		return ReleasePlan{}, err
@@ -147,7 +160,7 @@ func BuildReleasePlan(repositoryRoot string, spec ReleaseSpec) (ReleasePlan, err
 	}
 	plan := ReleasePlan{
 		SchemaVersion: 1, Mode: spec.Mode, ContractRegistry: ContractRegistryPath,
-		Contracts: map[string]string{}, DeploymentChanges: deploymentChanges,
+		Contracts: map[string]string{}, DeploymentChanges: deploymentChanges, Impacts: impacts,
 		ExecutionOrder: releaseExecutionOrder(workspace, versions), RequiresApproval: spec.Mode == ReleaseModeProduction,
 		ProductionExecution: false,
 	}
@@ -184,6 +197,7 @@ func BuildReleasePlan(repositoryRoot string, spec ReleaseSpec) (ReleasePlan, err
 		dependencies := allDependencies(plugin.Manifest)
 		plan.Plugins = append(plan.Plugins, ReleasePluginPlan{
 			ID: id, Version: plugin.Version, SourcePath: plugin.Path, Faces: faces,
+			Change:       request.Change,
 			Dependencies: dependencies, ReverseDependencies: workspace.ReverseDependencies(id),
 			BackendTarget: request.BackendTarget, BackendBinding: request.BackendBinding,
 			FrontendTarget: request.FrontendTarget, FrontendBinding: request.FrontendBinding, FrontendScope: request.FrontendScope,
