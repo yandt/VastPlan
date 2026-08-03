@@ -60,3 +60,4 @@
 - 首次管理员设置收敛到 `authentication.method.v1` 的受限 `enrollment` Step，而不再把 `seed-admin init` 作为正常安装流程。该 Step 只允许 `Uninitialized` 的 Seed Authority 且必须由可信组合根显式启用；提交由 Authority 的 generation CAS 原子完成。
 - Seed Provider 把唯一 Seed Operator 投影为固定、非 PII 的 `seed.operator` 主体。实际账号仅保留在受保护的 Seed Store 中验证，避免将首次输入的账号复制进授权快照或 Portal Session；可信宿主可因此在未初始化阶段预置该主体的最小启动授权。
 - 成功领取仍沿用 Broker 签发 Assertion、一次性消费和 Authorization Session 解析，不创建前端特权旁路。进入 `SeedActive` 后 `enrollment` 不可再次取得；登录页不提供重置能力。生产默认关闭网络首次设置，部署控制面必须明确选择受限入口。
+- Seed 管理员重置与首次领取分离：开发 `clean` 仅重置本地测试运行目录；生产重置必须是独立的 Reset Ceremony，要求本机或硬件证明、职责分离批准、带目标 generation 的单次 Reset Intent、CAS、旧会话/Assertion/租约撤销、credential epoch 轮换和不可篡改审计。企业身份正常时不重置 Seed，也不允许它重新成为日常登录入口。

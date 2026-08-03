@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "revision": 76,
+  "revision": 77,
   "id": "local-platform-management",
   "target": { "kernel": "backend" },
   "serviceClasses": ["application.backend"],
@@ -220,7 +220,7 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.3.11", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.security.authentication-broker", "version": "0.5.2", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.authentication-broker", "version": "0.5.3", "channel": "stable" },
         { "id": "cn.vastplan.foundation.security.seed-access", "version": "0.1.6", "channel": "stable" }
       ]
     },
