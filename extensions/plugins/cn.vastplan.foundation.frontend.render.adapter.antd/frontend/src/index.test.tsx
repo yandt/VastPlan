@@ -109,6 +109,7 @@ describe("Ant Design portal UI renderer", () => {
     expect(markup).toContain("ant-menu-inline");
     expect(markup).toContain("vp-antd-shell-navigation-menu");
     expect(markup).toContain("height:44px");
+    expect(markup).toMatch(/ant-menu-submenu[^>]*style="margin:0"/);
     expect(markup).toContain("个人信息");
   });
 

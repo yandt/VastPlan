@@ -23,12 +23,16 @@ const shellNavigationMenuCSS = `
 function menuItems(items: MenuItem[], recipe: Readonly<{ itemHeight: number; itemInlinePadding: number; radius: number }>, variant: NonNullable<MenuProps["variant"]>, onSelect?: (id: string) => void, parentDisabled = false): NonNullable<AntdMenuProps["items"]> {
   return items.map((item) => {
     const disabled = parentDisabled || item.disabled === true;
+    const children = item.children?.length ? menuItems(item.children, recipe, variant, onSelect, disabled) : undefined;
     const label = item.href === undefined ? item.label : <a href={item.href} onClick={(event) => {
       event.preventDefault();
       event.stopPropagation();
       if (!disabled) onSelect?.(item.id);
     }}>{item.label}</a>;
-    return { key: item.id, label, icon: item.icon, disabled, style: { height: recipe.itemHeight, lineHeight: `${recipe.itemHeight}px`, margin: 0, paddingInline: recipe.itemInlinePadding, borderRadius: recipe.radius, ...(variant === "action" ? componentVariantRecipes.menu.actionItem : {}) }, children: item.children?.length ? menuItems(item.children, recipe, variant, onSelect, disabled) : undefined };
+    const style = children === undefined
+      ? { height: recipe.itemHeight, lineHeight: `${recipe.itemHeight}px`, margin: 0, paddingInline: recipe.itemInlinePadding, borderRadius: recipe.radius, ...(variant === "action" ? componentVariantRecipes.menu.actionItem : {}) }
+      : { margin: 0 };
+    return { key: item.id, label, icon: item.icon, disabled, style, children };
   });
 }
 
