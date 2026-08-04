@@ -20,7 +20,7 @@ describe("FormActions", () => {
         { id: "test", label: "测试连接", icon: "success", placement: "footer.start" },
         { id: "help", label: "帮助", icon: "help", placement: "footer.end" },
       ] } },
-      presentation: {}, validation: { valid: true, validating: false }, loading: false, submitting: false,
+      presentation: {}, validation: { valid: true, validating: false, issues: [], errors: {} }, loading: false, submitting: false,
       requestClose: async () => undefined, runAction: async () => undefined, submit: async () => undefined, setActiveSection: () => undefined,
     };
     const html = renderToStaticMarkup(<FormActions form={form as never} />);
@@ -33,10 +33,37 @@ describe("FormActions", () => {
 
   it("leaves submit available so it can reveal the whole form's validation errors", () => {
     const form = {
-      definition: { workflow: { title: "新增" } }, presentation: {}, validation: { valid: false, validating: false }, loading: false, submitting: false,
+      definition: { workflow: { title: "新增" } }, presentation: {}, validation: { valid: false, validating: false, issues: [{ path: "/name", code: "required" }], errors: { "/name": "必填" } }, loading: false, submitting: false,
       requestClose: async () => undefined, runAction: async () => undefined, submit: async () => undefined, setActiveSection: () => undefined,
     };
     const html = renderToStaticMarkup(<FormActions form={form as never} />);
     expect(html).toContain('data-disabled="false">提交');
+  });
+
+  it("keeps validity-required actions clickable while blur validation is running", () => {
+    const form = {
+      definition: { workflow: { title: "新增", actions: [
+        { id: "test", label: "测试连接", icon: "success", placement: "footer.start", requiresValid: true },
+      ] } },
+      presentation: {}, validation: { valid: false, validating: true, issues: [], errors: {} }, loading: false, submitting: false,
+      requestClose: async () => undefined, runAction: async () => undefined, submit: async () => undefined, setActiveSection: () => undefined,
+    };
+    const html = renderToStaticMarkup(<FormActions form={form as never} />);
+    expect(html).toContain('data-disabled="false">');
+    expect(html).toContain("测试连接");
+    expect(html).toContain('data-disabled="false">提交');
+  });
+
+  it("does not make validity-optional actions wait for the renderer snapshot", () => {
+    const form = {
+      definition: { workflow: { title: "新增", actions: [
+        { id: "help", label: "帮助", icon: "help", placement: "footer.start", requiresValid: false },
+      ] } },
+      presentation: {}, validation: { valid: false, validating: false, issues: [], errors: {} }, loading: false, submitting: false,
+      requestClose: async () => undefined, runAction: async () => undefined, submit: async () => undefined, setActiveSection: () => undefined,
+    };
+    const html = renderToStaticMarkup(<FormActions form={form as never} />);
+    expect(html).toContain('data-disabled="false">');
+    expect(html).toContain("帮助");
   });
 });

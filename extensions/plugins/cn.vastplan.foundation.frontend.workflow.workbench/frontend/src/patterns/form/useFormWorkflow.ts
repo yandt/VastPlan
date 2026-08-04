@@ -6,7 +6,8 @@ import { projectFormPresentation, resolveWorkbenchFormPresentation } from "./pre
 import { containsSecretMaterial, discardSecretMaterial, secretMaterialPointers } from "./secret-material.js";
 import { useStableSelection } from "./stable-selection.js";
 import { localizeFormFieldErrors } from "./field-errors.js";
-import { runAfterSubmit, submitFormDefinition } from "./submit-lifecycle.js";
+import { validateFormIntent } from "./form-validation.js";
+import { runAfterSubmit, submitValidatedFormDefinition } from "./submit-lifecycle.js";
 
 const namespace = "cn.vastplan.foundation.frontend.workflow.workbench";
 const emptyValidation: FormRendererValidationState = { valid: false, validating: false, issues: [], errors: {} };
@@ -123,13 +124,18 @@ export function useFormWorkflow(input: UseFormWorkflowInput): FormWorkflowContro
 
   const runAction = useCallback(async (action: FormActionSpec) => {
     if (definition?.runAction === undefined || submitting || runningActionID !== undefined || loading) return;
-    if (action.requiresValid !== false && (!validation.valid || validation.validating)) return;
-    if (action.confirm !== undefined && !await ui.confirm({ title: i18n.text(action.label), content: i18n.text(action.confirm) })) return;
     actionRef.current?.abort();
     const controller = new AbortController();
     actionRef.current = controller;
     setRunningActionID(action.id); setFailure(undefined); setFieldErrors({});
     try {
+      if (action.requiresValid !== false) {
+        const validationOutcome = await validateFormIntent(definition, { value, selected: stableSelected, context }, validation, controller.signal);
+        if (validationOutcome.kind === "cancelled" || validationOutcome.kind === "pending") return;
+        if (validationOutcome.kind === "field-errors") { setFieldErrors(localizeFormFieldErrors(validationOutcome.fieldErrors, i18n.text)); return; }
+      }
+      if (action.confirm !== undefined && !await ui.confirm({ title: i18n.text(action.label), content: i18n.text(action.confirm) })) return;
+      if (controller.signal.aborted) return;
       const result = await definition.runAction({ action, value, selected: stableSelected, context }, controller.signal);
       if (controller.signal.aborted || result === undefined) return;
       if (result.fieldErrors !== undefined) setFieldErrors(localizeFormFieldErrors(result.fieldErrors, i18n.text));
@@ -143,19 +149,22 @@ export function useFormWorkflow(input: UseFormWorkflowInput): FormWorkflowContro
     } finally {
       if (!controller.signal.aborted) setRunningActionID(undefined);
     }
-  }, [context, definition, i18n.text, loading, runningActionID, stableSelected, submitting, ui, validation.valid, validation.validating, value]);
+  }, [context, definition, i18n.text, loading, runningActionID, stableSelected, submitting, ui, validation, value]);
 
   const submit = useCallback(async () => {
-    if (definition === undefined || submitting || runningActionID !== undefined || validation.validating) return;
-    // 打开表单和输入过程不提示必填错误；提交时才一次性展示整表校验结果。
-    if (!validation.valid) { setFieldErrors(validation.errors); return; }
-    if (definition.workflow.confirmBeforeSubmit !== undefined && !await ui.confirm({ title: i18n.text(definition.workflow.title), content: i18n.text(definition.workflow.confirmBeforeSubmit) })) return;
+    if (definition === undefined || submitting || runningActionID !== undefined || loading) return;
     submitRef.current?.abort();
     const controller = new AbortController();
     submitRef.current = controller;
     setSubmitting(true); setFailure(undefined); setFieldErrors({});
     try {
-      const outcome = await submitFormDefinition(definition, { value, selected: stableSelected, context }, controller.signal);
+      // 点击表达提交意图；Workbench 基于当前值执行一次整表校验，不受失焦校验的瞬时状态阻断。
+      const validationOutcome = await validateFormIntent(definition, { value, selected: stableSelected, context }, validation, controller.signal);
+      if (validationOutcome.kind === "cancelled" || validationOutcome.kind === "pending") return;
+      if (validationOutcome.kind === "field-errors") { setFieldErrors(localizeFormFieldErrors(validationOutcome.fieldErrors, i18n.text)); return; }
+      if (definition.workflow.confirmBeforeSubmit !== undefined && !await ui.confirm({ title: i18n.text(definition.workflow.title), content: i18n.text(definition.workflow.confirmBeforeSubmit) })) return;
+      if (controller.signal.aborted) return;
+      const outcome = await submitValidatedFormDefinition(definition, { value, selected: stableSelected, context }, controller.signal);
       if (outcome.kind === "cancelled") return;
       if (outcome.kind === "field-errors") { setFieldErrors(localizeFormFieldErrors(outcome.fieldErrors, i18n.text)); return; }
       const submittedValue = outcome.context.value;
@@ -177,7 +186,7 @@ export function useFormWorkflow(input: UseFormWorkflowInput): FormWorkflowContro
       setValue((current) => discardSecretMaterial(current, secretPointers));
       if (!controller.signal.aborted) setSubmitting(false);
     }
-  }, [context, definition, i18n.text, onClose, onRefresh, runningActionID, secretPointers, stableSelected, submitting, ui, validation.valid, validation.validating, value]);
+  }, [context, definition, i18n.text, loading, onClose, onRefresh, runningActionID, secretPointers, stableSelected, submitting, ui, validation, value]);
 
   return {
     definition, presentation, controlSize: presentation.size ?? definition?.size ?? definition?.workflow.size ?? formControlSize(presentation), schema, context, value, loading, submitting,

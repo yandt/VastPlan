@@ -6,10 +6,19 @@ export type FormSubmitOutcome =
   | { kind: "submitted"; context: WorkbenchFormSubmitContext; result?: WorkbenchFormSubmitResult };
 
 export async function submitFormDefinition(definition: WorkbenchFormDefinition, context: WorkbenchFormSubmitContext, signal: AbortSignal): Promise<FormSubmitOutcome> {
-  // 自定义校验与 Schema 校验一样只在失焦或提交时运行；提交路径必须覆盖整表。
+  // 直接调用保留完整提交生命周期；Workbench 内部可复用已经完成的意图校验。
   const validation = await definition.validate?.({ value: context.value, context: context.context ?? {}, signal });
   if (signal.aborted) return { kind: "cancelled" };
   if (validation !== undefined && Object.keys(validation).length > 0) return { kind: "field-errors", fieldErrors: validation };
+  return persistFormDefinition(definition, context, signal);
+}
+
+/** Workbench 已校验同一份值后进入持久化阶段，避免自定义校验重复执行。 */
+export async function submitValidatedFormDefinition(definition: WorkbenchFormDefinition, context: WorkbenchFormSubmitContext, signal: AbortSignal): Promise<FormSubmitOutcome> {
+  return persistFormDefinition(definition, context, signal);
+}
+
+async function persistFormDefinition(definition: WorkbenchFormDefinition, context: WorkbenchFormSubmitContext, signal: AbortSignal): Promise<FormSubmitOutcome> {
   const before = await definition.beforeSubmit?.(context, signal);
   if (signal.aborted || before?.cancelled === true) return { kind: "cancelled" };
   if (before?.fieldErrors !== undefined && Object.keys(before.fieldErrors).length > 0) return { kind: "field-errors", fieldErrors: before.fieldErrors };
