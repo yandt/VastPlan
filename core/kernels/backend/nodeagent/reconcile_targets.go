@@ -60,41 +60,41 @@ func (r *Reconciler) reconcileTarget(ctx context.Context, revision uint64, unit 
 			return false, err
 		}
 	}
-	current.Candidate = &CandidateState{Fingerprint: fingerprint, Phase: PhaseUninstalled, PhaseChangedAt: r.now()}
-	if current.Fingerprint == "" {
-		if err := r.setUnitPhase(&current, PhaseUninstalled); err != nil {
+	var installed []InstalledPlugin
+	if current.Candidate != nil && current.Candidate.Fingerprint == fingerprint &&
+		current.Candidate.Phase == PhaseInstalledInactive && len(current.Candidate.Plugins) > 0 {
+		installed = append([]InstalledPlugin(nil), current.Candidate.Plugins...)
+	} else {
+		current.Candidate = &CandidateState{Fingerprint: fingerprint, Phase: PhaseUninstalled, PhaseChangedAt: r.now()}
+		if current.Fingerprint == "" && current.Phase != PhaseInstalledInactive {
+			if err := r.setUnitPhase(&current, PhaseUninstalled); err != nil {
+				return false, err
+			}
+		}
+		actual.Units[id] = current
+		if err := r.checkpoint(actual); err != nil {
 			return false, err
 		}
-	}
-	actual.Units[id] = current
-	if err := r.checkpoint(actual); err != nil {
-		return false, err
-	}
 
-	installed, stage, err := r.prepare(ctx, unit)
-	r.pulse()
-	if err != nil {
-		return false, r.recordCandidateFailure(actual, id, stage, err)
-	}
-	current = actual.Units[id]
-	current.Candidate.Plugins = installed
-	if err := r.setCandidatePhase(&current, PhaseInstalledInactive); err != nil {
-		return false, err
-	}
-	actual.Units[id] = current
-	if err := r.checkpoint(actual); err != nil {
-		return false, err
+		var stage string
+		installed, stage, err = r.prepare(ctx, unit)
+		r.pulse()
+		if err != nil {
+			return false, r.recordCandidateFailure(actual, id, stage, err)
+		}
+		current = actual.Units[id]
+		current.Candidate.Plugins = installed
+		if err := r.setCandidatePhase(&current, PhaseInstalledInactive); err != nil {
+			return false, err
+		}
+		actual.Units[id] = current
+		if err := r.checkpoint(actual); err != nil {
+			return false, err
+		}
 	}
 	migrations, err := planStateMigrations(id, fingerprint, current.Plugins, installed)
 	if err != nil {
 		return false, r.recordCandidateFailure(actual, id, "migration_contract", err)
-	}
-	if err := r.setCandidatePhase(&current, PhaseActivating); err != nil {
-		return false, err
-	}
-	actual.Units[id] = current
-	if err := r.checkpoint(actual); err != nil {
-		return false, err
 	}
 	envelope, err := configEnvelope(unit.Config, unit.Plugins)
 	if err != nil {
@@ -105,11 +105,27 @@ func (r *Reconciler) reconcileTarget(ctx context.Context, revision uint64, unit 
 		LogicalService: unit.LogicalService, InstancePolicy: policy.InstancePolicy,
 		StateModel: policy.StateModel, Visibility: policy.Visibility, Routing: policy.Routing,
 		RoutingDomain:         policy.RoutingDomain,
+		StartupTier:           unit.StartupTier,
 		PartitionKeys:         envelope.PartitionKeys,
 		EnvironmentAllowlists: envelope.EnvironmentAllowlist,
 		KernelServiceGrants:   envelope.KernelServiceGrants,
 		Config:                RawConfig(unit.Config), Plugins: installed, Migrations: migrations,
 		RestartBase: current.RestartCount,
+	}
+	if r.ActivationGate != nil {
+		if err := r.ActivationGate.Allow(ctx, runtimeUnit); err != nil {
+			if errors.Is(err, ErrActivationDeferred) {
+				return false, r.checkpoint(actual)
+			}
+			return false, r.recordCandidateFailure(actual, id, "startup_gate", err)
+		}
+	}
+	if err := r.setCandidatePhase(&current, PhaseActivating); err != nil {
+		return false, err
+	}
+	actual.Units[id] = current
+	if err := r.checkpoint(actual); err != nil {
+		return false, err
 	}
 	if err := r.Runtime.Apply(ctx, runtimeUnit); err != nil {
 		return false, r.recordCandidateFailure(actual, id, runtimeFailureStage(err), err)

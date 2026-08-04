@@ -2,10 +2,7 @@ package platformcontrol
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"sync"
 
 	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
@@ -62,7 +59,7 @@ func (c *Controller) Start(ctx context.Context) error {
 		c.setStatus(platformcontrolv1.PhaseRecovery, profile.Generation, CodeDatabaseUnavailable)
 		return err
 	}
-	if err := c.binding.Bind(profile.Generation, profileIdentity(*profile), store); err != nil {
+	if err := c.binding.Bind(profile.Generation, platformcontrolport.ProfileIdentity(*profile), store); err != nil {
 		_ = store.Close()
 		c.setStatus(platformcontrolv1.PhaseRecovery, profile.Generation, CodeCommitConflict)
 		return err
@@ -100,7 +97,7 @@ func (c *Controller) Configure(ctx context.Context, candidate platformcontrolv1.
 		c.setCandidateFailure(expectedGeneration, CodeCommitConflict)
 		return err
 	}
-	if err := c.binding.Bind(candidate.Generation, profileIdentity(candidate), store); err != nil {
+	if err := c.binding.Bind(candidate.Generation, platformcontrolport.ProfileIdentity(candidate), store); err != nil {
 		_ = store.Close()
 		c.setStatus(platformcontrolv1.PhaseRecovery, candidate.Generation, CodeCommitConflict)
 		return err
@@ -128,9 +125,4 @@ func (c *Controller) setStatus(phase platformcontrolv1.Phase, generation uint64,
 	c.mu.Lock()
 	c.status = platformcontrolv1.Status{Phase: phase, Generation: generation, Code: code}
 	c.mu.Unlock()
-}
-
-func profileIdentity(profile platformcontrolv1.Profile) string {
-	raw, _ := json.Marshal(profile)
-	return fmt.Sprintf("sha256:%x", sha256.Sum256(raw))
 }

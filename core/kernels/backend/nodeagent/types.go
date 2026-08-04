@@ -7,11 +7,14 @@ package nodeagent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/bootstrapinventory"
 )
+
+var ErrActivationDeferred = errors.New("runtime activation deferred")
 
 // Installer 把不可变制品安装到本机内容寻址目录。
 type Installer interface {
@@ -33,6 +36,13 @@ type Runtime interface {
 	Events() <-chan RuntimeEvent
 	UnitIDs() []string
 	Close() error
+}
+
+// ActivationGate is selected once by the composition root. It can delay a
+// prepared unit without teaching the Reconciler about a concrete bootstrap or
+// storage implementation.
+type ActivationGate interface {
+	Allow(context.Context, RuntimeUnit) error
 }
 
 // StateStore 持久化节点实际态；集群模式以本地文件为恢复真源并复制到 NATS。
@@ -100,6 +110,7 @@ type RuntimeUnit struct {
 	Visibility             string
 	Routing                string
 	RoutingDomain          string
+	StartupTier            string
 	Generation             uint64
 	FencingToken           string
 	PartitionKeys          []string

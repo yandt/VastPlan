@@ -61,6 +61,7 @@ type Unit struct {
 	Visibility     string               `json:"visibility,omitempty"`
 	Routing        string               `json:"routing,omitempty"`
 	RoutingDomain  string               `json:"routing_domain,omitempty"`
+	StartupTier    string               `json:"startup_tier,omitempty"`
 	DependsOn      []string             `json:"depends_on,omitempty"`
 	Replicas       int                  `json:"replicas"`
 	Placement      Placement            `json:"placement,omitempty"`
@@ -145,6 +146,12 @@ func Parse(raw []byte) (DesiredState, error) {
 		unit.InstancePolicy, unit.StateModel = policy.InstancePolicy, policy.StateModel
 		unit.Visibility, unit.Routing = policy.Visibility, policy.Routing
 		unit.RoutingDomain = policy.RoutingDomain
+		if unit.StartupTier == "" {
+			unit.StartupTier = "full"
+		}
+		if unit.StartupTier != "bootstrap" && unit.StartupTier != "full" {
+			return DesiredState{}, fmt.Errorf("unit %q startup_tier 无效: %q", unit.ID, unit.StartupTier)
+		}
 		pluginIDs := map[string]struct{}{}
 		installedPluginIDs := make([]string, 0, len(unit.Plugins))
 		for j := range unit.Plugins {

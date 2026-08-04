@@ -204,6 +204,7 @@
       "enabled": true,
       "service_role": "backend",
       "logical_service": "foundation.security.authentication-broker",
+      "startup_tier": "bootstrap",
       "instance_policy": "leader",
       "state_model": "leader-owned",
       "visibility": "cluster",
@@ -230,6 +231,7 @@
       "enabled": true,
       "service_role": "backend",
       "logical_service": "foundation.security.authorization-session",
+      "startup_tier": "bootstrap",
       "instance_policy": "active-active",
       "state_model": "external-shared",
       "visibility": "cluster",
@@ -285,6 +287,7 @@
       "enabled": true,
       "service_role": "backend",
       "logical_service": "platform.database",
+      "startup_tier": "bootstrap",
       "instance_policy": "leader",
       "state_model": "leader-owned",
       "visibility": "cluster",
@@ -309,12 +312,13 @@
       "enabled": true,
       "service_role": "backend",
       "logical_service": "foundation.data.relational.runtime",
+      "startup_tier": "bootstrap",
       "instance_policy": "active-active",
       "state_model": "external-shared",
       "visibility": "cluster",
       "routing": "queue",
       "routing_domain": "platform",
-      "replicas": 2,
+      "replicas": 1,
       "placement": { "nodeSelector": { "environment": "local-platform" } },
       "config": {
         "plugins": {
@@ -329,7 +333,7 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.4.1", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.data.relational.runtime", "version": "0.9.0", "channel": "stable" }
+        { "id": "cn.vastplan.foundation.data.relational.runtime", "version": "0.10.0", "channel": "stable" }
       ]
     },
     {

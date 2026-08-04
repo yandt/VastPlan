@@ -21,6 +21,7 @@ type reconcileOptions struct {
 	recoveryCapsule, recoveryStatus, recoveryListen                                                         string
 	runtimeRoot, actualPath, lockPath, nodeID, labelsRaw                                                    string
 	credentialRoot                                                                                          string
+	platformControlProfile, platformControlCredentialsDirectory                                             string
 	backendPlatformCatalog                                                                                  string
 	frontendDeliveryOrigin                                                                                  string
 	firstPartyPublishers                                                                                    string
@@ -83,6 +84,8 @@ func newReconcileFlagSet(options *reconcileOptions) *flag.FlagSet {
 	flags.StringVar(&options.nodeID, "node-id", "local", "当前节点 ID")
 	flags.StringVar(&options.labelsRaw, "labels", "", "节点标签，逗号分隔 key=value")
 	flags.StringVar(&options.credentialRoot, "credential-root", "", "可信凭证挂载根目录：<root>/<tenant>/<credential-name>；留空不启用节点引导 Broker")
+	flags.StringVar(&options.platformControlProfile, "platform-control-profile", "", "owner-only Platform Control Store Profile；设置后 Shared State 只绑定 SQL Provider")
+	flags.StringVar(&options.platformControlCredentialsDirectory, "platform-control-credentials-directory", "", "systemd credential 目录；默认读取 CREDENTIALS_DIRECTORY")
 	flags.StringVar(&options.backendPlatformCatalog, "backend-platform-catalog", "", "平台签发的 Backend Platform Catalog；配置后向 deployment-manager 开放在线编排")
 	flags.StringVar(&options.frontendDeliveryOrigin, "frontend-delivery-origin", "", "可信 Portal 前端快照中央物化目录；仅在承载 Portal Composer 的节点配置")
 	flags.StringVar(&options.thirdPartyPluginPolicy, "third-party-plugin-policy", string(nodeagent.PublisherPolicyRequireIsolation), "未单独配置发布者时的策略: require-isolation, allow-trusted, deny")
@@ -210,6 +213,12 @@ func finalizeReconcileOptions(options reconcileOptions, visited map[string]bool)
 	}
 	if options.credentialRoot != "" && (!filepath.IsAbs(options.credentialRoot) || filepath.Clean(options.credentialRoot) != options.credentialRoot) {
 		return reconcileOptions{}, errors.New("-credential-root 必须是规范绝对路径")
+	}
+	if options.platformControlProfile != "" && (!filepath.IsAbs(options.platformControlProfile) || filepath.Clean(options.platformControlProfile) != options.platformControlProfile) {
+		return reconcileOptions{}, errors.New("-platform-control-profile 必须是规范绝对路径")
+	}
+	if options.platformControlCredentialsDirectory != "" && (!filepath.IsAbs(options.platformControlCredentialsDirectory) || filepath.Clean(options.platformControlCredentialsDirectory) != options.platformControlCredentialsDirectory) {
+		return reconcileOptions{}, errors.New("-platform-control-credentials-directory 必须是规范绝对路径")
 	}
 	if options.bootstrapInventory != "" && (!filepath.IsAbs(options.bootstrapInventory) || filepath.Clean(options.bootstrapInventory) != options.bootstrapInventory) {
 		return reconcileOptions{}, errors.New("-bootstrap-inventory 必须是规范绝对路径")

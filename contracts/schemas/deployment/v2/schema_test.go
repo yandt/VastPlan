@@ -122,6 +122,14 @@ func TestParseValidatesUnitDependencyDAG(t *testing.T) {
 	}
 }
 
+func TestParsePreservesBootstrapStartupTier(t *testing.T) {
+	raw := `{"version":2,"revision":1,"metadata":{"name":"prod"},"units":[{"id":"database-runtime","kind":"service","plugins":[{"id":"com.example.db","version":"1.0.0"}],"enabled":true,"service_role":"backend","startup_tier":"bootstrap","replicas":1}]}`
+	deployment, err := Parse(resolvedDeployment(t, raw))
+	if err != nil || deployment.Units[0].StartupTier != "bootstrap" {
+		t.Fatalf("bootstrap startup tier 未保留: deployment=%+v err=%v", deployment, err)
+	}
+}
+
 func TestParseValidatesLeaderAndPartitionOwnership(t *testing.T) {
 	partitioned := `{"version":2,"revision":1,"metadata":{"name":"prod"},"units":[{"id":"db","kind":"service","plugins":[{"id":"com.example.db","version":"1.0.0"}],"enabled":true,"service_role":"backend","logical_service":"platform.database","instance_policy":"partitioned","state_model":"partition-owned","visibility":"cluster","routing":"shard","replicas":2,"partition_keys":["a","b","c"]}]}`
 	deployment, err := Parse(resolvedDeployment(t, partitioned))

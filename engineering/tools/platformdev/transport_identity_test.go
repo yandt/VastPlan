@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/addressing"
 )
 
@@ -33,6 +34,9 @@ func TestWriteDevelopmentTransportIdentitiesCreatesMutuallyTrustedWorkloads(t *t
 	}
 	if document.Identities[0].Name != "node-agent/local-platform-node" || document.Identities[1].Name != "node-agent/local-managed-node" {
 		t.Fatalf("Node transport identity 必须投影为策略可验证的 node-agent system caller: %+v", document.Identities)
+	}
+	if len(document.Identities[0].AllowedSystemCallers) != 2 || document.Identities[0].AllowedSystemCallers[1] != platformcontrolv1.TrustedBootstrapSystemID {
+		t.Fatalf("平台节点未精确授权 Platform Control SYSTEM caller: %+v", document.Identities[0])
 	}
 	if document.Identities[3].Name != "platform-dev" || document.Identities[3].NodeID != "platform-dev" || len(document.Identities[3].AllowedSystemCallers) != 1 || document.Identities[3].AllowedSystemCallers[0] != developmentInstallationCaller {
 		t.Fatalf("开发安装控制器身份未被精确绑定: %+v", document.Identities[3])

@@ -247,6 +247,10 @@ func runReconcile(args []string) (runErr error) {
 	if err != nil {
 		return err
 	}
+	platformControl, err := configurePlatformControlStartup(options, plane, runtime, logf)
+	if err != nil {
+		return err
+	}
 	defer func() { runErr = errors.Join(runErr, runtime.Close()) }()
 	if plane.router != nil {
 		if err := runtime.AttachRouter(plane.router); err != nil {
@@ -256,6 +260,9 @@ func runReconcile(args []string) (runErr error) {
 	reconciler, err := buildNodeReconciler(options, prepared, plane, runtime)
 	if err != nil {
 		return err
+	}
+	if platformControl != nil {
+		reconciler.ActivationGate = platformControl
 	}
 	recovery, err := buildReconcileRecovery(options, prepared, plane, serviceNotifier, logf)
 	if err != nil {
@@ -273,6 +280,9 @@ func runReconcile(args []string) (runErr error) {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if platformControl != nil {
+		go platformControl.Run(ctx)
+	}
 	liveness.Pulse()
 	serviceNotifier.Start(ctx, liveness, logf)
 	leaseGuard, err := startNodeLeaseGuard(ctx, stop, options, prepared.labels, plane.buckets, plane.transport, logf)

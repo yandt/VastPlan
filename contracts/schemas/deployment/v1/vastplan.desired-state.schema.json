@@ -81,6 +81,7 @@
         "visibility": { "enum": ["local", "service", "cluster", "global"] },
         "routing": { "enum": ["direct", "queue", "leader", "shard"] },
         "routing_domain": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "startup_tier": { "enum": ["bootstrap", "full"] },
         "depends_on": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 160 } },
         "replicas": { "const": 1 },
         "resources": { "$ref": "#/$defs/resources" },

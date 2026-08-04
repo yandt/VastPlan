@@ -139,12 +139,16 @@ func (builder *scheduleBuilder) assignUnit(nodeID string, unit deploymentv2.Serv
 		}
 		config["partition_keys"] = append([]string(nil), partitionKeys...)
 	}
+	startupTier := unit.StartupTier
+	if startupTier == "" {
+		startupTier = "full"
+	}
 	assignment := builder.assignments[nodeID]
 	assignment.Units = append(assignment.Units, deploymentv1.Unit{
 		ID: unit.ID, Kind: unit.Kind, Plugins: append([]deploymentv1.PluginRef(nil), unit.Plugins...),
 		Config: config, Enabled: true, ServiceRole: unit.ServiceRole, LogicalService: unit.LogicalService,
 		InstancePolicy: policy.InstancePolicy, StateModel: policy.StateModel, Visibility: policy.Visibility,
-		Routing: policy.Routing, RoutingDomain: policy.RoutingDomain, Replicas: 1,
+		Routing: policy.Routing, RoutingDomain: policy.RoutingDomain, StartupTier: startupTier, Replicas: 1,
 		DependsOn: effectiveUnitDependencies(builder.graph, unit.ID),
 		Resources: deploymentv1.ResourceRequirements{Requests: deploymentv1.ResourceList{
 			CPUMillis: unit.Resources.Requests.CPUMillis, MemoryBytes: unit.Resources.Requests.MemoryBytes, GPU: unit.Resources.Requests.GPU,

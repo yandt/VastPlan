@@ -8,6 +8,8 @@
 
 当前公开 Capability 契约：`foundation.data.relational.runtime@1.2.0`
 
+宿主内部 Capability：`foundation.state.shared.sql.bootstrap@1.0.0`、`foundation.state.shared.sql@1.0.0`。两者只服务 Platform Control 两阶段启动，不作为普通插件可选择的数据库连接暴露。
+
 ## 职责边界
 
 Database Runtime 是关系数据库数据面，负责 Provider、节点本地连接池、查询、事务、健康和指标；它不管理 Portal 中的连接定义，也不拥有 CredentialRef 生命周期。连接管理面仍属于 `cn.vastplan.platform.data.relational.connection-manager`，Backend Kernel 只负责通用 capability 路由、可信身份和进程生命周期。

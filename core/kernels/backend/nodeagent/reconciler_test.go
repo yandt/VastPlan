@@ -130,6 +130,29 @@ func newTestReconciler(runtime *fakeRuntime, store StateStore) *Reconciler {
 	}
 }
 
+type activationGateFunc func(context.Context, RuntimeUnit) error
+
+func (f activationGateFunc) Allow(ctx context.Context, unit RuntimeUnit) error { return f(ctx, unit) }
+
+func TestReconcileDeferredActivationIsExpectedStateNotFailure(t *testing.T) {
+	runtime := newFakeRuntime()
+	r := newTestReconciler(runtime, NewMemoryStateStore())
+	r.ActivationGate = activationGateFunc(func(context.Context, RuntimeUnit) error { return ErrActivationDeferred })
+	result, err := r.Reconcile(context.Background(), desired(1, "1.0.0", true))
+	if err != nil || result.Converged || len(result.State.Errors) != 0 || runtime.applyCalls != 0 {
+		t.Fatalf("延迟激活不应污染错误或启动 Runtime: result=%+v calls=%d err=%v", result, runtime.applyCalls, err)
+	}
+	candidate := result.State.Units["backend-main"].Candidate
+	if candidate == nil || candidate.Phase != PhaseInstalledInactive {
+		t.Fatalf("延迟候选应保持已安装未激活: %+v", candidate)
+	}
+	r.ActivationGate = nil
+	result, err = r.Reconcile(context.Background(), desired(1, "1.0.0", true))
+	if err != nil || !result.Converged || runtime.applyCalls != 1 {
+		t.Fatalf("门控解除后应激活: result=%+v calls=%d err=%v", result, runtime.applyCalls, err)
+	}
+}
+
 func testArtifactVerifier() ArtifactVerifier {
 	return ArtifactVerifier{
 		allowUnsigned: true, configured: true,

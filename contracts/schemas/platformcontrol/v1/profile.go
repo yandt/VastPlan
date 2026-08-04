@@ -3,8 +3,20 @@
 package platformcontrolv1
 
 const (
-	SchemaURL = "https://schemas.cdsoft.com.cn/vastplan/platformcontrol/v1/vastplan.platform-control.schema.json"
-	Version   = 1
+	SchemaURL                 = "https://schemas.cdsoft.com.cn/vastplan/platformcontrol/v1/vastplan.platform-control.schema.json"
+	Version                   = 1
+	BootstrapCapability       = "foundation.state.shared.sql.bootstrap"
+	BootstrapContractVersion  = "1.0.0"
+	RuntimeLogicalService     = "foundation.data.relational.runtime"
+	RuntimeRoutingDomain      = "platform"
+	OperationTest             = "test"
+	OperationInitialize       = "initialize"
+	OperationOpen             = "open"
+	TrustedBootstrapSystemID  = "platform-control-bootstrap/primary"
+	ErrorInvalid              = "platform.control.invalid"
+	ErrorUnavailable          = "platform.control.unavailable"
+	ErrorConflict             = "platform.control.conflict"
+	ErrorInitializationFailed = "platform.control.initialization_failed"
 )
 
 type SecretRef struct {

@@ -54,3 +54,14 @@ Database Runtime 内部的 `platformcontrolbootstrap` 适配器复用 PostgreSQL
 P4a 已完成 Profile 契约、owner-only CAS 文件存储、systemd/development file Secret Source、两阶段 Controller 和不可回退 Binding Store，并覆盖空环境、首次成功、失败不提交、旧代保留、权限与秘密清零测试。
 
 P4b 已完成 Database Runtime 进程内 Bootstrap 适配：PostgreSQL/MySQL 初始化、限定 schema SQL Shared State、迁移锁、候选连接池回收和 TLS `verify-ca`。公开 Database Runtime Capability 提升至 `1.2.0`，插件提升至 `0.9.0`。Bootstrap Tier 启动、配置 API/UI 和恢复动作仍属于 P4 后续。
+
+P4c 已把进程边界接通：
+
+- Database Runtime `0.10.0` 同时贡献公开数据面、仅宿主可调用的 `foundation.state.shared.sql.bootstrap@1.0.0` 和 `foundation.state.shared.sql@1.0.0`；
+- Bootstrap Capability 只接受固定 SYSTEM caller `platform-control-bootstrap/primary`，目标 logical service 和 routing domain 也由宿主固定；
+- 宿主用 `RemoteBootstrapper/RemoteStore` 把跨进程 Capability 重新适配为原有 `sharedstate.Store`，业务插件看不到传输差异；
+- Deployment/Assignment 增加 `startup_tier=bootstrap|full`，默认 `full`。Node Agent 可以完成 Full 单元的下载、验签和安装，但在 Shared State Ready 前拒绝激活；
+- 恢复由已验证能力目录的 topology change 触发，没有定时兜底轮询；Runtime 重建并重新登记 Capability 后，Controller 按已提交 Profile 幂等执行 Open；
+- P6 完成多副本逐实例初始化和事务亲和前，种子 Database Runtime 固定为单副本，禁止把 queue 路由误当成多副本 Shared State 已就绪。
+
+配置 API/UI 和 Seed Recovery 可写动作仍属于 P4 后续。

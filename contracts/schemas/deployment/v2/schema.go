@@ -84,6 +84,7 @@ type ServiceUnit struct {
 	Visibility     string                   `json:"visibility,omitempty"`
 	Routing        string                   `json:"routing,omitempty"`
 	RoutingDomain  string                   `json:"routing_domain,omitempty"`
+	StartupTier    string                   `json:"startup_tier,omitempty"`
 	PartitionKeys  []string                 `json:"partition_keys,omitempty"`
 	DependsOn      []string                 `json:"depends_on,omitempty"`
 	Replicas       int                      `json:"replicas"`
@@ -231,6 +232,12 @@ func NormalizeServiceUnits(units []ServiceUnit) ([]ServiceUnit, error) {
 		unit.InstancePolicy, unit.StateModel = policy.InstancePolicy, policy.StateModel
 		unit.Visibility, unit.Routing = policy.Visibility, policy.Routing
 		unit.RoutingDomain = policy.RoutingDomain
+		if unit.StartupTier == "" {
+			unit.StartupTier = "full"
+		}
+		if unit.StartupTier != "bootstrap" && unit.StartupTier != "full" {
+			return nil, fmt.Errorf("unit %q startup_tier 无效: %q", unit.ID, unit.StartupTier)
+		}
 		if policy.InstancePolicy == servicemodel.PolicyLeader && unit.Replicas != 1 {
 			return nil, fmt.Errorf("unit %q leader 当前只允许 replicas=1；高可用由节点失联后的重新调度提供", unit.ID)
 		}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/nats-io/nkeys"
 
+	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/addressing"
 )
 
@@ -24,7 +25,7 @@ func writeDevelopmentTransportIdentities(secretsDir string) error {
 	if err != nil {
 		return err
 	}
-	node.AllowedSystemCallers = []string{"bootstrap-inventory/local-seed"}
+	node.AllowedSystemCallers = []string{"bootstrap-inventory/local-seed", platformcontrolv1.TrustedBootstrapSystemID}
 	portal, portalSeed, err := developmentTransportIdentity("portal-host", "edge", "portal-host")
 	if err != nil {
 		return err

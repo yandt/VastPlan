@@ -1,6 +1,7 @@
 package deploymentv1
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -118,5 +119,20 @@ func TestUnitFingerprint_IgnoresPluginOrder(t *testing.T) {
 	b.Plugins = []PluginRef{a.Plugins[1], a.Plugins[0]}
 	if a.Fingerprint() != b.Fingerprint() {
 		t.Fatal("插件声明顺序不应造成 service 无意义重启")
+	}
+}
+
+func TestParseNormalizesAndValidatesStartupTier(t *testing.T) {
+	base := `{"version":1,"revision":1,"metadata":{"name":"local"},"units":[{"id":"x","kind":"service","enabled":true,"service_role":"backend","replicas":1,%s"plugins":[{"id":"com.example.demo","version":"1.0.0","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}]}`
+	state, err := Parse([]byte(fmt.Sprintf(base, "")))
+	if err != nil || state.Units[0].StartupTier != "full" {
+		t.Fatalf("默认 startup tier 应为 full: state=%+v err=%v", state, err)
+	}
+	state, err = Parse([]byte(fmt.Sprintf(base, `"startup_tier":"bootstrap",`)))
+	if err != nil || state.Units[0].StartupTier != "bootstrap" {
+		t.Fatalf("bootstrap tier 未保留: state=%+v err=%v", state, err)
+	}
+	if _, err := Parse([]byte(fmt.Sprintf(base, `"startup_tier":"early",`))); err == nil {
+		t.Fatal("未知 startup tier 必须拒绝")
 	}
 }

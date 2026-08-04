@@ -7,10 +7,18 @@ package platformcontrol
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
 
 	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
 )
+
+func ProfileIdentity(profile platformcontrolv1.Profile) string {
+	raw, _ := json.Marshal(profile)
+	return fmt.Sprintf("sha256:%x", sha256.Sum256(raw))
+}
 
 // SecretSource lends secret material only for the duration of use.
 type SecretSource interface {

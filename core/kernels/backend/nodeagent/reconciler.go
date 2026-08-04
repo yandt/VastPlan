@@ -23,6 +23,7 @@ type Reconciler struct {
 	BootstrapInventory        *bootstrapinventory.Inventory
 	BootstrapReferences       ArtifactReferencePublisher
 	BootstrapUpgrade          BootstrapUpgradeCoordinator
+	ActivationGate            ActivationGate
 	RequireArtifactReferences bool
 	Now                       func() time.Time
 	// Pulse marks progress through potentially long multi-unit reconciliation.
@@ -100,6 +101,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, desired deploymentv1.Desired
 	}
 	result := Result{Changed: changed, Converged: converged, State: actual}
 	if !converged {
+		if len(actual.Errors) == 0 && hasInstalledInactiveCandidate(actual) {
+			return result, nil
+		}
 		failure := fmt.Errorf("节点 %s 未收敛：%d 个操作失败", r.NodeID, len(actual.Errors))
 		for _, operation := range actual.Errors {
 			failure = errors.Join(failure, fmt.Errorf("unit=%s stage=%s: %s", operation.UnitID, operation.Stage, operation.Message))
@@ -107,6 +111,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, desired deploymentv1.Desired
 		return result, failure
 	}
 	return result, nil
+}
+
+func hasInstalledInactiveCandidate(actual ActualState) bool {
+	for _, unit := range actual.Units {
+		if unit.Candidate != nil && unit.Candidate.Phase == PhaseInstalledInactive {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *Reconciler) beginReconcile(desired deploymentv1.DesiredState) (ActualState, error) {

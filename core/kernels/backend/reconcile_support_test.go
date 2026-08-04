@@ -61,6 +61,21 @@ func TestParseReconcileOptionsSupportsYAMLStartupFileAlias(t *testing.T) {
 	}
 }
 
+func TestParseReconcileOptionsValidatesPlatformControlRoots(t *testing.T) {
+	root := t.TempDir()
+	configured, err := parseReconcileOptions([]string{
+		"-desired", "desired.json",
+		"-platform-control-profile", filepath.Join(root, "platform-control.json"),
+		"-platform-control-credentials-directory", filepath.Join(root, "credentials"),
+	})
+	if err != nil || configured.platformControlProfile == "" {
+		t.Fatalf("合法 Platform Control 根未接受: options=%+v err=%v", configured, err)
+	}
+	if _, err := parseReconcileOptions([]string{"-desired", "desired.json", "-platform-control-profile", "relative.json"}); err == nil {
+		t.Fatal("相对 Platform Control Profile 必须拒绝")
+	}
+}
+
 func TestParseReconcileOptionsBindsRecoveryCapsuleToAbsoluteKernelState(t *testing.T) {
 	root := t.TempDir()
 	configured, err := parseReconcileOptions([]string{
