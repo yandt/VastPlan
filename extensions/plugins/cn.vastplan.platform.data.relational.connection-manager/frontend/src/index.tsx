@@ -58,6 +58,9 @@ function databaseConnectionSchema(passwordRequired: boolean): FormSchema {
     "/properties/options/properties/network/oneOf/0/title": message(namespace,"option.networkTcp","TCP"), "/properties/options/properties/network/oneOf/1/title": message(namespace,"option.networkUnix","Unix 套接字"),
     "/properties/pool/properties/minIdle/title": message(namespace,"form.minIdle","最小空闲连接"), "/properties/pool/properties/maxIdle/title": message(namespace,"form.maxIdle","最大空闲连接"), "/properties/pool/properties/maxOpen/title": message(namespace,"form.maxOpen","最大连接数"), "/properties/pool/properties/maxLifetimeMs/title": message(namespace,"form.maxLifetime","连接最长生命周期"), "/properties/pool/properties/maxIdleTimeMs/title": message(namespace,"form.maxIdleTime","最长空闲时间"), "/properties/pool/properties/acquireTimeoutMs/title": message(namespace,"form.acquireTimeout","获取连接超时"), "/properties/pool/properties/idlePoolTtlMs/title": message(namespace,"form.idlePoolTtl","空池回收时间"),
   },
+  // 数据库凭证不是本站登录凭证；避免浏览器回填本地数据库账号。
+  // RJSF 的 Ant 输入适配器从 ui:options.autocomplete 映射到原生 autoComplete。
+  uiSchema: { options: { user: { "ui:options": { autocomplete: "new-password" } }, password: { "ui:options": { autocomplete: "new-password" } } } },
   };
 }
 

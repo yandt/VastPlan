@@ -217,6 +217,16 @@ describe("Ant Design portal UI renderer", () => {
     expect(markup).toContain("User");
   });
 
+  it("forwards governed new-password autocomplete hints to browser credential controls", () => {
+    const Form = antdPortalUIComponents.FormRenderer;
+    const markup = renderToStaticMarkup(<PortalI18nProvider policy={{ defaultLocale: "en-US", supportedLocales: ["en-US"] }} catalogs={{}} candidates={["en-US"]}><Form
+      schema={{ id: "database-credentials", schema: { type: "object", properties: { options: { type: "object", properties: { user: { type: "string", title: "User" }, password: { type: "string", title: "Password" } } } } }, uiSchema: { options: { user: { "ui:options": { autocomplete: "new-password" } }, password: { "ui:widget": "password", "ui:options": { autocomplete: "new-password" } } } } }}
+      value={{ options: {} }}
+      onChange={() => undefined}
+    /></PortalI18nProvider>);
+    expect(markup.match(/auto[Cc]omplete="new-password"/g)).toHaveLength(2);
+  });
+
   it("localizes JSON Schema validation errors without exposing validator internals", () => {
     const catalogs = { [namespace]: antdRenderer.localization! };
     const schema: RJSFSchema = { type: "object", properties: { reason: { type: "string", minLength: 4 } } };

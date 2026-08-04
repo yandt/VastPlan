@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.platform.data.relational.connection-manager`
 能力：`tool.package/platform.database`
-当前制品版本：`0.12.0`
+当前制品版本：`0.12.1`
 
 ## 边界
 
@@ -39,5 +39,7 @@
 0.11.1 将既有 `probe` 数据链产品化为“测试连接”。列表行动作复用已保存定义与托管凭证；FormDialog 的 `footer.start` 动作使用当前表单值：编辑且密码留空时复用现有托管引用，新建或输入新密码时通过随机资源名创建短期托管凭证。凭证仍处于 Preparing 时就先耐久记录 `stageId + ref` 清理意图，再执行激活；测试完成立即终止候选或退役 Active，进程在任意步骤中断后由 reconcile 流程继续清理。两条路径都由 Database Runtime 创建短生命周期池并执行 Provider `Probe`，不保存表单定义、不发布 revision，也不污染正式连接池。Workbench 复用统一校验、等待和通知；成功提示实际 Provider 和握手耗时，失败仅给出安全的本地化排查建议，不向浏览器透传驱动、地址、账号或凭证诊断。
 
 0.12.0 将 Portal 的 TCP 端点输入拆为“地址”和“端口”：PostgreSQL 新建默认 5432，MySQL 的 host-only 历史定义按 3306 显示。提交前前端将两字段规范化为唯一的 `endpoint`，因此管理 API、持久化状态与 Database Runtime 无需承载 UI 字段。IPv6 在表单中输入裸地址，提交时自动以方括号编码；地址字段已含端口、空地址或 1..65535 以外的端口均被本地化字段校验拒绝。Unix Socket 仍是 Provider 专有运行方式，未被错误地伪装为 TCP 地址加端口。
+
+0.12.1 将数据库用户名和密码标记为浏览器的 `new-password` 字段。这些字段不再被识别为 Portal 登录凭证，因此浏览器不会把本站保存的登录账号自动回填到数据库连接表单；该策略不影响 Portal 登录页。
 
 详见《[插件配置与托管凭证](../architecture/插件配置与托管凭证.md)》。权限与集群调用见《[平台管理中心](../architecture/平台管理中心.md)》。

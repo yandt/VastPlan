@@ -1,7 +1,7 @@
 import { ConfigProvider, Input, Select as AntdSelect, Steps, Tabs, Typography } from "antd";
 import RJSFForm from "@rjsf/core/lib/components/Form.js";
 import { generateWidgets } from "@rjsf/antd/lib/widgets/index.js";
-import { enumOptionsIndexForValue, enumOptionsValueForIndex } from "@rjsf/utils";
+import { ariaDescribedByIds, enumOptionsIndexForValue, enumOptionsValueForIndex } from "@rjsf/utils";
 import type { FieldTemplateProps, ObjectFieldTemplateProps, RJSFValidationError, WidgetProps } from "@rjsf/utils";
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
@@ -89,6 +89,25 @@ function SecretRefWidget({ value, disabled, readonly, required, onChange, onBlur
     onChange={(event) => onChange(event.target.value)}
     onBlur={(event) => onBlur(id, event.target.value)}
     onFocus={(event) => onFocus(id, event.target.value)}
+  />;
+}
+
+/** Preserve governed browser credential hints; the upstream Ant password widget currently drops them. */
+function PasswordWidget({ disabled, registry, id, onBlur, onChange, onFocus, options, placeholder, readonly, value }: WidgetProps) {
+  const readonlyAsDisabled = registry.formContext.readonlyAsDisabled !== false;
+  const emptyValue = options.emptyValue ?? "";
+  const autoComplete = typeof options.autocomplete === "string" ? options.autocomplete : undefined;
+  return <Input.Password
+    disabled={disabled || (readonlyAsDisabled && readonly)}
+    id={id}
+    name={id}
+    onBlur={readonly ? undefined : (event) => onBlur(id, event.target.value)}
+    onChange={readonly ? undefined : (event) => onChange(event.target.value === "" ? emptyValue : event.target.value)}
+    onFocus={readonly ? undefined : (event) => onFocus(id, event.target.value)}
+    placeholder={placeholder}
+    value={typeof value === "string" ? value : ""}
+    autoComplete={autoComplete}
+    aria-describedby={ariaDescribedByIds(id)}
   />;
 }
 
@@ -200,7 +219,7 @@ export function FormRenderer({ schema, value, onChange, size: requestedSize, pre
     });
   }, [combinedExternalErrors, currentAsync.validating, onValidationChange, syncErrors, validation.errors]);
   const templates = useMemo(() => ({ ...safeAntdTemplates, FieldTemplate: (props: FieldTemplateProps) => <PresentedField {...props} placement={formLabelPlacement(presentation)} />, ObjectFieldTemplate: (props: ObjectFieldTemplateProps) => <PresentedObject {...props} presentation={presentation} activeSection={presentationSection} onSectionChange={onPresentationSectionChange} />, ButtonTemplates: { ...safeAntdTemplates.ButtonTemplates, SubmitButton: () => null } }), [onPresentationSectionChange, presentation, presentationSection]);
-  const widgets = useMemo(() => ({ ...antdWidgets, SelectWidget, duration: DurationWidget, secretRef: SecretRefWidget }), []);
+  const widgets = useMemo(() => ({ ...antdWidgets, PasswordWidget, SelectWidget, duration: DurationWidget, secretRef: SecretRefWidget }), []);
   const compact = presentation?.layout === "compact";
   const controlAlignment = formControlAlignment(presentation);
   const form = <RJSFForm

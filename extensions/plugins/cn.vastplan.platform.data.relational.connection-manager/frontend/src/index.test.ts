@@ -14,6 +14,10 @@ describe("database connections Workbench page", () => {
     const properties = create?.schema.schema.properties as Readonly<Record<string, Readonly<Record<string, unknown>>>> | undefined;
     const editProperties = edit?.schema.schema.properties as Readonly<Record<string, Readonly<Record<string, unknown>>>> | undefined;
     expect(create?.presentation).toMatchObject({ layout: "horizontal", labelPlacement: "inline" });
+    expect(create?.schema.uiSchema).toMatchObject({ options: {
+      user: { "ui:options": { autocomplete: "new-password" } },
+      password: { "ui:options": { autocomplete: "new-password" } },
+    } });
     expect(properties?.host).toMatchObject({ title: "地址", minLength: 1 });
     expect(properties?.port).toMatchObject({ title: "端口", minimum: 1, maximum: 65535 });
     expect(properties).not.toHaveProperty("endpoint");
