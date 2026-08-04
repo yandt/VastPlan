@@ -84,7 +84,7 @@ func TestMaterialLeaseVaultOutageDeniesThenRecovers(t *testing.T) {
 	leasePayload, _ := json.Marshal(request)
 	vault.mode.Store("delayed")
 	result, raw, err = service.MaterialLeaseHandler(context.Background(), host, kernel, leasePayload, "issue")
-	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_ERROR || result.GetError().GetCode() != "platform.credentials.material_lease.denied" || len(raw) != 0 {
+	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_ERROR || result.GetError().GetCode() != credentiallease.ErrorServiceUnavailable || !result.GetError().GetRetryable() || len(raw) != 0 {
 		t.Fatalf("Vault 故障时 material lease 必须拒绝且不得返回包: result=%+v raw=%s err=%v", result, raw, err)
 	}
 	assertNoVaultSecret(t, result.GetError().GetMessage(), []byte(secret), "", vault.token)

@@ -42,3 +42,9 @@
 Database Runtime 的领域中继已经实现。Host 从验签清单和当前协议会话构造 host-only identity，绑定插件 ID、发布者、版本、制品 SHA-256、节点、service unit 与单次启动实例；完整 identity 不跨 wire，进程只取得其非秘密 audience 摘要。因此本领域不发放可被复制、转移或重放的“宿主签名 bearer token”。
 
 Database Runtime 自己生成一次性 X25519 接收密钥，经声明的 `kernel.credential.material-lease` 回调请求信封。Kernel 根据权威会话身份将请求转换为 transport-trusted `SYSTEM` 调用，但没有接收私钥且不执行 Open。精确策略只允许首方 `cn.vastplan.foundation.data.relational.runtime` 读取 connection-manager 拥有、purpose 为 `database.connection` 的 tenant CredentialRef。Runtime 最终校验 tenant、audience、完整引用、时间窗与 GCM，并在同步 Provider 回调结束后清零明文。
+
+## 补充决策（2026-08-05，稳定失败契约）
+
+Material Lease 从凭证插件到可信 Runtime 统一使用 `credential.material_lease.*` 失败族，至少区分请求无效、策略拒绝、引用不可用、material 不可用、签发期间引用变化和服务暂时不可用。该类型在凭证插件、Kernel Broker、可信 Host 回调和语言 SDK 间逐层保留；后续各层只能读取稳定码与 `retryable`，不得重新解析远端错误文本或按环境重复判断。
+
+Vault Transit 的原始响应、密文、token、CredentialRef 和驱动细节不能跨越凭证插件边界。不可解密的历史密文稳定归类为不可重试 `material_unavailable`；Vault 网络、限流或服务端故障归类为可重试 `service_unavailable`。历史单向摘要不包含可恢复明文，系统不能伪造迁移，拥有者必须重新录入密码或其他 material。

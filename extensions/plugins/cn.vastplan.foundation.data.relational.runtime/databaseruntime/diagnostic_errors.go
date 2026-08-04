@@ -16,6 +16,7 @@ import (
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/credentiallease"
 )
 
 // classifyProviderValidationError keeps deployment policy failures separate
@@ -34,6 +35,10 @@ func runtimeSafeMessage(code string) string {
 		return "数据库连接配置无效"
 	case databasev1.ErrorConnectionNotFound:
 		return "数据库连接定义不存在"
+	case databasev1.ErrorCredentialUnavailable:
+		return "数据库密码不可用或已经失效"
+	case databasev1.ErrorCredentialServiceUnavailable:
+		return "数据库凭证服务暂时不可用"
 	case databasev1.ErrorTLSPolicyForbidden:
 		return "当前部署策略不允许关闭数据库传输加密校验"
 	case databasev1.ErrorNameResolutionFailed:
@@ -83,6 +88,20 @@ func logRuntimeDiagnostic(call *contractv1.CallContext, operation, providerID, s
 }
 
 func diagnosticEvidence(err error) (diagnostic, driverCode string) {
+	if code, _, ok := credentiallease.FailureDetails(err); ok {
+		switch code {
+		case credentiallease.ErrorReferenceUnavailable:
+			return "credential_reference_unavailable", ""
+		case credentiallease.ErrorMaterialUnavailable:
+			return "credential_material_unavailable", ""
+		case credentiallease.ErrorChanged:
+			return "credential_changed", ""
+		case credentiallease.ErrorDenied:
+			return "credential_lease_denied", ""
+		default:
+			return "credential_service_unavailable", ""
+		}
+	}
 	root := rootDiagnosticCause(err)
 	var postgresError *pgconn.PgError
 	if errors.As(root, &postgresError) {

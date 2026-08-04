@@ -10,11 +10,11 @@ import (
 	"strings"
 	"time"
 
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
-	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/credentiallease"
 	"cdsoft.com.cn/VastPlan/core/internal/runtimeidentity"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/credentiallease"
 )
 
 const (
@@ -56,13 +56,13 @@ func NewRuntimeLease(invoke LeaseInvoker) (*RuntimeLease, error) {
 func (b *RuntimeLease) IssueRuntimeLease(ctx context.Context, tenant string, identity runtimeidentity.Identity,
 	request credentiallease.Request) (credentiallease.Envelope, error) {
 	if b == nil || b.invoke == nil || ctx == nil || strings.TrimSpace(tenant) == "" {
-		return credentiallease.Envelope{}, errors.New("runtime material lease 参数无效")
+		return credentiallease.Envelope{}, credentiallease.NewFailure(credentiallease.ErrorInvalid, false, errors.New("runtime material lease 参数无效"))
 	}
 	if err := authorizeRuntimeCredential(identity, request); err != nil {
-		return credentiallease.Envelope{}, err
+		return credentiallease.Envelope{}, credentiallease.NewFailure(credentiallease.ErrorDenied, false, err)
 	}
 	if err := credentiallease.ValidateRequest(request); err != nil {
-		return credentiallease.Envelope{}, err
+		return credentiallease.Envelope{}, credentiallease.NewFailure(credentiallease.ErrorInvalid, false, err)
 	}
 	audience, err := identity.Audience()
 	if err != nil {
@@ -88,27 +88,23 @@ func (b *RuntimeLease) IssueRuntimeLease(ctx context.Context, tenant string, ide
 	})
 	result, response, err := b.invoke(callcontext.WithTrusted(ctx, trusted), target, trusted.Wire(), payload)
 	if err != nil {
-		return credentiallease.Envelope{}, fmt.Errorf("申请 runtime material lease: %w", err)
+		return credentiallease.Envelope{}, credentiallease.NewFailure(credentiallease.ErrorServiceUnavailable, true, fmt.Errorf("申请 runtime material lease: %w", err))
 	}
 	if result == nil || result.GetStatus() != contractv1.CallResult_STATUS_OK {
-		message := "runtime material lease 签发失败"
-		if result != nil && result.GetError().GetMessage() != "" {
-			message = result.GetError().GetMessage()
-		}
-		return credentiallease.Envelope{}, errors.New(message)
+		return credentiallease.Envelope{}, leaseFailureFromResult(result)
 	}
 	var envelope credentiallease.Envelope
 	decoder := json.NewDecoder(bytes.NewReader(response))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&envelope); err != nil {
-		return credentiallease.Envelope{}, fmt.Errorf("解码 runtime material lease: %w", err)
+		return credentiallease.Envelope{}, credentiallease.NewFailure(credentiallease.ErrorInvalid, false, fmt.Errorf("解码 runtime material lease: %w", err))
 	}
 	var trailing any
 	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		return credentiallease.Envelope{}, errors.New("runtime material lease 响应只能包含一个 JSON 文档")
+		return credentiallease.Envelope{}, credentiallease.NewFailure(credentiallease.ErrorInvalid, false, errors.New("runtime material lease 响应只能包含一个 JSON 文档"))
 	}
 	if envelope.TenantID != tenant || envelope.Audience != audience || envelope.Ref != request.Ref {
-		return credentiallease.Envelope{}, errors.New("runtime material lease claims 与可信启动身份不匹配")
+		return credentiallease.Envelope{}, credentiallease.NewFailure(credentiallease.ErrorInvalid, false, errors.New("runtime material lease claims 与可信启动身份不匹配"))
 	}
 	return envelope, nil
 }

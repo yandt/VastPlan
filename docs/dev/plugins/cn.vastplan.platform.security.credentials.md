@@ -3,13 +3,15 @@
 插件 ID：`cn.vastplan.platform.security.credentials`
 能力：`tool.package/platform.credentials`、`tool.package/platform.credentials.material-lease`
 运行模型：`leader + external-shared + cluster + leader`
-当前制品版本：`0.12.9`
+当前制品版本：`0.14.2`
 
 ## 安全模型
 
 本插件采用 Vault Transit/KMS 信封加密：调用 `put` 时的明文只被编码后发送到 Vault Transit 的 `encrypt` API；Shared State 内容寻址快照仅保存 Vault 返回的密文、版本、时间与撤销状态。每租户小型 Root 是唯一 CAS 提交点，完整快照拆为不超过 512 KiB 的不可变 SHA-256 chunk，因此单个大 ciphertext 不受 Shared State 单值 1 MiB 限制。`describe`、`list`、`rotate`、`revoke` 的协议响应均不包含密文，更不包含明文。
 
 可信宿主需要执行数据库连接等操作时，使用独立的 `platform.credentials.material-lease/issue`。该操作只接受认证后的 `SYSTEM` caller，以一次性 X25519 公钥签发默认 15 秒的 AES-GCM 加密信封，并把 tenant、宿主 audience、完整托管引用和时间窗绑定进 AAD。Vault decrypt 完成后插件会重新读取最新 Root，复核 handle、完整引用、状态和 ciphertext；跨实例 revoke/retire 优先于签发。它不提供返回明文的 API，用户和普通插件均不能申请。完整取舍见 [ADR-0093](../decisions/ADR-0093-可信宿主加密Material-Lease.md) 与 [ADR-0127](../decisions/ADR-0127-Credentials内容寻址快照与Material-Lease复核.md)。
+
+Material Lease 失败使用稳定 `credential.material_lease.*` 协议，只暴露分类和是否可重试，不透传 Vault 响应或密文。开发环境早期生成的单向摘要不是可解密密文；检测到这类历史记录时返回不可重试的 material 不可用，拥有者需重新输入密码形成新的托管凭证，系统不会假装完成自动迁移。
 
 `rotate` 使用 Transit `rewrap`，因此只轮换包裹密钥版本，不需要先解密再重新加密原始凭证。`revoke` 使引用失效；是否同时吊销外部数据库用户、API token 等目标系统身份，属于后续受控凭证操作与业务工作流，不由本插件猜测。
 

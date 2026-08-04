@@ -134,10 +134,14 @@ func TestPlatformProfileActivationKernelServicesRequireExactDeploymentManager(t 
 type runtimeLeaseBroker struct {
 	tenant   string
 	identity runtimeidentity.Identity
+	err      error
 }
 
 func (b *runtimeLeaseBroker) IssueRuntimeLease(_ context.Context, tenant string, identity runtimeidentity.Identity, request credentiallease.Request) (credentiallease.Envelope, error) {
 	b.tenant, b.identity = tenant, identity
+	if b.err != nil {
+		return credentiallease.Envelope{}, b.err
+	}
 	return credentiallease.Envelope{Version: 1, TenantID: tenant, Audience: "runtime:v1:test", Ref: request.Ref}, nil
 }
 
@@ -221,6 +225,36 @@ func TestRuntimeMaterialLeaseRequiresHostOnlyLaunchIdentity(t *testing.T) {
 	call.Caller.Id = "cn.vastplan.foundation.data.relational.other"
 	if _, _, err := handler(ctx, call, payload); err == nil {
 		t.Fatal("wire caller 与 host identity 不一致必须拒绝")
+	}
+}
+
+func TestRuntimeMaterialLeaseReturnsStableBrokerFailure(t *testing.T) {
+	broker := &runtimeLeaseBroker{err: credentiallease.NewFailure(credentiallease.ErrorMaterialUnavailable, false, errors.New("do-not-expose-vault-detail"))}
+	handler := kernelRuntimeMaterialLease(broker)
+	ref := commonv1.ManagedCredentialRef{
+		Handle: "credential://managed/database", Scope: "tenant",
+		Owner: "cn.vastplan.platform.data.relational.connection-manager", Purpose: "database.connection", Version: 1,
+	}
+	request, recipient, err := credentiallease.NewRequest(ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer recipient.Discard()
+	payload, _ := json.Marshal(request)
+	call := &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{
+		Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.vastplan.foundation.data.relational.runtime",
+	}}
+	identity := runtimeidentity.Identity{
+		PluginID: call.Caller.Id, Publisher: "vastplan", Version: "0.2.0", ArtifactSHA256: strings.Repeat("a", 64),
+		NodeID: "node-a", RuntimeScope: "database", InstanceID: "runtime-a",
+	}
+	ctx, err := runtimeidentity.WithIdentity(context.Background(), identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, raw, err := handler(ctx, call, payload)
+	if err != nil || len(raw) != 0 || result.GetError().GetCode() != credentiallease.ErrorMaterialUnavailable || result.GetError().GetRetryable() || strings.Contains(result.GetError().GetMessage(), "do-not-expose") {
+		t.Fatalf("Kernel 必须保留稳定错误且移除 Vault 细节: result=%+v raw=%s err=%v", result, raw, err)
 	}
 }
 

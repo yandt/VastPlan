@@ -169,21 +169,21 @@ func (s *Service) RetireManaged(call *contractv1.CallContext, handle string) (pl
 // Plaintext is never returned in a protocol payload.
 func (s *Service) IssueMaterialLease(ctx context.Context, call *contractv1.CallContext, request credentiallease.Request) (credentiallease.Envelope, error) {
 	if err := credentiallease.ValidateRequest(request); err != nil {
-		return credentiallease.Envelope{}, err
+		return credentiallease.Envelope{}, credentiallease.NewFailure(credentiallease.ErrorInvalid, false, err)
 	}
 	t, err := tenant(call)
 	if err != nil {
-		return credentiallease.Envelope{}, err
+		return credentiallease.Envelope{}, credentiallease.NewFailure(credentiallease.ErrorInvalid, false, err)
 	}
 	audience := strings.TrimSpace(call.GetCaller().GetId())
 	if call.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_SYSTEM || audience == "" {
-		return credentiallease.Envelope{}, errors.New("material lease 只接受已认证可信宿主")
+		return credentiallease.Envelope{}, credentiallease.NewFailure(credentiallease.ErrorDenied, false, errMaterialLeaseDenied)
 	}
 	select {
 	case s.leaseSlots <- struct{}{}:
 		defer func() { <-s.leaseSlots }()
 	case <-ctx.Done():
-		return credentiallease.Envelope{}, ctx.Err()
+		return credentiallease.Envelope{}, credentiallease.NewFailure(credentiallease.ErrorServiceUnavailable, true, ctx.Err())
 	}
 	s.mu.Lock()
 	var matched ManagedRecord
@@ -195,13 +195,13 @@ func (s *Service) IssueMaterialLease(ctx context.Context, call *contractv1.CallC
 	}
 	if matched.StageID == "" || (matched.State != managedCandidate && matched.State != managedActive) || matched.Ref != request.Ref || matched.Ciphertext == "" {
 		s.mu.Unlock()
-		return credentiallease.Envelope{}, errors.New("托管凭证不存在、未激活或引用不匹配")
+		return credentiallease.Envelope{}, credentiallease.NewFailure(credentiallease.ErrorReferenceUnavailable, false, errManagedCredentialUnavailable)
 	}
 	ciphertext := matched.Ciphertext
 	s.mu.Unlock()
 	material, err := s.transit.Decrypt(ctx, ciphertext)
 	if err != nil {
-		return credentiallease.Envelope{}, err
+		return credentiallease.Envelope{}, classifyTransitLeaseFailure(err)
 	}
 	defer func() {
 		for index := range material {
@@ -218,7 +218,7 @@ func (s *Service) IssueMaterialLease(ctx context.Context, call *contractv1.CallC
 	if session != nil {
 		latest, _, loadErr := session.repository.load(ctx, call)
 		if loadErr != nil {
-			return credentiallease.Envelope{}, loadErr
+			return credentiallease.Envelope{}, credentiallease.NewFailure(credentiallease.ErrorServiceUnavailable, true, loadErr)
 		}
 		current, ok = latest.Managed[matched.StageID]
 	} else {
@@ -228,9 +228,13 @@ func (s *Service) IssueMaterialLease(ctx context.Context, call *contractv1.CallC
 	}
 	stillUsable := ok && (current.State == managedCandidate || current.State == managedActive) && current.Ref == matched.Ref && current.Ciphertext == ciphertext
 	if !stillUsable {
-		return credentiallease.Envelope{}, errors.New("托管凭证在 lease 签发期间已变化")
+		return credentiallease.Envelope{}, credentiallease.NewFailure(credentiallease.ErrorChanged, false, errManagedCredentialChanged)
 	}
-	return credentiallease.Seal(request, credentiallease.Claims{TenantID: t, Audience: audience, Ref: matched.Ref}, material, time.Now().UTC(), credentiallease.DefaultTTL)
+	envelope, err := credentiallease.Seal(request, credentiallease.Claims{TenantID: t, Audience: audience, Ref: matched.Ref}, material, time.Now().UTC(), credentiallease.DefaultTTL)
+	if err != nil {
+		return credentiallease.Envelope{}, credentiallease.NewFailure(credentiallease.ErrorInvalid, false, err)
+	}
+	return envelope, nil
 }
 
 func decodeMaterialLeaseRequest(payload []byte) (credentiallease.Request, error) {
@@ -256,26 +260,36 @@ func (s *Service) MaterialLeaseHandler(ctx context.Context, host sdk.Host, call 
 		return handlerErr
 	})
 	if err != nil {
-		return credentialDomainError(err)
+		return materialLeaseFailureResult(classifyMaterialLeaseFailure(err))
 	}
 	return result, raw, handlerErr
 }
 
 func (s *Service) materialLeaseLoaded(ctx context.Context, call *contractv1.CallContext, payload []byte, operation string) (*contractv1.CallResult, []byte, error) {
 	if operation != "issue" {
-		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: "platform.credentials.material_lease.invalid", Message: "不支持的 material lease 操作"}}, nil, nil
+		return materialLeaseFailureResult(credentiallease.NewFailure(credentiallease.ErrorInvalid, false, errors.New("不支持的 material lease 操作")))
 	}
 	request, err := decodeMaterialLeaseRequest(payload)
 	if err != nil {
-		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: "platform.credentials.material_lease.invalid", Message: err.Error()}}, nil, nil
+		return materialLeaseFailureResult(credentiallease.NewFailure(credentiallease.ErrorInvalid, false, err))
 	}
 	envelope, err := s.IssueMaterialLease(ctx, call, request)
 	if err != nil {
-		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: "platform.credentials.material_lease.denied", Message: err.Error()}}, nil, nil
+		return materialLeaseFailureResult(classifyMaterialLeaseFailure(err))
 	}
 	raw, err := json.Marshal(envelope)
 	if err != nil {
 		return nil, nil, err
 	}
 	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
+}
+
+func materialLeaseFailureResult(err error) (*contractv1.CallResult, []byte, error) {
+	code, retryable, ok := credentiallease.FailureDetails(err)
+	if !ok {
+		code, retryable = credentiallease.ErrorServiceUnavailable, true
+	}
+	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{
+		Code: code, Message: credentiallease.SafeFailureMessage(code), Retryable: retryable,
+	}}, nil, nil
 }

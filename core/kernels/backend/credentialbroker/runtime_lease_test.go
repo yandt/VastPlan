@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
-	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/credentiallease"
 	"cdsoft.com.cn/VastPlan/core/internal/runtimeidentity"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/credentiallease"
 )
 
 func databaseRuntimeIdentity() runtimeidentity.Identity {
@@ -91,6 +91,37 @@ func TestRuntimeLeaseRejectsUntrustedIdentityAndCredentialScopeBeforeInvocation(
 	request, _, _ = credentiallease.NewRequest(ref)
 	if _, err := broker.IssueRuntimeLease(context.Background(), "tenant-a", identity, request); err == nil || called {
 		t.Fatalf("跨 owner 凭证必须在调用前拒绝: err=%v called=%v", err, called)
+	}
+}
+
+func TestRuntimeLeasePreservesCustodianFailureWithoutRemoteMessage(t *testing.T) {
+	broker, err := NewRuntimeLease(func(context.Context, *contractv1.CallTarget, *contractv1.CallContext, []byte) (*contractv1.CallResult, []byte, error) {
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{
+			Code: credentiallease.ErrorMaterialUnavailable, Message: "vault-host-and-ciphertext", Retryable: false,
+		}}, nil, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, recipient, err := credentiallease.NewRequest(databaseCredentialRef())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer recipient.Discard()
+	_, err = broker.IssueRuntimeLease(context.Background(), "tenant-a", databaseRuntimeIdentity(), request)
+	code, retryable, ok := credentiallease.FailureDetails(err)
+	if !ok || code != credentiallease.ErrorMaterialUnavailable || retryable || strings.Contains(err.Error(), "vault-host") {
+		t.Fatalf("Kernel Broker 未保留稳定错误或泄漏远端细节: code=%q retryable=%v ok=%v err=%v", code, retryable, ok, err)
+	}
+}
+
+func TestLeaseFailureTreatsUnknownRemoteCodeAsRetryableServiceFailure(t *testing.T) {
+	err := leaseFailureFromResult(&contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{
+		Code: "plugin.handler_error", Message: "remote internal detail", Retryable: false,
+	}})
+	code, retryable, ok := credentiallease.FailureDetails(err)
+	if !ok || code != credentiallease.ErrorServiceUnavailable || !retryable || strings.Contains(err.Error(), "internal") {
+		t.Fatalf("未知远端错误未安全归一: code=%q retryable=%v ok=%v err=%v", code, retryable, ok, err)
 	}
 }
 

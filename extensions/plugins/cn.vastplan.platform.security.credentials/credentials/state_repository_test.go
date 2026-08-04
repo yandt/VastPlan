@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	sharedstatev1 "cdsoft.com.cn/VastPlan/contracts/schemas/sharedstate/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	sharedstatev1 "cdsoft.com.cn/VastPlan/contracts/schemas/sharedstate/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/credentiallease"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
@@ -125,7 +125,7 @@ func TestMaterialLeaseReloadsRootAfterDecrypt(t *testing.T) {
 	}
 	close(transit.decryptRelease)
 	got := <-done
-	if got.err != nil || got.result.GetStatus() != contractv1.CallResult_STATUS_ERROR || got.result.GetError().GetCode() != "platform.credentials.material_lease.denied" {
+	if got.err != nil || got.result.GetStatus() != contractv1.CallResult_STATUS_ERROR || got.result.GetError().GetCode() != credentiallease.ErrorChanged {
 		t.Fatalf("decrypt 期间发生退役后不得签发 lease: result=%+v err=%v", got.result, got.err)
 	}
 }

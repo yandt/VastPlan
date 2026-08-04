@@ -14,6 +14,8 @@ const diagnosticMessages: Readonly<Record<string, Readonly<{ key: string; fallba
   database_not_found: { key: "test.databaseNotFoundDetail", fallback: "指定的数据库不存在，请检查数据库名称。" },
   database_permission_denied: { key: "test.permissionDetail", fallback: "数据库账户没有连接或访问该数据库所需的权限。" },
   database_pool_exhausted: { key: "test.poolDetail", fallback: "数据库连接资源暂时不足，请稍后重试或检查连接数限制。" },
+  database_credential_unavailable: { key: "test.credentialDetail", fallback: "数据库密码不可用或已经失效，请重新输入密码后重试。" },
+  database_credential_service_unavailable: { key: "test.credentialServiceDetail", fallback: "数据库凭证服务暂时不可用，请稍后重试。" },
   database_runtime_unavailable: { key: "test.runtimeDetail", fallback: "数据库运行服务暂时不可用，请稍后重试。" },
 };
 

@@ -125,6 +125,8 @@ func TestCurrentFormConnectionTestPreservesSafeRuntimeDiagnosis(t *testing.T) {
 		{databasev1.ErrorAuthenticationFailed, "platform.database.authentication_failed", "数据库用户名或密码验证失败"},
 		{databasev1.ErrorDatabaseNotFound, "platform.database.database_not_found", "指定的数据库不存在"},
 		{databasev1.ErrorPermissionDenied, "platform.database.permission_denied", "数据库账户没有所需权限"},
+		{databasev1.ErrorCredentialUnavailable, "platform.database.credential_unavailable", "数据库密码不可用或已经失效，请重新输入密码"},
+		{databasev1.ErrorCredentialServiceUnavailable, "platform.database.credential_service_unavailable", "数据库凭证服务暂时不可用，请稍后重试"},
 	} {
 		t.Run(test.runtimeCode, func(t *testing.T) {
 			service, err := newService(filepath.Join(t.TempDir(), "connections.json"))
@@ -139,6 +141,22 @@ func TestCurrentFormConnectionTestPreservesSafeRuntimeDiagnosis(t *testing.T) {
 				t.Fatalf("安全诊断泄露 Provider 原文: %q", result.GetError().GetMessage())
 			}
 		})
+	}
+}
+
+func TestSavedConnectionProbeUsesTheSameCredentialDiagnosis(t *testing.T) {
+	service, err := newService(filepath.Join(t.TempDir(), "connections.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	host := &probeHost{}
+	if _, _, err := service.handle(context.Background(), host, dbContext(), []byte(`{"name":"saved","providerId":"postgresql","endpoint":"db.internal:5432","options":{"user":"app"},"credentialValue":"one-time-password"}`), "define"); err != nil {
+		t.Fatal(err)
+	}
+	host.runtimeErrorCode = databasev1.ErrorCredentialUnavailable
+	result, raw, err := service.handle(context.Background(), host, dbContext(), []byte(`{"name":"saved"}`), "probe")
+	if err != nil || len(raw) != 0 || result.GetError().GetCode() != "platform.database.credential_unavailable" || result.GetError().GetMessage() != "数据库密码不可用或已经失效，请重新输入密码" {
+		t.Fatalf("列表 probe 与编辑 test 的凭证诊断不一致: result=%+v raw=%s err=%v", result, raw, err)
 	}
 }
 

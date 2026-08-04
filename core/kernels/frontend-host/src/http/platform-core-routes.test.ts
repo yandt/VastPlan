@@ -79,6 +79,8 @@ describe("Platform core management routes", () => {
       ["platform.database.database_not_found", "database_not_found", 422],
       ["platform.database.permission_denied", "database_permission_denied", 422],
       ["platform.database.pool_exhausted", "database_pool_exhausted", 429],
+      ["platform.database.credential_unavailable", "database_credential_unavailable", 422],
+      ["platform.database.credential_service_unavailable", "database_credential_service_unavailable", 503],
     ] as const;
     for (const [platformCode, browserCode, status] of diagnoses) {
       const invoker: TrustedCapabilityInvoker = { async invoke() { throw new CapabilityApplicationError(platformCode, "endpoint=db.internal password=do-not-leak"); } };
@@ -88,6 +90,15 @@ describe("Platform core management routes", () => {
       expect(response.status).toBe(status);
       expect(await response.json()).toEqual({ error: browserCode });
     }
+  });
+
+  it("maps saved probe credential failures through the same database diagnosis", async () => {
+    const invoker: TrustedCapabilityInvoker = { async invoke() { throw new CapabilityApplicationError("platform.database.credential_unavailable", "vault-private-detail"); } };
+    const server = await startPlatformManagementTestServer(invoker, ["platform.database.probe"], fullBinding());
+    close.push(server.close);
+    const response = await fetch(`${server.origin}/v1/portals/operations/platform/services/core/database-connections/main/probe`, { method: "POST", headers: server.writeHeaders, body: "{}" });
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: "database_credential_unavailable" });
   });
 });
 

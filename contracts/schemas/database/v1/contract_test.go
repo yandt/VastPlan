@@ -51,6 +51,14 @@ func TestDatabaseRuntimeSchemaParsesStrictOperationRequests(t *testing.T) {
 	}
 }
 
+func TestCredentialFailuresAreStableRuntimeErrors(t *testing.T) {
+	for _, code := range []string{databasev1.ErrorCredentialUnavailable, databasev1.ErrorCredentialServiceUnavailable} {
+		if !databasev1.KnownErrorCode(code) {
+			t.Fatalf("凭证错误码未登记: %s", code)
+		}
+	}
+}
+
 func TestTransactionRequestsAcceptOpaqueInstanceAffineHandle(t *testing.T) {
 	begin, err := json.Marshal(databasev1.BeginRequest{Connection: validConnection().Ref,
 		Options: databasev1.TransactionOptions{Isolation: "serializable", ReadOnly: true, TimeoutMS: 1000}})

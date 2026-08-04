@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.platform.data.relational.connection-manager`
 能力：`tool.package/platform.database`
-当前制品版本：`0.13.4`
+当前制品版本：`0.13.5`
 
 ## 边界
 
@@ -13,6 +13,8 @@
 ## 测试连接错误边界
 
 `test` 使用短期托管凭证调用 Runtime 的一次性 `probe`，不保存连接定义。Runtime 的稳定诊断码在管理面保持一一对应，Portal 再转换为浏览器稳定码：参数无效、部署 TLS 策略、DNS 解析、拒绝连接、连接超时、证书校验、身份验证、数据库不存在、权限不足和连接池耗尽均能得到明确、可本地化的排查提示。无法归类的连接故障和 Runtime 故障继续使用安全兜底码。
+
+表单 `test` 与列表中已保存记录的 `probe` 共用同一错误映射。托管密码不可解密或引用失效时返回“数据库密码不可用或已经失效，请重新输入密码”；凭证服务暂时不可用时返回可重试提示，而不是误报 `database_runtime_unavailable` 或 `platform_service_unavailable`。
 
 浏览器只接收稳定错误码，不接收数据库地址、密码、DSN、驱动原文或 TLS 握手细节。可信 Runtime 日志保留脱敏后的技术分类和驱动码，并关联 trace ID；前端根据插件语言目录生成面向用户的可操作提示。前端在提交前还会剔除切换 Provider 后遗留的隐藏字段，并明确校验用户名，避免有效连接被其他 Provider 的字段拒绝。
 

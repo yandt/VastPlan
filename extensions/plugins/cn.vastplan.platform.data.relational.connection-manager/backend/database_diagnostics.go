@@ -13,20 +13,22 @@ type databaseDiagnostic struct {
 }
 
 var databaseDiagnostics = map[string]databaseDiagnostic{
-	databasev1.ErrorInvalidRequest:        {"platform.database.invalid", "数据库连接参数不符合当前数据库类型要求"},
-	databasev1.ErrorProviderNotFound:      {"platform.database.invalid", "当前数据库类型不可用"},
-	databasev1.ErrorUnsupported:           {"platform.database.invalid", "当前数据库类型不支持该连接方式"},
-	databasev1.ErrorTLSPolicyForbidden:    {"platform.database.tls_policy_forbidden", "当前部署策略不允许关闭数据库传输加密校验"},
-	databasev1.ErrorNameResolutionFailed:  {"platform.database.name_resolution_failed", "数据库地址无法解析"},
-	databasev1.ErrorConnectionRefused:     {"platform.database.connection_refused", "数据库服务器拒绝了连接"},
-	databasev1.ErrorConnectionTimeout:     {"platform.database.connection_timeout", "连接数据库超时"},
-	databasev1.ErrorDeadlineExceeded:      {"platform.database.connection_timeout", "连接数据库超时"},
-	databasev1.ErrorTLSVerificationFailed: {"platform.database.tls_verification_failed", "数据库传输加密或证书校验失败"},
-	databasev1.ErrorAuthenticationFailed:  {"platform.database.authentication_failed", "数据库用户名或密码验证失败"},
-	databasev1.ErrorDatabaseNotFound:      {"platform.database.database_not_found", "指定的数据库不存在"},
-	databasev1.ErrorPermissionDenied:      {"platform.database.permission_denied", "数据库账户没有所需权限"},
-	databasev1.ErrorPoolExhausted:         {"platform.database.pool_exhausted", "数据库连接资源暂时不足"},
-	databasev1.ErrorConnectionUnavailable: {"platform.database.connection_unavailable", "数据库连接暂时不可用"},
+	databasev1.ErrorInvalidRequest:               {"platform.database.invalid", "数据库连接参数不符合当前数据库类型要求"},
+	databasev1.ErrorProviderNotFound:             {"platform.database.invalid", "当前数据库类型不可用"},
+	databasev1.ErrorUnsupported:                  {"platform.database.invalid", "当前数据库类型不支持该连接方式"},
+	databasev1.ErrorTLSPolicyForbidden:           {"platform.database.tls_policy_forbidden", "当前部署策略不允许关闭数据库传输加密校验"},
+	databasev1.ErrorNameResolutionFailed:         {"platform.database.name_resolution_failed", "数据库地址无法解析"},
+	databasev1.ErrorConnectionRefused:            {"platform.database.connection_refused", "数据库服务器拒绝了连接"},
+	databasev1.ErrorConnectionTimeout:            {"platform.database.connection_timeout", "连接数据库超时"},
+	databasev1.ErrorDeadlineExceeded:             {"platform.database.connection_timeout", "连接数据库超时"},
+	databasev1.ErrorTLSVerificationFailed:        {"platform.database.tls_verification_failed", "数据库传输加密或证书校验失败"},
+	databasev1.ErrorAuthenticationFailed:         {"platform.database.authentication_failed", "数据库用户名或密码验证失败"},
+	databasev1.ErrorDatabaseNotFound:             {"platform.database.database_not_found", "指定的数据库不存在"},
+	databasev1.ErrorPermissionDenied:             {"platform.database.permission_denied", "数据库账户没有所需权限"},
+	databasev1.ErrorPoolExhausted:                {"platform.database.pool_exhausted", "数据库连接资源暂时不足"},
+	databasev1.ErrorConnectionUnavailable:        {"platform.database.connection_unavailable", "数据库连接暂时不可用"},
+	databasev1.ErrorCredentialUnavailable:        {"platform.database.credential_unavailable", "数据库密码不可用或已经失效，请重新输入密码"},
+	databasev1.ErrorCredentialServiceUnavailable: {"platform.database.credential_service_unavailable", "数据库凭证服务暂时不可用，请稍后重试"},
 }
 
 // databaseTestError exposes a stable diagnosis, never the Runtime's raw

@@ -24,6 +24,9 @@ func classifySQLError(err error, transaction bool) error {
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return NewRuntimeError(databasev1.ErrorDeadlineExceeded, true, err)
 	}
+	if classified, ok := classifyCredentialLeaseError(err); ok {
+		return classified
+	}
 	var runtimeError *RuntimeError
 	if errors.As(err, &runtimeError) {
 		return err

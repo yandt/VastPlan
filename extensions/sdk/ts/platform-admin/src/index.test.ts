@@ -96,6 +96,14 @@ describe("PlatformAdminClient", () => {
       .rejects.toMatchObject({ code: "database_authentication_failed", message: "数据库用户名或密码验证失败。" });
   });
 
+  it("asks for a new database password when managed material is unusable", async () => {
+    const client = new PlatformAdminClient(async (path) => path === "/v1/csrf"
+      ? { ok: true, status: 200, json: async () => ({ token: "safe" }) }
+      : { ok: false, status: 422, json: async () => ({ error: "database_credential_unavailable" }) }, "operations", "database");
+    await expect(client.probeDatabaseConnection("main"))
+      .rejects.toMatchObject({ code: "database_credential_unavailable", message: "数据库密码不可用或已经失效，请重新输入密码后重试。" });
+  });
+
   it("reads redacted managed credential audit through a bounded fixed route", async () => {
     const calls: string[] = [];
     const client = new PlatformAdminClient(async (path) => {

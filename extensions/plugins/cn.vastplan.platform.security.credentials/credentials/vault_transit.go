@@ -18,7 +18,7 @@ import (
 
 const (
 	PluginID                = credentialsstate.PluginID
-	PluginVersion           = "0.14.1"
+	PluginVersion           = "0.14.2"
 	Capability              = "platform.credentials"
 	MaterialLeaseCapability = "platform.credentials.material-lease"
 	vaultAddressKey         = "platform.credentials.vault.address"
@@ -39,6 +39,41 @@ type VaultTransit struct {
 	Client                  *http.Client
 }
 
+// VaultTransitError keeps HTTP/retry semantics without retaining a Vault
+// response body, token, ciphertext or plaintext. InvalidMaterial is true only
+// when Vault explicitly rejected a decrypt input as unusable.
+type VaultTransitError struct {
+	Operation       string
+	StatusCode      int
+	Retryable       bool
+	InvalidMaterial bool
+	Err             error
+}
+
+func (e *VaultTransitError) Error() string {
+	if e == nil {
+		return "Vault Transit 调用失败"
+	}
+	if e.StatusCode != 0 {
+		return fmt.Sprintf("Vault Transit %s 失败: status=%d", e.Operation, e.StatusCode)
+	}
+	if e.Err != nil {
+		return fmt.Sprintf("Vault Transit %s 失败: %v", e.Operation, e.Err)
+	}
+	return fmt.Sprintf("Vault Transit %s 失败", e.Operation)
+}
+
+func (e *VaultTransitError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
+
+func vaultFailure(operation string, status int, retryable, invalidMaterial bool, err error) error {
+	return &VaultTransitError{Operation: operation, StatusCode: status, Retryable: retryable, InvalidMaterial: invalidMaterial, Err: err}
+}
+
 type vaultTransitData struct {
 	Ciphertext string `json:"ciphertext"`
 	Plaintext  string `json:"plaintext"`
@@ -46,11 +81,11 @@ type vaultTransitData struct {
 
 func (v VaultTransit) call(ctx context.Context, operation string, body any) (vaultTransitData, error) {
 	if strings.TrimSpace(v.Address) == "" || strings.TrimSpace(v.Key) == "" || strings.TrimSpace(v.TokenFile) == "" {
-		return vaultTransitData{}, errors.New("Vault Transit 配置不完整")
+		return vaultTransitData{}, vaultFailure(operation, 0, false, false, errors.New("配置不完整"))
 	}
 	token, err := os.ReadFile(v.TokenFile)
 	if err != nil {
-		return vaultTransitData{}, fmt.Errorf("读取 Vault token 文件: %w", err)
+		return vaultTransitData{}, vaultFailure(operation, 0, false, false, fmt.Errorf("读取 token 文件: %w", err))
 	}
 	defer func() {
 		for i := range token {
@@ -78,7 +113,7 @@ func (v VaultTransit) call(ctx context.Context, operation string, body any) (vau
 	}
 	response, err := client.Do(request)
 	if err != nil {
-		return vaultTransitData{}, fmt.Errorf("调用 Vault Transit: %w", err)
+		return vaultTransitData{}, vaultFailure(operation, 0, true, false, err)
 	}
 	defer response.Body.Close()
 	var decoded struct {
@@ -86,10 +121,12 @@ func (v VaultTransit) call(ctx context.Context, operation string, body any) (vau
 		Errors []string         `json:"errors"`
 	}
 	if err := json.NewDecoder(io.LimitReader(response.Body, 8<<20)).Decode(&decoded); err != nil {
-		return vaultTransitData{}, err
+		return vaultTransitData{}, vaultFailure(operation, response.StatusCode, response.StatusCode >= 500, false, errors.New("响应格式无效"))
 	}
 	if response.StatusCode/100 != 2 {
-		return vaultTransitData{}, fmt.Errorf("Vault Transit %s 失败: %s", operation, strings.Join(decoded.Errors, "; "))
+		retryable := response.StatusCode == http.StatusTooManyRequests || response.StatusCode >= 500
+		invalidMaterial := operation == "decrypt" && response.StatusCode == http.StatusBadRequest
+		return vaultTransitData{}, vaultFailure(operation, response.StatusCode, retryable, invalidMaterial, nil)
 	}
 	return decoded.Data, nil
 }

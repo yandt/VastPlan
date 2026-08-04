@@ -6,16 +6,16 @@ import (
 	"errors"
 	"fmt"
 
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationauthority"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/core/internal/runtimeidentity"
+	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
+	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationauthority"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/credentiallease"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/deploymentpublication"
-	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/operationfence"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformprofileactivation"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfiguration"
-	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
-	"cdsoft.com.cn/VastPlan/core/internal/runtimeidentity"
 )
 
 func kernelConfigurationAuthorityIssue(issuer configurationauthority.Issuer) protocolbus.HostService {
@@ -86,7 +86,13 @@ func kernelRuntimeMaterialLease(broker kernelspi.RuntimeMaterialLeaseBroker) pro
 		}
 		envelope, err := broker.IssueRuntimeLease(ctx, callCtx.GetTenantId(), identity, request)
 		if err != nil {
-			return nil, nil, err
+			code, retryable, ok := credentiallease.FailureDetails(err)
+			if !ok {
+				code, retryable = credentiallease.ErrorServiceUnavailable, true
+			}
+			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{
+				Code: code, Message: credentiallease.SafeFailureMessage(code), Retryable: retryable,
+			}}, nil, nil
 		}
 		raw, err := json.Marshal(envelope)
 		if err != nil {

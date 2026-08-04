@@ -85,6 +85,17 @@ describe("database connections Workbench page", () => {
     expect(outcome?.notify).toMatchObject({ kind: "error", content: expect.objectContaining({ key: "test.authenticationDetail" }) });
   });
 
+  it("asks the user to replace an unusable managed database password", async () => {
+    const testDatabaseConnection = vi.fn(async () => { throw new PlatformAdminError(422, "database_credential_unavailable"); });
+    const client = { testDatabaseConnection, listDatabaseConnections: vi.fn(async () => []) } as unknown as PlatformAdminClient;
+    const page = createDatabaseConnectionsPage(client, "database", "/settings/databases", message("test", "title", "Databases"));
+    const edit = page.forms?.find((form) => form.id === "edit");
+    const testAction = edit?.workflow.actions?.find((action) => action.id === "test");
+    if (testAction === undefined) throw new Error("测试连接 Form Action 未注册");
+    const outcome = await edit?.runAction?.({ action: testAction, value: { name: "main", providerId: "postgresql", host: "db", port: 5432, options: { user: "app" } }, selected: [] }, new AbortController().signal);
+    expect(outcome?.notify).toMatchObject({ kind: "error", content: expect.objectContaining({ key: "test.credentialDetail" }) });
+  });
+
   it("preserves MySQL Unix socket endpoints without inventing a TCP port", async () => {
     const putDatabaseConnection = vi.fn(async () => ({}));
     const client = { putDatabaseConnection, listDatabaseConnections: vi.fn(async () => []) } as unknown as PlatformAdminClient;

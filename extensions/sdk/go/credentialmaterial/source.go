@@ -55,40 +55,40 @@ func (s *Source) WithMaterial(ctx context.Context, now time.Time, use func(Mater
 	}
 	request, recipient, err := credentiallease.NewRequest(s.ref)
 	if err != nil {
-		return err
+		return credentiallease.NewFailure(credentiallease.ErrorInvalid, false, err)
 	}
 	defer recipient.Discard()
 	payload, err := json.Marshal(request)
 	if err != nil {
-		return err
+		return credentiallease.NewFailure(credentiallease.ErrorInvalid, false, err)
 	}
 	operation := "issue"
 	result, response, err := s.host.Call(ctx, &contractv1.CallTarget{
 		ExtensionPoint: extpoint.KernelService, Capability: credentiallease.RuntimeKernelService, Operation: &operation,
 	}, &contractv1.CallContext{TenantId: s.tenant}, payload)
 	if err != nil {
-		return fmt.Errorf("申请 runtime material lease: %w", err)
+		return credentiallease.NewFailure(credentiallease.ErrorServiceUnavailable, true, fmt.Errorf("申请 runtime material lease: %w", err))
 	}
 	if result == nil || result.GetStatus() != contractv1.CallResult_STATUS_OK {
-		message := "runtime material lease 被拒绝"
-		if result != nil && result.GetError().GetMessage() != "" {
-			message = result.GetError().GetMessage()
+		code, retryable := credentiallease.ErrorServiceUnavailable, true
+		if result != nil && result.GetError() != nil && credentiallease.KnownFailureCode(result.GetError().GetCode()) {
+			code, retryable = result.GetError().GetCode(), result.GetError().GetRetryable()
 		}
-		return errors.New(message)
+		return credentiallease.NewFailure(code, retryable, errors.New(credentiallease.SafeFailureMessage(code)))
 	}
 	var envelope credentiallease.Envelope
 	decoder := json.NewDecoder(bytes.NewReader(response))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&envelope); err != nil {
-		return fmt.Errorf("解码 runtime material lease: %w", err)
+		return credentiallease.NewFailure(credentiallease.ErrorInvalid, false, fmt.Errorf("解码 runtime material lease: %w", err))
 	}
 	var trailing any
 	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		return errors.New("runtime material lease 响应只能包含一个 JSON 文档")
+		return credentiallease.NewFailure(credentiallease.ErrorInvalid, false, errors.New("runtime material lease 响应只能包含一个 JSON 文档"))
 	}
 	raw, err := recipient.Open(envelope, credentiallease.Claims{TenantID: s.tenant, Audience: s.audience, Ref: s.ref}, now)
 	if err != nil {
-		return err
+		return credentiallease.NewFailure(credentiallease.ErrorInvalid, false, err)
 	}
 	defer zero(raw)
 	return use(material(raw))

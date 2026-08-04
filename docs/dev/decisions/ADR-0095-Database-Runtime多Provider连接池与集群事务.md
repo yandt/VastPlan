@@ -160,3 +160,9 @@ Database Runtime 升级为 0.7.0，新增受限 `metrics` 操作和 `RuntimeMetr
 连接测试与建池错误采用分层稳定码，不允许管理面把所有 Provider 失败压缩为单一 `connection_unavailable`，也不允许把原始驱动文本直接透传给浏览器。Database Runtime 负责把 PostgreSQL SQLSTATE、MySQL 错误号、DNS、网络、TLS/x509 和部署策略错误归一为 `database.runtime.*`；connection-manager 保持语义映射为 `platform.database.*`；Portal Edge 只返回浏览器稳定码；功能插件按语言目录提供最终提示。
 
 可信 Runtime 日志允许记录稳定错误码、可重试性、操作阶段、Provider、trace ID，以及 PostgreSQL SQLSTATE、MySQL 错误号或受限网络/TLS 分类。禁止记录原始驱动字符串、endpoint、用户名、数据库名、SQL、CredentialRef 或 material。这样既能在日志中定位真实故障类型，也不会把可能含秘密或内部拓扑的驱动消息扩大到管理面和浏览器。
+
+## 补充决策（2026-08-05，凭证故障与双入口一致性）
+
+Database Runtime 在 SQL/网络诊断之前识别 Material Lease 稳定失败，把引用或 material 失效映射为不可重试 `database.runtime.credential_unavailable`，把 Vault、凭证服务或可信中继暂时不可用映射为可重试 `database.runtime.credential_service_unavailable`。该顺序避免把“密码已经无法取回”误报为 Runtime 不存在或普通数据库连接失败。
+
+connection-manager 的表单 `test` 和已保存记录 `probe` 必须调用同一个诊断映射，统一生成 `platform.database.*`；Portal 再映射为浏览器稳定码与本地化行动提示。两条入口不得分别依赖原始 handler 文本。旧凭证不可恢复时，用户动作统一为重新输入数据库密码并保存新 CredentialRef；系统不自动修改或删除原定义。

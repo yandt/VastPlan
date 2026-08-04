@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "revision": 112,
+  "revision": 113,
   "id": "local-portal-platform",
   "profiles": [
     {
       "version": 1,
-      "revision": 112,
+      "revision": 113,
       "id": "portal-default",
       "target": { "kernel": "frontend" },
       "updates": { "mode": "automatic" },
@@ -69,8 +69,8 @@
         { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "6.2.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.10.1", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.plugin-settings", "version": "0.15.1", "channel": "stable" },
-        { "id": "cn.vastplan.platform.security.credentials", "version": "0.14.1", "channel": "stable" },
-        { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.13.4", "channel": "stable" },
+        { "id": "cn.vastplan.platform.security.credentials", "version": "0.14.2", "channel": "stable" },
+        { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.13.5", "channel": "stable" },
         { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.40.1", "channel": "stable" },
         { "id": "cn.vastplan.platform.integration.api-exposure", "version": "0.7.1", "channel": "stable" },
         { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.27.1", "channel": "stable" },
@@ -86,8 +86,8 @@
       "portalId": "operations",
       "platformProfile": {
         "id": "portal-default",
-        "revision": 112,
-        "digest": "9a65fb85de00ffbe45117bdaab4617f24d13513b44d63ec59e3867c88c99de63"
+        "revision": 113,
+        "digest": "32ad61af9f8127c59da889bba66851280409fd3a3cebd6868f585949d1322b32"
       },
       "services": [
         {

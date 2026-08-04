@@ -115,6 +115,9 @@ func (s *service) handleManagement(ctx context.Context, host sdk.Host, call *con
 			return domainError("platform.database.not_found", err)
 		}
 		if err != nil {
+			if operation == "probe" {
+				return databaseTestError(err)
+			}
 			return nil, nil, err
 		}
 	}

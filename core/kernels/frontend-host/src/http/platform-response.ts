@@ -53,6 +53,8 @@ function mapCapabilityError(response: ServerResponse, code: string, head = false
   if (code === "platform.database.invalid") return sendAPIError(response, 422, "database_connection_invalid", head);
   if (["platform.settings.invalid", "platform.credentials.invalid", "platform.deployment.invalid", "platform.plugin_configuration.invalid"].includes(code)) return sendAPIError(response, 400, "invalid_request", head);
   if (code === "platform.database.connection_unavailable") return sendAPIError(response, 422, "database_connection_failed", head);
+  if (code === "platform.database.credential_unavailable") return sendAPIError(response, 422, "database_credential_unavailable", head);
+  if (code === "platform.database.credential_service_unavailable") return sendAPIError(response, 503, "database_credential_service_unavailable", head);
   if (code === "platform.database.tls_policy_forbidden") return sendAPIError(response, 422, "database_tls_policy_forbidden", head);
   if (code === "platform.database.name_resolution_failed") return sendAPIError(response, 422, "database_name_resolution_failed", head);
   if (code === "platform.database.connection_refused") return sendAPIError(response, 422, "database_connection_refused", head);

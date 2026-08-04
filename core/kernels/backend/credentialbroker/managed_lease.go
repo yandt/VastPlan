@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/credentiallease"
+	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/credentiallease"
 )
 
 const (
@@ -77,29 +77,25 @@ func (b *ManagedLease) WithCredential(ctx context.Context, scope kernelspi.Scope
 	})
 	result, response, err := b.invoke(callcontext.WithTrusted(ctx, trusted), target, trusted.Wire(), payload)
 	if err != nil {
-		return fmt.Errorf("申请 material lease: %w", err)
+		return credentiallease.NewFailure(credentiallease.ErrorServiceUnavailable, true, fmt.Errorf("申请 material lease: %w", err))
 	}
 	if result == nil || result.GetStatus() != contractv1.CallResult_STATUS_OK {
-		message := "material lease 签发失败"
-		if result != nil && result.GetError() != nil && result.GetError().GetMessage() != "" {
-			message = result.GetError().GetMessage()
-		}
-		return errors.New(message)
+		return leaseFailureFromResult(result)
 	}
 	var envelope credentiallease.Envelope
 	decoder := json.NewDecoder(bytes.NewReader(response))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&envelope); err != nil {
-		return fmt.Errorf("解码 material lease: %w", err)
+		return credentiallease.NewFailure(credentiallease.ErrorInvalid, false, fmt.Errorf("解码 material lease: %w", err))
 	}
 	var trailing any
 	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		return errors.New("material lease 响应只能包含一个 JSON 文档")
+		return credentiallease.NewFailure(credentiallease.ErrorInvalid, false, errors.New("material lease 响应只能包含一个 JSON 文档"))
 	}
 	claims := credentiallease.Claims{TenantID: scope.TenantID, Audience: b.audience, Ref: ref}
 	raw, err := recipient.Open(envelope, claims, b.now().UTC())
 	if err != nil {
-		return err
+		return credentiallease.NewFailure(credentiallease.ErrorInvalid, false, err)
 	}
 	defer zeroMaterial(raw)
 	return use(material(raw))
