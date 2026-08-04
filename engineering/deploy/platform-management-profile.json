@@ -324,7 +324,7 @@
       "placement": { "nodeSelector": { "environment": "local-platform" } },
       "config": {
         "plugins": {
-          "cn.vastplan.foundation.data.relational.runtime": { "allowInsecureTLS": false, "maxTransactions": 4096, "clusterMaxOpen": 4096, "maxReplicas": 1 }
+          "cn.vastplan.foundation.data.relational.runtime": { "allowInsecureTLS": false, "maxTransactions": 4096, "clusterMaxOpen": 4096 }
         },
         "environment_allowlist": {
           "cn.vastplan.foundation.security.authorization-enforcer": ["VASTPLAN_AUTHORIZATION_PERMISSION_CATALOG", "VASTPLAN_AUTHORIZATION_POLICY_SNAPSHOT", "VASTPLAN_AUTHORIZATION_POLICY_TRUST", "VASTPLAN_AUTHORIZATION_POLICY_AUDIENCE", "VASTPLAN_AUTHORIZATION_DIRECTORY_GROUPS"]

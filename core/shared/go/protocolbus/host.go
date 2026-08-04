@@ -93,6 +93,9 @@ type LaunchPolicy struct {
 	// RuntimeGeneration separates providers that cannot unload code (notably
 	// dynamic-go) while a candidate and current service generation overlap.
 	RuntimeGeneration string
+	// ClusterMaxReplicas is derived from Deployment replicas/autoscaling and is
+	// never accepted from a plugin manifest or ordinary plugin configuration.
+	ClusterMaxReplicas int
 	// BackgroundService allows calls that are not descendants of a host Invoke.
 	// The trusted runtime binds those calls to exactly one configured tenant;
 	// plugin-supplied CallContext fields never widen that identity.

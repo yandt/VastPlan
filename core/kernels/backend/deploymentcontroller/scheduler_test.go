@@ -521,6 +521,13 @@ func TestSchedulerAutoscalingMetricBoundsAndMissingMetric(t *testing.T) {
 	if err != nil || countUnit(plan.Assignments, "api") != 3 {
 		t.Fatalf("21/10 应扩为 3 副本: count=%d err=%v", countUnit(plan.Assignments, "api"), err)
 	}
+	for _, assignment := range plan.Assignments {
+		for _, unit := range assignment.Units {
+			if unit.ID == "api" && unit.ClusterMaxReplicas != 5 {
+				t.Fatalf("Assignment 必须携带 Autoscaling 最大副本数而非当前副本数: %+v", unit)
+			}
+		}
+	}
 	deployment.Revision++
 	publish(100)
 	plan, err = scheduler.Reconcile(ctx, deployment)

@@ -31,6 +31,9 @@ const (
 	// identity. A plugin may compare it with a returned encrypted lease, but it
 	// cannot choose or override the value.
 	RuntimeAudienceEnvKey = "VASTPLAN_RUNTIME_AUDIENCE"
+	// ClusterMaxReplicasEnvKey is trusted scheduler metadata. Plugins may use it
+	// to divide cluster-wide resource budgets, but cannot choose its value.
+	ClusterMaxReplicasEnvKey = "VASTPLAN_CLUSTER_MAX_REPLICAS"
 )
 
 var workspacePrerelease = regexp.MustCompile(`^dev\.workspace\.[0-9a-f]{12,64}$`)

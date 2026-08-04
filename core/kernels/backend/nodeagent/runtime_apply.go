@@ -161,7 +161,8 @@ func (transaction *applyTransaction) startPlugin(ctx context.Context, plugin Ins
 		EnvironmentAllowlist: append([]string(nil), transaction.unit.EnvironmentAllowlists[plugin.ID]...),
 		Configuration:        startupConfig, RequiredFeatures: append([]string(nil), plugin.Execution.Features...),
 		RuntimeScope: transaction.unit.ID, RuntimeGeneration: transaction.unit.Fingerprint,
-		BackgroundService: plugin.Contract.BackgroundService, AutonomousTenantID: autonomousTenantID,
+		ClusterMaxReplicas: transaction.unit.ClusterMaxReplicas,
+		BackgroundService:  plugin.Contract.BackgroundService, AutonomousTenantID: autonomousTenantID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("启动插件 %s@%s: %w", plugin.ID, plugin.Version, err)

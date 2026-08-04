@@ -49,23 +49,24 @@ type Metadata struct {
 
 // Unit 是 v1 唯一支持的 service 组合单元。
 type Unit struct {
-	ID             string               `json:"id"`
-	Kind           string               `json:"kind"`
-	Plugins        []PluginRef          `json:"plugins"`
-	Config         map[string]any       `json:"config,omitempty"`
-	Enabled        bool                 `json:"enabled"`
-	ServiceRole    string               `json:"service_role"`
-	LogicalService string               `json:"logical_service,omitempty"`
-	InstancePolicy string               `json:"instance_policy,omitempty"`
-	StateModel     string               `json:"state_model,omitempty"`
-	Visibility     string               `json:"visibility,omitempty"`
-	Routing        string               `json:"routing,omitempty"`
-	RoutingDomain  string               `json:"routing_domain,omitempty"`
-	StartupTier    string               `json:"startup_tier,omitempty"`
-	DependsOn      []string             `json:"depends_on,omitempty"`
-	Replicas       int                  `json:"replicas"`
-	Placement      Placement            `json:"placement,omitempty"`
-	Resources      ResourceRequirements `json:"resources,omitempty"`
+	ID                 string               `json:"id"`
+	Kind               string               `json:"kind"`
+	Plugins            []PluginRef          `json:"plugins"`
+	Config             map[string]any       `json:"config,omitempty"`
+	Enabled            bool                 `json:"enabled"`
+	ServiceRole        string               `json:"service_role"`
+	LogicalService     string               `json:"logical_service,omitempty"`
+	InstancePolicy     string               `json:"instance_policy,omitempty"`
+	StateModel         string               `json:"state_model,omitempty"`
+	Visibility         string               `json:"visibility,omitempty"`
+	Routing            string               `json:"routing,omitempty"`
+	RoutingDomain      string               `json:"routing_domain,omitempty"`
+	StartupTier        string               `json:"startup_tier,omitempty"`
+	DependsOn          []string             `json:"depends_on,omitempty"`
+	Replicas           int                  `json:"replicas"`
+	ClusterMaxReplicas int                  `json:"cluster_max_replicas,omitempty"`
+	Placement          Placement            `json:"placement,omitempty"`
+	Resources          ResourceRequirements `json:"resources,omitempty"`
 }
 
 // PluginRef 通过不可变制品身份引用一个插件。组合输入可以只提供三元组，
@@ -151,6 +152,9 @@ func Parse(raw []byte) (DesiredState, error) {
 		}
 		if unit.StartupTier != "bootstrap" && unit.StartupTier != "full" {
 			return DesiredState{}, fmt.Errorf("unit %q startup_tier 无效: %q", unit.ID, unit.StartupTier)
+		}
+		if unit.ClusterMaxReplicas == 0 {
+			unit.ClusterMaxReplicas = 1
 		}
 		pluginIDs := map[string]struct{}{}
 		installedPluginIDs := make([]string, 0, len(unit.Plugins))

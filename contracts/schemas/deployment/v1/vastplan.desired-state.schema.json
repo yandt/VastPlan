@@ -84,6 +84,7 @@
         "startup_tier": { "enum": ["bootstrap", "full"] },
         "depends_on": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 160 } },
         "replicas": { "const": 1 },
+        "cluster_max_replicas": { "type": "integer", "minimum": 1, "maximum": 10000 },
         "resources": { "$ref": "#/$defs/resources" },
         "placement": { "$ref": "#/$defs/placement" }
       }

@@ -122,6 +122,7 @@ type RuntimeUnit struct {
 	Plugins                []InstalledPlugin
 	Migrations             []StateMigrationPlan
 	RestartBase            uint64
+	ClusterMaxReplicas     int
 }
 
 // StateMigrationPlan 由 Reconciler 从旧/新签名清单计算，Runtime 只负责按协议执行。

@@ -53,8 +53,7 @@
       "properties": {
         "allowInsecureTLS": { "type": "boolean", "default": false },
         "maxTransactions": { "type": "integer", "minimum": 1, "maximum": 1000000, "default": 4096 },
-        "clusterMaxOpen": { "type": "integer", "minimum": 2, "maximum": 10000000, "default": 4096 },
-        "maxReplicas": { "type": "integer", "minimum": 1, "maximum": 10000, "default": 1 }
+        "clusterMaxOpen": { "type": "integer", "minimum": 2, "maximum": 10000000, "default": 4096 }
       }
     }
   },

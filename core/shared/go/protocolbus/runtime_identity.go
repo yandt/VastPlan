@@ -3,10 +3,19 @@ package protocolbus
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocol"
 	"cdsoft.com.cn/VastPlan/core/internal/runtimeidentity"
 )
+
+func clusterMaxReplicasEnvironment(policy LaunchPolicy) string {
+	value := policy.ClusterMaxReplicas
+	if value < 1 {
+		value = 1
+	}
+	return protocol.ClusterMaxReplicasEnvKey + "=" + strconv.Itoa(value)
+}
 
 func launchRuntimeIdentity(policy LaunchPolicy) (runtimeidentity.Identity, error) {
 	identity := runtimeidentity.Identity{

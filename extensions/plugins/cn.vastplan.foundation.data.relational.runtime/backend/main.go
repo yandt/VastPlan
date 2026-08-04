@@ -6,6 +6,7 @@ package main
 import (
 	"log"
 	"os"
+	"strconv"
 
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocol"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
@@ -20,7 +21,6 @@ func main() {
 		AllowInsecureTLS bool `json:"allowInsecureTLS"`
 		MaxTransactions  int  `json:"maxTransactions"`
 		ClusterMaxOpen   int  `json:"clusterMaxOpen"`
-		MaxReplicas      int  `json:"maxReplicas"`
 	}
 	if err := sdk.DecodeStartupConfiguration(&startup); err != nil {
 		log.Fatalf("解析 Database Runtime 启动配置: %v", err)
@@ -28,8 +28,9 @@ func main() {
 	if startup.ClusterMaxOpen == 0 {
 		startup.ClusterMaxOpen = 4096
 	}
-	if startup.MaxReplicas == 0 {
-		startup.MaxReplicas = 1
+	maxReplicas, err := strconv.Atoi(os.Getenv(protocol.ClusterMaxReplicasEnvKey))
+	if err != nil || maxReplicas < 1 {
+		log.Fatalf("读取可信集群最大副本数失败")
 	}
 	registry, err := runtime.NewDefaultRegistry(runtime.ProviderSecurityPolicy{AllowInsecureTLS: startup.AllowInsecureTLS})
 	if err != nil {
@@ -49,7 +50,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("初始化 SQL Shared State Capability: %v", err)
 	}
-	policy, err := runtime.ClusterManagerPolicy(startup.ClusterMaxOpen, startup.MaxReplicas)
+	policy, err := runtime.ClusterManagerPolicy(startup.ClusterMaxOpen, maxReplicas)
 	if err != nil {
 		log.Fatalf("计算 Database Runtime 集群连接预算: %v", err)
 	}

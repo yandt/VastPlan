@@ -28,7 +28,7 @@ Provider options 强制使用结构化 JSON，不接受 DSN。两者都要求 `u
 - 第三方 Provider 不实现本 Go SPI，而是经未来的隔离进程和版本化 RPC 接入。
 - `allowInsecureTLS` 是 service 级重启配置，默认 `false`；只有受控测试环境可设置为 `true`，连接定义自身不能绕过该部署策略。
 - `maxTransactions` 是每个 Runtime 实例的活动事务硬上限，默认 4096；达到上限时拒绝新事务，不影响无状态查询。
-- `clusterMaxOpen` 是全部 Runtime 副本共享的物理连接硬预算，`maxReplicas` 必须等于或高于 Deployment/Autoscaling 允许的最大副本数。每个实例只取得 `floor(clusterMaxOpen / maxReplicas)`，Pool Manager 对活动代和排空代共同计数，因此两代热切换不会额外突破集群预算。扩容前必须先提高 `maxReplicas` 并确认每副本预算仍至少能容纳两个 generation；不能靠运行中副本互传 socket 或临时借额。
+- `clusterMaxOpen` 是全部 Runtime 副本共享的物理连接硬预算；最大副本数由 Scheduler 从 Deployment/Autoscaling 派生并作为可信启动元数据注入，不能由插件或用户配置覆盖。每个实例只取得 `floor(clusterMaxOpen / maxReplicas)`，Pool Manager 对活动代和排空代共同计数，因此两代热切换不会额外突破集群预算。扩容前必须确认每副本预算仍至少能容纳两个 generation；不能靠运行中副本互传 socket 或临时借额。
 
 ## 指标与告警
 

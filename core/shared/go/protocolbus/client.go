@@ -110,6 +110,7 @@ func (h *Host) LaunchSpecWithPolicy(ctx context.Context, spec LaunchSpec, policy
 	if runtimeAudience, err := runtimeAudienceEnvironment(policy); err == nil {
 		cmd.Env = append(cmd.Env, runtimeAudience)
 	}
+	cmd.Env = append(cmd.Env, clusterMaxReplicasEnvironment(policy))
 	if len(policy.Configuration) != 0 {
 		cmd.Env = append(cmd.Env, protocol.PluginConfigEnvKey+"="+string(policy.Configuration))
 	}
@@ -228,6 +229,7 @@ func (h *Host) LaunchManagedWithPolicy(ctx context.Context, spec ManagedLaunchSp
 	if runtimeAudience, err := runtimeAudienceEnvironment(policy); err == nil {
 		environment = append(environment, runtimeAudience)
 	}
+	environment = append(environment, clusterMaxReplicasEnvironment(policy))
 	if len(policy.Configuration) != 0 {
 		environment = append(environment, protocol.PluginConfigEnvKey+"="+string(policy.Configuration))
 	}
@@ -331,7 +333,7 @@ func validateExtraEnvironment(environment []string) error {
 
 func reservedPluginEnvironmentKey(key string) bool {
 	switch key {
-	case protocol.MagicEnvKey, protocol.HostAddrEnvKey, protocol.LaunchTokenEnvKey, protocol.PluginConfigEnvKey, protocol.RuntimeAudienceEnvKey:
+	case protocol.MagicEnvKey, protocol.HostAddrEnvKey, protocol.LaunchTokenEnvKey, protocol.PluginConfigEnvKey, protocol.RuntimeAudienceEnvKey, protocol.ClusterMaxReplicasEnvKey:
 		return true
 	default:
 		return false

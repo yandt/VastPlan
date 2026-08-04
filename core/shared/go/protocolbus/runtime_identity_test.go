@@ -25,3 +25,19 @@ func TestLaunchPolicyCreatesReservedRuntimeAudience(t *testing.T) {
 		}
 	}
 }
+
+func TestLaunchPolicyCreatesReservedClusterReplicaEnvelope(t *testing.T) {
+	policy := LaunchPolicy{ClusterMaxReplicas: 5}
+	environment := clusterMaxReplicasEnvironment(policy)
+	if environment != protocol.ClusterMaxReplicasEnvKey+"=5" {
+		t.Fatalf("可信最大副本数环境无效: %q", environment)
+	}
+	if err := validateExtraEnvironment([]string{environment}); err == nil {
+		t.Fatal("执行驱动不得覆盖宿主保留的最大副本数")
+	}
+	for _, inherited := range pluginEnvironment([]string{protocol.ClusterMaxReplicasEnvKey}) {
+		if strings.HasPrefix(inherited, protocol.ClusterMaxReplicasEnvKey+"=") {
+			t.Fatal("最大副本数不得从父进程继承")
+		}
+	}
+}

@@ -110,7 +110,8 @@ func (r *Reconciler) reconcileTarget(ctx context.Context, revision uint64, unit 
 		EnvironmentAllowlists: envelope.EnvironmentAllowlist,
 		KernelServiceGrants:   envelope.KernelServiceGrants,
 		Config:                RawConfig(unit.Config), Plugins: installed, Migrations: migrations,
-		RestartBase: current.RestartCount,
+		RestartBase:        current.RestartCount,
+		ClusterMaxReplicas: unit.ClusterMaxReplicas,
 	}
 	if r.ActivationGate != nil {
 		if err := r.ActivationGate.Allow(ctx, runtimeUnit); err != nil {
