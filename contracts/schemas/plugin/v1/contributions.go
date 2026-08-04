@@ -150,6 +150,26 @@ func BackendRuntimeContributions(manifest Manifest) ([]RuntimeContribution, erro
 	return out, nil
 }
 
+// ManifestDataModels returns the signed references to external DataModel files.
+func ManifestDataModels(manifest Manifest) ([]DataModelReference, error) {
+	var backend struct {
+		DataModels []DataModelReference `json:"dataModels"`
+	}
+	if raw := manifest.Contributes["backend"]; len(raw) != 0 {
+		if err := json.Unmarshal(raw, &backend); err != nil {
+			return nil, fmt.Errorf("解析 backend.dataModels: %w", err)
+		}
+	}
+	seen := map[string]struct{}{}
+	for _, reference := range backend.DataModels {
+		if _, duplicate := seen[reference.ID]; duplicate {
+			return nil, fmt.Errorf("backend.dataModels 重复: %s", reference.ID)
+		}
+		seen[reference.ID] = struct{}{}
+	}
+	return append([]DataModelReference(nil), backend.DataModels...), nil
+}
+
 // IsLocalPermissionAuxiliary reports whether a contribution is a host-local
 // authorization guard that may be co-located with a service unit whose
 // schedulable capability uses a cluster policy. The exception is intentionally

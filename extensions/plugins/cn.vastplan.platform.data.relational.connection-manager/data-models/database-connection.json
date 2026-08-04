@@ -1,0 +1,34 @@
+{
+  "contract": "data.model.v1",
+  "id": "platform.database.connection",
+  "schemaVersion": 1,
+  "storage": { "kind": "platform-control", "table": "database_connections" },
+  "fields": [
+    { "id": "id", "column": "id", "type": "uuid", "nullable": false, "sensitivity": "internal" },
+    { "id": "tenantId", "column": "tenant_id", "type": "string", "nullable": false, "sensitivity": "confidential" },
+    { "id": "serviceId", "column": "service_id", "type": "string", "nullable": false, "sensitivity": "internal" },
+    { "id": "name", "column": "name", "type": "string", "nullable": false, "sensitivity": "internal" },
+    { "id": "providerId", "column": "provider_id", "type": "string", "nullable": false, "sensitivity": "internal" },
+    { "id": "endpoint", "column": "endpoint", "type": "string", "nullable": false, "sensitivity": "confidential" },
+    { "id": "database", "column": "database_name", "type": "string", "nullable": true, "sensitivity": "confidential" },
+    { "id": "options", "column": "provider_options", "type": "json", "nullable": false, "sensitivity": "confidential" },
+    { "id": "pool", "column": "pool_policy", "type": "json", "nullable": false, "sensitivity": "internal" },
+    { "id": "credentialRef", "column": "credential_ref", "type": "string", "nullable": false, "sensitivity": "secret" },
+    { "id": "revision", "column": "revision", "type": "int64", "nullable": false, "sensitivity": "internal" },
+    { "id": "createdAt", "column": "created_at", "type": "timestamp", "nullable": false, "sensitivity": "internal" },
+    { "id": "updatedAt", "column": "updated_at", "type": "timestamp", "nullable": false, "sensitivity": "internal" },
+    { "id": "deletedAt", "column": "deleted_at", "type": "timestamp", "nullable": true, "sensitivity": "internal" }
+  ],
+  "primaryKey": ["id"],
+  "indexes": [
+    { "id": "byTenantService", "fields": ["tenantId", "serviceId"], "unique": false },
+    { "id": "byProvider", "fields": ["providerId"], "unique": false }
+  ],
+  "uniqueConstraints": [
+    { "id": "tenantServiceName", "fields": ["tenantId", "serviceId", "name"] }
+  ],
+  "scope": { "tenant": "required", "service": "required" },
+  "optimisticLock": { "field": "revision" },
+  "audit": { "createdAt": "createdAt", "updatedAt": "updatedAt" },
+  "deletion": { "mode": "soft", "field": "deletedAt" }
+}

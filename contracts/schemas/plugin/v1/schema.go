@@ -286,6 +286,15 @@ type RuntimeRequirement struct {
 	RoutingDomain  string `json:"routingDomain,omitempty"`
 }
 
+// DataModelReference binds a signed plugin manifest to one external
+// data.model.v1 document without inflating the manifest itself.
+type DataModelReference struct {
+	ID              string `json:"id"`
+	ContractVersion string `json:"contractVersion"`
+	Path            string `json:"path"`
+	SHA256          string `json:"sha256"`
+}
+
 // State 声明各运行面的插件私有持久状态。Backend 1.0 只发布 backend 契约；
 // 其他运行面在各自内核封板时追加，不能借 additionalProperties 提前占位。
 type State struct {
@@ -356,6 +365,7 @@ var backendContributionPoints = map[string]string{
 var declarativeBackendContributionGroups = map[string]struct{}{
 	"apiContracts":      {},
 	"dataPlaneServices": {},
+	"dataModels":        {},
 }
 
 // BackendRuntimeContributions 把已经通过 Schema 的 backend 清单贡献规范化为协议总线
