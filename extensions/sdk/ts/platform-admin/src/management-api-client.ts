@@ -1,21 +1,26 @@
 import type { PlatformFetch, PlatformFetchResponse } from "./types.js";
 import { PlatformAdminError } from "./client.js";
+import { CSRFTokenCache, withCSRF } from "./csrf-token-cache.js";
 
 export class ManagementAPIClient {
   private readonly basePath: string;
+  private readonly csrf: CSRFTokenCache;
 
   public constructor(private readonly fetcher: PlatformFetch, portalID: string, serviceID: string, apiID: string, private readonly csrfPath = "/v1/csrf") {
     this.basePath = `/v1/portals/${segment(portalID)}/platform/services/${segment(serviceID)}/api/${segment(apiID)}`;
+    this.csrf = new CSRFTokenCache(async () => {
+      const value = await this.call<{ token: string }>(this.csrfPath, { method: "GET" });
+      if (!value.token) throw new PlatformAdminError(403, "csrf_required");
+      return value.token;
+    });
   }
 
   public get<T>(path: string): Promise<T> { return this.call<T>(this.route(path), { method: "GET" }); }
 
   public async mutate<T>(path: string, method: "POST" | "PUT" | "PATCH" | "DELETE", body: unknown = {}): Promise<T> {
-    const csrf = await this.call<{ token: string }>(this.csrfPath, { method: "GET" });
-    if (!csrf.token) throw new PlatformAdminError(403, "csrf_required");
-    return this.call<T>(this.route(path), {
-      method, headers: { "Content-Type": "application/json", "X-VastPlan-CSRF": csrf.token }, body: JSON.stringify(body),
-    });
+    return withCSRF(this.csrf, (token) => this.call<T>(this.route(path), {
+      method, headers: { "Content-Type": "application/json", "X-VastPlan-CSRF": token }, body: JSON.stringify(body),
+    }), isCSRFRejected);
   }
 
   private route(path: string): string {
@@ -34,6 +39,10 @@ export class ManagementAPIClient {
     }
     return value as T;
   }
+}
+
+function isCSRFRejected(error: unknown): boolean {
+  return error instanceof PlatformAdminError && error.status === 403 && error.code === "csrf_rejected";
 }
 
 export function createBrowserManagementAPIClient(portalID: string, serviceID: string, apiID: string): ManagementAPIClient {

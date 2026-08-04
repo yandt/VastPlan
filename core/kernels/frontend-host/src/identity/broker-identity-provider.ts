@@ -5,7 +5,7 @@ import type { BrokerIdentityConfig } from "../config/identity-config";
 import { appendSetCookie, onlyCookie } from "../http/cookies";
 import { sendAPIError, sendJSON } from "../http/json-response";
 import { readRequestJSON, requireJSONObject, RequestJSONError } from "../http/request-json";
-import { issueCSRF, validCSRF } from "../security/csrf";
+import { issueCSRF, renewCSRF, validCSRF } from "../security/csrf";
 import type { AuthenticationBrokerPort } from "./authentication-broker-port";
 import { parseContinueInput, parseDescribe, parseResultEnvelope } from "./broker-identity-contract";
 import { authenticationProofFromBrokerSession, createBrokerAuthenticationProof, createBrokerSession, createBrokerTransaction, parseBrokerTransaction, principalFromBrokerSession, validReturnTo } from "./broker-identity-session";
@@ -111,7 +111,7 @@ export class BrokerIdentityProvider implements IdentityProvider {
 
   private async begin(request: IncomingMessage, response: ServerResponse, secure: boolean): Promise<true> {
     if (request.method !== "POST") return apiError(response, 405, "method_not_allowed");
-    if (!validMutation(request, secure)) return apiError(response, 403, "csrf_rejected");
+    if (!validMutation(request, response, secure)) return apiError(response, 403, "csrf_rejected");
     try {
       const body = requireJSONObject(await readRequestJSON(request, 8192));
       if (!hasOnlyFrom(body, ["methodId", "locale", "returnTo"]) || !safeID(body.methodId) || typeof body.locale !== "string" || body.locale.length > 64 || typeof body.returnTo !== "string" || !validReturnTo(body.returnTo)) throw new RequestJSONError("认证事务请求无效");
@@ -132,7 +132,7 @@ export class BrokerIdentityProvider implements IdentityProvider {
 
   private async beginProviderTest(request: IncomingMessage, response: ServerResponse, secure: boolean): Promise<true> {
     if (request.method !== "POST") return apiError(response, 405, "method_not_allowed");
-    if (!validMutation(request, secure)) return apiError(response, 403, "csrf_rejected");
+    if (!validMutation(request, response, secure)) return apiError(response, 403, "csrf_rejected");
     let principal: Principal;
     try { principal = await this.authenticate(request); } catch { return apiError(response, 401, "session_required"); }
     if (!principal.roles.includes("foundation.security.authentication.providers.test")) return apiError(response, 403, "forbidden");
@@ -153,7 +153,7 @@ export class BrokerIdentityProvider implements IdentityProvider {
 
   private async continue(request: IncomingMessage, response: ServerResponse, secure: boolean, id: string, redirect?: Readonly<Record<string, string>>): Promise<true> {
     if (redirect === undefined && request.method !== "POST") return apiError(response, 405, "method_not_allowed");
-    if (redirect === undefined && !validMutation(request, secure)) return apiError(response, 403, "csrf_rejected");
+    if (redirect === undefined && !validMutation(request, response, secure)) return apiError(response, 403, "csrf_rejected");
     const transaction = this.readTransaction(request, id);
     if (transaction === undefined) return apiError(response, 401, "authentication_transaction_rejected");
     try {
@@ -205,7 +205,7 @@ export class BrokerIdentityProvider implements IdentityProvider {
 
   private async resend(request: IncomingMessage, response: ServerResponse, secure: boolean, id: string): Promise<true> {
     if (request.method !== "POST") return apiError(response, 405, "method_not_allowed");
-    if (!validMutation(request, secure)) return apiError(response, 403, "csrf_rejected");
+    if (!validMutation(request, response, secure)) return apiError(response, 403, "csrf_rejected");
     const transaction = this.readTransaction(request, id);
     if (transaction === undefined) return apiError(response, 401, "authentication_transaction_rejected");
     const value = parseResultEnvelope(await this.broker.call(transaction.tenantId, "resend", { transactionId: id, stepId: transaction.stepId }), false);
@@ -215,7 +215,7 @@ export class BrokerIdentityProvider implements IdentityProvider {
   }
 
   private async cancel(request: IncomingMessage, response: ServerResponse, secure: boolean, id: string): Promise<true> {
-    if (!validMutation(request, secure)) return apiError(response, 403, "csrf_rejected");
+    if (!validMutation(request, response, secure)) return apiError(response, 403, "csrf_rejected");
     const transaction = this.readTransaction(request, id);
     if (transaction === undefined) return apiError(response, 401, "authentication_transaction_rejected");
     await this.broker.call(transaction.tenantId, "cancel", { transactionId: id });
@@ -226,7 +226,7 @@ export class BrokerIdentityProvider implements IdentityProvider {
 
   private async logout(request: IncomingMessage, response: ServerResponse, secure: boolean): Promise<true> {
     if (request.method !== "POST") return apiError(response, 405, "method_not_allowed");
-    if (!validMutation(request, secure)) return apiError(response, 403, "csrf_rejected");
+    if (!validMutation(request, response, secure)) return apiError(response, 403, "csrf_rejected");
     appendSetCookie(response, clearCookie(sessionCookie, "/", secure, "Lax"));
     appendSetCookie(response, clearCookie(authenticationProofCookie, "/", secure, "Strict"));
     appendSetCookie(response, clearCookie("vastplan_csrf", "/", secure, "Strict"));
@@ -259,11 +259,11 @@ export class BrokerIdentityProvider implements IdentityProvider {
   }
 }
 
-function validMutation(request: IncomingMessage, secure: boolean): boolean {
+function validMutation(request: IncomingMessage, response: ServerResponse, secure: boolean): boolean {
   if (!validCSRF(request)) return false;
   const host = request.headers.host, origin = request.headers.origin, fetchSite = request.headers["sec-fetch-site"];
   if (typeof host !== "string" || typeof origin !== "string" || origin !== `${secure ? "https" : "http"}://${host}`) return false;
-  return fetchSite === undefined || fetchSite === "same-origin";
+  return (fetchSite === undefined || fetchSite === "same-origin") && renewCSRF(request, response, secure);
 }
 function requestHost(request: IncomingMessage): string | undefined { try { const value = new URL(`https://${request.headers.host ?? ""}`); return value.hostname.toLowerCase().replace(/\.$/, ""); } catch { return undefined; } }
 function targetAudience(request: IncomingMessage, portalId: string): string { const host = requestHost(request); if (host === undefined) throw new RequestJSONError("Host 无效"); return `portal:${host}:${portalId}`; }

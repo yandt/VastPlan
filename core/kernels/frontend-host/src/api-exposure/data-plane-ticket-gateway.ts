@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { CapabilityApplicationError, type TrustedCapabilityInvoker } from "../capabilities/capability-invoker";
 import { sendAPIError, sendJSON } from "../http/json-response";
 import type { IdentityProvider, Principal } from "../identity/identity-provider";
-import { validCSRF } from "../security/csrf";
+import { renewCSRF } from "../security/csrf";
 import type { APIExposureCatalogPort, DataPlaneExposure } from "./api-exposure-contract";
 
 const maximumRequestBytes = 8 << 10;
@@ -27,6 +27,7 @@ export class DataPlaneTicketGateway {
     private readonly catalog: APIExposureCatalogPort,
     private readonly identity: IdentityProvider,
     private readonly invoker: TrustedCapabilityInvoker,
+    private readonly secureCookies: boolean,
   ) {}
 
   public async handle(request: IncomingMessage, response: ServerResponse, routeKey: string): Promise<void> {
@@ -38,7 +39,7 @@ export class DataPlaneTicketGateway {
     const principal = await this.authenticate(request, exposure);
     if (principal === undefined) return sendAPIError(response, 401, "authentication_required");
     if (!authorized(principal, exposure)) return sendAPIError(response, 403, "forbidden");
-    if (principal.requiresCSRF !== false && !exposure.authentication.allowAnonymous && !validCSRF(request)) return sendAPIError(response, 403, "csrf_rejected");
+    if (principal.requiresCSRF !== false && !exposure.authentication.allowAnonymous && !renewCSRF(request, response, this.secureCookies)) return sendAPIError(response, 403, "csrf_rejected");
 
     let body: TicketRequest;
     try { body = validateTicketRequest(await readJSON(request)); }

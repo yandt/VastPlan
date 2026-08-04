@@ -14,7 +14,7 @@ Portal 已具备双输入解析、可信 ESM 装载、Arco 设计系统和受治
 
 ## 决策
 
-1. `@vastplan/ui-primitives` 提供类型化 `PortalControlClient`，覆盖 list、create、update、submit、approve、publish、rollback 和 audit。每次非安全读取操作重新取得短期 CSRF token；错误向 UI 暴露稳定错误码，不暴露内部调用细节。
+1. `@vastplan/ui-primitives` 提供类型化 `PortalControlClient`，覆盖 list、create、update、submit、approve、publish、rollback 和 audit。非安全写操作使用短期双提交 CSRF token；浏览器仅在内存中按 15 分钟闲置窗口复用，通过 CSRF 预检的写请求续期同一 SameSite Cookie，刷新后重新取得。错误向 UI 暴露稳定错误码，不暴露内部调用细节。
 2. Composer 的草稿允许在 `draft` 状态更新完整 Application Composition；提交后不可编辑。更新仍执行 Schema、插件分类、Catalog 和当前 Platform Profile 解析校验，并产生 `draft.updated` 审计事件。
 3. Portal Composer 页面提供 revision 列表、草稿创建/编辑、差异预览、提交、审批、发布、回滚和审计查看。职责分离和最终权限仍由服务端策略裁决，按钮可见性不是授权边界。
 4. 普通活动模块继续只通过 `/v1/portal-modules/{activeRevision}/{plugin}.js` 读取。启动失败时，内核原生恢复页可请求 `/v1/portal-recovery`；服务端只选择同租户、同 Portal ID、非当前且最近的已发布 revision。

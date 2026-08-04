@@ -9,10 +9,7 @@ const csrfTokenPattern = /^[a-f0-9]{64}$/;
 export function issueCSRF(request: IncomingMessage, response: ServerResponse, secure: boolean): string {
   const existing = onlyCookie(request, csrfCookieName);
   const token = existing !== undefined && csrfTokenPattern.test(existing) ? existing : randomBytes(32).toString("hex");
-  const attributes = [`${csrfCookieName}=${token}`, "Path=/", "Max-Age=900", "SameSite=Strict"];
-  if (secure) attributes.push("Secure");
-  response.setHeader("Set-Cookie", attributes.join("; "));
-  response.setHeader("Cache-Control", "no-store");
+  setCSRFCookie(response, token, secure);
   return token;
 }
 
@@ -22,4 +19,21 @@ export function validCSRF(request: IncomingMessage): boolean {
   const header = Array.isArray(headerValue) ? undefined : headerValue;
   if (cookie === undefined || header === undefined || cookie.length !== header.length) return false;
   return timingSafeEqual(Buffer.from(cookie), Buffer.from(header));
+}
+
+/** Validates and extends the same double-submit token for another 15 idle minutes. */
+export function renewCSRF(request: IncomingMessage, response: ServerResponse, secure: boolean): boolean {
+  const token = onlyCookie(request, csrfCookieName);
+  if (token === undefined || !csrfTokenPattern.test(token) || !validCSRF(request)) return false;
+  setCSRFCookie(response, token, secure);
+  return true;
+}
+
+function setCSRFCookie(response: ServerResponse, token: string, secure: boolean): void {
+  const attributes = [`${csrfCookieName}=${token}`, "Path=/", "Max-Age=900", "SameSite=Strict"];
+  if (secure) attributes.push("Secure");
+  const cookie = attributes.join("; ");
+  const existing = response.getHeader("Set-Cookie");
+  response.setHeader("Set-Cookie", existing === undefined ? cookie : Array.isArray(existing) ? [...existing, cookie] : [String(existing), cookie]);
+  response.setHeader("Cache-Control", "no-store");
 }

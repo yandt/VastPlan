@@ -6,7 +6,7 @@ import type { InteractionPort } from "../capabilities/interaction-client";
 import type { PlatformCapabilityPort } from "../capabilities/platform-management-client";
 import type { PlatformManagementResolver } from "../capabilities/platform-management-resolver";
 import type { PortalDeliveryStore } from "../runtime/portal-delivery-store";
-import { issueCSRF, validCSRF } from "../security/csrf";
+import { issueCSRF, renewCSRF } from "../security/csrf";
 import { sendAPIError, sendJSON } from "./json-response";
 import { PortalControlRoutes } from "./portal-control-routes";
 import { InteractionRoutes } from "./interaction-routes";
@@ -47,7 +47,7 @@ export function createAPIHandler(options: APIHandlerOptions): (request: Incoming
       const token = issueCSRF(request, response, options.secureCookies);
       return sendJSON(response, 200, { token }, method === "HEAD");
     }
-    if (method !== "GET" && method !== "HEAD" && !validCSRF(request)) return sendAPIError(response, 403, "csrf_rejected");
+    if (method !== "GET" && method !== "HEAD" && !renewCSRF(request, response, options.secureCookies)) return sendAPIError(response, 403, "csrf_rejected");
     const controller = new AbortController();
     request.once("aborted", () => controller.abort(new Error("Browser request aborted")));
     if (runtime !== undefined) {

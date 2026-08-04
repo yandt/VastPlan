@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ManagementAPIClient, PlatformAdminClient, PlatformAdminError, type PlatformFetch } from "./index";
 
 describe("PlatformAdminClient", () => {
@@ -13,6 +13,52 @@ describe("PlatformAdminClient", () => {
 	expect(calls[1].path).toBe("/v1/portals/operations/platform/services/credentials/credentials/vault.db");
     expect(calls[1].path).not.toContain("top-secret");
     expect(calls[1].body).toContain("top-secret");
+  });
+
+  it("reuses a CSRF token until fifteen idle minutes have elapsed", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-08-04T12:00:00Z"));
+      const calls: string[] = [];
+      const client = new PlatformAdminClient(async (path) => {
+        calls.push(path);
+        return { ok: true, status: 200, json: async () => path === "/v1/csrf" ? { token: "safe" } : { key: "theme", value: "dark" } };
+      }, "operations", "settings");
+
+      await client.putSetting("theme", "dark");
+      vi.setSystemTime(new Date("2026-08-04T12:14:00Z"));
+      await client.putSetting("theme", "light");
+      vi.setSystemTime(new Date("2026-08-04T12:28:00Z"));
+      await client.putSetting("theme", "system");
+      expect(calls.filter((path) => path === "/v1/csrf")).toHaveLength(1);
+
+      vi.setSystemTime(new Date("2026-08-04T12:43:01Z"));
+      await client.putSetting("theme", "dark");
+      expect(calls.filter((path) => path === "/v1/csrf")).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("refreshes once and safely retries when the host rejected CSRF before routing", async () => {
+    const calls: string[] = [];
+    let writes = 0;
+    const client = new PlatformAdminClient(async (path) => {
+      calls.push(path);
+      if (path === "/v1/csrf") return { ok: true, status: 200, json: async () => ({ token: `safe-${calls.length}` }) };
+      writes += 1;
+      return writes === 1
+        ? { ok: false, status: 403, json: async () => ({ error: "csrf_rejected" }) }
+        : { ok: true, status: 200, json: async () => ({ key: "theme", value: "dark" }) };
+    }, "operations", "settings");
+
+    await client.putSetting("theme", "dark");
+    expect(calls).toEqual([
+      "/v1/csrf",
+      "/v1/portals/operations/platform/services/settings/settings/theme",
+      "/v1/csrf",
+      "/v1/portals/operations/platform/services/settings/settings/theme",
+    ]);
   });
 
   it("rejects ambiguous path names locally", async () => {
@@ -107,7 +153,6 @@ describe("PlatformAdminClient", () => {
     expect(calls).toEqual([
       { path: "/v1/csrf", method: "GET", body: undefined },
       { path: "/v1/portals/operations/platform/services/deployment/deployment/service-revisions", method: "POST", body: JSON.stringify({ intent }) },
-      { path: "/v1/csrf", method: "GET", body: undefined },
       { path: "/v1/portals/operations/platform/services/deployment/deployment/service-revisions/4/refresh-plan", method: "POST", body: "{}" },
     ]);
   });
@@ -205,7 +250,7 @@ describe("PlatformAdminClient", () => {
     expect(() => client.cutoverArtifactMigration("repository.move-001", 0)).toThrowError(PlatformAdminError);
     expect(() => client.releaseArtifactMigration("bad/id")).toThrowError(PlatformAdminError);
     await client.setArtifactLifecycle({ ref: { pluginId: "cn.example.demo", version: "1.0.0", channel: "stable" }, status: "deprecated", reason: "use v2", expectedRevision: 17 });
-    expect(calls[3]).toEqual({
+    expect(calls[2]).toEqual({
       path: "/v1/portals/operations/platform/services/artifacts/artifacts/lifecycle",
       method: "POST",
       body: expect.stringContaining('"expectedRevision":17'),
@@ -294,9 +339,9 @@ describe("PlatformAdminClient", () => {
     expect(calls.map((call) => call.path)).toEqual([
       "/v1/portals/operations/platform/services/artifacts/artifacts/publications",
       "/v1/csrf", "/v1/portals/operations/platform/services/artifacts/artifacts/publications",
-      "/v1/csrf", `/v1/portals/operations/platform/services/artifacts/artifacts/publications/${"a".repeat(64)}/approve`,
-      "/v1/csrf", `/v1/portals/operations/platform/services/artifacts/artifacts/publications/${"b".repeat(64)}/reject`,
-      "/v1/csrf", `/v1/portals/operations/platform/services/artifacts/artifacts/publications/${"c".repeat(64)}/cancel`,
+      `/v1/portals/operations/platform/services/artifacts/artifacts/publications/${"a".repeat(64)}/approve`,
+      `/v1/portals/operations/platform/services/artifacts/artifacts/publications/${"b".repeat(64)}/reject`,
+      `/v1/portals/operations/platform/services/artifacts/artifacts/publications/${"c".repeat(64)}/cancel`,
       "/v1/portals/operations/platform/services/artifacts/artifacts/evidence?pluginId=cn.vastplan.demo&version=1.0.0&channel=stable",
     ]);
   });
@@ -314,7 +359,6 @@ describe("PlatformAdminClient", () => {
       { path: "/v1/portals/operations/platform/services/configuration/plugin-configurations", method: "GET", body: undefined },
       { path: "/v1/csrf", method: "GET", body: undefined },
 	  { path: "/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates", method: "POST", body: JSON.stringify({ configurationId: "cfg_aaaaaaaaaaaaaaaaaaaaaaaa", catalogDigest: "b".repeat(64), values: { region: "cn-east" }, secrets: { token: "one-use-secret" } }) },
-      { path: "/v1/csrf", method: "GET", body: undefined },
       { path: "/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/pcfg_cccccccccccccccccccccccccccccccc", method: "DELETE", body: "{\"expectedRevision\":1}" },
     ]);
     expect(calls.some((call) => call.path.includes("com.example"))).toBe(false);
@@ -337,7 +381,6 @@ describe("PlatformAdminClient", () => {
       { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/resources?configurationId=${configurationId}&resourceCollectionId=${collectionId}&catalogDigest=${digest}&limit=20`, method: "GET", body: undefined },
       { path: "/v1/csrf", method: "GET", body: undefined },
       { path: "/v1/portals/operations/platform/services/configuration/plugin-configurations/resources/candidates/create", method: "POST", body: JSON.stringify({ configurationId, resourceCollectionId: collectionId, catalogDigest: digest, values: { endpoint: "https://notify.example.test" }, secrets: { authorization: "secret" } }) },
-      { path: "/v1/csrf", method: "GET", body: undefined },
       { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/pcfg_${"e".repeat(32)}/activate-resource`, method: "POST", body: '{"expectedRevision":7}' },
     ]);
     expect(calls.some((call) => call.path.includes("authentication.delivery.webhook"))).toBe(false);
@@ -360,6 +403,18 @@ describe("ManagementAPIClient", () => {
       { path: "/v1/portals/operations/platform/services/api-exposure/api/primary/api-exposures", method: "POST", body: JSON.stringify({ name: "customer-api" }) },
     ]);
     expect(calls.some(({ path }) => path.includes("capability=") || path.includes("operation="))).toBe(false);
+  });
+
+  it("shares the same idle CSRF policy with the generic Management API client", async () => {
+    const calls: string[] = [];
+    const client = new ManagementAPIClient(async (path) => {
+      calls.push(path);
+      return { ok: true, status: 200, json: async () => path === "/v1/csrf" ? { token: "safe" } : { id: 7 } };
+    }, "operations", "api-exposure", "primary");
+
+    await client.mutate("/api-exposures", "POST", { name: "one" });
+    await client.mutate("/api-exposures", "POST", { name: "two" });
+    expect(calls.filter((path) => path === "/v1/csrf")).toHaveLength(1);
   });
 
   it("rejects ambiguous selectors and relative-path traversal", async () => {

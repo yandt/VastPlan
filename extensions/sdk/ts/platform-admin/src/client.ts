@@ -17,11 +17,18 @@ import type {
 	PluginInstallationCandidate, PluginInstallationPreview, PluginInstallationPreviewRequest, PluginInstallationTargetOption, SelfServicePluginInstallationRequest, ServiceAuditEvent, ServiceRevision, ServiceRevisionStatus, Setting, SubmitArtifactPublicationRequest, TestRelease,
 	TestReleaseStatus, TestTargetBinding, UpdateAuthorizationBindingRequest,
 } from "./types.js";
+import { CSRFTokenCache, withCSRF } from "./csrf-token-cache.js";
 
 export class PlatformAdminClient {
 	private readonly basePath: string;
+	private readonly csrf: CSRFTokenCache;
 	public constructor(private readonly fetcher: PlatformFetch, portalID: string, serviceID: string, private readonly csrfPath = "/v1/csrf") {
 		this.basePath = `/v1/portals/${segment(portalID)}/platform/services/${segment(serviceID)}`;
+		this.csrf = new CSRFTokenCache(async () => {
+			const value = await this.get<{ token: string }>(this.csrfPath);
+			if (!value.token) throw new PlatformAdminError(403, "csrf_required");
+			return value.token;
+		});
 	}
 
   public listSettings(prefix = ""): Promise<Setting[]> { return this.get(`${this.basePath}/settings${query({ prefix })}`); }
@@ -325,13 +332,11 @@ export class PlatformAdminClient {
   private get<T>(path: string): Promise<T> { return this.call<T>(path, { method: "GET" }); }
 
   private async mutate<T>(path: string, method: "POST" | "PUT" | "DELETE", body?: unknown): Promise<T> {
-    const csrf = await this.get<{ token: string }>(this.csrfPath);
-    if (!csrf.token) throw new PlatformAdminError(403, "csrf_required");
-    return this.call<T>(path, {
+    return withCSRF(this.csrf, (token) => this.call<T>(path, {
       method,
-      headers: { "Content-Type": "application/json", "X-VastPlan-CSRF": csrf.token },
+      headers: { "Content-Type": "application/json", "X-VastPlan-CSRF": token },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    });
+    }), isCSRFRejected);
   }
 
   private async call<T>(path: string, init: { method: string; headers?: Record<string, string>; body?: string }): Promise<T> {
@@ -374,6 +379,10 @@ export class PlatformAdminError extends Error {
     super(`Platform administration request failed: ${code}`);
     this.name = "PlatformAdminError";
   }
+}
+
+function isCSRFRejected(error: unknown): boolean {
+  return error instanceof PlatformAdminError && error.status === 403 && error.code === "csrf_rejected";
 }
 
 function segment(value: string): string {

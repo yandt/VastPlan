@@ -34,7 +34,7 @@ node dist/portal-host.cjs \
   --interaction-logical-service platform.interaction-broker
 ```
 
-Portal 只接受最长 30 秒、绑定 transaction/tenant/Portal/audience/Provider Profile 的 Ed25519 Broker Assertion；本地验签后仍必须回到 leader-routed Broker 原子消费，再由独立 Authorization Session 插件把稳定主体映射成内部权限。外部 Provider 的 Group/Role claim 不会直接进入 Session。会话使用 AES-256-GCM HttpOnly Cookie，最长 1 小时、默认 15 分钟；会话前写请求同时校验 Origin、Fetch Metadata 和双提交 CSRF。
+Portal 只接受最长 30 秒、绑定 transaction/tenant/Portal/audience/Provider Profile 的 Ed25519 Broker Assertion；本地验签后仍必须回到 leader-routed Broker 原子消费，再由独立 Authorization Session 插件把稳定主体映射成内部权限。外部 Provider 的 Group/Role claim 不会直接进入 Session。会话使用 AES-256-GCM HttpOnly Cookie，最长 1 小时、默认 15 分钟；会话前写请求同时校验 Origin、Fetch Metadata 和双提交 CSRF。浏览器 SDK 的 CSRF Token 只保留在内存：每次通过 CSRF 预检的受保护写请求都会续期同一个 SameSite Cookie 与 15 分钟闲置期限，刷新页面后重新获取，绝不写入 Web Storage。
 
 `--api-exposure-catalog` 是控制面发布的自包含不可变快照。Host 启动时必须完整验证；运行中至多每秒检查一次文件元数据，只在新 generation 的 Schema、契约摘要和路由语义全部通过后切换，失败继续使用 Last Known Good。公共地址仅使用 `/api/r/{routeKey}/v{major}/...`，不接受客户端提交 plugin/capability/service/tenant。当前每实例限流是入口抗滥用保护，集群业务配额仍由共享 Authorization/Quota Provider 负责。
 

@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { CapabilityApplicationError, type TrustedCapabilityInvoker } from "../capabilities/capability-invoker";
 import type { IdentityProvider, Principal } from "../identity/identity-provider";
-import { validCSRF } from "../security/csrf";
+import { renewCSRF } from "../security/csrf";
 import { sendAPIError, sendJSON } from "../http/json-response";
 import type { APIExposureCatalogPort, APIRouteContract, GatewayInvocation, ResolvedAPIExposure } from "./api-exposure-contract";
 import { matchAPIRoute } from "./api-route-matcher";
@@ -26,7 +26,7 @@ export class APIExposureGateway {
     rateLimiter?: APIExposureRateLimiter,
   ) {
     this.rateLimiter = rateLimiter ?? new APIExposureRateLimiter();
-    this.dataPlane = new DataPlaneTicketGateway(catalog, identity, invoker);
+    this.dataPlane = new DataPlaneTicketGateway(catalog, identity, invoker, secureCookies);
   }
 
   public async handle(request: IncomingMessage, response: ServerResponse, path: string): Promise<void> {
@@ -48,7 +48,7 @@ export class APIExposureGateway {
     const principal = await this.authenticate(request, resolved);
     if (principal === undefined) return sendAPIError(response, 401, "authentication_required");
     if (!this.authorizedPrincipal(principal, resolved)) return sendAPIError(response, 403, "forbidden");
-    if (method !== "GET" && principal.requiresCSRF !== false && !resolved.exposure.authentication.allowAnonymous && !validCSRF(request)) {
+    if (method !== "GET" && principal.requiresCSRF !== false && !resolved.exposure.authentication.allowAnonymous && !renewCSRF(request, response, this.secureCookies)) {
       return sendAPIError(response, 403, "csrf_rejected");
     }
     if (!this.rateLimiter.allow(resolved.exposure.routeKey, principal.id, resolved.exposure.limits.requestsPerMinute)) {
