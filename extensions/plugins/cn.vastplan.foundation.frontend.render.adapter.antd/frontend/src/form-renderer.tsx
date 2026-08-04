@@ -1,4 +1,4 @@
-import { Card, ConfigProvider, Input, Select as AntdSelect, Steps, Tabs, Typography } from "antd";
+import { ConfigProvider, Input, Select as AntdSelect, Steps, Tabs, Typography } from "antd";
 import RJSFForm from "@rjsf/core/lib/components/Form.js";
 import { generateWidgets } from "@rjsf/antd/lib/widgets/index.js";
 import { enumOptionsIndexForValue, enumOptionsValueForIndex } from "@rjsf/utils";
@@ -25,6 +25,10 @@ const controlAlignmentCSS = `
 .vp-antd-form-controls-start .ant-form-item-control-input-content{justify-content:flex-start}
 .vp-antd-form-controls-end .ant-form-item-control-input-content{justify-content:flex-end}
 .vp-antd-form-controls-start .ant-form-item-control-input-content>*,.vp-antd-form-controls-end .ant-form-item-control-input-content>*{max-width:100%}
+.vp-antd-form-section{display:grid;gap:var(--vp-form-grid-gap,12px);min-width:0}
+.vp-antd-form-section-heading{display:grid;gap:6px;line-height:1.4}
+.vp-antd-form-section-heading>span{display:block;height:1px;background:var(--ant-color-split,#f0f0f0)}
+.vp-antd-form-section-collapsible>summary{cursor:pointer;font-weight:600}
 `;
 
 type TextResolver = (value: LocalizedText) => string;
@@ -113,6 +117,7 @@ type PresentedObjectProps = ObjectFieldTemplateProps & { presentation?: FormPres
 
 function PresentedObject({ presentation, activeSection, onSectionChange, ...props }: PresentedObjectProps) {
   const i18n = usePortalI18n();
+  const size = useComponentSize();
   const compactRoot = props.fieldPathId.path.length === 0 && presentation?.layout === "compact";
   if (props.fieldPathId.path.length !== 0) return <section className="vp-antd-form-object">{props.title === "" ? null : <Typography.Title level={5}>{props.title}</Typography.Title>}{props.description}{props.properties.filter((property) => !property.hidden).map((property) => <div key={property.name}>{property.content}</div>)}</section>;
   if (presentation?.sections === undefined || presentation.sections.length === 0) {
@@ -133,11 +138,12 @@ function PresentedObject({ presentation, activeSection, onSectionChange, ...prop
       const span = presentation.fields?.find((field) => formFieldName(field.pointer) === property.name)?.span ?? 1;
       return <div key={property.name} style={{ gridColumn: `span ${Math.min(Math.max(1, span), columns)}` }}>{property.content}</div>;
     })}</div>;
-    const description = section.description === undefined ? null : <Typography.Paragraph type="secondary">{i18n.text(section.description)}</Typography.Paragraph>;
+    const description = section.description === undefined ? null : <Typography.Paragraph type="secondary" style={{ marginBlock: 0 }}>{i18n.text(section.description)}</Typography.Paragraph>;
     if (presentation.navigation !== "sections") return <>{description}{body}</>;
+    const title = section.title === undefined ? undefined : i18n.text(section.title);
     return section.collapsible
-      ? <details><summary>{section.title === undefined ? section.id : i18n.text(section.title)}</summary>{description}{body}</details>
-      : <Card title={section.title === undefined ? undefined : i18n.text(section.title)}>{description}{body}</Card>;
+      ? <details className="vp-antd-form-section vp-antd-form-section-collapsible"><summary>{title ?? section.id}</summary>{description}{body}</details>
+      : <section className="vp-antd-form-section">{title === undefined ? null : <div className="vp-antd-form-section-heading"><Typography.Text strong>{title}</Typography.Text><span aria-hidden="true" /></div>}{description}{body}</section>;
   };
   const remaining = remainder.length === 0 ? null : <div>{remainder.map((property) => <div key={property.name}>{property.content}</div>)}</div>;
   if (presentation.navigation === "tabs") return <><Tabs activeKey={selected.id} onChange={onSectionChange} items={sections.map((section) => ({ key: section.id, label: section.title === undefined ? section.id : i18n.text(section.title), children: renderSection(section) }))} />{remaining}</>;
@@ -145,7 +151,7 @@ function PresentedObject({ presentation, activeSection, onSectionChange, ...prop
     const current = Math.max(0, sections.findIndex((section) => section.id === selected.id));
     return <><Steps current={current} onChange={(index) => onSectionChange?.(sections[index]!.id)} items={sections.map((section, index) => ({ title: section.title === undefined ? `${index + 1}` : i18n.text(section.title) }))} /><div style={{ marginTop: 24 }}>{renderSection(selected)}</div>{remaining}</>;
   }
-  return <div style={{ display: "grid", gap: 16 }}>{sections.map((section) => <div key={section.id}>{renderSection(section)}</div>)}{remaining}</div>;
+  return <div className="vp-antd-form-sections" style={{ display: "grid", gap: componentSizeRecipes.layout[size].gap }}>{sections.map((section) => <div key={section.id}>{renderSection(section)}</div>)}{remaining}</div>;
 }
 
 export function FormRenderer({ schema, value, onChange, size: requestedSize, presentation, presentationSection, onPresentationSectionChange, readOnly, submitting, errors: externalErrors = {}, context: suppliedContext, validate, validationDelayMs = 250, onValidationChange }: FormRendererProps) {

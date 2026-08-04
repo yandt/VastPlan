@@ -149,6 +149,9 @@ describe("Ant Design portal UI renderer", () => {
       errors={{ name: "Name is already used" }}
     /></PortalI18nProvider>);
     expect(markup).toContain("Identity");
+    expect(markup).toContain("vp-antd-form-section-heading");
+    expect(markup).toContain("vp-antd-form-section");
+    expect(markup).not.toContain("ant-card");
     expect(markup).toContain("Name");
     expect(markup).toContain("credential://");
     expect(markup).toContain("minmax(0, 35fr) minmax(0, 65fr)");

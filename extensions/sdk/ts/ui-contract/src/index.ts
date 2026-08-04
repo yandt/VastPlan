@@ -72,6 +72,7 @@ export interface FormPresentation extends SizeableProps {
   columns?: number;
   /** Relative percentage weights. Length must equal columns and total 100. */
   columnWidths?: readonly number[];
+  /** Sections render as sequential title-and-divider groups, never nested cards. */
   navigation?: "sections" | "tabs" | "steps";
   sections?: readonly FormSectionPresentation[];
   fields?: readonly FormFieldPresentation[];
