@@ -27,4 +27,15 @@ describe("form submit lifecycle", () => {
     expect(outcome).toMatchObject({ kind: "field-errors", fieldErrors: { "/name": "Required" } });
     expect(submitted).toBe(false);
   });
+
+  it("runs custom validation for the whole form before persistence", async () => {
+    let submitted = false;
+    const definition: WorkbenchFormDefinition = { ...base,
+      async validate() { return { "/name": "Required" }; },
+      async submit() { submitted = true; },
+    };
+    const outcome = await submitFormDefinition(definition, { value: {}, selected: [], context: {} }, new AbortController().signal);
+    expect(outcome).toMatchObject({ kind: "field-errors", fieldErrors: { "/name": "Required" } });
+    expect(submitted).toBe(false);
+  });
 });
