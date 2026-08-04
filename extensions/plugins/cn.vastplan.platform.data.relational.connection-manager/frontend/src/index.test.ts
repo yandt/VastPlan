@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { PlatformAdminClient } from "@vastplan/platform-admin";
 import { message } from "@vastplan/workbench-sdk";
-import { createDatabaseConnectionsPage } from "./index.js";
+import databaseConnectionsPlugin, { createDatabaseConnectionsPage } from "./index.js";
 
 describe("database connections Workbench page", () => {
   it("requires one-time material on create but never loads it for edit", async () => {
@@ -16,13 +16,28 @@ describe("database connections Workbench page", () => {
     expect(properties?.options).not.toHaveProperty("title");
     expect(properties?.pool).not.toHaveProperty("title");
     expect(create?.presentation?.sections).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: "options", title: expect.objectContaining({ fallback: "Provider 连接选项" }) }),
+      expect.objectContaining({ id: "options", title: expect.objectContaining({ fallback: "连接选项" }), fields: ["/options", "/credentialValue"] }),
       expect.objectContaining({ id: "pool", title: expect.objectContaining({ fallback: "连接池策略" }) }),
     ]));
+    expect(create?.presentation?.sections).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: "credential" })]));
     await expect(create?.validate?.({ value: {}, context: {}, signal: new AbortController().signal })).resolves.toEqual({ credentialValue: expect.objectContaining({ key: "error.credentialRequired" }) });
     const loaded = await edit?.load?.([{ name: "main", resourceId: "r", revision: 1, providerId: "postgresql", endpoint: "db:5432", options: { user: "app" }, pool: { maxIdle: 8, maxOpen: 32, maxLifetimeMs: 1000, maxIdleTimeMs: 1000, acquireTimeoutMs: 100, idlePoolTtlMs: 1000 }, runtime: "ready", credential: { managed: true, version: 2 }, credentialState: "managed", credentialVersion: 2 }], new AbortController().signal);
     expect(loaded).not.toHaveProperty("credentialValue");
     await create?.submit({ value: { name: "main", providerId: "postgresql", endpoint: "db:5432", options: { user: "app" }, credentialValue: "one-time" }, selected: [] }, new AbortController().signal);
     expect(putDatabaseConnection).toHaveBeenCalledWith("main", expect.objectContaining({ credentialValue: "one-time" }));
+  });
+
+  it("uses Chinese functional labels in the Chinese locale", () => {
+    const messages = databaseConnectionsPlugin.localization.messages["zh-CN"];
+    expect(messages).toMatchObject({
+      "form.provider": "数据库类型",
+      "form.tlsMode": "传输加密模式",
+      "form.serverName": "证书校验服务器名称",
+      "form.applicationName": "客户端应用名称",
+      "section.options": "连接选项",
+      "filter.provider": "数据库类型",
+      "column.provider": "数据库类型",
+      "column.runtime": "运行状态",
+    });
   });
 });

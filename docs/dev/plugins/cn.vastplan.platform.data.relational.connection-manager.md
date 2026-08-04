@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.platform.data.relational.connection-manager`
 能力：`tool.package/platform.database`
-当前制品版本：`0.10.6`
+当前制品版本：`0.10.7`
 
 ## 边界
 
@@ -33,4 +33,4 @@
 
 ## Portal 管理页
 
-同一签名制品提供 `/settings/databases` 页面。0.5 已迁移到 Collection/Form Workbench，统一配置 PostgreSQL/MySQL Provider、用户名、TLS、连接超时、池预算和 Runtime 状态。用户通过受治理的 `secretMaterial` 直接输入一次性密码或令牌，不再复制 CredentialRef；新建必须输入，编辑永不回填且留空保留现有托管凭证，提交结束后 Workbench 删除浏览器状态中的材料引用。表单由 `FormDialog` 组合 Overlay，由动态表单持有 Schema、分段和字段状态；数据库插件显式选择 `horizontal + inline`，连接标识、Provider 选项、连接池和托管凭证均声明两列分区，直接对象跨满分区后由 Renderer 将内部字段按同一两列模型排列。所有分段共享 Renderer 计算的 Label 列宽，Section 标题是唯一分组标题，不再绘制嵌套对象窗口或重复对象标题。详见《[插件配置与托管凭证](../architecture/插件配置与托管凭证.md)》。权限与集群调用见《[平台管理中心](../architecture/平台管理中心.md)》。
+同一签名制品提供 `/settings/databases` 页面。0.5 已迁移到 Collection/Form Workbench，统一配置 PostgreSQL/MySQL 数据库类型、用户名、传输加密、连接超时、池预算和运行状态。用户通过受治理的 `secretMaterial` 直接输入一次性密码或令牌，不再复制 CredentialRef；新建必须输入，编辑永不回填且留空保留现有托管凭证，提交结束后 Workbench 删除浏览器状态中的材料引用。表单由 `FormDialog` 组合 Overlay，由动态表单持有 Schema、分段和字段状态；数据库插件显式选择 `horizontal + inline`，连接标识、连接选项和连接池均声明两列分区，托管凭证在视觉上并入连接选项，但仍保持根级只写敏感字段的独立数据与安全边界。直接对象跨满分区后由 Renderer 将内部字段按同一两列模型排列。所有分段共享 Renderer 计算的 Label 列宽，Section 标题是唯一分组标题，不再绘制嵌套对象窗口或重复对象标题。中文环境中的功能性名称必须使用中文，PostgreSQL、MySQL、TCP、Unix 等产品或协议标识保留行业名称。详见《[插件配置与托管凭证](../architecture/插件配置与托管凭证.md)》。权限与集群调用见《[平台管理中心](../architecture/平台管理中心.md)》。
