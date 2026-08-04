@@ -23,7 +23,7 @@ export function FormActions({ form }: { form: FormWorkflowController }) {
     {steps && sectionIndex > 0 ? <ui.Button kind="secondary" disabled={running} onClick={() => form.setActiveSection(sections[sectionIndex - 1]?.id)}>{i18n.text(message(namespace, "action.previous", "上一步"))}</ui.Button> : null}
     {steps && sectionIndex < sections.length - 1
       ? <ui.Button kind="primary" disabled={running} onClick={() => form.setActiveSection(sections[sectionIndex + 1]?.id)}>{i18n.text(message(namespace, "action.next", "下一步"))}</ui.Button>
-      : <ui.Button kind="primary" loading={form.submitting} disabled={running || !form.validation.valid || form.validation.validating || form.loading} onClick={() => void form.submit()}>{i18n.text(form.definition?.workflow.submitLabel ?? message(namespace, "action.submit", "提交"))}</ui.Button>}
+      : <ui.Button kind="primary" loading={form.submitting} disabled={running || form.validation.validating || form.loading} onClick={() => void form.submit()}>{i18n.text(form.definition?.workflow.submitLabel ?? message(namespace, "action.submit", "提交"))}</ui.Button>}
     </ui.Stack>
   </ui.Stack>;
 }

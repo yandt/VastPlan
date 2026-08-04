@@ -146,7 +146,9 @@ export function useFormWorkflow(input: UseFormWorkflowInput): FormWorkflowContro
   }, [context, definition, i18n.text, loading, runningActionID, stableSelected, submitting, ui, validation.valid, validation.validating, value]);
 
   const submit = useCallback(async () => {
-    if (definition === undefined || submitting || runningActionID !== undefined || !validation.valid || validation.validating) return;
+    if (definition === undefined || submitting || runningActionID !== undefined || validation.validating) return;
+    // 打开表单和输入过程不提示必填错误；提交时才一次性展示整表校验结果。
+    if (!validation.valid) { setFieldErrors(validation.errors); return; }
     if (definition.workflow.confirmBeforeSubmit !== undefined && !await ui.confirm({ title: i18n.text(definition.workflow.title), content: i18n.text(definition.workflow.confirmBeforeSubmit) })) return;
     submitRef.current?.abort();
     const controller = new AbortController();

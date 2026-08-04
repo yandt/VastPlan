@@ -196,20 +196,27 @@ export function FormRenderer({ schema, value, onChange, size: requestedSize, pre
   const transformErrors = useMemo(() => (errors: RJSFValidationError[]) => localizeValidationErrors(errors, i18n.text), [i18n.text]);
   const validation = useMemo(() => validator.validateFormData(value, schema.schema, undefined, transformErrors, schema.uiSchema), [schema.schema, schema.uiSchema, transformErrors, value]);
   const syncErrors = useMemo(() => Object.fromEntries(validation.errors.map((error, index) => [errorPath(error) || `form.${index}`, error.message ?? i18n.text(message(namespace, "form.invalid", "输入内容不符合要求"))])), [i18n, validation.errors]);
-  const [asyncValidation, setAsyncValidation] = useState<{ source?: Readonly<Record<string, unknown>>; validating: boolean; errors: Readonly<Record<string, string>> }>({ validating: false, errors: {} });
-  const currentAsync = asyncValidation.source === value ? asyncValidation : { source: value, validating: validate !== undefined && validation.errors.length === 0, errors: {} };
+  const [blurredFields, setBlurredFields] = useState<ReadonlySet<string>>(() => new Set());
+  const [asyncValidation, setAsyncValidation] = useState<{ source?: Readonly<Record<string, unknown>>; fieldID?: string; validating: boolean; errors: Readonly<Record<string, string>> }>({ validating: false, errors: {} });
+  const [asyncRequest, setAsyncRequest] = useState<{ source: Readonly<Record<string, unknown>>; fieldID: string }>();
+  const blurredErrors = useMemo(() => Object.fromEntries(validation.errors
+    .filter((error) => blurredFields.has(errorFieldID(error)))
+    .map((error, index) => [errorPath(error) || `form.${index}`, error.message ?? i18n.text(message(namespace, "form.invalid", "输入内容不符合要求"))])), [blurredFields, i18n, validation.errors]);
+  const currentAsync = asyncValidation.source === value && asyncValidation.fieldID === asyncRequest?.fieldID
+    ? asyncValidation
+    : { source: value, validating: false, errors: {} };
   useEffect(() => {
-    if (validate === undefined || validation.errors.length > 0) { setAsyncValidation({ source: value, validating: false, errors: {} }); return; }
+    if (asyncRequest === undefined || validate === undefined) { setAsyncValidation({ source: value, validating: false, errors: {} }); return; }
     const controller = new AbortController();
-    setAsyncValidation({ source: value, validating: true, errors: {} });
+    setAsyncValidation({ source: asyncRequest.source, fieldID: asyncRequest.fieldID, validating: true, errors: {} });
     const timeout = window.setTimeout(() => {
-      validate({ schema, value, context: formContext, signal: controller.signal })
-        .then((errors) => { if (!controller.signal.aborted) setAsyncValidation({ source: value, validating: false, errors }); })
-        .catch(() => { if (!controller.signal.aborted) setAsyncValidation({ source: value, validating: false, errors: { $form: i18n.text(message(namespace, "form.asyncUnavailable", "异步校验暂时不可用")) } }); });
+      validate({ schema, value: asyncRequest.source, context: formContext, signal: controller.signal })
+        .then((errors) => { if (!controller.signal.aborted) setAsyncValidation({ source: asyncRequest.source, fieldID: asyncRequest.fieldID, validating: false, errors: filterFieldErrors(errors, asyncRequest.fieldID) }); })
+        .catch(() => { if (!controller.signal.aborted) setAsyncValidation({ source: asyncRequest.source, fieldID: asyncRequest.fieldID, validating: false, errors: { $form: i18n.text(message(namespace, "form.asyncUnavailable", "异步校验暂时不可用")) } }); });
     }, Math.max(0, validationDelayMs));
     return () => { controller.abort(); window.clearTimeout(timeout); };
-  }, [formContext, i18n, schema, validate, validation.errors.length, validationDelayMs, value]);
-  const combinedExternalErrors = useMemo(() => ({ ...currentAsync.errors, ...externalErrors }), [currentAsync.errors, externalErrors]);
+  }, [asyncRequest, formContext, i18n, schema, validate, validationDelayMs]);
+  const combinedExternalErrors = useMemo(() => ({ ...blurredErrors, ...currentAsync.errors, ...externalErrors }), [blurredErrors, currentAsync.errors, externalErrors]);
   useEffect(() => {
     onValidationChange?.({
       valid: validation.errors.length === 0 && !currentAsync.validating && Object.keys(combinedExternalErrors).length === 0,
@@ -229,7 +236,7 @@ export function FormRenderer({ schema, value, onChange, size: requestedSize, pre
     validator={validator}
     readonly={readOnly}
     disabled={submitting}
-    liveValidate="onChange"
+    liveValidate={false}
     showErrorList={false}
     extraErrors={errorSchema(combinedExternalErrors) as never}
     extraErrorsBlockSubmit
@@ -237,6 +244,10 @@ export function FormRenderer({ schema, value, onChange, size: requestedSize, pre
     transformErrors={transformErrors}
     formContext={formContext}
     onChange={(event) => onChange((event.formData ?? {}) as Record<string, unknown>)}
+    onBlur={(id) => {
+      setBlurredFields((current) => current.has(id) ? current : new Set([...current, id]));
+      setAsyncRequest({ source: value, fieldID: id });
+    }}
     templates={templates}
     widgets={widgets}
   ><></></RJSFForm>;
@@ -273,6 +284,19 @@ function errorPath(error: { property?: string; name?: string; params?: { missing
   const missingProperty = error.params?.missingProperty;
   if (error.name === "required" && typeof missingProperty === "string" && parts.at(-1) !== missingProperty) parts.push(missingProperty);
   return parts.join(".");
+}
+
+/** RJSF delivers widget ids on blur; derive the same id from a schema validation error. */
+function errorFieldID(error: { property?: string; name?: string; params?: { missingProperty?: unknown } }): string {
+  const path = errorPath(error);
+  return path === "" ? "root" : `root_${path.split(".").join("_")}`;
+}
+
+function filterFieldErrors(errors: Readonly<Record<string, string>>, fieldID: string): Readonly<Record<string, string>> {
+  return Object.fromEntries(Object.entries(errors).filter(([path]) => {
+    const parts = externalErrorPathParts(path);
+    return `root_${parts.join("_")}` === fieldID;
+  }));
 }
 
 function errorSchema(errors: Readonly<Record<string, string>>): Record<string, unknown> {

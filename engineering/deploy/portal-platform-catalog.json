@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "revision": 107,
+  "revision": 108,
   "id": "local-portal-platform",
   "profiles": [
     {
       "version": 1,
-      "revision": 107,
+      "revision": 108,
       "id": "portal-default",
       "target": { "kernel": "frontend" },
       "updates": { "mode": "automatic" },
@@ -48,7 +48,7 @@
       },
       "workbench": {
         "id": "cn.vastplan.foundation.frontend.workflow.workbench",
-        "version": "7.2.0",
+        "version": "7.2.1",
         "channel": "stable",
         "uiContract": "^10.4.0"
       },
@@ -60,11 +60,11 @@
       "plugins": [
         { "id": "cn.vastplan.foundation.frontend.runtime.engine.react", "version": "1.1.3", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.render.adapter", "version": "6.2.2", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.frontend.render.adapter.antd", "version": "6.2.3", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.frontend.render.adapter.antd", "version": "6.2.4", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.structure.shell", "version": "9.0.4", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.structure.layout.standard", "version": "6.1.4", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.structure.layout.top-navigation", "version": "6.1.4", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.frontend.workflow.workbench", "version": "7.2.0", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.frontend.workflow.workbench", "version": "7.2.1", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.identity.account-center", "version": "0.7.1", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "6.1.4", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.9.1", "channel": "stable" },
@@ -86,8 +86,8 @@
       "portalId": "operations",
       "platformProfile": {
         "id": "portal-default",
-        "revision": 107,
-        "digest": "993404808ea69aefee7bb197f0e4453e52e44416508eb8b684824b94b433599d"
+        "revision": 108,
+        "digest": "7f22da315d8cc28775f4342b2c67b560a79edf00ffdc58c525701a6cba69f51a"
       },
       "services": [
         {

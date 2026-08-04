@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.foundation.frontend.render.adapter.antd`
 
-当前制品版本：`6.2.3`
+当前制品版本：`6.2.4`
 
 该基础插件是统一 `ui.render.adapter` Catalog 下的受信任 React Renderer Library，不是独立 Adapter，也不是新的 Runtime Engine。Portal 只在活动 Platform Profile 选择 `renderer=antd` 时校验并下载它。
 

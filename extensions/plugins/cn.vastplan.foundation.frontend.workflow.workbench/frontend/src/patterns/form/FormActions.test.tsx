@@ -6,7 +6,7 @@ vi.mock("@vastplan/ui-primitives", () => ({
   usePortalI18n: () => ({ text: (value: string) => value }),
   usePortalUI: () => ({
     Stack: ({ children, justify, fill }: { children: unknown; justify?: string; fill?: boolean }) => <div data-justify={justify} data-fill={fill}>{children as never}</div>,
-    Button: ({ children, kind, loading, disabled }: { children: unknown; kind?: string; loading?: boolean; disabled?: boolean }) => <button data-kind={kind} data-loading={loading} disabled={disabled}>{children as never}</button>,
+    Button: ({ children, kind, loading, disabled }: { children: unknown; kind?: string; loading?: boolean; disabled?: boolean }) => <button data-kind={kind} data-loading={loading} data-disabled={String(Boolean(disabled))} disabled={disabled}>{children as never}</button>,
     Icon: ({ name }: { name: string }) => <span data-icon={name} />,
   }),
 }));
@@ -29,5 +29,14 @@ describe("FormActions", () => {
     expect(html).toContain('data-icon="success"');
     expect(html.indexOf("测试连接")).toBeLessThan(html.indexOf("取消"));
     expect(html.indexOf("帮助")).toBeLessThan(html.indexOf("取消"));
+  });
+
+  it("leaves submit available so it can reveal the whole form's validation errors", () => {
+    const form = {
+      definition: { workflow: { title: "新增" } }, presentation: {}, validation: { valid: false, validating: false }, loading: false, submitting: false,
+      requestClose: async () => undefined, runAction: async () => undefined, submit: async () => undefined, setActiveSection: () => undefined,
+    };
+    const html = renderToStaticMarkup(<FormActions form={form as never} />);
+    expect(html).toContain('data-disabled="false">提交');
   });
 });

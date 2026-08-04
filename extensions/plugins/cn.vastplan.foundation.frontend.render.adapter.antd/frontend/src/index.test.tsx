@@ -227,6 +227,17 @@ describe("Ant Design portal UI renderer", () => {
     expect(markup.match(/auto[Cc]omplete="new-password"/g)).toHaveLength(2);
   });
 
+  it("keeps required fields neutral until blur or an explicit submit attempt", () => {
+    const Form = antdPortalUIComponents.FormRenderer;
+    const markup = renderToStaticMarkup(<PortalI18nProvider policy={{ defaultLocale: "en-US", supportedLocales: ["en-US"] }} catalogs={{}} candidates={["en-US"]}><Form
+      schema={{ id: "required-field", schema: { type: "object", required: ["name"], properties: { name: { type: "string", title: "Name" } } } }}
+      value={{}}
+      onChange={() => undefined}
+    /></PortalI18nProvider>);
+    expect(markup).toContain("Name");
+    expect(markup).not.toContain("This field is required");
+  });
+
   it("localizes JSON Schema validation errors without exposing validator internals", () => {
     const catalogs = { [namespace]: antdRenderer.localization! };
     const schema: RJSFSchema = { type: "object", properties: { reason: { type: "string", minLength: 4 } } };
