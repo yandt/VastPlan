@@ -132,7 +132,7 @@ export function StandardShell(props: UIShellProps) {
         composition={composition}
         mainGroups={mainGroups}
         selectedGroup={selectedGroup}
-        account={accountGroup === undefined ? null : <PortalAccountControl account={props.account} selected={selectedGroup?.id === accountGroup.id} onSelect={() => selectGroup(accountGroup.id)} />}
+        account={accountGroup === undefined ? null : <PortalAccountControl account={props.account} selected={selectedGroup?.id === accountGroup.id} onSelect={() => selectGroup(accountGroup.id)} tooltipPlacement="right" />}
         onSelectGroup={selectGroup}
         onNavigate={navigate}
         onLogout={props.onLogout}
@@ -200,7 +200,7 @@ function RailButton({ group, selected, controls, buttonRef, onSelect, onOpen }: 
   const i18n = usePortalI18n();
   const ui = usePortalUI();
   const label = navigationLabel(group, i18n);
-  return <ui.Tooltip title={label}><button ref={buttonRef} type="button" className="vp-rail-button" data-selected={selected || undefined} aria-label={label} title={label} aria-pressed={selected} aria-controls={controls} onClick={onSelect} onKeyDown={(event) => {
+  return <ui.Tooltip title={label} placement="right"><button ref={buttonRef} type="button" className="vp-rail-button" data-selected={selected || undefined} aria-label={label} title={label} aria-pressed={selected} aria-controls={controls} onClick={onSelect} onKeyDown={(event) => {
     if (event.key === "ArrowRight" && selected) { event.preventDefault(); onOpen(); }
   }}><NavigationIcon icon={group.icon} state={selected ? "active" : "normal"} size="lg" /></button></ui.Tooltip>;
 }

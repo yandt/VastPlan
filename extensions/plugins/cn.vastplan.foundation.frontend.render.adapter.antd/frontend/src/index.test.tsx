@@ -40,6 +40,12 @@ describe("Ant Design portal UI renderer", () => {
     expect(markup).toContain("Select Node A");
   });
 
+  it("accepts the governed right-side Tooltip placement used by compact side navigation", () => {
+    const Tooltip = antdPortalUIComponents.Tooltip;
+    const markup = renderToStaticMarkup(<Tooltip title="Operations" placement="right"><button type="button">Open</button></Tooltip>);
+    expect(markup).toContain("Open");
+  });
+
   it("renders governed body sections with separators only between regions", () => {
     const BodySections = antdPortalUIComponents.BodySections;
     const markup = renderToStaticMarkup(<BodySections sections={[

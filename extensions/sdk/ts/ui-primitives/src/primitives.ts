@@ -136,6 +136,8 @@ export interface DialogProps extends SizeableProps {
 export interface DrawerProps extends DialogProps { placement?: "top" | "right" | "bottom" | "left"; }
 
 export type PopoverPlacement = "bottom-start" | "bottom" | "bottom-end" | "top-start" | "top" | "top-end";
+/** Tooltip may additionally sit beside a compact navigation trigger. */
+export type TooltipPlacement = PopoverPlacement | "right";
 /**
  * A non-interactive explanatory overlay for a single visible trigger.
  * Render adapters own their framework-native implementation (Ant Design
@@ -144,7 +146,7 @@ export type PopoverPlacement = "bottom-start" | "bottom" | "bottom-end" | "top-s
 export interface TooltipProps {
   title: ReactNode;
   children: ReactNode;
-  placement?: PopoverPlacement;
+  placement?: TooltipPlacement;
 }
 export type PopoverCloseReason = "trigger" | "escape" | "outside" | "selection";
 export interface PopoverTriggerProps {

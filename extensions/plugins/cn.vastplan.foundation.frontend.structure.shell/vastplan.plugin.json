@@ -2,7 +2,7 @@
   "id": "cn.vastplan.foundation.frontend.structure.shell",
   "name": "VastPlan Portal Shell",
   "description": "统一管理 Portal 稳定 Slot、导航语义和可切换的侧栏/顶部模板",
-  "version": "9.0.2",
+  "version": "9.0.3",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -14,7 +14,7 @@
   "contributes": { "frontend": { "shells": [{
     "id": "ui.structure.shell",
     "title": "Portal Shell Catalog",
-    "uiContract": "^10.1.0",
+    "uiContract": "^10.3.0",
     "engineFamily": "react"
   }] } }
 }

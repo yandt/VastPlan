@@ -25,6 +25,7 @@ const tooltipPlacements = {
   "bottom-start": "bottomLeft",
   bottom: "bottom",
   "bottom-end": "bottomRight",
+  right: "right",
 } as const;
 
 /** Maps the governed Tooltip contract onto Ant Design without leaking Ant props to Shell code. */
