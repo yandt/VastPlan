@@ -116,6 +116,9 @@ func TestOnlyAuthenticationBrokerCanCallMethodProviders(t *testing.T) {
 
 func TestOnlyComposerCanUseRestrictedKernelServices(t *testing.T) {
 	composer := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: PluginIDForComposer()}}
+	if got := decisionFor(t, composer, portalapi.KernelCatalogBrowserExposureCompilationCapability, "compile"); got.Decision != extpoint.DecisionAllow {
+		t.Fatalf("Composer 浏览器暴露编译回调应放行: %+v", got)
+	}
 	if got := decisionFor(t, composer, portalapi.KernelCatalogValidationCapability, "validate"); got.Decision != extpoint.DecisionAllow {
 		t.Fatalf("Composer catalog 回调应放行: %+v", got)
 	}

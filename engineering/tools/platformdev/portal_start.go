@@ -25,7 +25,7 @@ func (r *runtime) startPortalKernel(ctx context.Context, env map[string]string, 
 			}
 			return publishPortal("http://"+r.options.portalListen,
 				filepath.Join(r.options.root, "engineering", "deploy", "portal-application-composition.json"),
-				filepath.Join(r.options.root, "engineering", "deploy", "portal-platform-catalog.json"))
+				filepath.Join(r.runDir, "portal-platform-catalog.json"))
 		}); err != nil {
 			return fmt.Errorf("显式发布初始 Portal 组合: %w", err)
 		}
@@ -45,7 +45,7 @@ func (r *runtime) startPortalKernel(ctx context.Context, env map[string]string, 
 		}
 		if err := publishPortal("http://"+r.options.portalListen,
 			filepath.Join(r.options.root, "engineering", "deploy", "portal-application-composition.json"),
-			filepath.Join(r.options.root, "engineering", "deploy", "portal-platform-catalog.json")); err != nil {
+			filepath.Join(r.runDir, "portal-platform-catalog.json")); err != nil {
 			return fmt.Errorf("显式发布初始 Portal 组合: %w", err)
 		}
 	}

@@ -28,3 +28,16 @@
 ## 影响
 
 Frontend Platform Profile 固定四个管理插件的精确版本。启用管理 API 的 Portal Edge 必须配置 NATS、能力目录和生产 addressing 传输身份；能力 unit 必须附加平台管理访问策略。任一前置条件缺失时管理调用 fail-closed，Portal 其他功能不受影响。
+
+## 实施更新（2026-08-04）：插件声明浏览器暴露，平台只可收紧
+
+原有 Portal Platform Catalog 将每个 capability 的 read/write operation 列表作为人工输入。这会让插件已声明的能力、Portal 绑定和 Node BFF 的最终快照出现三处重复维护，并在插件新增操作时产生遗漏或误配。
+
+现改为以下单向模型：
+
+1. 插件在签名 authorization.browserExposed=true 中显式允许其已受 operationGuards 保护的用户 operation 进入 Portal BFF 候选面；未声明即保持内部能力，安装本身不暴露浏览器 API。
+2. Portal Platform Catalog 的服务只选择 capability，不再人工写入 read/write operation。可信组合根读取已验证、且与 Profile 精确版本相符的 Manifest，按 access 生成不可变的精确 operation 快照。
+3. browserExposure.disabledPlugins 与 disabledOperations 是 Portal Composer 的平台配置，只能移除已声明 operation；未知引用、重复引用、手工 grant 或禁用后清空一个服务 capability 均在编译期拒绝。不存在“平台额外允许内部 operation”的配置。
+4. Node BFF、PortalActivation 和后端 PEP 继续使用编译后的精确快照。浏览器仍只能访问固定的 service/API 路由，不能提交 capability、operation、插件 ID 或路由目标。
+
+因此，第三方插件是否提供浏览器可用的管理操作由其制品作者明确声明；采用该插件的平台默认接受声明的操作，若企业需要收紧则在平台配置中关闭。新的插件版本、禁用策略和最终 snapshot 必须在同一个 Portal Generation 内提交，失败时保留前一代。

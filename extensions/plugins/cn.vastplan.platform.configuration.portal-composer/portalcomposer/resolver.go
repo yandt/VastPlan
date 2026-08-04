@@ -13,7 +13,7 @@ func resolve(catalog frontendcompositionv1.PortalPlatformCatalog, application fr
 		return portalapi.PortalSpec{}, fmt.Errorf("Portal 解析需要 tenant 和发布 revision")
 	}
 	var err error
-	catalog, err = frontendcompositionv1.ValidatePortalPlatformCatalog(catalog)
+	catalog, err = frontendcompositionv1.ValidateResolvedPortalPlatformCatalog(catalog)
 	if err != nil {
 		return portalapi.PortalSpec{}, err
 	}

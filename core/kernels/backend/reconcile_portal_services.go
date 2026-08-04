@@ -58,10 +58,11 @@ func configurePortalHostServices(options reconcileOptions, artifacts artifactRes
 		return err
 	}
 	runtime.HostServices = map[string]protocolbus.HostService{
-		portalapi.KernelCatalogValidationCapability:            portaltrust.CatalogValidationService(catalog),
-		portalapi.KernelCatalogMaterializationCapability:       portaltrust.CatalogMaterializationService(catalog),
-		portalapi.KernelArtifactReferencePublicationCapability: portaltrust.ArtifactReferencePublicationService(publisher),
-		portalapi.KernelTestArtifactValidationCapability:       portaltrust.CatalogTestArtifactValidationService(catalog),
+		portalapi.KernelCatalogValidationCapability:                 portaltrust.CatalogValidationService(catalog),
+		portalapi.KernelCatalogBrowserExposureCompilationCapability: portaltrust.CatalogBrowserExposureCompilationService(catalog),
+		portalapi.KernelCatalogMaterializationCapability:            portaltrust.CatalogMaterializationService(catalog),
+		portalapi.KernelArtifactReferencePublicationCapability:      portaltrust.ArtifactReferencePublicationService(publisher),
+		portalapi.KernelTestArtifactValidationCapability:            portaltrust.CatalogTestArtifactValidationService(catalog),
 	}
 	return nil
 }

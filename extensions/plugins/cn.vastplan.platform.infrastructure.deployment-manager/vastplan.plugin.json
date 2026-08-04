@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.infrastructure.deployment-manager",
   "name": "VastPlan 部署与测试发布管理服务",
-  "version": "0.26.1",
+  "version": "0.27.1",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -11,6 +11,7 @@
   "capabilities": { "kernelServices": ["kernel.node.bootstrap", "kernel.node.readiness", "kernel.deployment.targets", "kernel.deployment.preview", "kernel.deployment.publish", "kernel.deployment.readiness", "kernel.platform-profile.prepare", "kernel.platform-profile.status", "kernel.platform-profile.activate", "kernel.platform-profile.publish", "kernel.platform-profile.finalize", "kernel.platform-profile.abort", "kernel.platform-profile.rollback", "kernel.state.shared.get", "kernel.state.shared.create", "kernel.state.shared.update"], "credentials": [], "resources": [] },
   "contextAccess": { "required": ["scope.tenant", "caller", "subject.id", "authorization.roles"], "optional": ["scope.project", "scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
   "authorization": {
+    "browserExposed": true,
     "namespace": "platform.deployment",
     "permissions": [
       { "code": "platform.deployment.read", "title": "查看服务与节点", "scope": "platform", "risk": "low", "assignable": true, "offlineAllowed": false },

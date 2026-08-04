@@ -71,6 +71,27 @@ func ValidatePortalPlatformCatalog(v PortalPlatformCatalog) (PortalPlatformCatal
 	}
 	return ParsePortalPlatformCatalog(raw)
 }
+
+// ValidateResolvedPortalPlatformCatalog additionally requires every selected
+// capability to carry the exact browser operation snapshot produced by
+// CompilePortalBrowserExposure. Portal Composer calls this boundary before a
+// catalog can become part of a Portal generation.
+func ValidateResolvedPortalPlatformCatalog(v PortalPlatformCatalog) (PortalPlatformCatalog, error) {
+	value, err := ValidatePortalPlatformCatalog(v)
+	if err != nil {
+		return PortalPlatformCatalog{}, err
+	}
+	for _, binding := range value.Bindings {
+		for _, service := range binding.Services {
+			for _, grant := range service.Capabilities {
+				if len(grant.Read)+len(grant.Write) == 0 {
+					return PortalPlatformCatalog{}, fmt.Errorf("Portal 服务 %s 的 capability %s 尚未完成浏览器暴露编译", service.ID, grant.Capability)
+				}
+			}
+		}
+	}
+	return value, nil
+}
 func ParsePlatformProfileFile(path string) (PlatformProfile, error) {
 	raw, err := configfile.Load(path)
 	if err != nil {
@@ -111,6 +132,9 @@ func (v PortalPlatformCatalog) Resolve(tenantID, portalID string) (PlatformProfi
 }
 
 func validatePortalPlatformCatalog(value PortalPlatformCatalog) (PortalPlatformCatalog, error) {
+	if err := validateBrowserExposurePolicy(value.BrowserExposure); err != nil {
+		return PortalPlatformCatalog{}, err
+	}
 	profiles := make(map[string]PlatformProfile, len(value.Profiles))
 	for i := range value.Profiles {
 		profile, err := ValidatePlatformProfile(value.Profiles[i])
@@ -199,9 +223,6 @@ func validateManagedServices(services []ManagedService) error {
 					return fmt.Errorf("operation 在 read/write 中重复: %s/%s", grant.Capability, operation)
 				}
 				seenOperations[operation] = struct{}{}
-			}
-			if len(seenOperations) == 0 {
-				return fmt.Errorf("capability 未授予任何 operation: %s", grant.Capability)
 			}
 		}
 		if len(seenCapabilities) == 0 {

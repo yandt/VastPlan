@@ -13,6 +13,12 @@ type AuthorizationContract struct {
 	Capabilities    []string                `json:"capabilities,omitempty"`
 	Permissions     []PermissionDeclaration `json:"permissions"`
 	OperationGuards []OperationGuard        `json:"operationGuards"`
+	// BrowserExposed explicitly opts this plugin's guarded user operations
+	// into Portal BFF delivery. It is deliberately opt-in: omitting it keeps
+	// every operation internal even when the plugin is installed. The platform
+	// may later remove declared operations, but it can never add an undeclared
+	// one to a browser-facing binding.
+	BrowserExposed bool `json:"browserExposed,omitempty"`
 }
 
 type PermissionDeclaration struct {

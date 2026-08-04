@@ -18,6 +18,9 @@
       "type": "array",
       "minItems": 1,
       "items": { "$ref": "#/$defs/portalBinding" }
+    },
+    "browserExposure": {
+      "$ref": "#/$defs/browserExposure"
     }
   },
   "$defs": {
@@ -32,11 +35,35 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["capability"],
-      "anyOf": [{ "required": ["read"] }, { "required": ["write"] }],
       "properties": {
         "capability": { "$ref": "#/$defs/governedName" },
         "read": { "$ref": "#/$defs/operationList" },
         "write": { "$ref": "#/$defs/operationList" }
+      }
+    },
+    "browserExposure": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "disabledPlugins": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/governedName" }
+        },
+        "disabledOperations": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["pluginId", "capability", "operation"],
+            "properties": {
+              "pluginId": { "$ref": "#/$defs/governedName" },
+              "capability": { "$ref": "#/$defs/governedName" },
+              "operation": { "$ref": "#/$defs/governedName" }
+            }
+          }
+        }
       }
     },
     "managedService": {

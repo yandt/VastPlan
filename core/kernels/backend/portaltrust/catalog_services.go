@@ -6,10 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 
-	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
+	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
 type catalogValidationRequest struct {
@@ -23,6 +24,10 @@ type catalogTestArtifactRequest struct {
 	AllowedPublishers []string                           `json:"allowedPublishers"`
 }
 
+type browserExposureCompilationRequest struct {
+	Catalog frontendcompositionv1.PortalPlatformCatalog `json:"catalog"`
+}
+
 type PortalCatalog interface {
 	ValidatePortal(context.Context, string, portalapi.PortalSpec) error
 	MaterializePortal(context.Context, string, portalapi.PortalSpec) ([]pluginv1.ArtifactReference, error)
@@ -30,6 +35,39 @@ type PortalCatalog interface {
 
 type PortalTestArtifactCatalog interface {
 	ValidateTestArtifact(context.Context, string, portalapi.CreateTestReleaseRequest, []string) error
+}
+
+type PortalBrowserExposureCompiler interface {
+	CompilePortalBrowserExposure(context.Context, frontendcompositionv1.PortalPlatformCatalog) (frontendcompositionv1.PortalPlatformCatalog, error)
+}
+
+// CatalogBrowserExposureCompilationService keeps the source-catalog to
+// immutable-operation-snapshot transformation inside the verified artifact
+// boundary. It is intentionally callable only by the Portal Composer plugin.
+func CatalogBrowserExposureCompilationService(compiler PortalBrowserExposureCompiler) protocolbus.HostService {
+	return func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+		if compiler == nil {
+			return nil, nil, errors.New("可信 Portal 浏览器暴露编译器未配置")
+		}
+		if !authenticatedPluginCaller(callCtx) || callCtx.GetCaller().GetId() != portalapi.ComposerPluginID {
+			return nil, nil, errors.New("Portal 浏览器暴露编译只接受 Portal Composer")
+		}
+		var request browserExposureCompilationRequest
+		decoder := json.NewDecoder(bytes.NewReader(payload))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&request); err != nil {
+			return nil, nil, errors.New("Portal 浏览器暴露编译请求无效")
+		}
+		catalog, err := compiler.CompilePortalBrowserExposure(ctx, request.Catalog)
+		if err != nil {
+			return nil, nil, err
+		}
+		raw, err := json.Marshal(catalog)
+		if err != nil {
+			return nil, nil, err
+		}
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
+	}
 }
 
 // CatalogValidationService exposes only complete Portal-spec validation to the

@@ -81,7 +81,7 @@ type Service struct {
 }
 
 func (s *Service) BindPlatformCatalog(catalog frontendcompositionv1.PortalPlatformCatalog) error {
-	catalog, err := frontendcompositionv1.ValidatePortalPlatformCatalog(catalog)
+	catalog, err := frontendcompositionv1.ValidateResolvedPortalPlatformCatalog(catalog)
 	if err != nil {
 		return err
 	}

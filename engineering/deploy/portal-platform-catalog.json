@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "revision": 109,
+  "revision": 112,
   "id": "local-portal-platform",
   "profiles": [
     {
       "version": 1,
-      "revision": 109,
+      "revision": 112,
       "id": "portal-default",
       "target": { "kernel": "frontend" },
       "updates": { "mode": "automatic" },
@@ -66,16 +66,16 @@
         { "id": "cn.vastplan.foundation.frontend.structure.layout.top-navigation", "version": "6.1.4", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.workflow.workbench", "version": "7.2.2", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.identity.account-center", "version": "0.7.1", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "6.1.4", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.9.1", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.plugin-settings", "version": "0.14.2", "channel": "stable" },
-        { "id": "cn.vastplan.platform.security.credentials", "version": "0.13.2", "channel": "stable" },
-        { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.12.1", "channel": "stable" },
-        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.39.1", "channel": "stable" },
-        { "id": "cn.vastplan.platform.integration.api-exposure", "version": "0.6.2", "channel": "stable" },
-        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.26.1", "channel": "stable" },
-        { "id": "cn.vastplan.platform.artifacts.marketplace", "version": "0.2.2", "channel": "stable" },
-        { "id": "cn.vastplan.platform.security.authorization-policy", "version": "0.8.2", "channel": "stable" }
+        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "6.2.0", "channel": "stable" },
+        { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.10.1", "channel": "stable" },
+        { "id": "cn.vastplan.platform.configuration.plugin-settings", "version": "0.15.1", "channel": "stable" },
+        { "id": "cn.vastplan.platform.security.credentials", "version": "0.14.1", "channel": "stable" },
+        { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.13.1", "channel": "stable" },
+        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.40.1", "channel": "stable" },
+        { "id": "cn.vastplan.platform.integration.api-exposure", "version": "0.7.1", "channel": "stable" },
+        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.27.1", "channel": "stable" },
+        { "id": "cn.vastplan.platform.artifacts.marketplace", "version": "0.3.1", "channel": "stable" },
+        { "id": "cn.vastplan.platform.security.authorization-policy", "version": "0.9.1", "channel": "stable" }
       ],
       "security": { "firstPartyOnly": true, "requireIntegrity": true }
     }
@@ -86,8 +86,8 @@
       "portalId": "operations",
       "platformProfile": {
         "id": "portal-default",
-        "revision": 109,
-        "digest": "2e77c58f55bef8832367785848bfb2bb49c8b1ebbbdccd6a38f7bbb854c1614c"
+        "revision": 112,
+        "digest": "8a955dc3b7693529567bbd050fe40886074c07e44681b4967b764a7b9e13144f"
       },
       "services": [
         {
@@ -96,7 +96,7 @@
           "logicalService": "platform.settings",
           "routingDomain": "platform",
           "capabilities": [
-            { "capability": "platform.settings", "read": ["list"], "write": ["put", "delete"] }
+            { "capability": "platform.settings" }
           ]
         },
         {
@@ -105,7 +105,7 @@
           "logicalService": "platform.plugin-configuration",
           "routingDomain": "platform",
           "capabilities": [
-            { "capability": "platform.plugin-configuration", "read": ["listDefinitions", "getDefinition", "listCandidates", "listResourceItems", "getResourceItem"], "write": ["createDraft", "discardDraft", "submitDraft", "activateCandidate", "submitProfileDraft", "approveProfileCandidate", "activateProfileCandidate", "abortProfileCandidate", "submitHotServiceDraft", "approveHotServiceCandidate", "activateHotServiceCandidate", "abortHotServiceCandidate", "submitScopedDraft", "approveScopedCandidate", "activateScopedCandidate", "abortScopedCandidate", "createResourceDraft", "updateResourceDraft", "deleteResourceDraft", "submitResourceDraft", "approveResourceCandidate", "activateResourceCandidate", "abortResourceCandidate"] }
+            { "capability": "platform.plugin-configuration" }
           ]
         },
         {
@@ -114,7 +114,7 @@
           "logicalService": "platform.credentials",
           "routingDomain": "platform",
           "capabilities": [
-            { "capability": "platform.credentials", "read": ["list", "listManagedAudit"], "write": ["put", "rotate", "revoke"] }
+            { "capability": "platform.credentials" }
           ]
         },
         {
@@ -123,7 +123,7 @@
           "logicalService": "platform.database",
           "routingDomain": "platform",
           "capabilities": [
-            { "capability": "platform.database", "read": ["list"], "write": ["define", "remove", "probe", "test"] }
+            { "capability": "platform.database" }
           ]
         },
         {
@@ -132,7 +132,7 @@
           "logicalService": "platform.api-exposure",
           "routingDomain": "platform",
           "capabilities": [
-            { "capability": "platform.api-exposure", "read": ["list", "listDataPlanes", "apiList"], "write": ["createDraft", "updateDraft", "submit", "approve", "publish", "retire", "createDataPlaneDraft", "submitDataPlane", "approveDataPlane", "publishDataPlane", "retireDataPlane", "apiCreateDraft", "apiUpdateDraft", "apiSubmit", "apiApprove", "apiPublish", "apiRetire"] }
+            { "capability": "platform.api-exposure" }
           ],
           "apis": [
             {
@@ -149,7 +149,7 @@
           "logicalService": "platform.artifacts.repository",
           "routingDomain": "platform",
           "capabilities": [
-            { "capability": "platform.artifacts.repository", "read": ["status", "assessmentInventory", "prepareAssessmentReport", "capacity", "listCatalog", "listPublishJournal", "resolve", "listReferences", "gcPlan", "gcStatus", "migrationStatus", "listPublications", "getSupplyChainEvidence"], "write": ["setLifecycle", "gcQuarantine", "gcSweep", "prepareMigration", "syncMigration", "cutoverMigration", "rollbackMigration", "finalizeMigration", "releaseMigration", "submitPublication", "approvePublication", "rejectPublication", "cancelPublication"] }
+            { "capability": "platform.artifacts.repository" }
           ]
         },
         {
@@ -158,7 +158,7 @@
           "logicalService": "platform.artifacts.marketplace",
           "routingDomain": "platform",
           "capabilities": [
-            { "capability": "platform.artifacts.marketplace", "read": ["listSources", "listCatalog"] }
+            { "capability": "platform.artifacts.marketplace" }
           ]
         },
         {
@@ -168,7 +168,7 @@
           "routingDomain": "platform",
           "resource": { "kind": "service-unit", "kernel": "backend", "deployment": "local-platform-management", "unitId": "platform-deployment" },
           "capabilities": [
-            { "capability": "platform.deployment", "read": ["listNodes", "listBootstrapJobs", "listDeploymentTargets", "listServiceRevisions", "previewPluginInstallation", "previewSelfServicePluginInstallation", "listPluginInstallationTargets", "listPluginInstallationCandidates", "getPluginInstallationCandidate", "listSelfServicePluginInstallationCandidates", "getSelfServicePluginInstallationCandidate", "listServiceRevisionAudit", "listTestTargetBindings", "listTestReleases"], "write": ["putNode", "createBootstrap", "approveBootstrap", "createIntentDraft", "updateIntentDraft", "refreshIntentDraft", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision", "createPluginInstallationCandidate", "createSelfServicePluginInstallationCandidate", "submitPluginInstallationCandidate", "approvePluginInstallationCandidate", "activatePluginInstallationCandidate", "cancelPluginInstallationCandidate", "rollbackPluginInstallationCandidate", "submitSelfServicePluginInstallationCandidate", "approveSelfServicePluginInstallationCandidate", "activateSelfServicePluginInstallationCandidate", "cancelSelfServicePluginInstallationCandidate", "rollbackSelfServicePluginInstallationCandidate", "putTestTargetBinding", "createTestRelease", "rollbackTestRelease"] }
+            { "capability": "platform.deployment" }
           ]
         },
         {
@@ -177,7 +177,7 @@
           "logicalService": "platform.authorization",
           "routingDomain": "security",
           "capabilities": [
-            { "capability": "platform.authorization", "read": ["get", "listAudit"], "write": ["createRole", "updateRole", "submitRole", "approveRole", "publishRole", "retireRole", "createBinding", "updateBinding", "submitBinding", "approveBinding", "publishBinding", "retireBinding", "revoke", "publishSnapshot"] }
+            { "capability": "platform.authorization" }
           ]
         }
       ]

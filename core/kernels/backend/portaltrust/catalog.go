@@ -103,6 +103,17 @@ func NewTrustedCatalog(sources []ArtifactSource, verifier ArtifactVerifier, opti
 	return catalog, nil
 }
 
+// CompilePortalBrowserExposure turns a source Catalog's capability selections
+// into immutable BFF operation grants using only manifests verified through
+// this trusted catalog. The Composer never receives package bytes, trust roots,
+// or an artifact-source handle.
+func (c *TrustedCatalog) CompilePortalBrowserExposure(ctx context.Context, catalog frontendcompositionv1.PortalPlatformCatalog) (frontendcompositionv1.PortalPlatformCatalog, error) {
+	return frontendcompositionv1.CompilePortalBrowserExposure(catalog, func(ref frontendcompositionv1.PluginRef) (pluginv1.Manifest, error) {
+		_, _, manifest, err := c.verifiedManifest(ctx, portalapi.PluginRef{ID: ref.ID, Version: ref.Version, Channel: ref.Channel})
+		return manifest, err
+	})
+}
+
 func (c *TrustedCatalog) ValidatePortal(ctx context.Context, tenantID string, spec portalapi.PortalSpec) error {
 	_, err := c.verifyPortal(ctx, tenantID, spec)
 	return err

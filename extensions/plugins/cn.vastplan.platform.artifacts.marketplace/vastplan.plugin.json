@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.artifacts.marketplace",
   "name": "VastPlan 插件市场",
-  "version": "0.2.2",
+  "version": "0.3.1",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -11,6 +11,7 @@
   "capabilities": { "kernelServices": ["kernel.credential.material-lease"], "credentials": [], "resources": [] },
   "contextAccess": { "required": ["scope.tenant"], "optional": ["caller", "trace", "request.deadline", "propagation.callPath"] },
   "authorization": {
+    "browserExposed": true,
     "namespace": "platform.artifacts.marketplace",
     "permissions": [
       { "code": "platform.artifacts.marketplace.read", "title": "浏览插件市场", "description": "查看平台配置的市场来源和插件目录", "scope": "platform", "risk": "low", "assignable": true, "offlineAllowed": false }

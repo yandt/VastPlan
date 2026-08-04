@@ -12,6 +12,8 @@ import (
 	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
+	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 )
 
 func (r *runtime) writeFixtures(ctx context.Context) error {
@@ -68,6 +70,13 @@ func (r *runtime) writeFixtures(ctx context.Context) error {
 	}
 	portalCatalog, err := os.ReadFile(filepath.Join(r.options.root, "engineering", "deploy", "portal-platform-catalog.json"))
 	if err != nil {
+		return err
+	}
+	compiledPortalCatalog, err := r.compilePortalPlatformCatalog(portalCatalog)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(r.runDir, "portal-platform-catalog.json"), compiledPortalCatalog, 0o600); err != nil {
 		return err
 	}
 	rendered, err := renderPlatformProfile(template, portalCatalog, r.runDir, r.persistentStateRoot(), r.options.artifactListen, repositoryProfile)
@@ -143,6 +152,29 @@ func (r *runtime) writeSeedRepositoryProfile() error {
 func yamlString(value string) string {
 	raw, _ := json.Marshal(value)
 	return string(raw)
+}
+
+// compilePortalPlatformCatalog is the development composition root for the
+// browser-management surface. It reads only manifests selected by the Profile,
+// derives exact operation grants, and writes the resulting immutable catalog
+// into the run directory. The source catalog never carries an operator-authored
+// operation allow-list.
+func (r *runtime) compilePortalPlatformCatalog(raw []byte) ([]byte, error) {
+	catalog, err := frontendcompositionv1.ParsePortalPlatformCatalog(raw)
+	if err != nil {
+		return nil, fmt.Errorf("解析 Portal Platform Catalog: %w", err)
+	}
+	compiled, err := frontendcompositionv1.CompilePortalBrowserExposure(catalog, func(ref frontendcompositionv1.PluginRef) (pluginv1.Manifest, error) {
+		return readLocalPluginManifest(r.options.root, ref.ID)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("编译 Portal 浏览器暴露: %w", err)
+	}
+	compiledRaw, err := json.Marshal(compiled)
+	if err != nil {
+		return nil, fmt.Errorf("序列化已编译 Portal Platform Catalog: %w", err)
+	}
+	return compiledRaw, nil
 }
 
 func renderPlatformProfile(template, portalCatalog []byte, runDir, stateDir, artifactListen string, repositoryProfile artifactrepositoryv1.Profile) ([]byte, error) {

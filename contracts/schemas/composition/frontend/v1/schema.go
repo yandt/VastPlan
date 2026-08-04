@@ -159,8 +159,25 @@ type ApplicationComposition struct {
 // PortalVersion and are not independently governed online.
 type PortalPlatformCatalog struct {
 	compositioncommonv1.Document
-	Profiles []PlatformProfile `json:"profiles"`
-	Bindings []PortalBinding   `json:"bindings"`
+	Profiles        []PlatformProfile      `json:"profiles"`
+	Bindings        []PortalBinding        `json:"bindings"`
+	BrowserExposure *BrowserExposurePolicy `json:"browserExposure,omitempty"`
+}
+
+// BrowserExposurePolicy is platform-owned configuration for the Portal BFF
+// surface. Plugins opt operations in through their signed authorization
+// contract; this policy can only remove declared operations. It intentionally
+// has no allow-list field, so platform configuration cannot turn an internal
+// operation into a browser API.
+type BrowserExposurePolicy struct {
+	DisabledPlugins    []string                          `json:"disabledPlugins,omitempty"`
+	DisabledOperations []BrowserExposureOperationDisable `json:"disabledOperations,omitempty"`
+}
+
+type BrowserExposureOperationDisable struct {
+	PluginID   string `json:"pluginId"`
+	Capability string `json:"capability"`
+	Operation  string `json:"operation"`
 }
 
 type PortalBinding struct {
@@ -203,8 +220,11 @@ type ManagementAPI struct {
 	ContractDigest  string `json:"contractDigest"`
 }
 
-// CapabilityGrant separates read and write operations so a read-only portal
-// cannot gain mutation authority merely because a new HTTP route is added.
+// CapabilityGrant is a capability selection in a source Platform Catalog and
+// an exact operation snapshot after trusted compilation. Source catalogs must
+// not populate Read or Write: those fields are derived solely from signed
+// plugin authorization contracts. The runtime keeps the compiled arrays so
+// every BFF invocation remains fail-closed against its immutable Generation.
 type CapabilityGrant struct {
 	Capability string   `json:"capability"`
 	Read       []string `json:"read,omitempty"`

@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"testing"
 
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactreference"
-	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
@@ -28,6 +29,31 @@ func (c *recordingCatalog) MaterializePortal(_ context.Context, tenant string, s
 
 type recordingReferencePublisher struct {
 	value pluginv1.ArtifactReferenceSnapshot
+}
+
+type recordingBrowserExposureCompiler struct {
+	catalog frontendcompositionv1.PortalPlatformCatalog
+}
+
+func (c *recordingBrowserExposureCompiler) CompilePortalBrowserExposure(_ context.Context, catalog frontendcompositionv1.PortalPlatformCatalog) (frontendcompositionv1.PortalPlatformCatalog, error) {
+	c.catalog = catalog
+	return catalog, nil
+}
+
+func TestCatalogBrowserExposureCompilationServiceOnlyAcceptsComposer(t *testing.T) {
+	compiler := &recordingBrowserExposureCompiler{}
+	service := CatalogBrowserExposureCompilationService(compiler)
+	request := browserExposureCompilationRequest{Catalog: frontendcompositionv1.PortalPlatformCatalog{}}
+	payload, _ := json.Marshal(request)
+	call := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: portalapi.ComposerPluginID}}
+	result, _, err := service(context.Background(), call, payload)
+	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK {
+		t.Fatalf("Composer 浏览器暴露编译调用失败: result=%+v err=%v", result, err)
+	}
+	call.Caller.Id = "cn.vastplan.other"
+	if _, _, err := service(context.Background(), call, payload); err == nil {
+		t.Fatal("非 Composer 插件不得调用浏览器暴露编译")
+	}
 }
 
 func (p *recordingReferencePublisher) Publish(_ context.Context, _ *contractv1.CallContext, value pluginv1.ArtifactReferenceSnapshot) error {

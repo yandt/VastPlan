@@ -224,6 +224,10 @@ func (s *Service) ensureConfigured(ctx context.Context, host sdk.Host, callCtx *
 		if err != nil {
 			return err
 		}
+		catalog, err = compileBrowserExposure(ctx, host, callCtx, catalog)
+		if err != nil {
+			return err
+		}
 		if err := s.BindPlatformCatalog(catalog); err != nil {
 			return err
 		}
@@ -243,6 +247,30 @@ func (s *Service) ensureConfigured(ctx context.Context, host sdk.Host, callCtx *
 		return err
 	}
 	return s.BindVersionControl(&binding)
+}
+
+func compileBrowserExposure(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, catalog frontendcompositionv1.PortalPlatformCatalog) (frontendcompositionv1.PortalPlatformCatalog, error) {
+	if host == nil || callCtx == nil {
+		return frontendcompositionv1.PortalPlatformCatalog{}, fmt.Errorf("Portal 浏览器暴露编译调用上下文不完整")
+	}
+	payload, err := json.Marshal(struct {
+		Catalog frontendcompositionv1.PortalPlatformCatalog `json:"catalog"`
+	}{Catalog: catalog})
+	if err != nil {
+		return frontendcompositionv1.PortalPlatformCatalog{}, err
+	}
+	op := "compile"
+	result, raw, err := host.Call(ctx, &contractv1.CallTarget{
+		ExtensionPoint: extpoint.KernelService, Capability: portalapi.KernelCatalogBrowserExposureCompilationCapability, Operation: &op,
+	}, callCtx, payload)
+	if err != nil || result == nil || result.Status != contractv1.CallResult_STATUS_OK {
+		return frontendcompositionv1.PortalPlatformCatalog{}, fmt.Errorf("调用可信 Portal 浏览器暴露编译: %w", catalogCallError(result, err))
+	}
+	compiled, err := frontendcompositionv1.ParsePortalPlatformCatalog(raw)
+	if err != nil {
+		return frontendcompositionv1.PortalPlatformCatalog{}, fmt.Errorf("可信 Portal 浏览器暴露编译返回无效 Catalog: %w", err)
+	}
+	return frontendcompositionv1.ValidateResolvedPortalPlatformCatalog(compiled)
 }
 
 func readConfig(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, key string) ([]byte, error) {

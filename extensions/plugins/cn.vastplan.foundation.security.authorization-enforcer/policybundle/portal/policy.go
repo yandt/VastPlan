@@ -70,7 +70,7 @@ func decide(c *contractv1.CallContext, request extpoint.PermissionRequest) (extp
 		}
 		return extpoint.DecisionDeny, "未知 Authentication Broker 操作"
 	}
-	if c.Caller.Kind == contractv1.CallerKind_CALLER_KIND_PLUGIN && c.Caller.Id == PluginIDForComposer() && (request.Capability == "kernel.config.get" || request.Capability == portalapi.KernelCatalogValidationCapability || request.Capability == portalapi.KernelCatalogMaterializationCapability || request.Capability == portalapi.KernelArtifactReferencePublicationCapability || request.Capability == portalapi.KernelTestArtifactValidationCapability || composerSharedStateCapability(request.Capability)) {
+	if c.Caller.Kind == contractv1.CallerKind_CALLER_KIND_PLUGIN && c.Caller.Id == PluginIDForComposer() && (request.Capability == "kernel.config.get" || request.Capability == portalapi.KernelCatalogBrowserExposureCompilationCapability || request.Capability == portalapi.KernelCatalogValidationCapability || request.Capability == portalapi.KernelCatalogMaterializationCapability || request.Capability == portalapi.KernelArtifactReferencePublicationCapability || request.Capability == portalapi.KernelTestArtifactValidationCapability || composerSharedStateCapability(request.Capability)) {
 		return extpoint.DecisionAllow, "Composer 受限宿主回调"
 	}
 	if c.Caller.Kind == contractv1.CallerKind_CALLER_KIND_PLUGIN && c.Caller.Id == PluginIDForComposer() && request.Capability == workspacev1.Capability {

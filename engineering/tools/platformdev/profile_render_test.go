@@ -144,6 +144,91 @@ func TestPortalPlatformBindingUsesCurrentProfileDigest(t *testing.T) {
 	}
 }
 
+func TestCompilePortalPlatformCatalogDerivesBrowserOperationsFromSignedManifests(t *testing.T) {
+	root := repositoryRoot(t)
+	raw, err := os.ReadFile(filepath.Join(root, "engineering", "deploy", "portal-platform-catalog.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime := runtime{options: options{root: root}}
+	compiledRaw, err := runtime.compilePortalPlatformCatalog(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	compiled, err := frontendcompositionv1.ParsePortalPlatformCatalog(compiledRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := frontendcompositionv1.ValidateResolvedPortalPlatformCatalog(compiled); err != nil {
+		t.Fatalf("已编译 Catalog 必须具备精确浏览器 operation snapshot: %v", err)
+	}
+	for _, service := range compiled.Bindings[0].Services {
+		if service.ID != "database" {
+			continue
+		}
+		grant := service.Capabilities[0]
+		if !containsString(grant.Read, "describe") || !containsString(grant.Write, "test") {
+			t.Fatalf("数据库浏览器操作必须由 Manifest 默认派生: %+v", grant)
+		}
+		return
+	}
+	t.Fatal("已编译 Catalog 缺少数据库服务")
+}
+
+func TestBrowserExposedPluginReleaseMetadataStaysSynchronized(t *testing.T) {
+	root := repositoryRoot(t)
+	cases := []struct {
+		pluginID      string
+		backendSource string
+	}{
+		{"cn.vastplan.platform.configuration.global-settings", "settings/service.go"},
+		{"cn.vastplan.platform.configuration.plugin-settings", "pluginsettings/service.go"},
+		{"cn.vastplan.platform.security.credentials", "credentials/vault_transit.go"},
+		{"cn.vastplan.platform.data.relational.connection-manager", "backend/main.go"},
+		{"cn.vastplan.platform.artifacts.repository", "backend/main.go"},
+		{"cn.vastplan.platform.integration.api-exposure", "apiexposure/types.go"},
+		{"cn.vastplan.platform.infrastructure.deployment-manager", "deploymentmanager/service.go"},
+		{"cn.vastplan.platform.artifacts.marketplace", "marketplace/config.go"},
+		{"cn.vastplan.platform.security.authorization-policy", "authorizationpolicy/model.go"},
+	}
+	for _, test := range cases {
+		t.Run(test.pluginID, func(t *testing.T) {
+			pluginRoot := filepath.Join(root, "extensions", "plugins", test.pluginID)
+			manifestRaw, err := os.ReadFile(filepath.Join(pluginRoot, "vastplan.plugin.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			manifest, err := pluginv1.ParseManifest(manifestRaw)
+			if err != nil || manifest.Authorization == nil || !manifest.Authorization.BrowserExposed {
+				t.Fatalf("浏览器暴露插件必须拥有有效且显式的 Manifest 声明: manifest=%+v err=%v", manifest.Authorization, err)
+			}
+			backendRaw, err := os.ReadFile(filepath.Join(pluginRoot, test.backendSource))
+			if err != nil || !strings.Contains(string(backendRaw), manifest.Version) {
+				t.Fatalf("Backend runtime identity 未同步 Manifest %s: %v", manifest.Version, err)
+			}
+			frontendRaw, err := os.ReadFile(filepath.Join(pluginRoot, "frontend", "package.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var frontendPackage struct {
+				Version string `json:"version"`
+			}
+			if err := json.Unmarshal(frontendRaw, &frontendPackage); err != nil || frontendPackage.Version != manifest.Version {
+				t.Fatalf("Frontend package version 未同步 Manifest: want=%s got=%s err=%v", manifest.Version, frontendPackage.Version, err)
+			}
+		})
+	}
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
 func TestPortalManagementAPIReferenceMatchesVerifiedManifestContract(t *testing.T) {
 	manifestRaw, err := os.ReadFile(filepath.Join("..", "..", "..", "extensions", "plugins", "cn.vastplan.platform.integration.api-exposure", "vastplan.plugin.json"))
 	if err != nil {

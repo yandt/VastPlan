@@ -257,6 +257,11 @@
       "required": ["namespace", "permissions", "operationGuards"],
       "properties": {
         "namespace": { "$ref": "#/$defs/authorizationName" },
+        "browserExposed": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether this plugin's guarded user operations may be compiled into a Portal BFF binding."
+        },
         "capabilities": {
           "type": "array",
           "minItems": 1,

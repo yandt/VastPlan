@@ -33,6 +33,12 @@ const ComposerPluginID = "cn.vastplan.platform.configuration.portal-composer"
 // artifact catalog. It is intentionally not a browser-facing API.
 const KernelCatalogValidationCapability = "kernel.portal.catalog.validate"
 
+// KernelCatalogBrowserExposureCompilationCapability is the trusted-host
+// bridge that compiles plugin-declared browser operations into an immutable
+// Portal management snapshot. It accepts source catalog data only from the
+// Composer plugin and never exposes raw artifacts to it.
+const KernelCatalogBrowserExposureCompilationCapability = "kernel.portal.catalog.compile-browser-exposure"
+
 // KernelCatalogMaterializationCapability is the publish-boundary operation
 // that verifies and extracts immutable browser delivery objects before a
 // revision can become active.

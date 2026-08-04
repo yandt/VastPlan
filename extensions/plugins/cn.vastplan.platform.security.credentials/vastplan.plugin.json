@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.security.credentials",
   "name": "VastPlan 凭证管理服务",
-  "version": "0.13.2",
+  "version": "0.14.1",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -34,6 +34,7 @@
     }
   },
   "authorization": {
+    "browserExposed": true,
     "namespace": "platform.credentials",
     "permissions": [
       { "code": "platform.credentials.read", "title": "查看凭证元数据", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false },

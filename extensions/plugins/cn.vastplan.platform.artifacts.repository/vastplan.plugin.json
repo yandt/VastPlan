@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.artifacts.repository",
   "name": "VastPlan 制品仓库服务",
-  "version": "0.39.1",
+  "version": "0.40.1",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -11,6 +11,7 @@
   "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
   "contextAccess": { "optional": ["scope.tenant", "caller", "scene", "trace", "request.deadline", "propagation.callPath"] },
   "authorization": {
+    "browserExposed": true,
     "namespace": "platform.artifacts",
     "permissions": [
       { "code": "platform.artifacts.read", "title": "查看制品仓库", "description": "查看仓库状态、目录、发布流水、引用、容量和只读计划", "scope": "platform", "risk": "low", "assignable": true, "offlineAllowed": false },
