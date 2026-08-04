@@ -1,4 +1,5 @@
 import { bootstrapPortal } from "./portal-shell";
+import { createPortalSessionFetch } from "./portal-session-boundary";
 
 const host = document.getElementById("vastplan-portal");
 if (host === null) {
@@ -15,4 +16,6 @@ if (mount === null) {
   shadow.replaceChildren(mount);
 }
 
-void bootstrapPortal({ element: mount });
+const portalFetch = createPortalSessionFetch(globalThis.fetch.bind(globalThis), globalThis.location);
+globalThis.fetch = portalFetch;
+void bootstrapPortal({ element: mount, fetcher: portalFetch });
