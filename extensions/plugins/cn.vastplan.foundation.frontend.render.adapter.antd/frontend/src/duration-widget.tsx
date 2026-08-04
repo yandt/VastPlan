@@ -14,7 +14,7 @@ const millisecondFactors: Readonly<Record<DurationUnit, number>> = Object.freeze
   month: 2_592_000_000,
 });
 
-export function DurationWidget({ id, value, disabled, readonly, required, options, schema, label, onChange, onBlur, onFocus }: WidgetProps) {
+export function DurationWidget({ id, value, disabled, readonly, required, rawErrors, options, schema, label, onChange, onBlur, onFocus }: WidgetProps) {
   const i18n = usePortalI18n();
   const config = durationConfiguration(options.vastplanDuration);
   const preferred = config.defaultUnit ?? config.units[0]!;
@@ -24,7 +24,7 @@ export function DurationWidget({ id, value, disabled, readonly, required, option
   const displayed = numeric === undefined ? undefined : durationDisplayValue(numeric, config.storageUnit, unit);
   const minimum = finiteNumber(schema.minimum);
   const maximum = finiteNumber(schema.maximum);
-  return <div className="vp-antd-duration-input" data-disabled={disabled || readonly || undefined}><InputNumber
+  return <div className="vp-antd-duration-input" data-disabled={disabled || readonly || undefined} data-invalid={(rawErrors?.length ?? 0) > 0 || undefined}><InputNumber
     id={id}
     value={displayed}
     disabled={disabled}
@@ -58,8 +58,8 @@ export const antdDurationWidgetCSS = `
 .vp-antd-duration-input:hover:not([data-disabled="true"]){border-color:var(--ant-color-primary-hover)}
 .vp-antd-duration-input:focus-within{border-color:var(--ant-color-primary);box-shadow:0 0 0 2px color-mix(in srgb,var(--ant-color-primary) 10%,transparent)}
 .vp-antd-duration-input[data-disabled="true"]{background:var(--ant-color-bg-container-disabled);cursor:not-allowed}
-.ant-form-item-has-error .vp-antd-duration-input{border-color:var(--ant-color-error)}
-.ant-form-item-has-error .vp-antd-duration-input:focus-within{box-shadow:0 0 0 2px color-mix(in srgb,var(--ant-color-error) 10%,transparent)}
+.vp-antd-duration-input[data-invalid="true"]{border-color:var(--ant-color-error)}
+.vp-antd-duration-input[data-invalid="true"]:focus-within{box-shadow:0 0 0 2px color-mix(in srgb,var(--ant-color-error) 10%,transparent)}
 .vp-antd-duration-input>.ant-input-number{flex:1 1 auto;width:0;min-width:0;border:0!important;border-radius:0;box-shadow:none!important;background:transparent!important}
 .vp-antd-duration-input>.ant-select{flex:0 0 88px;width:88px;min-width:0}
 `;
