@@ -52,7 +52,7 @@ func (r *runtime) ensureDevelopmentAuthenticationMaterial() error {
 	if err := ensureAuthenticationAssertionIdentity(r.authenticationAssertionKeyPath(), r.authenticationAssertionTrustPath()); err != nil {
 		return err
 	}
-	if err := ensurePortalSessionKey(r.portalSessionKeyPath()); err != nil {
+	if err := ensurePrivate32ByteKey(r.portalSessionKeyPath(), "Portal session key"); err != nil {
 		return err
 	}
 	if err := ensureDevelopmentProviderState(r.authenticationProviderStatePath()); err != nil {
@@ -90,15 +90,15 @@ func ensureAuthenticationAssertionIdentity(keyPath, trustPath string) error {
 	return writeOwnerJSON(trustPath, trust)
 }
 
-func ensurePortalSessionKey(path string) error {
+func ensurePrivate32ByteKey(path, label string) error {
 	if fileExists(path) {
 		info, err := os.Lstat(path)
 		if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0o077 != 0 {
-			return errors.New("Portal session key 必须是 owner-only 普通文件")
+			return fmt.Errorf("%s 必须是 owner-only 普通文件", label)
 		}
 		raw, err := os.ReadFile(path)
 		if err != nil || len(raw) != 32 {
-			return errors.New("Portal session key 必须是 32 字节")
+			return fmt.Errorf("%s 必须是 32 字节", label)
 		}
 		return nil
 	}
