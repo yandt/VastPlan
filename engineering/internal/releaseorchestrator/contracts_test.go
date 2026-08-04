@@ -68,6 +68,34 @@ func TestSyncContractsRejectsIncompatiblePluginClaim(t *testing.T) {
 	}
 }
 
+func TestSyncContractsRejectsCompatibleButDifferentFoundationUIFamilyRanges(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, ContractRegistryPath, "schemaVersion: 1\ncontracts:\n  frontend.ui:\n    version: 6.1.0\n    compatibility: ^6.1.0\n    description: test\n")
+	writeFile(t, root, "engineering/deploy/portal-platform-catalog.json", `{"uiContract":"^6.0.0"}`)
+	writeFile(t, root, "extensions/plugins/cn.vastplan.foundation.frontend.render.adapter/vastplan.plugin.json", `{"id":"cn.vastplan.foundation.frontend.render.adapter","contributes":{"frontend":{"renderAdapters":[{"uiContract":"^6.0.0"}]}}}`)
+	writeFile(t, root, "extensions/plugins/cn.vastplan.foundation.frontend.render.adapter.antd/vastplan.plugin.json", `{"id":"cn.vastplan.foundation.frontend.render.adapter.antd","contributes":{"frontend":{"rendererModules":[{"uiContract":"^6.1.0"}]}}}`)
+	writeFile(t, root, "extensions/plugins/cn.vastplan.foundation.frontend.render.adapter/frontend/src/index.ts", `export const value = { uiContract: uiContractVersion };`)
+	writeFile(t, root, "extensions/plugins/cn.vastplan.foundation.frontend.render.adapter.antd/frontend/src/index.ts", `export const value = { uiContract: uiContractVersion };`)
+	writeFile(t, root, "examples/plugins/.keep/vastplan.plugin.json", `{}`)
+
+	if _, err := SyncContracts(root, false); err == nil || !strings.Contains(err.Error(), "同一契约族未同步") {
+		t.Fatalf("HMR 同族的兼容范围即使相交也必须精确同步: %v", err)
+	}
+}
+
+func TestSyncContractsRejectsPortalProfileAndFoundationUIRangeDrift(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, ContractRegistryPath, "schemaVersion: 1\ncontracts:\n  frontend.ui:\n    version: 6.1.0\n    compatibility: ^6.1.0\n    description: test\n")
+	writeFile(t, root, "engineering/deploy/portal-platform-catalog.json", `{"profiles":[{"id":"default","renderAdapter":{"uiContract":"^6.0.0"}}]}`)
+	writeFile(t, root, "extensions/plugins/cn.vastplan.foundation.frontend.render.adapter/vastplan.plugin.json", `{"id":"cn.vastplan.foundation.frontend.render.adapter","contributes":{"frontend":{"renderAdapters":[{"uiContract":"^6.1.0"}]}}}`)
+	writeFile(t, root, "extensions/plugins/cn.vastplan.foundation.frontend.render.adapter/frontend/src/index.ts", `export const value = { uiContract: uiContractVersion };`)
+	writeFile(t, root, "examples/plugins/.keep/vastplan.plugin.json", `{}`)
+
+	if _, err := SyncContracts(root, false); err == nil || !strings.Contains(err.Error(), "Profile 与 Foundation UI 契约未同步") {
+		t.Fatalf("可信 Portal Profile 必须与所选 Foundation Manifest 精确同代: %v", err)
+	}
+}
+
 func writeFile(t *testing.T, root, relative, content string) {
 	t.Helper()
 	path := filepath.Join(root, filepath.FromSlash(relative))

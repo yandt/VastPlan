@@ -5,6 +5,7 @@ package releaseorchestrator
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -44,6 +45,37 @@ type ContractDefinition struct {
 type DerivedChange struct {
 	Path   string
 	Reason string
+}
+
+type foundationUIManifest struct {
+	ID          string `json:"id"`
+	Contributes struct {
+		Frontend struct {
+			RenderAdapters  []frontendUIContractClaim `json:"renderAdapters"`
+			RendererModules []frontendUIContractClaim `json:"rendererModules"`
+			Shells          []frontendUIContractClaim `json:"shells"`
+			ShellLibraries  []frontendUIContractClaim `json:"shellLibraries"`
+			Workbenches     []frontendUIContractClaim `json:"workbenches"`
+		} `json:"frontend"`
+	} `json:"contributes"`
+}
+
+type frontendUIContractClaim struct {
+	UIContract string `json:"uiContract"`
+}
+
+type foundationUIFamilyClaim struct {
+	contract string
+	manifest string
+}
+
+type portalUIProfileCatalog struct {
+	Profiles []struct {
+		ID            string                  `json:"id"`
+		RenderAdapter frontendUIContractClaim `json:"renderAdapter"`
+		Shell         frontendUIContractClaim `json:"shell"`
+		Workbench     frontendUIContractClaim `json:"workbench"`
+	} `json:"profiles"`
 }
 
 func LoadContractRegistry(repositoryRoot string) (ContractRegistry, error) {
@@ -146,10 +178,94 @@ func SyncContracts(repositoryRoot string, write bool) ([]DerivedChange, error) {
 	if err := validatePluginUICompatibility(repositoryRoot, definition); err != nil {
 		return changes, err
 	}
+	if err := validateFoundationUIFamilySynchronization(repositoryRoot); err != nil {
+		return changes, err
+	}
 	if err := validateNoHardcodedFoundationUIVersion(repositoryRoot); err != nil {
 		return changes, err
 	}
 	return changes, nil
+}
+
+// Foundation modules in one HMR family are loaded into the same browser
+// generation. Their claims must therefore be textually identical, matching the
+// runtime overlay rule rather than merely overlapping semver constraints.
+func validateFoundationUIFamilySynchronization(repositoryRoot string) error {
+	root := filepath.Join(repositoryRoot, "extensions", "plugins")
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return err
+	}
+	claims := map[string]foundationUIFamilyClaim{}
+	var mismatches []string
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		relative := filepath.ToSlash(filepath.Join("extensions/plugins", entry.Name(), "vastplan.plugin.json"))
+		raw, err := os.ReadFile(filepath.Join(repositoryRoot, filepath.FromSlash(relative)))
+		if err != nil {
+			return err
+		}
+		var manifest foundationUIManifest
+		if err := json.Unmarshal(raw, &manifest); err != nil {
+			return fmt.Errorf("解析 %s: %w", relative, err)
+		}
+		if !strings.HasPrefix(manifest.ID, "cn.vastplan.foundation.frontend.") {
+			continue
+		}
+		frontend := manifest.Contributes.Frontend
+		families := map[string][][]frontendUIContractClaim{
+			"render":    {frontend.RenderAdapters, frontend.RendererModules},
+			"shell":     {frontend.Shells, frontend.ShellLibraries},
+			"workbench": {frontend.Workbenches},
+		}
+		for family, groups := range families {
+			for _, group := range groups {
+				for _, claim := range group {
+					if existing, ok := claims[family]; ok && existing.contract != claim.UIContract {
+						mismatches = append(mismatches, fmt.Sprintf("%s: %s declares %s, %s declares %s", family, existing.manifest, existing.contract, relative, claim.UIContract))
+						continue
+					}
+					claims[family] = foundationUIFamilyClaim{contract: claim.UIContract, manifest: relative}
+				}
+			}
+		}
+	}
+	if len(mismatches) > 0 {
+		sort.Strings(mismatches)
+		return fmt.Errorf("Foundation UI 同一契约族未同步:\n- %s", strings.Join(mismatches, "\n- "))
+	}
+	return validatePortalUIFamilySelections(repositoryRoot, claims)
+}
+
+func validatePortalUIFamilySelections(repositoryRoot string, claims map[string]foundationUIFamilyClaim) error {
+	relative := "engineering/deploy/portal-platform-catalog.json"
+	raw, err := os.ReadFile(filepath.Join(repositoryRoot, filepath.FromSlash(relative)))
+	if err != nil {
+		return err
+	}
+	var catalog portalUIProfileCatalog
+	if err := json.Unmarshal(raw, &catalog); err != nil {
+		return fmt.Errorf("解析 %s: %w", relative, err)
+	}
+	var mismatches []string
+	for _, profile := range catalog.Profiles {
+		selections := map[string]string{
+			"render": profile.RenderAdapter.UIContract, "shell": profile.Shell.UIContract, "workbench": profile.Workbench.UIContract,
+		}
+		for family, selection := range selections {
+			claim, exists := claims[family]
+			if exists && selection != "" && selection != claim.contract {
+				mismatches = append(mismatches, fmt.Sprintf("profile %s %s selects %s, %s declares %s", profile.ID, family, selection, claim.manifest, claim.contract))
+			}
+		}
+	}
+	if len(mismatches) > 0 {
+		sort.Strings(mismatches)
+		return fmt.Errorf("Portal Profile 与 Foundation UI 契约未同步:\n- %s", strings.Join(mismatches, "\n- "))
+	}
+	return nil
 }
 
 func generatedGoRegistry(definition ContractDefinition, major uint64) []byte {
