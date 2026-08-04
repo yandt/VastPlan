@@ -11,11 +11,15 @@ describe("database connections Workbench page", () => {
     const create = page.forms?.find((form) => form.id === "create");
     const edit = page.forms?.find((form) => form.id === "edit");
     const properties = create?.schema.schema.properties as Readonly<Record<string, Readonly<Record<string, unknown>>>> | undefined;
+    const editProperties = edit?.schema.schema.properties as Readonly<Record<string, Readonly<Record<string, unknown>>>> | undefined;
     expect(create?.presentation).toMatchObject({ layout: "horizontal", labelPlacement: "inline" });
     const optionProperties = properties?.options?.properties as Readonly<Record<string, Readonly<Record<string, unknown>>>> | undefined;
     expect(create?.presentation?.fields).toContainEqual(expect.objectContaining({ pointer: "/options/password", widget: "secretMaterial" }));
     expect(Object.keys(optionProperties ?? {}).slice(0, 2)).toEqual(["user", "password"]);
     expect(optionProperties?.password).toMatchObject({ title: "密码", format: "vastplan-secret-material", writeOnly: true });
+    expect(properties?.options?.required).toEqual(["user", "password"]);
+    expect(editProperties?.options?.required).toEqual(["user"]);
+    expect(create?.presentation?.fields?.find((field) => field.pointer === "/options/password")).not.toHaveProperty("help");
     expect(properties?.options).not.toHaveProperty("title");
     expect(properties?.pool).not.toHaveProperty("title");
     expect(create?.presentation?.sections).toEqual(expect.arrayContaining([
