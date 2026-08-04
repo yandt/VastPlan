@@ -48,6 +48,8 @@ export function DurationWidget({ id, value, disabled, readonly, required, rawErr
     disabled={disabled || readonly}
     variant="borderless"
     popupMatchSelectWidth={false}
+    style={{ width: "max-content", minWidth: 56 }}
+    styles={{ content: { textAlign: "right" } }}
     options={config.units.map((candidate) => ({ value: candidate, label: i18n.text(durationUnitLabel(candidate)) }))}
     onChange={(next: DurationUnit) => setUnit(next)}
   /></div>;
@@ -61,7 +63,7 @@ export const antdDurationWidgetCSS = `
 .vp-antd-duration-input[data-invalid="true"]{border-color:var(--ant-color-error)}
 .vp-antd-duration-input[data-invalid="true"]:focus-within{box-shadow:0 0 0 2px color-mix(in srgb,var(--ant-color-error) 10%,transparent)}
 .vp-antd-duration-input>.ant-input-number{flex:1 1 auto;width:0;min-width:0;border:0!important;border-radius:0;box-shadow:none!important;background:transparent!important}
-.vp-antd-duration-input>.ant-select{flex:0 0 88px;width:88px;min-width:0}
+.vp-antd-duration-input>.ant-select{flex:0 0 auto}
 `;
 
 /** Conversion does not mutate the stored value when only the display unit changes. */

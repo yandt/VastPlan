@@ -18,6 +18,8 @@ describe("Ant Design duration widget", () => {
     expect(html).not.toContain("小时");
     expect(html).toContain("vp-antd-duration-input");
     expect(html).toContain("ant-select-borderless");
+    expect(html).toContain("width:max-content;min-width:56px");
+    expect(html).toContain("text-align:right");
     expect(html).toContain("ant-input-number-borderless");
     expect(html).not.toContain("ant-input-number-suffix");
     expect(html).not.toContain("ant-space-compact");
