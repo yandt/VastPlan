@@ -151,7 +151,7 @@ FormWorkflow
 
 `FormDialog` 是非页面表单唯一的默认组合，由 Workbench 统一处理标题、焦点、ESC、关闭确认、校验、提交中禁用、一次性提交、字段级错误、成功刷新、失败保留和本地化。插件省略 `workflow.surface` 即使用 Dialog；只有独立表单页和记录页内编辑器可显式声明 `page`。FormDialog 内部表单控件统一比表单请求尺寸降低一档且最低为 `xs`，Dialog 框架和操作按钮仍保留原尺寸；该策略由 Workbench 组合一次，不要求功能插件重复声明。Drawer 只保留给只读详情、审计和辅助 Overlay，不再承载表单。`navigation: sections` 中直接拥有对象字段的分段是该对象唯一的可见标题；Workbench 只在渲染投影中移除该对象的 JSON Schema 标题，原始 Schema 与校验规则不变，因此功能插件不需要编写 Renderer 专用的 `ui:title` 补丁。Dialog 未指定 `dialogHeight` 时随内容自然撑开；指定后只接受 160–10000 的整数像素值，渲染适配器仍强制限制整体至视口 95%。FormDialog 的标题与提交区保持固定，超过可用空间时仅表单内容区内部滚动，页面背景不接管滚动。插件只给出 Schema、Presentation、Workflow 与 `submit(values, signal)` 处理器；处理器是运行时代码，绝不写入 Portal 发布配置。
 
-同步 JSON Schema 校验、异步校验和提交返回的字段错误必须先归一化到所属字段路径；只有无法归属字段的真正表单级错误使用 `$form`。Renderer 在控件后显示紧凑错误图标，并在鼠标悬停或键盘聚焦时使用红色 Tooltip 展示本地化详情，不再把字段错误作为表单底部的游离文字。功能插件只返回字段路径与本地化错误数据，不得自行拼装错误图标、Tooltip 或框架组件。
+同步 JSON Schema 校验、异步校验和提交返回的字段错误必须先归一化到所属字段路径；只有无法归属字段的真正表单级错误使用 `$form`。Renderer 在控件后显示紧凑错误图标，并在鼠标悬停或键盘聚焦时使用红色 Tooltip 展示本地化详情，不再把字段错误作为表单底部的游离文字。异步校验的进行状态只用于禁止提交，不在 FormDialog 或页面表单中渲染动态提示，避免输入时改变表单高度和造成视觉抖动。功能插件只返回字段路径与本地化错误数据，不得自行拼装错误图标、Tooltip 或框架组件。
 
 所有 Workbench 业务表单默认采用单行字段布局，即 Label 与输入控件同行；控件在字段区域内默认使用 `controlAlignment: end`，需要左对齐时显式声明 `start`。该字段不改变列宽、控件尺寸或输入文本方向。`layout` 只管理表单区块和导航排列，`vertical` 不得再被解释为 Label 上下布局；功能插件确有长说明型表单需求时必须显式声明 `labelPlacement: stacked`。FilterPanel 不是普通业务表单，继续显式使用 `inside-inline` 紧凑语义。
 

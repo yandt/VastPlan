@@ -31,4 +31,11 @@ describe("FormDialog control size", () => {
     expect(renderToStaticMarkup(<FormContent form={form as never} />)).toContain('data-control-size="md"');
     expect(renderToStaticMarkup(<FormContent form={form as never} density="dialog" />)).toContain('data-control-size="sm"');
   });
+
+  it("keeps asynchronous validation silent so form content does not move while typing", () => {
+    const validating = { ...form, validation: { ...form.validation, validating: true } };
+    const markup = renderToStaticMarkup(<FormContent form={validating as never} density="dialog" />);
+
+    expect(markup).not.toContain("正在校验表单");
+  });
 });
