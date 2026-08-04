@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/platformcontrol/v1/vastplan.platform-control.schema.json",
+  "$defs": {
+    "text": { "type": "string", "minLength": 1, "maxLength": 160, "pattern": "^\\S(?:.*\\S)?$" },
+    "secretRef": {
+      "type": "object", "additionalProperties": false, "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["systemd-credential", "owner-file"] },
+        "name": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9._-]+$" },
+        "path": { "type": "string", "minLength": 1, "maxLength": 1024 }
+      },
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "systemd-credential" } } }, "then": { "required": ["name"] } },
+        { "if": { "properties": { "kind": { "const": "owner-file" } } }, "then": { "required": ["path"] } }
+      ]
+    },
+    "profile": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schemaVersion", "generation", "providerId", "endpoint", "database", "schema", "tls", "username", "secretRef", "contractRange"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "generation": { "type": "integer", "minimum": 1 },
+        "providerId": { "enum": ["postgresql", "mysql"] },
+        "endpoint": { "type": "string", "minLength": 3, "maxLength": 320 },
+        "database": { "$ref": "#/$defs/text" },
+        "schema": { "$ref": "#/$defs/text" },
+        "tls": {
+          "type": "object", "additionalProperties": false, "required": ["mode"],
+          "properties": { "mode": { "enum": ["disable", "verify-ca", "verify-full"] }, "serverName": { "type": "string", "maxLength": 253 } }
+        },
+        "username": { "$ref": "#/$defs/text" },
+        "secretRef": { "$ref": "#/$defs/secretRef" },
+        "contractRange": { "type": "string", "minLength": 1, "maxLength": 120 }
+      }
+    },
+    "status": {
+      "type": "object", "additionalProperties": false, "required": ["phase"],
+      "properties": {
+        "phase": { "enum": ["unconfigured", "testing", "initializing", "ready", "recovery"] },
+        "generation": { "type": "integer", "minimum": 1 },
+        "code": { "type": "string", "pattern": "^[a-z][a-z0-9_.-]+$", "maxLength": 160 }
+      }
+    }
+  }
+}
