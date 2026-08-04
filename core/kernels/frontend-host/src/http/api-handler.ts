@@ -44,7 +44,7 @@ export function createAPIHandler(options: APIHandlerOptions): (request: Incoming
     }
     if (path === "/v1/csrf") {
       if (method !== "GET" && method !== "HEAD") return sendAPIError(response, 405, "method_not_allowed");
-      const token = issueCSRF(response, options.secureCookies);
+      const token = issueCSRF(request, response, options.secureCookies);
       return sendJSON(response, 200, { token }, method === "HEAD");
     }
     if (method !== "GET" && method !== "HEAD" && !validCSRF(request)) return sendAPIError(response, 403, "csrf_rejected");

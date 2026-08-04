@@ -72,6 +72,14 @@ describe("BrokerIdentityProvider", () => {
 
     const csrfResponse = await fetch(`${portal}/auth/v1/csrf`), csrf = (await csrfResponse.json() as { token: string }).token;
     const csrfCookie = cookieFrom(csrfResponse.headers, "vastplan_csrf");
+    const renewedCSRFResponse = await fetch(`${portal}/auth/v1/csrf`, { headers: { Cookie: `vastplan_csrf=${csrfCookie}` } });
+    expect((await renewedCSRFResponse.json() as { token: string }).token).toBe(csrf);
+    expect(cookieFrom(renewedCSRFResponse.headers, "vastplan_csrf")).toBe(csrfCookie);
+    expect(renewedCSRFResponse.headers.get("cache-control")).toBe("no-store");
+    const malformedCSRFResponse = await fetch(`${portal}/auth/v1/csrf`, { headers: { Cookie: "vastplan_csrf=attacker-selected" } });
+    const malformedReplacement = (await malformedCSRFResponse.json() as { token: string }).token;
+    expect(malformedReplacement).toMatch(/^[a-f0-9]{64}$/);
+    expect(malformedReplacement).not.toBe("attacker-selected");
     const headers = { Origin: portal, "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json", "X-VastPlan-CSRF": csrf, Cookie: `vastplan_csrf=${csrfCookie}` };
 		expect((await fetch(`${portal}/auth/v1/transactions`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({methodId:"password",locale:"zh-CN",returnTo:"/operations"}) })).status).toBe(403);
 		expect((await fetch(`${portal}/auth/v1/transactions`, { method:"POST", headers:{...headers,Origin:"https://evil.example"}, body:JSON.stringify({methodId:"password",locale:"zh-CN",returnTo:"/operations"}) })).status).toBe(403);

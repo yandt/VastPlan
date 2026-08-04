@@ -95,7 +95,7 @@ export class BrokerIdentityProvider implements IdentityProvider {
 
   private async csrf(request: IncomingMessage, response: ServerResponse, secure: boolean): Promise<true> {
     if (request.method !== "GET") return apiError(response, 405, "method_not_allowed");
-    sendJSON(response, 200, { token: issueCSRF(response, secure) });
+    sendJSON(response, 200, { token: issueCSRF(request, response, secure) });
     return true;
   }
 

@@ -3,12 +3,16 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { onlyCookie } from "../http/cookies";
 
 const csrfCookieName = "vastplan_csrf";
+const csrfTokenPattern = /^[a-f0-9]{64}$/;
 
-export function issueCSRF(response: ServerResponse, secure: boolean): string {
-  const token = randomBytes(32).toString("hex");
+/** Reuses and renews the browser's valid double-submit token so concurrent CSRF reads cannot invalidate each other. */
+export function issueCSRF(request: IncomingMessage, response: ServerResponse, secure: boolean): string {
+  const existing = onlyCookie(request, csrfCookieName);
+  const token = existing !== undefined && csrfTokenPattern.test(existing) ? existing : randomBytes(32).toString("hex");
   const attributes = [`${csrfCookieName}=${token}`, "Path=/", "Max-Age=900", "SameSite=Strict"];
   if (secure) attributes.push("Secure");
   response.setHeader("Set-Cookie", attributes.join("; "));
+  response.setHeader("Cache-Control", "no-store");
   return token;
 }
 
