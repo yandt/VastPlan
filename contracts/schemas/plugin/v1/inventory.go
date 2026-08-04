@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/Masterminds/semver/v3"
 )
 
 const PluginInventorySchemaVersion = 1
@@ -182,17 +184,20 @@ func ValidatePluginInventory(snapshot PluginInventorySnapshot) error {
 	if err != nil || expected != snapshot.Digest {
 		return errors.New("Plugin Inventory 摘要失配")
 	}
-	// Older v1 snapshots predate public-interface projections and remain
-	// readable. New projections populate both fields. Consumers that require
-	// minimum-upgrade analysis must fail closed when either required fact is
-	// absent rather than making a running historical Generation unreadable.
 	for _, item := range snapshot.Plugins {
-		if len(item.PublicInterface) == 0 {
-			continue
-		}
 		fingerprint, err := PublicInterfaceFingerprintFromSurface(item.PublicInterface)
 		if err != nil || fingerprint != item.InterfaceFingerprint {
 			return errors.New("Plugin Inventory 公开接口与指纹不一致")
+		}
+		for _, provided := range item.RuntimeProvides {
+			if _, err := semver.NewVersion(provided.ContractVersion); err != nil {
+				return fmt.Errorf("Plugin Inventory capability %s contractVersion 无效", provided.Capability)
+			}
+		}
+		for _, required := range item.RuntimeRequires {
+			if _, err := semver.NewConstraint(required.ContractRange); err != nil {
+				return fmt.Errorf("Plugin Inventory capability %s contractRange 无效", required.Capability)
+			}
 		}
 	}
 	return nil

@@ -47,7 +47,7 @@ func TestBuildAPIContractCatalogIsDeterministic(t *testing.T) {
 
 func TestAPIContractMayOnlyExposeOwnedToolOperation(t *testing.T) {
 	for name, raw := range map[string]string{
-		"未声明 capability": strings.Replace(string(governedAPIManifest()), `"capability":"platform.demo"`, `"capability":"platform.other"`, 1),
+		"未声明 capability": strings.Replace(string(governedAPIManifest()), `"target":{"capability":"platform.demo"`, `"target":{"capability":"platform.other"`, 1),
 		"未声明 operation":  strings.Replace(string(governedAPIManifest()), `"operation":"listItems"`, `"operation":"deleteAll"`, 1),
 		"跨 service role": strings.Replace(string(governedAPIManifest()), `"id":"management-api","service_role":"backend"`, `"id":"management-api","service_role":"workspace"`, 1),
 	} {
@@ -63,6 +63,7 @@ func governedAPIManifest() []byte {
 	return []byte(`{
   "id":"com.example.governed-api","name":"governed-api","description":"governed api",
   "version":"1.0.0","publisher":"example","engines":{"backend":"^1.0"},
+  "runtime":{"instancePolicy":"active-active","stateModel":"external-shared","visibility":"cluster","routing":"queue","provides":[{"extensionPoint":"tool.package","capability":"platform.demo","contractVersion":"1.0.0","visibility":"cluster","routing":"queue"}]},
   "activation":["onStartup"],"entry":{"backend":"backend/main"},
   "contributes":{"backend":{
     "tools":[{"id":"platform.demo","service_role":"backend","subcommands":[{"name":"listItems","description":"list"}]}],

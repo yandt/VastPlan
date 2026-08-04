@@ -139,7 +139,7 @@ func TestResolveAllowsExactHostLocalPluginInMultiplePlatformServices(t *testing.
 	policyManifest := []byte(`{
 		"id":"cn.vastplan.foundation.security.host-local-guard-fixture","name":"policy","description":"policy",
 		"version":"1.0.0","publisher":"vastplan","engines":{"backend":"^1.0"},
-		"runtime":{"instancePolicy":"per-kernel","stateModel":"local-ephemeral","visibility":"local","routing":"direct"},
+		"runtime":{"instancePolicy":"per-kernel","stateModel":"local-ephemeral","visibility":"local","routing":"direct","provides":[{"extensionPoint":"permission.checker","capability":"platform.admin","contractVersion":"1.0.0","visibility":"local","routing":"direct"}]},
 		"activation":["onStartup"],"entry":{"backend":"backend/main"},
 		"contributes":{"backend":{"permissionCheckers":[{"id":"platform.admin","service_role":"backend","title":"policy","priority":1000,"applies":{}}]}}
 	}`)
@@ -168,7 +168,7 @@ func TestDeploySampleIsResolverOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 	reader := artifactReader{}
-	for _, item := range []struct{ id, version string }{{"cn.vastplan.example.backend.permission", "0.1.1"}, {"cn.vastplan.example.backend.hello-world", "0.2.1"}} {
+	for _, item := range []struct{ id, version string }{{"cn.vastplan.example.backend.permission", "0.1.2"}, {"cn.vastplan.example.backend.hello-world", "0.2.2"}} {
 		id := item.id
 		raw, readErr := os.ReadFile(filepath.Join(root, "examples", "plugins", id, "vastplan.plugin.json"))
 		if readErr != nil {

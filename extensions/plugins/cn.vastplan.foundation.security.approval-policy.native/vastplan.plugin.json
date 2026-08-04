@@ -2,7 +2,7 @@
   "id": "cn.vastplan.foundation.security.approval-policy.native",
   "name": "VastPlan Native Approval Policy Provider",
   "description": "默认 Go approval.policy.v2 Provider，以版本化声明式规则求值业务审批决定",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -16,7 +16,8 @@
     "routing": "queue",
     "routingDomain": "security",
     "provides": [
-      { "extensionPoint": "tool.package", "capability": "foundation.security.approval-policy", "visibility": "cluster", "routing": "queue", "routingDomain": "security" }
+      { "extensionPoint": "tool.package", "capability": "foundation.security.approval-policy", "contractVersion": "1.0.0", "visibility": "cluster", "routing": "queue", "routingDomain": "security" },
+      { "extensionPoint": "permission.checker", "capability": "foundation.security.approval-policy.access", "contractVersion": "1.0.0", "visibility": "cluster", "routing": "queue", "routingDomain": "security" }
     ]
   },
   "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },

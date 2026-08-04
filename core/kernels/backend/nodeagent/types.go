@@ -43,19 +43,20 @@ type StateStore interface {
 
 // InstalledPlugin 是经安装器校验后可交给 backend 宿主启动的插件。
 type InstalledPlugin struct {
-	ID            string                    `json:"id"`
-	Publisher     string                    `json:"publisher"`
-	Version       string                    `json:"version"`
-	Engines       map[string]string         `json:"engines,omitempty"`
-	Channel       string                    `json:"channel"`
-	SHA256        string                    `json:"sha256"`
-	Root          string                    `json:"root"`
-	EntryPath     string                    `json:"entry_path"`
-	DynamicGoPath string                    `json:"dynamic_go_path,omitempty"`
-	PythonPath    string                    `json:"python_path,omitempty"`
-	Execution     pluginv1.BackendExecution `json:"execution"`
-	State         *PluginStateContract      `json:"state,omitempty"`
-	Contract      PluginRuntimeContract     `json:"contract"`
+	ID                   string                    `json:"id"`
+	Publisher            string                    `json:"publisher"`
+	Version              string                    `json:"version"`
+	InterfaceFingerprint string                    `json:"interface_fingerprint"`
+	Engines              map[string]string         `json:"engines,omitempty"`
+	Channel              string                    `json:"channel"`
+	SHA256               string                    `json:"sha256"`
+	Root                 string                    `json:"root"`
+	EntryPath            string                    `json:"entry_path"`
+	DynamicGoPath        string                    `json:"dynamic_go_path,omitempty"`
+	PythonPath           string                    `json:"python_path,omitempty"`
+	Execution            pluginv1.BackendExecution `json:"execution"`
+	State                *PluginStateContract      `json:"state,omitempty"`
+	Contract             PluginRuntimeContract     `json:"contract"`
 }
 
 // PluginRuntimeContract 是安装时从已验签清单冻结的运行授权，宿主不再相信进程自报。

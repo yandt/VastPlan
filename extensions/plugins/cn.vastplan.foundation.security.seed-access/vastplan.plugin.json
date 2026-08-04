@@ -2,7 +2,7 @@
   "id": "cn.vastplan.foundation.security.seed-access",
   "name": "VastPlan Seed Access",
   "description": "数据库无关的首次配置与本机授权灾难恢复认证 Provider",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -14,7 +14,11 @@
     "stateModel": "leader-owned",
     "visibility": "cluster",
     "routing": "leader",
-    "routingDomain": "security"
+    "routingDomain": "security",
+    "provides": [
+      { "extensionPoint": "tool.package", "capability": "foundation.security.seed.handoff", "contractVersion": "1.0.0", "visibility": "cluster", "routing": "leader", "routingDomain": "security" },
+      { "extensionPoint": "authentication.provider", "capability": "seed-local", "contractVersion": "1.0.0", "visibility": "cluster", "routing": "leader", "routingDomain": "security" }
+    ]
   },
   "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
   "authorization": {

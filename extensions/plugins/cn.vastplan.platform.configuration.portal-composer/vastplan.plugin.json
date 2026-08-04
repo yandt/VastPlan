@@ -2,7 +2,7 @@
   "id": "cn.vastplan.platform.configuration.portal-composer",
   "name": "VastPlan Portal Composer",
   "description": "以单一 Portal 聚合治理 WorkingCopy、Publication、Release 与用户级 PortalPreference",
-  "version": "6.2.0",
+  "version": "6.2.1",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -49,12 +49,12 @@
     "routing": "queue",
     "routingDomain": "platform",
     "requires": [
-      { "capability": "foundation.security.approval-policy", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "fail" },
-      { "capability": "foundation.versioning.workspace", "scope": "remote", "kind": "lazy", "ready": "readiness", "failurePolicy": "degrade", "logicalService": "foundation.versioning.workspace", "routingDomain": "platform" }
+      { "capability": "foundation.security.approval-policy", "contractRange": "^1.0.0", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "fail" },
+      { "capability": "foundation.versioning.workspace", "contractRange": "^1.0.0", "scope": "remote", "kind": "lazy", "ready": "readiness", "failurePolicy": "degrade", "logicalService": "foundation.versioning.workspace", "routingDomain": "platform" }
     ],
     "provides": [
-      { "extensionPoint": "tool.package", "capability": "platform.portal-composer", "visibility": "cluster", "routing": "queue", "routingDomain": "platform" },
-      { "extensionPoint": "tool.package", "capability": "platform.portal-preference", "visibility": "cluster", "routing": "queue", "routingDomain": "platform" }
+      { "extensionPoint": "tool.package", "capability": "platform.portal-composer", "contractVersion": "1.0.0", "visibility": "cluster", "routing": "queue", "routingDomain": "platform" },
+      { "extensionPoint": "tool.package", "capability": "platform.portal-preference", "contractVersion": "1.0.0", "visibility": "cluster", "routing": "queue", "routingDomain": "platform" }
     ]
   },
   "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },

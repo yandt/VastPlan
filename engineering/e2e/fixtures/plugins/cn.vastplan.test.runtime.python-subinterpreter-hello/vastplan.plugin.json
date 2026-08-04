@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.test.runtime.python-subinterpreter-hello",
   "name": "Python Subinterpreter Hello",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -17,6 +17,10 @@
       "requirements": { "python": ">=3.14" },
       "python": { "subinterpreterSafe": true }
     }
+  },
+  "runtime": {
+    "instancePolicy": "active-active", "stateModel": "external-shared", "visibility": "cluster", "routing": "queue",
+    "provides": [{ "extensionPoint": "tool.package", "capability": "test.runtime.python-subinterpreter-hello", "contractVersion": "1.0.0", "visibility": "cluster", "routing": "queue" }]
   },
   "activation": ["onAgentTool:test.runtime.python-subinterpreter-hello"],
   "entry": { "backend": "backend/main.py" },

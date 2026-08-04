@@ -28,7 +28,7 @@ Planner 只调用仓库的两个只读操作：
 
 ## 运行时推导
 
-同一 service 中所有非辅助贡献的签名运行策略必须一致；本地权限辅助插件可以按既有窄例外共置。跨服务边只来自 Manifest `runtime.requires` 或已启用 Feature 的 `runtimeRequires`。多个 Provider 无法由签名 `logicalService/routingDomain/version` 消除歧义时返回 `Invalid`，不让用户手工指定内部 Provider。
+同一 service 中所有非辅助贡献的签名运行策略必须一致；本地权限辅助插件可以按既有窄例外共置。跨服务边只来自 Manifest `runtime.requires` 或已启用 Feature 的 `runtimeRequires`。多个 Provider 无法由签名 `logicalService/routingDomain/contractRange` 消除歧义时返回 `Invalid`，不让用户手工指定内部 Provider；制品 SemVer 只参与包解析，不参与 Capability 接口匹配。
 
 Planner 是建议生成者：不持有 NATS KV、Deployment CAS、SSH、Assignment、仓库签名密钥、信任根或凭证 material。Backend 内核、Controller 与 Node Agent 继续从完整 Manifest 独立复验和执行。
 

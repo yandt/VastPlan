@@ -192,12 +192,12 @@ func validateResolveRequest(current uint64, request pluginv1.ArtifactResolveRequ
 		if !capabilityPattern.MatchString(value.Capability) {
 			return 0, nil, nil, nil, nil, nil, resolutionError("REQUEST_INVALID", "availableCapabilities 包含无效 capability")
 		}
-		if value.Version != "" {
-			if _, versionErr := semver.NewVersion(value.Version); versionErr != nil {
+		if value.ContractVersion != "" {
+			if _, versionErr := semver.NewVersion(value.ContractVersion); versionErr != nil {
 				return 0, nil, nil, nil, nil, nil, resolutionError("REQUEST_INVALID", "availableCapabilities 版本必须是精确 SemVer")
 			}
 		}
-		external[value.Capability] = append(external[value.Capability], value.Version)
+		external[value.Capability] = append(external[value.Capability], value.ContractVersion)
 	}
 	seenRoots := map[string]struct{}{}
 	for _, root := range request.Roots {

@@ -26,7 +26,7 @@ var deniedCapabilities = map[string]string{
 }
 
 func main() {
-	p := sdk.New("cn.vastplan.example.backend.permission", "0.1.1", map[string]string{"backend": "^0.1 || ^1.0"})
+	p := sdk.New("cn.vastplan.example.backend.permission", "0.1.2", map[string]string{"backend": "^0.1 || ^1.0"})
 
 	p.Contribute(sdk.Contribution{
 		ExtensionPoint: extpoint.PermissionChecker,

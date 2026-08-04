@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactsupplychain"
 	"cdsoft.com.cn/VastPlan/engineering/internal/cyclonedx"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactsupplychain"
 )
 
 func TestGenerateGoSBOMFromActualBuildInfo(t *testing.T) {

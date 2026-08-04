@@ -45,7 +45,7 @@ func (l *ledger) snapshot() []recorded {
 
 func main() {
 	book := &ledger{}
-	p := sdk.New("cn.vastplan.example.backend.audit", "0.1.1", map[string]string{"backend": "^0.1 || ^1.0"})
+	p := sdk.New("cn.vastplan.example.backend.audit", "0.1.2", map[string]string{"backend": "^0.1 || ^1.0"})
 
 	p.Contribute(sdk.Contribution{
 		ExtensionPoint: extpoint.EventSink,

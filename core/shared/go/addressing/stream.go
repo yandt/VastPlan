@@ -21,9 +21,9 @@ import (
 
 	addressingv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/addressing/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/errorcode"
 	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
-	"cdsoft.com.cn/VastPlan/contracts/runtime/go/errorcode"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/servicemodel"
 )
 
@@ -155,14 +155,17 @@ func (r *Router) RegisterStream(ctx context.Context, options RegisterOptions, ha
 		options.InstanceID = r.NodeID + "." + options.UnitID + "." + randomID()
 	}
 	record := Announcement{
-		SchemaVersion: 1, Capability: options.Capability, ExtensionPoint: options.ExtensionPoint,
+		SchemaVersion: announcementSchemaVersion, Capability: options.Capability, ExtensionPoint: options.ExtensionPoint,
 		ServiceRole: options.ServiceRole, LogicalService: options.LogicalService, RoutingDomain: options.RoutingDomain, PartitionKey: options.PartitionKey,
 		InstancePolicy: options.InstancePolicy, StateModel: options.StateModel,
 		Visibility: options.Visibility, Routing: options.Routing,
 		Readiness: options.Readiness, ReadinessReason: options.ReadinessReason,
 		Generation: options.Generation, FencingToken: options.FencingToken, LeaseExpiresAt: options.LeaseExpiresAt,
 		InstanceID: options.InstanceID, NodeID: r.NodeID,
-		UnitID: options.UnitID, Version: options.Version, Subject: controlplane.RPCSubjectForPartition(options.Capability, options.LogicalService, options.RoutingDomain, options.PartitionKey),
+		UnitID:         options.UnitID,
+		Artifact:       ArtifactIdentity{PluginID: options.PluginID, Version: options.ArtifactVersion, SHA256: options.ArtifactSHA256},
+		Contract:       ContractIdentity{Capability: options.Capability, Version: options.ContractVersion, InterfaceFingerprint: options.InterfaceFingerprint},
+		Subject:        controlplane.RPCSubjectForPartition(options.Capability, options.LogicalService, options.RoutingDomain, options.PartitionKey),
 		StreamEndpoint: endpoint, Health: "healthy", UpdatedAt: nowUTC(),
 	}
 	key := controlplane.CapabilityKey(options.Capability, options.InstanceID)

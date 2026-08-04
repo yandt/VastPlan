@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.configuration.global-settings",
   "name": "VastPlan 全局设置服务",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -38,7 +38,7 @@
     "provides": [
       {
         "extensionPoint": "tool.package",
-        "capability": "platform.settings",
+        "capability": "platform.settings", "contractVersion": "1.0.0",
         "visibility": "cluster",
         "routing": "queue",
         "routingDomain": "platform"

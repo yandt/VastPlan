@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.example.backend.quota",
   "name": "示例配额",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -14,6 +14,15 @@
   "contextAccess": { "required": ["scope.tenant", "caller", "scene"], "optional": ["trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
 
   "activation": ["onStartup"],
+
+  "runtime": {
+    "instancePolicy": "active-active", "stateModel": "external-shared", "visibility": "cluster", "routing": "queue",
+    "provides": [
+      { "extensionPoint": "hook", "capability": "demo.quota.limit", "contractVersion": "1.0.0", "visibility": "cluster", "routing": "queue" },
+      { "extensionPoint": "hook", "capability": "demo.quota.meter", "contractVersion": "1.0.0", "visibility": "cluster", "routing": "queue" },
+      { "extensionPoint": "tool.package", "capability": "demo.quota", "contractVersion": "1.0.0", "visibility": "cluster", "routing": "queue" }
+    ]
+  },
 
   "entry": { "backend": "backend/demo-quota" },
 

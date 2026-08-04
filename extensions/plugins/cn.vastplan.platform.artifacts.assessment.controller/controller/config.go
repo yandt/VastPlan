@@ -13,7 +13,7 @@ import (
 
 const (
 	PluginID      = artifactassessment.AssessmentControllerPluginID
-	PluginVersion = "0.1.1"
+	PluginVersion = "0.1.2"
 	Capability    = "platform.artifacts.assessment.controller"
 )
 

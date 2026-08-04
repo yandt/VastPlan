@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.artifacts.storage.file",
   "name": "VastPlan 本地文件制品存储 Provider",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -17,7 +17,7 @@
     "routing": "leader",
     "routingDomain": "platform",
     "provides": [
-      { "extensionPoint": "tool.package", "capability": "platform.artifacts.storage.file", "visibility": "cluster", "routing": "leader", "routingDomain": "platform" }
+      { "extensionPoint": "tool.package", "capability": "platform.artifacts.storage.file", "contractVersion": "1.0.0", "visibility": "cluster", "routing": "leader", "routingDomain": "platform" }
     ]
   },
   "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },

@@ -39,10 +39,10 @@
     "availableCapabilities": {
       "type": "array", "maxItems": 512,
       "items": {
-        "type": "object", "additionalProperties": false, "required": ["capability"],
+        "type": "object", "additionalProperties": false, "required": ["capability", "contractVersion"],
         "properties": {
           "capability": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 160 },
-          "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/semver" }
+          "contractVersion": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/semver" }
         }
       }
     },

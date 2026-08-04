@@ -15,7 +15,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.platform.infrastructure.composition-planner"
-	PluginVersion = "0.2.6"
+	PluginVersion = "0.2.7"
 	CallerID      = "cn.vastplan.platform.infrastructure.deployment-manager"
 )
 

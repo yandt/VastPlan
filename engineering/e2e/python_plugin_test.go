@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocol"
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
 )
 
@@ -53,7 +53,7 @@ func TestPythonPlugin_CrossLanguageInvokeAndFeatureNegotiation(t *testing.T) {
 			"PYTHONPATH=" + filepath.Join(root, "extensions/sdk/python"),
 		},
 	}, protocolbus.LaunchPolicy{
-		PluginID: "cn.vastplan.example.runtime.python-hello", Version: "0.2.0", Contributions: contributions,
+		PluginID: "cn.vastplan.example.runtime.python-hello", Version: "0.2.1", Contributions: contributions,
 		RequiredFeatures: []string{protocol.FeatureCancellation, protocol.FeatureEventPublish},
 	})
 	if err != nil {

@@ -18,7 +18,7 @@ import (
 )
 
 const PluginID = "cn.vastplan.foundation.security.authentication.provider.database"
-const PluginVersion = "0.1.1"
+const PluginVersion = "0.1.2"
 const ProviderID = "database-user"
 const MethodID = "database-password"
 

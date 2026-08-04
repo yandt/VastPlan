@@ -42,3 +42,30 @@ func TestInventoryRejectsArtifactManifestIdentityDrift(t *testing.T) {
 		t.Fatal("应拒绝制品与 Manifest 身份漂移")
 	}
 }
+
+func TestInventoryKeepsArtifactAndCapabilityContractVersionsIndependent(t *testing.T) {
+	manifest := Manifest{
+		ID: "cn.vastplan.database", Version: "9.4.3", Publisher: "vastplan",
+		Runtime: &RuntimePolicy{Provides: []RuntimeCapabilityPolicy{{
+			ExtensionPoint: "tool.package", Capability: "platform.database", ContractVersion: "1.2.0",
+		}}},
+	}
+	value := VerifiedArtifactManifest{
+		Artifact: Artifact{PluginID: manifest.ID, Version: manifest.Version, Channel: "stable", SHA256: strings.Repeat("a", 64)},
+		Manifest: manifest,
+	}
+	inventory, err := BuildPluginInventory(1, strings.Repeat("b", 64), []VerifiedArtifactManifest{value})
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := inventory.Plugins[0]
+	if item.Artifact.Ref.Version != "9.4.3" || item.RuntimeProvides[0].ContractVersion != "1.2.0" {
+		t.Fatalf("制品版本与 Capability 契约版本被错误耦合: %+v", item)
+	}
+	bad := inventory
+	bad.Plugins[0].RuntimeProvides[0].ContractVersion = ""
+	bad.Digest, _ = pluginInventoryDigest(bad)
+	if err := ValidatePluginInventory(bad); err == nil {
+		t.Fatal("Activation Inventory 不得接受缺失的 Capability 契约身份")
+	}
+}

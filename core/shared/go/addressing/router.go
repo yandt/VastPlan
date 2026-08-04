@@ -25,6 +25,8 @@ import (
 
 const cancelSubject = "vp.rpc.cancel.v1"
 
+const announcementSchemaVersion = 2
+
 var ErrCapabilityNotFound = errors.New("全局能力目录中没有健康实例")
 
 // InvokeHandler 是本地与远端服务实现共用的处理签名。
@@ -32,36 +34,51 @@ type InvokeHandler func(context.Context, *contractv1.CallTarget, *contractv1.Cal
 
 type EventHandler func(context.Context, *contractv1.CallContext, *contractv1.CallEvent) error
 
+// ArtifactIdentity 是目录中与内容摘要绑定的精确制品身份。
+type ArtifactIdentity struct {
+	PluginID string `json:"plugin_id"`
+	Version  string `json:"version"`
+	SHA256   string `json:"sha256"`
+}
+
+// ContractIdentity 是该制品当前对外提供的 Capability 接口身份。
+type ContractIdentity struct {
+	Capability           string `json:"capability"`
+	Version              string `json:"version"`
+	InterfaceFingerprint string `json:"interface_fingerprint"`
+}
+
 // Announcement 是全局能力目录的一条实例租约。
 type Announcement struct {
-	SchemaVersion      int       `json:"schema_version"`
-	Capability         string    `json:"capability"`
-	ExtensionPoint     string    `json:"extension_point"`
-	ServiceRole        string    `json:"service_role"`
-	LogicalService     string    `json:"logical_service,omitempty"`
-	RoutingDomain      string    `json:"routing_domain,omitempty"`
-	PartitionKey       string    `json:"partition_key,omitempty"`
-	InstancePolicy     string    `json:"instance_policy,omitempty"`
-	StateModel         string    `json:"state_model,omitempty"`
-	Visibility         string    `json:"visibility,omitempty"`
-	Routing            string    `json:"routing,omitempty"`
-	InstanceID         string    `json:"instance_id"`
-	NodeID             string    `json:"node_id"`
-	UnitID             string    `json:"unit_id"`
-	Subject            string    `json:"subject"`
-	StreamEndpoint     string    `json:"stream_endpoint,omitempty"`
-	Version            string    `json:"version,omitempty"`
-	Health             string    `json:"health"`
-	Readiness          string    `json:"readiness,omitempty"`
-	ReadinessReason    string    `json:"readiness_reason,omitempty"`
-	Generation         uint64    `json:"generation,omitempty"`
-	FencingToken       string    `json:"fencing_token,omitempty"`
-	LeaseExpiresAt     time.Time `json:"lease_expires_at,omitempty"`
-	UpdatedAt          time.Time `json:"updated_at"`
-	TransportPublicKey string    `json:"transport_public_key,omitempty"`
-	TransportTimestamp string    `json:"transport_timestamp,omitempty"`
-	TransportNonce     string    `json:"transport_nonce,omitempty"`
-	TransportSignature string    `json:"transport_signature,omitempty"`
+	SchemaVersion      int              `json:"schema_version"`
+	Capability         string           `json:"capability"`
+	ExtensionPoint     string           `json:"extension_point"`
+	ServiceRole        string           `json:"service_role"`
+	LogicalService     string           `json:"logical_service,omitempty"`
+	RoutingDomain      string           `json:"routing_domain,omitempty"`
+	PartitionKey       string           `json:"partition_key,omitempty"`
+	InstancePolicy     string           `json:"instance_policy,omitempty"`
+	StateModel         string           `json:"state_model,omitempty"`
+	Visibility         string           `json:"visibility,omitempty"`
+	Routing            string           `json:"routing,omitempty"`
+	InstanceID         string           `json:"instance_id"`
+	NodeID             string           `json:"node_id"`
+	UnitID             string           `json:"unit_id"`
+	Subject            string           `json:"subject"`
+	StreamEndpoint     string           `json:"stream_endpoint,omitempty"`
+	Artifact           ArtifactIdentity `json:"artifact"`
+	Contract           ContractIdentity `json:"contract"`
+	Health             string           `json:"health"`
+	Readiness          string           `json:"readiness,omitempty"`
+	ReadinessReason    string           `json:"readiness_reason,omitempty"`
+	Generation         uint64           `json:"generation,omitempty"`
+	FencingToken       string           `json:"fencing_token,omitempty"`
+	LeaseExpiresAt     time.Time        `json:"lease_expires_at,omitempty"`
+	UpdatedAt          time.Time        `json:"updated_at"`
+	TransportPublicKey string           `json:"transport_public_key,omitempty"`
+	TransportTimestamp string           `json:"transport_timestamp,omitempty"`
+	TransportNonce     string           `json:"transport_nonce,omitempty"`
+	TransportSignature string           `json:"transport_signature,omitempty"`
 }
 
 type localHandler struct {

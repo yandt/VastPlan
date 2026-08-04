@@ -5,13 +5,13 @@ import (
 	"sort"
 	"testing"
 
-	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	addressingv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/addressing/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	pluginhostv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/pluginhost/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/errorcode"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
-	pluginhostv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/pluginhost/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocol"
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 

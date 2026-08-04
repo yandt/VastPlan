@@ -11,13 +11,13 @@
       "plugins": [
         {
           "id": "cn.vastplan.example.backend.permission",
-          "version": "0.1.1",
+          "version": "0.1.2",
           "channel": "stable",
           "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         },
         {
           "id": "cn.vastplan.example.backend.hello-world",
-          "version": "0.2.1",
+          "version": "0.2.2",
           "channel": "stable",
           "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         }

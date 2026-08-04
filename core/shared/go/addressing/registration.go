@@ -10,31 +10,35 @@ import (
 
 	"github.com/nats-io/nats.go"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/errorcode"
+	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/servicemodel"
 )
 
 // RegisterOptions 描述一个可被本地直调和远端 queue group 调用的实例。
 type RegisterOptions struct {
-	Capability      string
-	ExtensionPoint  string
-	ServiceRole     string
-	LogicalService  string
-	RoutingDomain   string
-	PartitionKey    string
-	InstancePolicy  string
-	StateModel      string
-	Visibility      string
-	Routing         string
-	Readiness       string
-	ReadinessReason string
-	Generation      uint64
-	FencingToken    string
-	LeaseExpiresAt  time.Time
-	UnitID          string
-	Version         string
-	InstanceID      string
+	Capability           string
+	ExtensionPoint       string
+	ServiceRole          string
+	LogicalService       string
+	RoutingDomain        string
+	PartitionKey         string
+	InstancePolicy       string
+	StateModel           string
+	Visibility           string
+	Routing              string
+	Readiness            string
+	ReadinessReason      string
+	Generation           uint64
+	FencingToken         string
+	LeaseExpiresAt       time.Time
+	UnitID               string
+	PluginID             string
+	ArtifactVersion      string
+	ArtifactSHA256       string
+	ContractVersion      string
+	InterfaceFingerprint string
+	InstanceID           string
 }
 
 type Registration struct {
@@ -72,7 +76,7 @@ func (r *Router) PrepareLocalRegistration(ctx context.Context, options RegisterO
 	}
 	registrationCtx, cancel := context.WithCancel(r.ctx)
 	registration := &Registration{
-		router: r, localOnly: true, record: Announcement{SchemaVersion: 1, Capability: options.Capability, ExtensionPoint: options.ExtensionPoint, ServiceRole: options.ServiceRole, LogicalService: options.LogicalService, RoutingDomain: options.RoutingDomain, PartitionKey: options.PartitionKey, InstancePolicy: policy.InstancePolicy, StateModel: policy.StateModel, Visibility: policy.Visibility, Routing: policy.Routing, Readiness: "ready", InstanceID: options.InstanceID, NodeID: r.NodeID, UnitID: options.UnitID, Version: options.Version, Subject: controlplane.RPCSubjectForPartition(options.Capability, options.LogicalService, options.RoutingDomain, options.PartitionKey), Health: "starting", UpdatedAt: time.Now().UTC()}, key: controlplane.CapabilityKey(options.Capability, options.InstanceID), id: randomID(), handler: handler, cancel: cancel}
+		router: r, localOnly: true, record: Announcement{SchemaVersion: announcementSchemaVersion, Capability: options.Capability, ExtensionPoint: options.ExtensionPoint, ServiceRole: options.ServiceRole, LogicalService: options.LogicalService, RoutingDomain: options.RoutingDomain, PartitionKey: options.PartitionKey, InstancePolicy: policy.InstancePolicy, StateModel: policy.StateModel, Visibility: policy.Visibility, Routing: policy.Routing, Readiness: "ready", InstanceID: options.InstanceID, NodeID: r.NodeID, UnitID: options.UnitID, Artifact: ArtifactIdentity{PluginID: options.PluginID, Version: options.ArtifactVersion, SHA256: options.ArtifactSHA256}, Contract: ContractIdentity{Capability: options.Capability, Version: options.ContractVersion, InterfaceFingerprint: options.InterfaceFingerprint}, Subject: controlplane.RPCSubjectForPartition(options.Capability, options.LogicalService, options.RoutingDomain, options.PartitionKey), Health: "starting", UpdatedAt: time.Now().UTC()}, key: controlplane.CapabilityKey(options.Capability, options.InstanceID), id: randomID(), handler: handler, cancel: cancel}
 	_ = registrationCtx
 	r.mu.Lock()
 	if r.closed {
@@ -132,15 +136,17 @@ func (r *Router) PrepareRegistration(ctx context.Context, options RegisterOption
 		leaseExpiresAt = time.Now().UTC().Add(30 * time.Second)
 	}
 	record := Announcement{
-		SchemaVersion: 1, Capability: options.Capability, ExtensionPoint: options.ExtensionPoint,
+		SchemaVersion: announcementSchemaVersion, Capability: options.Capability, ExtensionPoint: options.ExtensionPoint,
 		ServiceRole: options.ServiceRole, LogicalService: options.LogicalService, RoutingDomain: options.RoutingDomain, PartitionKey: options.PartitionKey,
 		InstancePolicy: options.InstancePolicy, StateModel: options.StateModel,
 		Visibility: options.Visibility, Routing: options.Routing,
 		Readiness: readiness, ReadinessReason: options.ReadinessReason,
 		Generation: options.Generation, FencingToken: options.FencingToken, LeaseExpiresAt: leaseExpiresAt,
 		InstanceID: options.InstanceID, NodeID: r.NodeID,
-		UnitID: options.UnitID, Version: options.Version,
-		Subject: controlplane.RPCSubjectForPartition(options.Capability, options.LogicalService, options.RoutingDomain, options.PartitionKey), Health: "starting", UpdatedAt: time.Now().UTC(),
+		UnitID:   options.UnitID,
+		Artifact: ArtifactIdentity{PluginID: options.PluginID, Version: options.ArtifactVersion, SHA256: options.ArtifactSHA256},
+		Contract: ContractIdentity{Capability: options.Capability, Version: options.ContractVersion, InterfaceFingerprint: options.InterfaceFingerprint},
+		Subject:  controlplane.RPCSubjectForPartition(options.Capability, options.LogicalService, options.RoutingDomain, options.PartitionKey), Health: "starting", UpdatedAt: time.Now().UTC(),
 	}
 	registrationID := randomID()
 	registrationCtx, cancel := context.WithCancel(r.ctx)

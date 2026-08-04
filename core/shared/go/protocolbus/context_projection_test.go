@@ -3,10 +3,10 @@ package protocolbus
 import (
 	"testing"
 
-	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
 )
 
 func TestProjectContextForPluginAppliesManifestAndExtensionPointCeilings(t *testing.T) {

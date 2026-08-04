@@ -101,12 +101,12 @@ func TestResolverRejectsCyclesAndMissingStrongCapabilities(t *testing.T) {
 	assertResolutionCode(t, err, "DEPENDENCY_CYCLE")
 
 	consumer := resolverEntry("cn.example.consumer", "1.0.0", 1, nil)
-	consumer.RuntimeRequires = []pluginv1.RuntimeRequirement{{Capability: "platform.database", Version: "^2.0", Scope: "remote", Kind: "strong", Ready: "readiness", FailurePolicy: "fail"}}
+	consumer.RuntimeRequires = []pluginv1.RuntimeRequirement{{Capability: "platform.database", ContractRange: "^2.0", Scope: "remote", Kind: "strong", Ready: "readiness", FailurePolicy: "fail"}}
 	request := resolverRequest(pluginv1.ArtifactRequirement{PluginID: consumer.Ref.PluginID, Constraint: "^1.0"})
-	request.AvailableCapabilities = []pluginv1.AvailableCapability{{Capability: "platform.database", Version: "1.5.0"}}
+	request.AvailableCapabilities = []pluginv1.AvailableCapability{{Capability: "platform.database", ContractVersion: "1.5.0"}}
 	_, err = resolveEntries(1, []Entry{consumer}, request)
 	assertResolutionCode(t, err, "CAPABILITY_UNSATISFIED")
-	request.AvailableCapabilities[0].Version = "2.1.0"
+	request.AvailableCapabilities[0].ContractVersion = "2.1.0"
 	if _, err := resolveEntries(1, []Entry{consumer}, request); err != nil {
 		t.Fatalf("matching external capability should satisfy the lock: %v", err)
 	}
@@ -115,13 +115,13 @@ func TestResolverRejectsCyclesAndMissingStrongCapabilities(t *testing.T) {
 	_, err = resolveEntries(1, []Entry{consumer}, request)
 	assertResolutionCode(t, err, "CAPABILITY_UNSATISFIED")
 	consumer.RuntimeRequires[0].Kind = "strong"
-	request.AvailableCapabilities = []pluginv1.AvailableCapability{{Capability: "platform.database", Version: "2.1.0"}}
+	request.AvailableCapabilities = []pluginv1.AvailableCapability{{Capability: "platform.database", ContractVersion: "2.1.0"}}
 	consumer.RuntimeRequires[0].Scope = "same-kernel"
 	if _, err := resolveEntries(1, []Entry{consumer}, request); err == nil {
 		t.Fatal("external capability must not satisfy a local runtime requirement")
 	}
 	provider := resolverEntry("cn.example.database", "2.2.0", 2, nil)
-	provider.ProvidedCapabilities = []string{"platform.database"}
+	provider.RuntimeProvides = []pluginv1.RuntimeCapabilityPolicy{{ExtensionPoint: "tool.package", Capability: "platform.database", ContractVersion: "2.2.0"}}
 	request.Roots = append(request.Roots, pluginv1.ArtifactRequirement{PluginID: provider.Ref.PluginID, Constraint: "^2.0"})
 	if _, err := resolveEntries(2, []Entry{consumer, provider}, request); err != nil {
 		t.Fatalf("selected same-kernel provider should satisfy capability: %v", err)
@@ -196,17 +196,17 @@ func TestResolverUnionsFeatureDependenciesAndCapabilities(t *testing.T) {
 	app.CompositionFeatures = map[string]pluginv1.CompositionFeature{
 		"audit": {
 			ID: "audit", Dependencies: map[string]string{"cn.example.audit": "^1.0"},
-			RuntimeRequires: []pluginv1.RuntimeRequirement{{Capability: "platform.database", Version: "^2.0", Scope: "remote", Kind: "strong", Ready: "readiness", FailurePolicy: "fail"}},
+			RuntimeRequires: []pluginv1.RuntimeRequirement{{Capability: "platform.database", ContractRange: "^2.0", Scope: "remote", Kind: "strong", Ready: "readiness", FailurePolicy: "fail"}},
 		},
 		"quota": {ID: "quota", Dependencies: map[string]string{"cn.example.quota": "^1.0"}},
 	}
 	audit := resolverEntry("cn.example.audit", "1.1.0", 2, nil)
 	quota := resolverEntry("cn.example.quota", "1.2.0", 3, nil)
 	request := resolverRequest(pluginv1.ArtifactRequirement{PluginID: app.Ref.PluginID, Constraint: "=1.0.0", Features: []string{"quota", "audit"}})
-	request.AvailableCapabilities = []pluginv1.AvailableCapability{{Capability: "platform.database", Version: "1.9.0"}}
+	request.AvailableCapabilities = []pluginv1.AvailableCapability{{Capability: "platform.database", ContractVersion: "1.9.0"}}
 	_, err := resolveEntries(3, []Entry{app, audit, quota}, request)
 	assertResolutionCode(t, err, "CAPABILITY_UNSATISFIED")
-	request.AvailableCapabilities[0].Version = "2.1.0"
+	request.AvailableCapabilities[0].ContractVersion = "2.1.0"
 	lock, err := resolveEntries(3, []Entry{app, audit, quota}, request)
 	if err != nil {
 		t.Fatal(err)

@@ -325,11 +325,8 @@ func validateRuntimeCapabilities(selected map[string]Entry, external map[string]
 	sort.Strings(ids)
 	for _, id := range ids {
 		entry := selected[id]
-		for _, capability := range entry.ProvidedCapabilities {
-			selectedProviders[capability] = append(selectedProviders[capability], entry.Ref.Version)
-		}
 		for _, provided := range entry.RuntimeProvides {
-			selectedProviders[provided.Capability] = append(selectedProviders[provided.Capability], entry.Ref.Version)
+			selectedProviders[provided.Capability] = append(selectedProviders[provided.Capability], provided.ContractVersion)
 		}
 	}
 	for _, id := range ids {
@@ -338,8 +335,8 @@ func validateRuntimeCapabilities(selected map[string]Entry, external map[string]
 			if requirement.Kind != "strong" && requirement.Kind != "data" {
 				continue
 			}
-			if requirement.Version != "" {
-				if _, err := semver.NewConstraint(requirement.Version); err != nil {
+			if requirement.ContractRange != "" {
+				if _, err := semver.NewConstraint(requirement.ContractRange); err != nil {
 					return resolutionError("CATALOG_INVALID", fmt.Sprintf("制品 %s 的 capability %s 版本约束无效", refKey(entry.Ref), requirement.Capability))
 				}
 			}
@@ -347,10 +344,10 @@ func validateRuntimeCapabilities(selected map[string]Entry, external map[string]
 			if requirement.Scope == "remote" {
 				versions = append(versions, external[requirement.Capability]...)
 			}
-			if capabilitySatisfied(versions, requirement.Version) {
+			if capabilitySatisfied(versions, requirement.ContractRange) {
 				continue
 			}
-			return resolutionError("CAPABILITY_UNSATISFIED", fmt.Sprintf("制品 %s 的阻塞依赖 capability %s %s 无提供者", refKey(entry.Ref), requirement.Capability, requirement.Version))
+			return resolutionError("CAPABILITY_UNSATISFIED", fmt.Sprintf("制品 %s 的阻塞依赖 capability %s %s 无提供者", refKey(entry.Ref), requirement.Capability, requirement.ContractRange))
 		}
 	}
 	return nil

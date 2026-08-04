@@ -7,7 +7,8 @@ func TestAuthenticationProviderContributionRequiresRuntimeDependencies(t *testin
       "id":"cn.example.identity.oidc","name":"oidc","description":"enterprise oidc provider",
       "version":"1.0.0","publisher":"example","engines":{"backend":"^1.0"},
       "runtime":{"instancePolicy":"active-active","stateModel":"external-shared","visibility":"cluster","routing":"queue",
-        "requires":[{"capability":"network.egress.identity","scope":"remote","kind":"strong","ready":"readiness","failurePolicy":"retry"}]},
+		"provides":[{"extensionPoint":"authentication.provider","capability":"enterprise-oidc","contractVersion":"1.0.0","visibility":"cluster","routing":"queue"}],
+        "requires":[{"capability":"network.egress.identity","contractRange":"^1.0.0","scope":"remote","kind":"strong","ready":"readiness","failurePolicy":"retry"}]},
       "activation":["onStartup"],"entry":{"backend":"backend/main"},
       "contributes":{"backend":{"authenticationProviders":[{
         "id":"enterprise-oidc","service_role":"backend","protocol":"authentication.method.v1",
@@ -29,7 +30,7 @@ func TestAuthenticationProviderContributionRequiresRuntimeDependencies(t *testin
 	missing := []byte(`{
       "id":"cn.example.identity.database","name":"database","description":"database identity provider",
       "version":"1.0.0","publisher":"example","engines":{"backend":"^1.0"},
-      "runtime":{"instancePolicy":"active-active","stateModel":"external-shared","visibility":"cluster","routing":"queue"},
+      "runtime":{"instancePolicy":"active-active","stateModel":"external-shared","visibility":"cluster","routing":"queue","provides":[{"extensionPoint":"authentication.provider","capability":"database-users","contractVersion":"1.0.0","visibility":"cluster","routing":"queue"}]},
       "activation":["onStartup"],"entry":{"backend":"backend/main"},
       "contributes":{"backend":{"authenticationProviders":[{
         "id":"database-users","service_role":"backend","protocol":"authentication.method.v1",

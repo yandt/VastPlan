@@ -61,13 +61,13 @@
     },
     "providerBinding": {
       "type": "object", "additionalProperties": false,
-      "required": ["consumerUnitId", "capability", "providerUnitId", "providerPluginId"],
+      "required": ["consumerUnitId", "capability", "providerUnitId", "providerPluginId", "contractVersion"],
       "properties": {
         "consumerUnitId": { "$ref": "#/$defs/serviceId" },
         "capability": { "type": "string", "minLength": 1, "maxLength": 160 },
         "providerUnitId": { "$ref": "#/$defs/serviceId" },
         "providerPluginId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
-        "version": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "contractVersion": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/semver" },
         "logicalService": { "type": "string", "minLength": 1, "maxLength": 160 },
         "routingDomain": { "type": "string", "minLength": 1, "maxLength": 160 }
       }

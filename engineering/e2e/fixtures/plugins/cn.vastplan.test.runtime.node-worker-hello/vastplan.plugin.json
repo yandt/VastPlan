@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.test.runtime.node-worker-hello",
   "name": "Node Worker Hello",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -17,6 +17,10 @@
       "features": ["channel.cancel.v1"],
       "node": { "workerSafe": true, "moduleFormat": "esm" }
     }
+  },
+  "runtime": {
+    "instancePolicy": "active-active", "stateModel": "external-shared", "visibility": "cluster", "routing": "queue",
+    "provides": [{ "extensionPoint": "tool.package", "capability": "test.runtime.node-worker-hello", "contractVersion": "1.0.0", "visibility": "cluster", "routing": "queue" }]
   },
   "activation": ["onAgentTool:test.runtime.node-worker-hello"],
   "entry": { "backend": "backend/main.mjs" },

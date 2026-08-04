@@ -591,10 +591,11 @@
     "runtimeCapabilityPolicy": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["extensionPoint", "capability"],
+      "required": ["extensionPoint", "capability", "contractVersion"],
       "properties": {
         "extensionPoint": { "type": "string", "minLength": 1, "maxLength": 160 },
         "capability": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "contractVersion": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/semver" },
         "visibility": { "enum": ["local", "service", "cluster", "global"] },
         "routing": { "enum": ["direct", "queue", "leader", "shard"] },
         "routingDomain": { "type": "string", "minLength": 1, "maxLength": 160 }
@@ -603,10 +604,10 @@
     "runtimeRequirement": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["capability", "scope", "kind", "ready", "failurePolicy"],
+      "required": ["capability", "contractRange", "scope", "kind", "ready", "failurePolicy"],
       "properties": {
         "capability": { "type": "string", "minLength": 1, "maxLength": 160 },
-        "version": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "contractRange": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/versionRange" },
         "scope": { "enum": ["same-node", "same-kernel", "remote"] },
         "kind": { "enum": ["strong", "soft", "lazy", "data"] },
         "ready": { "enum": ["readiness", "health"] },

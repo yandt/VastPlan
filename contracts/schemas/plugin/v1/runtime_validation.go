@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/servicemodel"
+	"github.com/Masterminds/semver/v3"
 )
 
 func runtimePolicies(manifest Manifest) (servicemodel.Policy, map[string]RuntimeCapabilityPolicy, error) {
@@ -25,6 +26,9 @@ func runtimePolicies(manifest Manifest) (servicemodel.Policy, map[string]Runtime
 	for _, provide := range manifest.Runtime.Provides {
 		if provide.ExtensionPoint == "" || provide.Capability == "" {
 			return servicemodel.Policy{}, nil, fmt.Errorf("runtime.provides 必须填写 extensionPoint 和 capability")
+		}
+		if _, err := semver.NewVersion(provide.ContractVersion); err != nil {
+			return servicemodel.Policy{}, nil, fmt.Errorf("runtime.provides %s/%s contractVersion 无效: %q", provide.ExtensionPoint, provide.Capability, provide.ContractVersion)
 		}
 		key := provide.ExtensionPoint + "\x00" + provide.Capability
 		if _, exists := overrides[key]; exists {
@@ -55,6 +59,9 @@ func validateRuntimeRequirements(requirements []RuntimeRequirement) error {
 	for _, requirement := range requirements {
 		if requirement.Capability == "" {
 			return fmt.Errorf("runtime.requires capability 不能为空")
+		}
+		if _, err := semver.NewConstraint(requirement.ContractRange); err != nil {
+			return fmt.Errorf("runtime.requires %s contractRange 无效: %q", requirement.Capability, requirement.ContractRange)
 		}
 		if requirement.Scope != "same-node" && requirement.Scope != "same-kernel" && requirement.Scope != "remote" {
 			return fmt.Errorf("runtime.requires %s scope 无效: %q", requirement.Capability, requirement.Scope)

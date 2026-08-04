@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.foundation.versioning.workspace",
   "name": "VastPlan Version Workspace",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -21,7 +21,7 @@
     "routingDomain": "platform",
     "requires": [
       {
-        "capability": "foundation.versioning.ledger",
+        "capability": "foundation.versioning.ledger", "contractRange": "^1.0.0",
         "scope": "remote",
         "kind": "strong",
         "ready": "readiness",
@@ -30,7 +30,7 @@
         "routingDomain": "platform"
       },
       {
-        "capability": "foundation.versioning.content-staging",
+        "capability": "foundation.versioning.content-staging", "contractRange": "^1.0.0",
         "scope": "remote",
         "kind": "soft",
         "ready": "readiness",
@@ -39,7 +39,7 @@
         "routingDomain": "platform"
       },
       {
-        "capability": "foundation.versioning.content-reference",
+        "capability": "foundation.versioning.content-reference", "contractRange": "^1.0.0",
         "scope": "remote",
         "kind": "soft",
         "ready": "readiness",
@@ -51,7 +51,7 @@
     "provides": [
       {
         "extensionPoint": "tool.package",
-        "capability": "foundation.versioning.workspace",
+        "capability": "foundation.versioning.workspace", "contractVersion": "1.0.0",
         "visibility": "cluster",
         "routing": "leader",
         "routingDomain": "platform"

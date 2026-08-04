@@ -21,12 +21,12 @@ type ArtifactReader interface {
 }
 
 type capabilityProvider struct {
-	unitID         string
-	capability     string
-	version        string
-	logicalService string
-	routingDomain  string
-	visibility     string
+	unitID          string
+	capability      string
+	contractVersion string
+	logicalService  string
+	routingDomain   string
+	visibility      string
 }
 
 type unitContract struct {
@@ -137,7 +137,7 @@ func recordCapabilityProviders(unit deploymentv2.ServiceUnit, ref deploymentv1.P
 			return fmt.Errorf("unit %s 部署策略与签名清单 %s/%s 不一致", unit.ID, ref.ID, contribution.ID)
 		}
 		providers[contribution.ID] = append(providers[contribution.ID], capabilityProvider{
-			unitID: unit.ID, capability: contribution.ID, version: manifest.Version,
+			unitID: unit.ID, capability: contribution.ID, contractVersion: contribution.ContractVersion,
 			logicalService: unit.LogicalService, routingDomain: contribution.RoutingDomain, visibility: contribution.Visibility,
 		})
 	}
@@ -199,7 +199,7 @@ func validateRemoteRequirement(unitID string, requirement pluginv1.RuntimeRequir
 		return nil
 	}
 	if mismatch {
-		return fmt.Errorf("unit %s 的 capability %s 版本范围 %q 无可用提供者", unitID, requirement.Capability, requirement.Version)
+		return fmt.Errorf("unit %s 的 capability %s 契约范围 %q 无可用提供者", unitID, requirement.Capability, requirement.ContractRange)
 	}
 	// A deployment revision only owns its own units. An explicitly addressed
 	// remote service may belong to another deployment. Availability and version
@@ -240,8 +240,8 @@ func validatePackageDependencies(unitID string, manifest pluginv1.Manifest, vers
 
 func matchingProviders(requirement pluginv1.RuntimeRequirement, candidates []capabilityProvider) ([]capabilityProvider, bool) {
 	var constraint *semver.Constraints
-	if requirement.Version != "" {
-		constraint, _ = semver.NewConstraint(requirement.Version)
+	if requirement.ContractRange != "" {
+		constraint, _ = semver.NewConstraint(requirement.ContractRange)
 	}
 	mismatch := false
 	matches := make([]capabilityProvider, 0, len(candidates))
@@ -253,7 +253,7 @@ func matchingProviders(requirement pluginv1.RuntimeRequirement, candidates []cap
 			continue
 		}
 		if constraint != nil {
-			version, err := semver.NewVersion(candidate.version)
+			version, err := semver.NewVersion(candidate.contractVersion)
 			if err != nil || !constraint.Check(version) {
 				mismatch = true
 				continue

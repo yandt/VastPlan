@@ -36,6 +36,9 @@ func TestParseManifest_ExistingPluginsConform(t *testing.T) {
 		if manifest.ID != entry.Name() {
 			t.Errorf("清单 ID=%q，应与目录名 %q 一致", manifest.ID, entry.Name())
 		}
+		if _, err := BackendRuntimeContributions(manifest); err != nil {
+			t.Errorf("%s runtime contract: %v", entry.Name(), err)
+		}
 	}
 }
 
@@ -117,7 +120,7 @@ func TestParseManifestCompositionFeaturesAreSignedAndClosed(t *testing.T) {
 	valid := `[{
   "id":"audit.extended","title":"Extended audit",
   "dependencies":{"com.example.audit":"^1.0"},
-  "runtimeRequires":[{"capability":"platform.audit","scope":"remote","kind":"strong","ready":"readiness","failurePolicy":"fail"}],
+  "runtimeRequires":[{"capability":"platform.audit","contractRange":"^1.0.0","scope":"remote","kind":"strong","ready":"readiness","failurePolicy":"fail"}],
   "configurationSchema":{"type":"object","additionalProperties":false,"properties":{"mode":{"const":"extended"}},"required":["mode"]}
 }]`
 	manifest, err := ParseManifest([]byte(fmt.Sprintf(base, valid)))
@@ -499,7 +502,7 @@ func TestParseManifest_RuntimePolicies(t *testing.T) {
 	local := []byte(`{
 		"id":"com.example.local","name":"local","description":"local",
 		"version":"1.0.0","publisher":"example","engines":{"backend":"^1.0"},
-		"runtime":{"instancePolicy":"per-kernel","stateModel":"local-ephemeral","visibility":"local","routing":"direct"},
+		"runtime":{"instancePolicy":"per-kernel","stateModel":"local-ephemeral","visibility":"local","routing":"direct","provides":[{"extensionPoint":"tool.package","capability":"local.tool","contractVersion":"1.0.0","visibility":"local","routing":"direct"}]},
 		"activation":["onStartup"],"entry":{"backend":"backend/main"},
 		"contributes":{"backend":{"tools":[{"id":"local.tool","service_role":"backend","title":"local","subcommands":[]}]}}
 	}`)
@@ -531,7 +534,8 @@ func TestParseManifest_RuntimeRequirements(t *testing.T) {
 		"id":"com.example.consumer","name":"consumer","description":"consumer",
 		"version":"1.0.0","publisher":"example","engines":{"backend":"^1.0"},
 		"runtime":{"instancePolicy":"active-active","stateModel":"external-shared","visibility":"cluster","routing":"queue",
-			"requires":[{"capability":"platform.database","version":"^1.0.0","scope":"remote","kind":"strong","ready":"readiness","failurePolicy":"retry","logicalService":"platform.database","routingDomain":"core"}]},
+			"provides":[{"extensionPoint":"tool.package","capability":"consumer.tool","contractVersion":"1.0.0","visibility":"cluster","routing":"queue"}],
+			"requires":[{"capability":"platform.database","contractRange":"^1.0.0","scope":"remote","kind":"strong","ready":"readiness","failurePolicy":"retry","logicalService":"platform.database","routingDomain":"core"}]},
 		"activation":["onStartup"],"entry":{"backend":"backend/main"},
 		"contributes":{"backend":{"tools":[{"id":"consumer.tool","service_role":"backend","title":"consumer","subcommands":[]}]}}
 	}`)
@@ -539,11 +543,15 @@ func TestParseManifest_RuntimeRequirements(t *testing.T) {
 	if err != nil || manifest.Runtime == nil || len(manifest.Runtime.Requires) != 1 {
 		t.Fatalf("runtime requires 应通过并被解析: manifest=%+v err=%v", manifest, err)
 	}
+	legacy := bytes.Replace(raw, []byte(`"contractRange":"^1.0.0"`), []byte(`"version":"^1.0.0"`), 1)
+	if _, err := ParseManifest(legacy); err == nil {
+		t.Fatal("runtime.requires.version 已删除，不得继续解释为 Capability 契约范围")
+	}
 	invalid := []byte(`{
 		"id":"com.example.invalid-requirement","name":"invalid","description":"invalid",
 		"version":"1.0.0","publisher":"example","engines":{"backend":"^1.0"},
 		"runtime":{"instancePolicy":"active-active","stateModel":"external-shared","visibility":"cluster","routing":"queue",
-			"requires":[{"capability":"platform.database","scope":"remote","kind":"strong","ready":"readiness","failurePolicy":"unknown"}]},
+			"requires":[{"capability":"platform.database","contractRange":"^1.0.0","scope":"remote","kind":"strong","ready":"readiness","failurePolicy":"unknown"}]},
 		"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}}
 	}`)
 	if _, err := ParseManifest(invalid); err == nil {

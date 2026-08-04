@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	authenticationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authentication/v1"
 	authorizationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authorization/v1"
-	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 )
 
 type acceptingAssertionProof struct{}

@@ -2,14 +2,16 @@
   "id": "cn.vastplan.platform.security.authorization-policy",
   "name": "VastPlan Authorization Policy",
   "description": "管理版本化角色、主体绑定、撤权、签名授权快照及其在线管理工作台",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
   "engines": { "backend": "^0.1", "frontend": "^0.1" },
   "contextAccess": { "required": ["caller", "subject.id", "scope.tenant"], "optional": ["authorization.roles", "scene", "trace", "request.deadline", "propagation.callPath"] },
-  "runtime": { "instancePolicy": "leader", "stateModel": "external-shared", "visibility": "cluster", "routing": "leader", "routingDomain": "security", "backgroundService": true },
+  "runtime": { "instancePolicy": "leader", "stateModel": "external-shared", "visibility": "cluster", "routing": "leader", "routingDomain": "security", "backgroundService": true, "provides": [
+    { "extensionPoint": "tool.package", "capability": "platform.authorization", "contractVersion": "1.0.0", "visibility": "cluster", "routing": "leader", "routingDomain": "security" }
+  ] },
   "configuration": {
     "scope": "service",
     "applyMode": "restart",

@@ -12,7 +12,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.foundation.security.seed-access"
-	PluginVersion = "0.1.6"
+	PluginVersion = "0.1.7"
 	StateVersion  = 1
 )
 

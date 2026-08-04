@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/addressing"
-	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
 	"cdsoft.com.cn/VastPlan/core/shared/go/registry"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/servicemodel"
@@ -16,14 +16,14 @@ func registerCandidate(ctx context.Context, router *addressing.Router, host *pro
 	if router == nil {
 		return nil, nil
 	}
-	versions := make(map[string]string, len(instances))
+	plugins := make(map[string]InstalledPlugin, len(unit.Plugins))
 	audiences := make(map[string]string, len(instances))
 	for _, instance := range instances {
-		versions[instance.PluginID] = instance.Version
 		audiences[instance.PluginID] = instance.RuntimeAudience
 	}
 	policies := make(map[string]pluginv1.RuntimeContribution)
 	for _, plugin := range unit.Plugins {
+		plugins[plugin.ID] = plugin
 		for _, contribution := range plugin.Contract.Contributions {
 			policies[plugin.ID+"\x00"+contribution.ExtensionPoint+"\x00"+contribution.ID] = contribution
 		}
@@ -42,6 +42,7 @@ func registerCandidate(ctx context.Context, router *addressing.Router, host *pro
 				continue
 			}
 			declared := policies[contribution.PluginID+"\x00"+point.Name+"\x00"+contribution.ID]
+			plugin := plugins[contribution.PluginID]
 			instanceID := audiences[contribution.PluginID]
 			if instanceID == "" {
 				return nil, fmt.Errorf("插件 %s 缺少可信 Runtime audience", contribution.PluginID)
@@ -56,7 +57,9 @@ func registerCandidate(ctx context.Context, router *addressing.Router, host *pro
 					LogicalService: logicalService, RoutingDomain: policy.RoutingDomain,
 					InstancePolicy: policy.InstancePolicy, StateModel: policy.StateModel,
 					Visibility: policy.Visibility, Routing: policy.Routing, UnitID: unit.ID,
-					Version: versions[contribution.PluginID], InstanceID: instanceID,
+					PluginID: plugin.ID, ArtifactVersion: plugin.Version, ArtifactSHA256: plugin.SHA256,
+					ContractVersion: declared.ContractVersion, InterfaceFingerprint: plugin.InterfaceFingerprint,
+					InstanceID: instanceID,
 				}, addressing.HostHandler(func(invokeCtx context.Context, target *contractv1.CallTarget, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 					response, err := host.Invoke(invokeCtx, target, callCtx, payload)
 					if err != nil {
@@ -95,7 +98,9 @@ func registerCandidate(ctx context.Context, router *addressing.Router, host *pro
 					Visibility: policy.Visibility, Routing: policy.Routing,
 					RoutingDomain: policy.RoutingDomain,
 					Generation:    generation, FencingToken: fencingToken,
-					UnitID: unit.ID, Version: versions[contribution.PluginID], InstanceID: routingInstanceID,
+					UnitID: unit.ID, PluginID: plugin.ID, ArtifactVersion: plugin.Version, ArtifactSHA256: plugin.SHA256,
+					ContractVersion: declared.ContractVersion, InterfaceFingerprint: plugin.InterfaceFingerprint,
+					InstanceID: routingInstanceID,
 				}, addressing.HostHandler(func(invokeCtx context.Context, target *contractv1.CallTarget, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 					response, err := host.Invoke(invokeCtx, target, callCtx, payload)
 					if err != nil {

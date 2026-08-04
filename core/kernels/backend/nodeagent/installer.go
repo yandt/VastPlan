@@ -230,6 +230,10 @@ func inspectInstalled(root string, artifact pluginv1.Artifact, publisher, entry 
 	if err != nil {
 		return InstalledPlugin{}, fmt.Errorf("冻结运行时贡献: %w", err)
 	}
+	interfaceFingerprint, err := pluginv1.PublicInterfaceFingerprint(manifest)
+	if err != nil {
+		return InstalledPlugin{}, fmt.Errorf("计算公共接口指纹: %w", err)
+	}
 	entryPath := filepath.Join(root, filepath.FromSlash(entry))
 	info, err := os.Stat(entryPath)
 	if err != nil {
@@ -264,8 +268,9 @@ func inspectInstalled(root string, artifact pluginv1.Artifact, publisher, entry 
 	}
 	installed := InstalledPlugin{
 		ID: artifact.PluginID, Publisher: publisher, Version: artifact.Version, Channel: artifact.Channel,
-		Engines: cloneStringMap(manifest.Engines),
-		SHA256:  artifact.SHA256, Root: root, EntryPath: entryPath, DynamicGoPath: dynamicGoPath, PythonPath: pythonPath,
+		InterfaceFingerprint: interfaceFingerprint,
+		Engines:              cloneStringMap(manifest.Engines),
+		SHA256:               artifact.SHA256, Root: root, EntryPath: entryPath, DynamicGoPath: dynamicGoPath, PythonPath: pythonPath,
 		Execution: execution,
 		Contract:  PluginRuntimeContract{Contributions: contributions, ContextAccess: pluginv1.ContextAccessContract(manifest)},
 	}

@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.artifacts.assessment.controller",
   "name": "VastPlan Artifact Security Rescan Controller",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -12,10 +12,10 @@
   "contextAccess": { "required": ["scope.tenant", "caller"], "optional": ["trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
   "runtime": {
     "instancePolicy": "leader", "stateModel": "leader-owned", "visibility": "cluster", "routing": "leader", "routingDomain": "platform", "backgroundService": true,
-    "provides": [{ "extensionPoint": "tool.package", "capability": "platform.artifacts.assessment.controller", "visibility": "cluster", "routing": "leader", "routingDomain": "platform" }],
+    "provides": [{ "extensionPoint": "tool.package", "capability": "platform.artifacts.assessment.controller", "contractVersion": "1.0.0", "visibility": "cluster", "routing": "leader", "routingDomain": "platform" }],
     "requires": [
-      { "capability": "platform.artifacts.repository", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "fail", "logicalService": "platform.artifacts.repository", "routingDomain": "platform" },
-      { "capability": "platform.artifacts.assessment", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "fail", "logicalService": "platform.artifacts.assessment", "routingDomain": "platform" }
+      { "capability": "platform.artifacts.repository", "contractRange": "^1.0.0", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "fail", "logicalService": "platform.artifacts.repository", "routingDomain": "platform" },
+      { "capability": "platform.artifacts.assessment", "contractRange": "^1.0.0", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "fail", "logicalService": "platform.artifacts.assessment", "routingDomain": "platform" }
     ]
   },
   "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },

@@ -12,9 +12,9 @@ import (
 )
 
 type runtimeProvider struct {
-	unitID, pluginID, capability, version string
-	logicalService, routingDomain         string
-	visibility                            string
+	unitID, pluginID, capability, contractVersion string
+	logicalService, routingDomain                 string
+	visibility                                    string
 }
 
 func policyForUnit(pluginIDs []string, manifests map[string]pluginv1.Manifest) (servicemodel.Policy, error) {
@@ -114,7 +114,7 @@ func planRuntime(intent backendcompositionv1.ApplicationIntent, profile backendc
 			provider := matches[0]
 			binding := backendcompositionv1.CapabilityProviderBinding{
 				ConsumerUnitID: planned.service.ID, Capability: requirement.Capability,
-				ProviderUnitID: provider.unitID, ProviderPluginID: provider.pluginID, Version: provider.version,
+				ProviderUnitID: provider.unitID, ProviderPluginID: provider.pluginID, ContractVersion: provider.contractVersion,
 				LogicalService: provider.logicalService, RoutingDomain: provider.routingDomain,
 			}
 			key := planned.service.ID + "\x00" + requirement.Capability
@@ -159,7 +159,7 @@ func collectProviders(target map[string][]runtimeProvider, unitID, logicalServic
 		contributions, _ := pluginv1.BackendRuntimeContributions(manifest)
 		for _, contribution := range contributions {
 			target[contribution.ID] = append(target[contribution.ID], runtimeProvider{
-				unitID: unitID, pluginID: pluginID, capability: contribution.ID, version: manifest.Version,
+				unitID: unitID, pluginID: pluginID, capability: contribution.ID, contractVersion: contribution.ContractVersion,
 				logicalService: logicalService, routingDomain: contribution.RoutingDomain, visibility: contribution.Visibility,
 			})
 		}
@@ -183,9 +183,9 @@ func requirementsForUnit(unit plannedUnit, manifests map[string]pluginv1.Manifes
 
 func matchRuntimeProviders(requirement pluginv1.RuntimeRequirement, candidates []runtimeProvider, consumerUnitID string) ([]runtimeProvider, error) {
 	var constraint *semver.Constraints
-	if requirement.Version != "" {
+	if requirement.ContractRange != "" {
 		var err error
-		constraint, err = semver.NewConstraint(requirement.Version)
+		constraint, err = semver.NewConstraint(requirement.ContractRange)
 		if err != nil {
 			return nil, fmt.Errorf("版本范围无效: %w", err)
 		}
@@ -205,7 +205,7 @@ func matchRuntimeProviders(requirement pluginv1.RuntimeRequirement, candidates [
 			continue
 		}
 		if constraint != nil {
-			version, err := semver.NewVersion(candidate.version)
+			version, err := semver.NewVersion(candidate.contractVersion)
 			if err != nil || !constraint.Check(version) {
 				continue
 			}

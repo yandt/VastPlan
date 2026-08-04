@@ -38,8 +38,8 @@ type ArtifactRequirement struct {
 // AvailableCapability describes a capability supplied by the target environment
 // rather than by a package selected into this lock.
 type AvailableCapability struct {
-	Capability string `json:"capability"`
-	Version    string `json:"version,omitempty"`
+	Capability      string `json:"capability"`
+	ContractVersion string `json:"contractVersion"`
 }
 
 // ArtifactResolveRequest contains every policy input that can affect solving.

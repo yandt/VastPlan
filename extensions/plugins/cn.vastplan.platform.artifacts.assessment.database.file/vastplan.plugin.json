@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.artifacts.assessment.database.file",
   "name": "VastPlan Trivy Database File Snapshot",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -12,7 +12,7 @@
   "contextAccess": { "optional": ["caller", "scene", "trace", "request.deadline"] },
   "runtime": {
     "instancePolicy": "per-kernel", "stateModel": "local-ephemeral", "visibility": "local", "routing": "direct",
-    "provides": [{ "extensionPoint": "tool.package", "capability": "platform.artifacts.assessment.database.file", "visibility": "local", "routing": "direct" }]
+    "provides": [{ "extensionPoint": "tool.package", "capability": "platform.artifacts.assessment.database.file", "contractVersion": "1.0.0", "visibility": "local", "routing": "direct" }]
   },
   "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
   "configuration": {

@@ -410,7 +410,7 @@ func writeTestPackage(t *testing.T, version string) string {
 	directory := t.TempDir()
 	manifest := []byte(`{
   "id":"cn.vastplan.product.test.publish","name":"Test publish","description":"Test publish plugin","version":"` + version + `","publisher":"vastplan",
-  "engines":{"backend":"^0.1"},"activation":["onStartup"],"entry":{"backend":"backend/main"},
+  "engines":{"backend":"^0.1"},"runtime":{"instancePolicy":"active-active","stateModel":"external-shared","visibility":"cluster","routing":"queue","provides":[{"extensionPoint":"tool.package","capability":"product.test.publish","contractVersion":"1.0.0","visibility":"cluster","routing":"queue"}]},"activation":["onStartup"],"entry":{"backend":"backend/main"},
   "contributes":{"backend":{"tools":[{"id":"product.test.publish","service_role":"backend","subcommands":[]}]}}
 }`)
 	if err := os.WriteFile(filepath.Join(directory, "vastplan.plugin.json"), manifest, 0o600); err != nil {

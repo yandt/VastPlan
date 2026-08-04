@@ -12,7 +12,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.platform.security.authentication.method.otp"
-	PluginVersion = "0.2.1"
+	PluginVersion = "0.2.2"
 	ProviderID    = "enterprise-one-time-code"
 	EmailMethodID = "enterprise-email-code"
 	SMSMethodID   = "enterprise-sms-code"

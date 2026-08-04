@@ -11,14 +11,14 @@ import (
 	"testing"
 	"time"
 
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	configurationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configuration/v1"
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationauthority"
-	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfiguration"
 	"cdsoft.com.cn/VastPlan/extensions/sdk/go/configurationcontroller"
@@ -397,7 +397,7 @@ func hotWorkflowFixture(t *testing.T) (*hotWorkflowHost, pluginconfiguration.Def
 	_ = json.Unmarshal(valuesRaw, &values)
 	manifest := []byte(fmt.Sprintf(`{
 		"id":%q,"name":"Hot Controller","description":"Hot config test","version":"1.0.0","publisher":"example","engines":{"backend":"^0.1"},
-		"runtime":{"instancePolicy":"leader","stateModel":"leader-owned","visibility":"cluster","routing":"leader","routingDomain":"security"},
+		"runtime":{"instancePolicy":"leader","stateModel":"leader-owned","visibility":"cluster","routing":"leader","routingDomain":"security","provides":[{"extensionPoint":"tool.package","capability":"test.hot-controller","contractVersion":"1.0.0","visibility":"cluster","routing":"leader","routingDomain":"security"}]},
 		"capabilities":{"kernelServices":["kernel.config.credential-ref"]},
 		"configuration":{"scope":"service","applyMode":"hot","controller":{"protocol":"configuration.v1"},"schema":{"type":"object","additionalProperties":false,"required":["issuer"],"properties":{"issuer":{"type":"string"}}},"managedCredentials":[{"id":"token","title":"Service token","purpose":"remote.token","required":true}]},
 		"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[{"id":"test.hot-controller","service_role":"backend","title":"Test","subcommands":[{"name":"status","description":"status"}]}]}}

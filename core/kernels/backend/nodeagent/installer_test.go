@@ -42,7 +42,7 @@ func TestLocalInstallerFreezesBackgroundServiceFromSignedManifest(t *testing.T) 
 	manifest := []byte(`{
   "id":"com.example.background","name":"background","description":"background","version":"1.0.0","publisher":"example",
   "engines":{"backend":"^1.0"},
-  "runtime":{"instancePolicy":"leader","stateModel":"leader-owned","visibility":"cluster","routing":"leader","backgroundService":true},
+  "runtime":{"instancePolicy":"leader","stateModel":"leader-owned","visibility":"cluster","routing":"leader","backgroundService":true,"provides":[{"extensionPoint":"tool.package","capability":"example.background","contractVersion":"1.0.0","visibility":"cluster","routing":"leader"}]},
   "configuration":{"scope":"service","applyMode":"restart","schema":{"type":"object","additionalProperties":false,"required":["tenantId"],"properties":{"tenantId":{"type":"string"}}}},
   "activation":["onStartup"],"entry":{"backend":"backend/plugin"},
   "contributes":{"backend":{"tools":[{"id":"example.background","service_role":"backend"}]}}
@@ -95,6 +95,7 @@ func TestLocalInstaller_PythonEntryNeedNotBeExecutable(t *testing.T) {
 	manifest := []byte(fmt.Sprintf(`{
   "id":"com.example.python","name":"python","description":"python","version":"1.0.0","publisher":"example",
   "engines":{"backend":"^1.0"},"execution":{"backend":{"driver":"python","requirements":{"python":">=3.8"}}},
+  "runtime":{"instancePolicy":"active-active","stateModel":"external-shared","visibility":"cluster","routing":"queue","provides":[{"extensionPoint":"tool.package","capability":"example.python","contractVersion":"1.0.0","visibility":"cluster","routing":"queue"}]},
   "activation":["onStartup"],"entry":{"backend":"backend/main.py"},
   "supplyChain":{"pythonLock":{"format":"pylock-toml","specVersion":"1.0","path":"supply-chain/pylock.toml","sha256":"%s"}},
   "contributes":{"backend":{"tools":[{"id":"example.python","service_role":"backend"}]}}
@@ -143,6 +144,7 @@ func TestLocalInstallerFreezesDynamicGoEntryFromSignedManifest(t *testing.T) {
   "id":"cn.vastplan.foundation.test.dynamic","name":"dynamic","description":"dynamic","version":"1.0.0","publisher":"vastplan",
   "engines":{"backend":"^1.0"},"execution":{"backend":{"driver":"native","minimumIsolation":"trusted-process",
     "dynamicGo":{"entry":"backend/plugin.so","abi":"vastplan.dynamic-go.v1","required":true%s}}},
+  "runtime":{"instancePolicy":"active-active","stateModel":"external-shared","visibility":"cluster","routing":"queue","provides":[{"extensionPoint":"tool.package","capability":"foundation.test.dynamic.tool","contractVersion":"1.0.0","visibility":"cluster","routing":"queue"}]},
   "activation":["onStartup"],"entry":{"backend":"backend/plugin"},
   "contributes":{"backend":{"tools":[{"id":"foundation.test.dynamic.tool","service_role":"backend"}]}}
 }`, fingerprint))
@@ -244,6 +246,7 @@ func testPackage(t *testing.T, mode os.FileMode) ([]byte, pluginv1.Artifact) {
   "version":"1.0.0","publisher":"example","engines":{"backend":"^0.1"},
   "state":{"backend":{"format":"com.example.installer.state","formatVersion":2,
     "migration":{"protocol":"lifecycle.v1","from":[{"format":"com.example.installer.state","formatVersion":1}]}}},
+  "runtime":{"instancePolicy":"active-active","stateModel":"external-shared","visibility":"cluster","routing":"queue","provides":[{"extensionPoint":"tool.package","capability":"example.tool","contractVersion":"1.0.0","visibility":"cluster","routing":"queue"}]},
   "activation":["onStartup"],"entry":{"backend":"backend/plugin"},
 	  "contributes":{"backend":{"tools":[{"id":"example.tool","service_role":"backend"}]}}
 }`)

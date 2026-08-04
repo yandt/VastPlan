@@ -28,7 +28,7 @@ const descriptor = `{
 
 func main() {
 	// id/version/engines 与 vastplan.plugin.json 保持一致（清单是单一真源，ADR-0017 §1）
-	p := sdk.New("cn.vastplan.example.backend.hello-world", "0.2.1", map[string]string{
+	p := sdk.New("cn.vastplan.example.backend.hello-world", "0.2.2", map[string]string{
 		"backend": "^0.1 || ^1.0", // 只贡献 backend 面；已通过 Backend 0.1/1.0 兼容门禁
 	})
 
@@ -114,7 +114,7 @@ func whoami(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext,
 		return nil, nil, fmt.Errorf("解析内核信息失败: %w", err)
 	}
 	out, _ := json.Marshal(map[string]any{
-		"plugin":       "cn.vastplan.example.backend.hello-world@0.2.1",
+		"plugin":       "cn.vastplan.example.backend.hello-world@0.2.2",
 		"hostReported": kernel,
 	})
 	return sdk.OK(time.Since(start).Milliseconds()), out, nil

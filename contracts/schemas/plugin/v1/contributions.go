@@ -72,9 +72,14 @@ func BackendRuntimeContributions(manifest Manifest) ([]RuntimeContribution, erro
 			if _, duplicate := seen[key]; duplicate {
 				return nil, fmt.Errorf("运行时贡献重复: %s/%s", point, id)
 			}
+			contract, declared := overrides[key]
+			if !declared {
+				return nil, fmt.Errorf("运行时贡献 %s/%s 缺少 runtime.provides 契约声明", point, id)
+			}
 			seen[key] = struct{}{}
 			out = append(out, RuntimeContribution{
-				ExtensionPoint: point, ID: id, Priority: priority, Descriptor: descriptor,
+				ExtensionPoint: point, ID: id, ContractVersion: contract.ContractVersion,
+				Priority: priority, Descriptor: descriptor,
 				InstancePolicy: policy.InstancePolicy, StateModel: policy.StateModel,
 				Visibility: policy.Visibility, Routing: policy.Routing, RoutingDomain: policy.RoutingDomain,
 			})
@@ -102,7 +107,8 @@ func BackendRuntimeContributions(manifest Manifest) ([]RuntimeContribution, erro
 			policy = servicemodel.Normalize(policy)
 		}
 		out = append(out, RuntimeContribution{
-			ExtensionPoint: ConfigurationControllerExtensionPoint, ID: id, Descriptor: descriptor,
+			ExtensionPoint: ConfigurationControllerExtensionPoint, ID: id,
+			ContractVersion: "1.0.0", Descriptor: descriptor,
 			InstancePolicy: policy.InstancePolicy, StateModel: policy.StateModel,
 			Visibility: policy.Visibility, Routing: policy.Routing, RoutingDomain: policy.RoutingDomain,
 		})
@@ -129,7 +135,8 @@ func BackendRuntimeContributions(manifest Manifest) ([]RuntimeContribution, erro
 			policy = servicemodel.Normalize(policy)
 		}
 		out = append(out, RuntimeContribution{
-			ExtensionPoint: ConfigurationResourceControllerExtensionPoint, ID: id, Descriptor: descriptor,
+			ExtensionPoint: ConfigurationResourceControllerExtensionPoint, ID: id,
+			ContractVersion: "1.0.0", Descriptor: descriptor,
 			InstancePolicy: policy.InstancePolicy, StateModel: policy.StateModel,
 			Visibility: policy.Visibility, Routing: policy.Routing, RoutingDomain: policy.RoutingDomain,
 		})

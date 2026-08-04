@@ -252,7 +252,7 @@ func publishTestArtifactWithSupplyChainForChannel(t *testing.T, repository *arti
 	}
 	manifest := []byte(`{
   "id":"com.example.catalog","name":"Catalog example","description":"Catalog example plugin","version":"` + version + `","publisher":"example",
-  "engines":{"backend":"^0.1"},` + supplyChain + `"activation":["onStartup"],"entry":{"backend":"backend/main"},
+  "engines":{"backend":"^0.1"},` + supplyChain + `"runtime":{"instancePolicy":"active-active","stateModel":"external-shared","visibility":"cluster","routing":"queue","provides":[{"extensionPoint":"tool.package","capability":"example.catalog","contractVersion":"1.0.0","visibility":"cluster","routing":"queue"}]},"activation":["onStartup"],"entry":{"backend":"backend/main"},
   "contributes":{"backend":{"tools":[{"id":"example.catalog","service_role":"backend","subcommands":[]}]}}
 }`)
 	if err := os.WriteFile(filepath.Join(directory, "vastplan.plugin.json"), manifest, 0o600); err != nil {

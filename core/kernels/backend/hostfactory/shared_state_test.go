@@ -8,11 +8,11 @@ import (
 	"strings"
 	"testing"
 
-	sharedstatev1 "cdsoft.com.cn/VastPlan/contracts/schemas/sharedstate/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	sharedstatev1 "cdsoft.com.cn/VastPlan/contracts/schemas/sharedstate/v1"
+	"cdsoft.com.cn/VastPlan/core/internal/runtimeidentity"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/observability"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/operationfence"
-	"cdsoft.com.cn/VastPlan/core/internal/runtimeidentity"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
 )
 

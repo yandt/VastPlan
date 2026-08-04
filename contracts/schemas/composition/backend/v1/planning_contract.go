@@ -103,7 +103,7 @@ type CapabilityProviderBinding struct {
 	Capability       string `json:"capability"`
 	ProviderUnitID   string `json:"providerUnitId"`
 	ProviderPluginID string `json:"providerPluginId"`
-	Version          string `json:"version,omitempty"`
+	ContractVersion  string `json:"contractVersion"`
 	LogicalService   string `json:"logicalService,omitempty"`
 	RoutingDomain    string `json:"routingDomain,omitempty"`
 }

@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.artifacts.repository",
   "name": "VastPlan 制品仓库服务",
-  "version": "0.40.1",
+  "version": "0.40.2",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -58,8 +58,8 @@
     "visibility": "cluster",
     "routing": "leader",
     "routingDomain": "platform",
-    "provides": [{ "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "visibility": "cluster", "routing": "leader", "routingDomain": "platform" }],
-    "requires": [{ "capability": "platform.api-exposure", "scope": "remote", "kind": "soft", "ready": "readiness", "failurePolicy": "degrade", "logicalService": "platform.api-exposure", "routingDomain": "platform" }]
+    "provides": [{ "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "contractVersion": "1.0.0", "visibility": "cluster", "routing": "leader", "routingDomain": "platform" }],
+    "requires": [{ "capability": "platform.api-exposure", "contractRange": "^1.0.0", "scope": "remote", "kind": "soft", "ready": "readiness", "failurePolicy": "degrade", "logicalService": "platform.api-exposure", "routingDomain": "platform" }]
   },
   "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
   "configuration": {

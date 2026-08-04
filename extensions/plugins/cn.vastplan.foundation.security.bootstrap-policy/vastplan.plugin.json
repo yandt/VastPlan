@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.foundation.security.bootstrap-policy",
   "name": "VastPlan 自举权限基线",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -16,7 +16,11 @@
     "instancePolicy": "per-kernel",
     "stateModel": "local-ephemeral",
     "visibility": "local",
-    "routing": "direct"
+    "routing": "direct",
+    "provides": [
+      { "extensionPoint": "permission.checker", "capability": "foundation.security.bootstrap-policy.write-guard", "contractVersion": "1.0.0", "visibility": "local", "routing": "direct" },
+      { "extensionPoint": "permission.checker", "capability": "foundation.security.bootstrap-policy.baseline", "contractVersion": "1.0.0", "visibility": "local", "routing": "direct" }
+    ]
   },
 
   "execution": {

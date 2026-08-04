@@ -240,12 +240,12 @@ func platformCapabilities(profile backendcompositionv1.PlatformProfile, manifest
 			}
 			contributions, _ := pluginv1.BackendRuntimeContributions(manifest)
 			for _, contribution := range contributions {
-				key := contribution.ID + "\x00" + manifest.Version
+				key := contribution.ID + "\x00" + contribution.ContractVersion
 				if _, duplicate := seen[key]; duplicate {
 					continue
 				}
 				seen[key] = struct{}{}
-				result = append(result, pluginv1.AvailableCapability{Capability: contribution.ID, Version: manifest.Version})
+				result = append(result, pluginv1.AvailableCapability{Capability: contribution.ID, ContractVersion: contribution.ContractVersion})
 			}
 		}
 	}
@@ -253,7 +253,7 @@ func platformCapabilities(profile backendcompositionv1.PlatformProfile, manifest
 		if result[i].Capability != result[j].Capability {
 			return result[i].Capability < result[j].Capability
 		}
-		return result[i].Version < result[j].Version
+		return result[i].ContractVersion < result[j].ContractVersion
 	})
 	return result
 }

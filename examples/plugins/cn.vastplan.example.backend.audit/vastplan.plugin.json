@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.example.backend.audit",
   "name": "示例审计",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -13,6 +13,14 @@
   "contextAccess": { "required": ["scope.tenant", "caller", "scene", "trace"], "optional": ["request.deadline", "propagation.callPath"] },
 
   "activation": ["onStartup"],
+
+  "runtime": {
+    "instancePolicy": "active-active", "stateModel": "external-shared", "visibility": "cluster", "routing": "queue",
+    "provides": [
+      { "extensionPoint": "event.sink", "capability": "demo.audit.sink", "contractVersion": "1.0.0", "visibility": "cluster", "routing": "queue" },
+      { "extensionPoint": "tool.package", "capability": "demo.audit", "contractVersion": "1.0.0", "visibility": "cluster", "routing": "queue" }
+    ]
+  },
 
   "entry": { "backend": "backend/demo-audit" },
 

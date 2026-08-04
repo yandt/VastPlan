@@ -17,7 +17,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.foundation.security.authorization-session"
-	PluginVersion = "0.1.2"
+	PluginVersion = "0.1.3"
 	Capability    = "foundation.security.authorization-session"
 )
 

@@ -32,7 +32,7 @@ func validateRuntimeRequirements(ctx context.Context, plugins []InstalledPlugin,
 			if err != nil {
 				return runtimeDependencyStatus{}, err
 			}
-			local[contribution.ID] = append(local[contribution.ID], plugin.Version)
+			local[contribution.ID] = append(local[contribution.ID], contribution.ContractVersion)
 			if policy.Visibility != servicemodel.VisibilityLocal && contribution.InstancePolicy == servicemodel.PolicyPerKernel {
 				return runtimeDependencyStatus{}, fmt.Errorf("贡献 %s/%s 声明 per-kernel 但 visibility 不是 local", contribution.ExtensionPoint, contribution.ID)
 			}
@@ -79,7 +79,7 @@ func dependencyReady(ctx context.Context, requirement pluginv1.RuntimeRequiremen
 				}
 			}
 		}
-		return versionsMatch(local[requirement.Capability], requirement.Version), time.Time{}, nil
+		return versionsMatch(local[requirement.Capability], requirement.ContractRange), time.Time{}, nil
 	}
 	if router == nil {
 		return false, time.Time{}, fmt.Errorf("远端 addressing router 未接入")
@@ -108,7 +108,7 @@ func requirementSatisfied(instance addressing.Announcement, requirement pluginv1
 		// data 依赖必须达到完整 readiness，不能以仅健康或 degraded 代替迁移/数据就绪。
 		ready = instance.Readiness == "ready"
 	}
-	return ready && versionsMatch([]string{instance.Version}, requirement.Version)
+	return ready && versionsMatch([]string{instance.Contract.Version}, requirement.ContractRange)
 }
 
 func versionsMatch(versions []string, constraint string) bool {

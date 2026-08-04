@@ -14,7 +14,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.foundation.versioning.content-staging"
-	PluginVersion = "0.4.0"
+	PluginVersion = "0.4.1"
 )
 
 type Scope struct {

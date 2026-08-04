@@ -17,7 +17,7 @@ import (
 
 const (
 	PluginID       = artifactassessment.AssessmentProviderPluginID
-	PluginVersion  = "0.3.1"
+	PluginVersion  = "0.3.2"
 	Capability     = "platform.artifacts.assessment"
 	SigningPurpose = "artifact.assessment.signing-key"
 )

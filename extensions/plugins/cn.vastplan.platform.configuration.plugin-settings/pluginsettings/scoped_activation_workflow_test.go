@@ -8,12 +8,12 @@ import (
 	"strings"
 	"testing"
 
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	configurationscopedv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configurationscoped/v1"
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfiguration"
 )
 
@@ -114,7 +114,7 @@ func scopedFixture(t *testing.T, scope string) (*catalogHost, pluginconfiguratio
 	pluginID := "cn.example.scoped-" + scope
 	manifest := []byte(fmt.Sprintf(`{
 		"id":%q,"name":"Scoped","description":"Scoped config test","version":"1.0.0","publisher":"example","engines":{"backend":"^0.1"},
-		"runtime":{"instancePolicy":"active-active","stateModel":"external-shared","visibility":"cluster","routing":"queue","routingDomain":"application","requires":[{"capability":"configuration.scoped","scope":"remote","kind":"strong","ready":"readiness","failurePolicy":"fail"}]},
+		"runtime":{"instancePolicy":"active-active","stateModel":"external-shared","visibility":"cluster","routing":"queue","routingDomain":"application","requires":[{"capability":"configuration.scoped","contractRange":"^1.0.0","scope":"remote","kind":"strong","ready":"readiness","failurePolicy":"fail"}]},
 		"configuration":{"scope":%q,"applyMode":"hot","schema":{"type":"object","additionalProperties":false,"required":["greetingTemplate"],"properties":{"greetingTemplate":{"type":"string"}}}},
 		"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[{"id":"test.scoped","service_role":"backend","title":"Test","subcommands":[{"name":"run","description":"run"}]}]}}
 	}`, pluginID, scope))

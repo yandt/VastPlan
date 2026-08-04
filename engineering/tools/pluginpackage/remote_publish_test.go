@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
 
 func TestStableRemotePublishReusesExactVerifiedTestingCandidate(t *testing.T) {

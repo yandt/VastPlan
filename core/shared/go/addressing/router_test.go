@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -26,6 +27,8 @@ func TestRouterLocalAndRemoteInvoke(t *testing.T) {
 	var receivedTarget *contractv1.CallTarget
 	registration, err := worker.Register(context.Background(), RegisterOptions{
 		Capability: "demo.echo", ExtensionPoint: "tool.package", ServiceRole: "backend", UnitID: "worker-unit",
+		PluginID: "cn.example.echo", ArtifactVersion: "7.4.9", ArtifactSHA256: strings.Repeat("a", 64),
+		ContractVersion: "1.2.0", InterfaceFingerprint: strings.Repeat("b", 64),
 	}, func(_ context.Context, target *contractv1.CallTarget, _ *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 		receivedTarget = target
 		return okResult(), append([]byte("echo:"), payload...), nil
@@ -45,6 +48,10 @@ func TestRouterLocalAndRemoteInvoke(t *testing.T) {
 	}
 
 	waitInstances(t, caller, "demo.echo", 1)
+	announced := caller.Instances("demo.echo")[0]
+	if announced.SchemaVersion != announcementSchemaVersion || announced.Artifact.Version != "7.4.9" || announced.Contract.Version != "1.2.0" || announced.Contract.Capability != "demo.echo" {
+		t.Fatalf("能力目录必须分别记录制品和契约身份: %+v", announced)
+	}
 	receivedTarget = nil
 	result, payload, err = caller.Invoke(context.Background(), target, &contractv1.CallContext{TenantId: "tenant-a"}, []byte("remote"))
 	if err != nil || result.Status != contractv1.CallResult_STATUS_OK || string(payload) != "echo:remote" {

@@ -14,7 +14,7 @@ import (
 
 const (
 	PluginID           = "cn.vastplan.foundation.security.bootstrap-policy"
-	PluginVersion      = "0.1.1"
+	PluginVersion      = "0.1.2"
 	WriteGuardID       = "foundation.security.bootstrap-policy.write-guard"
 	BaselineID         = "foundation.security.bootstrap-policy.baseline"
 	SettingsCapability = "platform.settings"

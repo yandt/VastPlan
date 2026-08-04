@@ -27,7 +27,7 @@ func TestLoaderLoadsRealFirstPartyModule(t *testing.T) {
 	}
 	loader := New(fingerprint)
 	definition, err := loader.Load(output,
-		"cn.vastplan.foundation.security.bootstrap-policy", "0.1.1", fingerprint)
+		"cn.vastplan.foundation.security.bootstrap-policy", "0.1.2", fingerprint)
 	if err != nil {
 		t.Fatalf("加载真实 dynamic-go 模块: %v", err)
 	}

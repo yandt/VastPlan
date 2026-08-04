@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.example.backend.hello-world",
   "name": "Hello World",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -18,8 +18,8 @@
 
   "runtime": {
     "instancePolicy": "active-active", "stateModel": "external-shared", "visibility": "cluster", "routing": "queue", "routingDomain": "application",
-    "provides": [{ "extensionPoint": "tool.package", "capability": "vastplan.hello", "visibility": "cluster", "routing": "queue", "routingDomain": "application" }],
-    "requires": [{ "capability": "configuration.scoped", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "fail", "logicalService": "platform.plugin-configuration", "routingDomain": "platform" }]
+    "provides": [{ "extensionPoint": "tool.package", "capability": "vastplan.hello", "contractVersion": "1.0.0", "visibility": "cluster", "routing": "queue", "routingDomain": "application" }],
+    "requires": [{ "capability": "configuration.scoped", "contractRange": "^1.0.0", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "fail", "logicalService": "platform.plugin-configuration", "routingDomain": "platform" }]
   },
 
   "configuration": {

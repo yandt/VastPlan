@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	apiv1 "cdsoft.com.cn/VastPlan/contracts/schemas/api/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	apiv1 "cdsoft.com.cn/VastPlan/contracts/schemas/api/v1"
 )
 
 func TestDataPlaneTicketIsInstalledByExactControlPlaneAndConsumedOnce(t *testing.T) {

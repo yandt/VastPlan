@@ -266,17 +266,18 @@ type RuntimePolicy struct {
 }
 
 type RuntimeCapabilityPolicy struct {
-	ExtensionPoint string `json:"extensionPoint"`
-	Capability     string `json:"capability"`
-	Visibility     string `json:"visibility,omitempty"`
-	Routing        string `json:"routing,omitempty"`
-	RoutingDomain  string `json:"routingDomain,omitempty"`
+	ExtensionPoint  string `json:"extensionPoint"`
+	Capability      string `json:"capability"`
+	ContractVersion string `json:"contractVersion"`
+	Visibility      string `json:"visibility,omitempty"`
+	Routing         string `json:"routing,omitempty"`
+	RoutingDomain   string `json:"routingDomain,omitempty"`
 }
 
 // RuntimeRequirement 描述跨插件/跨服务的运行时能力依赖，不与制品 dependencies 混用。
 type RuntimeRequirement struct {
 	Capability     string `json:"capability"`
-	Version        string `json:"version,omitempty"`
+	ContractRange  string `json:"contractRange"`
 	Scope          string `json:"scope"`
 	Kind           string `json:"kind"`
 	Ready          string `json:"ready"`
@@ -328,15 +329,16 @@ type Capabilities struct {
 // RuntimeContribution 是签名清单对运行时声明的授权边界。运行进程只能声明这里
 // 已登记的扩展点、ID、优先级和 descriptor，不能在启动后临时扩大权限面。
 type RuntimeContribution struct {
-	ExtensionPoint string          `json:"extensionPoint"`
-	ID             string          `json:"id"`
-	Priority       int32           `json:"priority"`
-	Descriptor     json.RawMessage `json:"descriptor"`
-	InstancePolicy string          `json:"instancePolicy,omitempty"`
-	StateModel     string          `json:"stateModel,omitempty"`
-	Visibility     string          `json:"visibility,omitempty"`
-	Routing        string          `json:"routing,omitempty"`
-	RoutingDomain  string          `json:"routingDomain,omitempty"`
+	ExtensionPoint  string          `json:"extensionPoint"`
+	ID              string          `json:"id"`
+	ContractVersion string          `json:"contractVersion,omitempty"`
+	Priority        int32           `json:"priority"`
+	Descriptor      json.RawMessage `json:"descriptor"`
+	InstancePolicy  string          `json:"instancePolicy,omitempty"`
+	StateModel      string          `json:"stateModel,omitempty"`
+	Visibility      string          `json:"visibility,omitempty"`
+	Routing         string          `json:"routing,omitempty"`
+	RoutingDomain   string          `json:"routingDomain,omitempty"`
 }
 
 var backendContributionPoints = map[string]string{

@@ -14,8 +14,8 @@ import (
 	"time"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactreference"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactstorage"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog"
 )
@@ -383,7 +383,7 @@ func migrationArtifact(t *testing.T, key ed25519.PrivateKey, version string) (ar
 func migrationArtifactForChannel(t *testing.T, key ed25519.PrivateKey, version, channel string) (artifactrepository.Artifact, []byte, []byte) {
 	t.Helper()
 	directory := t.TempDir()
-	manifest := []byte(`{"id":"com.example.migration","name":"Migration","description":"Migration fixture","version":"` + version + `","publisher":"example","engines":{"backend":"^0.1"},"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[{"id":"example.migration","service_role":"backend","subcommands":[]}]}}}`)
+	manifest := []byte(`{"id":"com.example.migration","name":"Migration","description":"Migration fixture","version":"` + version + `","publisher":"example","engines":{"backend":"^0.1"},"runtime":{"instancePolicy":"active-active","stateModel":"external-shared","visibility":"cluster","routing":"queue","provides":[{"extensionPoint":"tool.package","capability":"example.migration","contractVersion":"1.0.0","visibility":"cluster","routing":"queue"}]},"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[{"id":"example.migration","service_role":"backend","subcommands":[]}]}}}`)
 	if err := os.WriteFile(filepath.Join(directory, "vastplan.plugin.json"), manifest, 0o600); err != nil {
 		t.Fatal(err)
 	}

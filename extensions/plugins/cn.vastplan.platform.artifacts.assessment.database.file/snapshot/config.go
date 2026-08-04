@@ -12,7 +12,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.platform.artifacts.assessment.database.file"
-	PluginVersion = "0.1.1"
+	PluginVersion = "0.1.2"
 	Capability    = "platform.artifacts.assessment.database.file"
 )
 

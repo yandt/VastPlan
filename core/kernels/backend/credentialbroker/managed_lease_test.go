@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/credentiallease"
+	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/credentiallease"
 )
 
 func TestManagedLeaseOpensOnlyInsideCallbackAndWipes(t *testing.T) {

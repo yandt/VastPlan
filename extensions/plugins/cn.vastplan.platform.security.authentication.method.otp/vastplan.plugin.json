@@ -2,7 +2,7 @@
   "id": "cn.vastplan.platform.security.authentication.method.otp",
   "name": "VastPlan Enterprise One-Time-Code Authentication Provider",
   "description": "通过可插拔 Delivery Port 提供企业邮箱和短信一次性验证码认证",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -15,7 +15,8 @@
     "visibility": "cluster",
     "routing": "leader",
     "routingDomain": "security",
-    "requires": [{ "capability": "foundation.security.authentication.delivery", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "degrade", "logicalService": "authentication-delivery", "routingDomain": "security" }]
+    "requires": [{ "capability": "foundation.security.authentication.delivery", "contractRange": "^1.0.0", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "degrade", "logicalService": "authentication-delivery", "routingDomain": "security" }],
+    "provides": [{ "extensionPoint": "authentication.provider", "capability": "enterprise-one-time-code", "contractVersion": "1.0.0", "visibility": "cluster", "routing": "leader", "routingDomain": "security" }]
   },
   "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
   "configuration": {
