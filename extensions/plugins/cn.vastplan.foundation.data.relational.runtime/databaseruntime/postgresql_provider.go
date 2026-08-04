@@ -2,7 +2,6 @@ package databaseruntime
 
 import (
 	"context"
-	"crypto/tls"
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
@@ -24,7 +23,7 @@ const postgresqlOptionsSchema = `{
   "type":"object","additionalProperties":false,
   "properties":{
     "user":{"type":"string","minLength":1,"maxLength":128},
-    "tlsMode":{"type":"string","enum":["verify-full","disable"],"default":"verify-full"},
+    "tlsMode":{"type":"string","enum":["verify-full","verify-ca","disable"],"default":"verify-full"},
     "serverName":{"type":"string","maxLength":253},
     "connectTimeoutMs":{"type":"integer","minimum":100,"maximum":300000,"default":10000},
     "applicationName":{"type":"string","maxLength":128}
@@ -126,14 +125,6 @@ func (p *postgresqlProvider) connectionConfig(spec databasev1.ConnectionSpec) (*
 	if options.ApplicationName != "" {
 		config.RuntimeParams["application_name"] = options.ApplicationName
 	}
-	if options.TLSMode == "verify-full" {
-		serverName := options.ServerName
-		if serverName == "" {
-			serverName = host
-		}
-		config.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12, ServerName: serverName}
-	} else {
-		config.TLSConfig = nil
-	}
+	config.TLSConfig = databaseTLSConfig(options.TLSMode, options.ServerName, host)
 	return config, nil
 }

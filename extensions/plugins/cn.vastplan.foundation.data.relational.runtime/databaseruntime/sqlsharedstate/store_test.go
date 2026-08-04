@@ -157,6 +157,10 @@ func TestSQLStoreSchemaIsProviderSpecificAndValueBounded(t *testing.T) {
 	if sql := SchemaStatements(mysql)[0].SQL; !strings.Contains(sql, "BINARY(32)") || !strings.Contains(sql, "LONGBLOB") {
 		t.Fatal(sql)
 	}
+	qualified, err := SchemaStatementsInSchema(postgres, "platform")
+	if err != nil || !strings.Contains(qualified[0].SQL, `"platform"."vastplan_shared_state"`) {
+		t.Fatalf("控制库表必须限定 schema: %+v %v", qualified, err)
+	}
 	store, _ := NewStore(postgres, &memorySessions{rows: map[string]stateRow{}})
 	scope := sharedstate.Scope{Kind: sharedstate.ScopeService, RuntimeScope: "service-a", PluginID: "cn.vastplan.example", Namespace: "settings"}
 	if _, err := store.Create(context.Background(), scope, "too-large", make([]byte, sharedstate.MaxValueBytes+1)); err == nil {

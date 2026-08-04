@@ -84,6 +84,17 @@ func TestProvidersEnforceTLSAndStrictOptions(t *testing.T) {
 	}
 }
 
+func TestVerifyCATLSReplacesHostnameCheckWithChainVerification(t *testing.T) {
+	config := databaseTLSConfig("verify-ca", "", "db.internal")
+	if config == nil || !config.InsecureSkipVerify || config.VerifyConnection == nil || config.ServerName != "" {
+		t.Fatalf("verify-ca TLS 配置无效: %+v", config)
+	}
+	full := databaseTLSConfig("verify-full", "db.internal", "fallback")
+	if full == nil || full.InsecureSkipVerify || full.ServerName != "db.internal" {
+		t.Fatalf("verify-full TLS 配置无效: %+v", full)
+	}
+}
+
 func TestPostgreSQLProviderRejectsAmbientServiceInjection(t *testing.T) {
 	t.Setenv("PGSERVICE", "attacker-controlled")
 	provider := NewPostgreSQLProvider(ProviderSecurityPolicy{})

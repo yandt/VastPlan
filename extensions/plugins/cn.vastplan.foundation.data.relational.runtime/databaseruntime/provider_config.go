@@ -55,8 +55,8 @@ func decodeProviderOptions(raw json.RawMessage, target *providerOptions) error {
 	if target.TLSMode == "" {
 		target.TLSMode = "verify-full"
 	}
-	if target.TLSMode != "verify-full" && target.TLSMode != "disable" {
-		return errors.New("tlsMode 仅支持 verify-full 或 disable")
+	if target.TLSMode != "verify-full" && target.TLSMode != "verify-ca" && target.TLSMode != "disable" {
+		return errors.New("tlsMode 仅支持 verify-full、verify-ca 或 disable")
 	}
 	if len(target.ServerName) > 253 || strings.IndexFunc(target.ServerName, invalidControlRune) >= 0 ||
 		strings.IndexFunc(target.ServerName, unicode.IsSpace) >= 0 {

@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
+	platformcontrolport "cdsoft.com.cn/VastPlan/extensions/libraries/go/platformcontrol"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
 )
 
@@ -20,13 +21,9 @@ const (
 	CodeCommitConflict       = "platform_control.commit_conflict"
 )
 
-// Bootstrapper is implemented by the trusted Database Runtime adapter. The
-// controller owns workflow ordering but never imports a driver or pool type.
-type Bootstrapper interface {
-	Test(context.Context, platformcontrolv1.Profile, SecretSource) error
-	Initialize(context.Context, platformcontrolv1.Profile, SecretSource) (sharedstate.Store, error)
-	Open(context.Context, platformcontrolv1.Profile, SecretSource) (sharedstate.Store, error)
-}
+type Bootstrapper = platformcontrolport.Bootstrapper
+type ManagedStore = platformcontrolport.ManagedStore
+type SecretSource = platformcontrolport.SecretSource
 
 type Controller struct {
 	profiles ProfileStore
@@ -66,6 +63,7 @@ func (c *Controller) Start(ctx context.Context) error {
 		return err
 	}
 	if err := c.binding.Bind(profile.Generation, profileIdentity(*profile), store); err != nil {
+		_ = store.Close()
 		c.setStatus(platformcontrolv1.PhaseRecovery, profile.Generation, CodeCommitConflict)
 		return err
 	}
@@ -98,10 +96,12 @@ func (c *Controller) Configure(ctx context.Context, candidate platformcontrolv1.
 		return err
 	}
 	if err := c.profiles.Commit(ctx, candidate, expectedGeneration); err != nil {
+		_ = store.Close()
 		c.setCandidateFailure(expectedGeneration, CodeCommitConflict)
 		return err
 	}
 	if err := c.binding.Bind(candidate.Generation, profileIdentity(candidate), store); err != nil {
+		_ = store.Close()
 		c.setStatus(platformcontrolv1.PhaseRecovery, candidate.Generation, CodeCommitConflict)
 		return err
 	}

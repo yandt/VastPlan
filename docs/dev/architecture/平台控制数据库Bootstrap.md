@@ -20,7 +20,7 @@ Profile 文件必须使用规范绝对路径、普通文件和 owner-only 权限
 
 ## 3. 两阶段状态机
 
-可信 Controller 只依赖 `ProfileStore`、`SecretResolver`、`Bootstrapper` 和 `BindingStore` 四个端口：
+可信 Controller 只依赖 `ProfileStore`、`SecretResolver`、`Bootstrapper` 和 `BindingStore` 四个端口。`Bootstrapper`、`ManagedStore` 与 `SecretSource` 放在中立 `extensions/libraries/go/platformcontrol`，避免 Database Runtime 插件反向链接内核实现：
 
 ```text
 Start
@@ -35,10 +35,22 @@ Configure
 
 ## 4. 不可回退 Shared State 绑定
 
-`sharedstate.BindingStore` 是 Kernel 暴露给插件的稳定 `state.shared.v1` 端口。它启动时 unavailable，只接受更高 generation 的 Provider；同 generation 只有相同 Profile identity 才幂等。Provider 故障不会切回本地 JSON，避免同一插件出现 SQL 与文件双真相源。
+`sharedstate.BindingStore` 是 Kernel 暴露给插件的稳定 `state.shared.v1` 端口。它启动时 unavailable，只接受更高 generation 的 Provider；同 generation 只有相同 Profile identity 才幂等。Provider 故障不会切回本地 JSON，避免同一插件出现 SQL 与文件双真相源。候选 Store 在 Profile 提交或绑定失败时必须关闭自身连接池，不能留下不可达 generation 的数据库连接。
 
-File Provider 仍只服务单测、开发未初始化阶段和明确的 Seed/Recovery 根状态，不能绑定为生产 Platform Control Store。P4 后续检查点将把 Database Runtime 的 `foundation.state.shared.sql` 适配到 `Bootstrapper/BindingStore`，再让 Node Agent 按 Bootstrap Tier 与 Full Tier 分阶段装配。
+File Provider 仍只服务单测、开发未初始化阶段和明确的 Seed/Recovery 根状态，不能绑定为生产 Platform Control Store。
+
+Database Runtime 内部的 `platformcontrolbootstrap` 适配器复用 PostgreSQL/MySQL Provider Registry 与本地连接池，不把密码、驱动或连接池交给普通服务。它负责：
+
+- 使用受控 `SecretSource` 建立候选连接池；
+- 对 PostgreSQL 创建并使用 Profile 指定 schema；MySQL 首期要求 schema 等于逻辑 database；
+- 在 pinned session 内取得数据库迁移锁，建立限定 schema 的 Shared State 表；
+- 初始化后重新打开并执行健康探针，只有成功的 `ManagedStore` 才允许绑定；
+- 支持 `verify-full / verify-ca / disable`，其中 `verify-ca` 校验证书链但不校验主机名。
+
+该适配器是 Database Runtime 内部模块，不是新插件，也不允许 Backend Kernel 链接具体数据库 Provider。P4 后续检查点只需通过 Bootstrap Tier 生命周期调用该统一端口。
 
 ## 5. 当前状态
 
-P4a 已完成 Profile 契约、owner-only CAS 文件存储、systemd/development file Secret Source、两阶段 Controller 和不可回退 Binding Store，并覆盖空环境、首次成功、失败不提交、旧代保留、权限与秘密清零测试。Database Runtime 远端适配、Bootstrap Tier 启动、配置 API/UI 和恢复动作仍属于 P4 后续。
+P4a 已完成 Profile 契约、owner-only CAS 文件存储、systemd/development file Secret Source、两阶段 Controller 和不可回退 Binding Store，并覆盖空环境、首次成功、失败不提交、旧代保留、权限与秘密清零测试。
+
+P4b 已完成 Database Runtime 进程内 Bootstrap 适配：PostgreSQL/MySQL 初始化、限定 schema SQL Shared State、迁移锁、候选连接池回收和 TLS `verify-ca`。公开 Database Runtime Capability 提升至 `1.2.0`，插件提升至 `0.9.0`。Bootstrap Tier 启动、配置 API/UI 和恢复动作仍属于 P4 后续。

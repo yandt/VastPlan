@@ -27,14 +27,22 @@ type TransactionProvider interface {
 type Store struct {
 	dialect  recordstore.Dialect
 	sessions TransactionProvider
+	schema   string
 	now      func() time.Time
 }
 
 func NewStore(dialect recordstore.Dialect, sessions TransactionProvider) (*Store, error) {
+	return NewStoreInSchema(dialect, sessions, "")
+}
+
+func NewStoreInSchema(dialect recordstore.Dialect, sessions TransactionProvider, schema string) (*Store, error) {
 	if dialect == nil || sessions == nil {
 		return nil, errors.New("SQL Shared State 依赖不能为空")
 	}
-	return &Store{dialect: dialect, sessions: sessions, now: func() time.Time { return time.Now().UTC() }}, nil
+	if schema != strings.TrimSpace(schema) || strings.ContainsAny(schema, "\x00\r\n") {
+		return nil, errors.New("SQL Shared State schema 无效")
+	}
+	return &Store{dialect: dialect, sessions: sessions, schema: schema, now: func() time.Time { return time.Now().UTC() }}, nil
 }
 
 func (s *Store) Get(ctx context.Context, scope sharedstate.Scope, key string) (sharedstate.Entry, error) {
@@ -156,10 +164,26 @@ func (s *Store) List(ctx context.Context, scope sharedstate.Scope, prefix string
 }
 
 func SchemaStatements(dialect recordstore.Dialect) []databasev1.Statement {
-	if dialect.ProviderID() == "postgresql" {
-		return []databasev1.Statement{{SQL: `CREATE TABLE IF NOT EXISTS "vastplan_shared_state" ("scope_hash" BYTEA NOT NULL, "entry_key" TEXT NOT NULL, "value" BYTEA NOT NULL, "revision" BIGINT NOT NULL, "updated_at" TIMESTAMPTZ NOT NULL, PRIMARY KEY ("scope_hash", "entry_key"))`, Parameters: []databasev1.Value{}}}
+	statements, _ := SchemaStatementsInSchema(dialect, "")
+	return statements
+}
+
+func SchemaStatementsInSchema(dialect recordstore.Dialect, schema string) ([]databasev1.Statement, error) {
+	if dialect == nil || schema != strings.TrimSpace(schema) || strings.ContainsAny(schema, "\x00\r\n") {
+		return nil, errors.New("SQL Shared State schema 无效")
 	}
-	return []databasev1.Statement{{SQL: "CREATE TABLE IF NOT EXISTS `vastplan_shared_state` (`scope_hash` BINARY(32) NOT NULL, `entry_key` VARCHAR(320) NOT NULL, `value` LONGBLOB NOT NULL, `revision` BIGINT UNSIGNED NOT NULL, `updated_at` DATETIME(6) NOT NULL, PRIMARY KEY (`scope_hash`, `entry_key`))", Parameters: []databasev1.Value{}}}
+	table := qualifiedTable(dialect, schema, "vastplan_shared_state")
+	if dialect.ProviderID() == "postgresql" {
+		return []databasev1.Statement{{SQL: fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s ("scope_hash" BYTEA NOT NULL, "entry_key" TEXT NOT NULL, "value" BYTEA NOT NULL, "revision" BIGINT NOT NULL, "updated_at" TIMESTAMPTZ NOT NULL, PRIMARY KEY ("scope_hash", "entry_key"))`, table), Parameters: []databasev1.Value{}}}, nil
+	}
+	return []databasev1.Statement{{SQL: fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (`scope_hash` BINARY(32) NOT NULL, `entry_key` VARCHAR(320) NOT NULL, `value` LONGBLOB NOT NULL, `revision` BIGINT UNSIGNED NOT NULL, `updated_at` DATETIME(6) NOT NULL, PRIMARY KEY (`scope_hash`, `entry_key`))", table), Parameters: []databasev1.Value{}}}, nil
+}
+
+func HealthStatement(dialect recordstore.Dialect, schema string) (databasev1.Statement, error) {
+	if dialect == nil || schema != strings.TrimSpace(schema) || strings.ContainsAny(schema, "\x00\r\n") {
+		return databasev1.Statement{}, errors.New("SQL Shared State schema 无效")
+	}
+	return databasev1.Statement{SQL: "SELECT 1 FROM " + qualifiedTable(dialect, schema, "vastplan_shared_state") + " WHERE 1 = 0", Parameters: []databasev1.Value{}}, nil
 }
 
 func validateKey(scope sharedstate.Scope, key string) error {
@@ -185,14 +209,14 @@ func (s *Store) selectOne(scope sharedstate.Scope, key string) databasev1.Statem
 	columns, parameters := s.identity(scope)
 	columns = append(columns, "entry_key")
 	parameters = append(parameters, stringValue(key))
-	return databasev1.Statement{SQL: fmt.Sprintf("SELECT %s, %s, %s FROM %s WHERE %s", s.dialect.Quote("value"), s.dialect.Quote("revision"), s.dialect.Quote("updated_at"), s.dialect.Quote("vastplan_shared_state"), equalWhere(s.dialect, columns)), Parameters: parameters}
+	return databasev1.Statement{SQL: fmt.Sprintf("SELECT %s, %s, %s FROM %s WHERE %s", s.dialect.Quote("value"), s.dialect.Quote("revision"), s.dialect.Quote("updated_at"), s.table(), equalWhere(s.dialect, columns)), Parameters: parameters}
 }
 
 func (s *Store) insert(scope sharedstate.Scope, entry sharedstate.Entry) databasev1.Statement {
 	columns, parameters := s.identity(scope)
 	columns = append(columns, "entry_key", "value", "revision", "updated_at")
 	parameters = append(parameters, stringValue(entry.Key), bytesValue(entry.Value), intValue(entry.Revision), timestampValue(entry.UpdatedAt))
-	return databasev1.Statement{SQL: fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", s.dialect.Quote("vastplan_shared_state"), quoteAll(s.dialect, columns), placeholders(s.dialect, len(columns))), Parameters: parameters}
+	return databasev1.Statement{SQL: fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", s.table(), quoteAll(s.dialect, columns), placeholders(s.dialect, len(columns))), Parameters: parameters}
 }
 
 func (s *Store) update(scope sharedstate.Scope, entry sharedstate.Entry, expected uint64) databasev1.Statement {
@@ -203,7 +227,7 @@ func (s *Store) update(scope sharedstate.Scope, entry sharedstate.Entry, expecte
 	parameters = append(parameters, identity...)
 	parameters = append(parameters, intValue(expected))
 	return databasev1.Statement{SQL: fmt.Sprintf("UPDATE %s SET %s = %s, %s = %s, %s = %s WHERE %s AND %s = %s",
-		s.dialect.Quote("vastplan_shared_state"), s.dialect.Quote("value"), s.dialect.Placeholder(1),
+		s.table(), s.dialect.Quote("value"), s.dialect.Placeholder(1),
 		s.dialect.Quote("revision"), s.dialect.Placeholder(2), s.dialect.Quote("updated_at"), s.dialect.Placeholder(3),
 		equalWhereOffset(s.dialect, columns, 3), s.dialect.Quote("revision"), s.dialect.Placeholder(len(parameters))), Parameters: parameters}
 }
@@ -212,7 +236,7 @@ func (s *Store) delete(scope sharedstate.Scope, key string, expected uint64) dat
 	columns, parameters := s.identity(scope)
 	columns = append(columns, "entry_key")
 	parameters = append(parameters, stringValue(key), intValue(expected))
-	return databasev1.Statement{SQL: fmt.Sprintf("DELETE FROM %s WHERE %s AND %s = %s", s.dialect.Quote("vastplan_shared_state"), equalWhere(s.dialect, columns), s.dialect.Quote("revision"), s.dialect.Placeholder(len(parameters))), Parameters: parameters}
+	return databasev1.Statement{SQL: fmt.Sprintf("DELETE FROM %s WHERE %s AND %s = %s", s.table(), equalWhere(s.dialect, columns), s.dialect.Quote("revision"), s.dialect.Placeholder(len(parameters))), Parameters: parameters}
 }
 
 func (s *Store) list(scope sharedstate.Scope, prefix string, limit int, cursor string) databasev1.Statement {
@@ -222,7 +246,16 @@ func (s *Store) list(scope sharedstate.Scope, prefix string, limit int, cursor s
 	where += fmt.Sprintf(" AND %s LIKE %s ESCAPE '\\\\' AND %s > %s", s.dialect.Quote("entry_key"), s.dialect.Placeholder(len(columns)+1), s.dialect.Quote("entry_key"), s.dialect.Placeholder(len(columns)+2))
 	return databasev1.Statement{SQL: fmt.Sprintf("SELECT %s, %s, %s, %s FROM %s WHERE %s ORDER BY %s ASC LIMIT %s",
 		s.dialect.Quote("entry_key"), s.dialect.Quote("value"), s.dialect.Quote("revision"), s.dialect.Quote("updated_at"),
-		s.dialect.Quote("vastplan_shared_state"), where, s.dialect.Quote("entry_key"), s.dialect.Placeholder(len(columns)+3)), Parameters: parameters}
+		s.table(), where, s.dialect.Quote("entry_key"), s.dialect.Placeholder(len(columns)+3)), Parameters: parameters}
+}
+
+func (s *Store) table() string { return qualifiedTable(s.dialect, s.schema, "vastplan_shared_state") }
+
+func qualifiedTable(dialect recordstore.Dialect, schema, table string) string {
+	if schema == "" {
+		return dialect.Quote(table)
+	}
+	return dialect.Quote(schema) + "." + dialect.Quote(table)
 }
 
 func escapeLike(value string) string {

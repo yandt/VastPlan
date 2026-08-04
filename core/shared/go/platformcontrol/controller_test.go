@@ -19,7 +19,7 @@ func (s staticSecretSource) WithSecret(_ context.Context, use func([]byte) error
 }
 
 type fakeBootstrapper struct {
-	store         sharedstate.Store
+	store         ManagedStore
 	testErr       error
 	initializeErr error
 	openErr       error
@@ -41,21 +41,25 @@ func (f *fakeBootstrapper) Test(ctx context.Context, _ platformcontrolv1.Profile
 	})
 }
 
-func (f *fakeBootstrapper) Initialize(context.Context, platformcontrolv1.Profile, SecretSource) (sharedstate.Store, error) {
+func (f *fakeBootstrapper) Initialize(context.Context, platformcontrolv1.Profile, SecretSource) (ManagedStore, error) {
 	f.initialized++
 	return f.store, f.initializeErr
 }
 
-func (f *fakeBootstrapper) Open(context.Context, platformcontrolv1.Profile, SecretSource) (sharedstate.Store, error) {
+func (f *fakeBootstrapper) Open(context.Context, platformcontrolv1.Profile, SecretSource) (ManagedStore, error) {
 	f.opened++
 	return f.store, f.openErr
 }
+
+type managedTestStore struct{ sharedstate.Store }
+
+func (managedTestStore) Close() error { return nil }
 
 func TestControllerConfiguresThenBindsSQLSharedStateAtomically(t *testing.T) {
 	root := t.TempDir()
 	profileStore := &FileProfileStore{Path: filepath.Join(root, "platform-control.json")}
 	stateStore, _ := sharedstate.OpenFileStore(filepath.Join(root, "provider-state.json"))
-	bootstrapper := &fakeBootstrapper{store: stateStore}
+	bootstrapper := &fakeBootstrapper{store: managedTestStore{Store: stateStore}}
 	binding := sharedstate.NewBindingStore()
 	controller, err := NewController(profileStore, func(platformcontrolv1.SecretRef) (SecretSource, error) {
 		return staticSecretSource{value: []byte("secret")}, nil

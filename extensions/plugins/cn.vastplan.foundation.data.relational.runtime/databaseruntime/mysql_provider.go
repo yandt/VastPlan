@@ -2,7 +2,6 @@ package databaseruntime
 
 import (
 	"context"
-	"crypto/tls"
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
@@ -21,7 +20,7 @@ const mysqlOptionsSchema = `{
   "properties":{
     "user":{"type":"string","minLength":1,"maxLength":128},
     "network":{"type":"string","enum":["tcp","unix"],"default":"tcp"},
-    "tlsMode":{"type":"string","enum":["verify-full","disable"],"default":"verify-full"},
+    "tlsMode":{"type":"string","enum":["verify-full","verify-ca","disable"],"default":"verify-full"},
     "serverName":{"type":"string","maxLength":253},
     "connectTimeoutMs":{"type":"integer","minimum":100,"maximum":300000,"default":10000},
     "readTimeoutMs":{"type":"integer","minimum":0,"maximum":300000,"default":0},
@@ -114,13 +113,7 @@ func (p *mysqlProvider) connectionConfig(spec databasev1.ConnectionSpec) (*mysql
 			return nil, err
 		}
 		config.Addr = net.JoinHostPort(host, strconv.Itoa(int(port)))
-		if options.TLSMode == "verify-full" {
-			serverName := options.ServerName
-			if serverName == "" {
-				serverName = host
-			}
-			config.TLS = &tls.Config{MinVersion: tls.VersionTLS12, ServerName: serverName}
-		}
+		config.TLS = databaseTLSConfig(options.TLSMode, options.ServerName, host)
 	} else {
 		return nil, errors.New("MySQL network 仅支持 tcp 或 unix")
 	}
@@ -128,7 +121,7 @@ func (p *mysqlProvider) connectionConfig(spec databasev1.ConnectionSpec) (*mysql
 		if options.ServerName == "" {
 			return nil, errors.New("MySQL unix + verify-full 必须提供 serverName")
 		}
-		config.TLS = &tls.Config{MinVersion: tls.VersionTLS12, ServerName: options.ServerName}
+		config.TLS = databaseTLSConfig(options.TLSMode, options.ServerName, options.ServerName)
 	}
 	return config, nil
 }

@@ -7,17 +7,14 @@ import (
 	"path/filepath"
 
 	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
+	platformcontrolport "cdsoft.com.cn/VastPlan/extensions/libraries/go/platformcontrol"
 )
 
 const maxSecretBytes = 64 << 10
 
-type SecretSource interface {
-	WithSecret(context.Context, func([]byte) error) error
-}
+type SecretResolver func(platformcontrolv1.SecretRef) (platformcontrolport.SecretSource, error)
 
-type SecretResolver func(platformcontrolv1.SecretRef) (SecretSource, error)
-
-func ResolveSecretSource(ref platformcontrolv1.SecretRef, credentialsDirectory string) (SecretSource, error) {
+func ResolveSecretSource(ref platformcontrolv1.SecretRef, credentialsDirectory string) (platformcontrolport.SecretSource, error) {
 	if err := platformcontrolv1.ValidateSecretRef(ref); err != nil {
 		return nil, err
 	}

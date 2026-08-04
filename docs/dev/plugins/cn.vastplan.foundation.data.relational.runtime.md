@@ -6,7 +6,7 @@
 
 当前制品版本：`0.8.1`
 
-当前公开 Capability 契约：`foundation.data.relational.runtime@1.1.0`
+当前公开 Capability 契约：`foundation.data.relational.runtime@1.2.0`
 
 ## 职责边界
 

@@ -11,7 +11,7 @@ import (
 
 const (
 	SchemaURL                 = "https://schemas.cdsoft.com.cn/vastplan/database/v1/vastplan.database-runtime.schema.json"
-	ContractVersion           = "1.1.0"
+	ContractVersion           = "1.2.0"
 	Capability                = "foundation.data.relational.runtime"
 	RuntimePluginID           = "cn.vastplan.foundation.data.relational.runtime"
 	ConnectionManagerPluginID = "cn.vastplan.platform.data.relational.connection-manager"
