@@ -41,6 +41,13 @@ export interface AuthenticationStep {
 
 export interface AuthenticationResult { readonly state: string; readonly step?: AuthenticationStep; readonly reasonCode?: string; }
 
+export class AccessAuthenticationError extends Error {
+  public constructor(public readonly status: number, public readonly code: string) {
+    super(code);
+    this.name = "AccessAuthenticationError";
+  }
+}
+
 export class AccessAuthenticationClient {
   private csrf?: string;
   public constructor(private readonly fetcher: ModuleFetcher, private readonly returnTo: string) {}
@@ -86,16 +93,28 @@ export class AccessAuthenticationClient {
   }
 
   private async mutate<T>(path: string, method: "POST" | "DELETE", body: unknown): Promise<T> {
-    if (this.csrf === undefined) {
-      const response = await this.fetcher("/auth/v1/csrf", { credentials: "same-origin", cache: "no-store" });
-      const value = await response.json() as { token?: string };
-      if (!response.ok || typeof value.token !== "string") throw new Error("authentication.csrf_unavailable");
-      this.csrf = value.token;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const csrf = await this.csrfToken();
+      const response = await this.fetcher(path, { method, credentials: "same-origin", cache: "no-store", headers: { "Content-Type": "application/json", "X-VastPlan-CSRF": csrf }, body: JSON.stringify(body) });
+      const value = response.status === 204 ? undefined : await response.json();
+      if (response.ok) return value as T;
+      const code = typeof value === "object" && value !== null && "error" in value ? String(value.error) : "authentication.request_rejected";
+      if (attempt === 0 && response.status === 403 && code === "csrf_rejected") {
+        this.csrf = undefined;
+        continue;
+      }
+      throw new AccessAuthenticationError(response.status, code);
     }
-    const response = await this.fetcher(path, { method, credentials: "same-origin", cache: "no-store", headers: { "Content-Type": "application/json", "X-VastPlan-CSRF": this.csrf }, body: JSON.stringify(body) });
-    const value = response.status === 204 ? undefined : await response.json();
-    if (!response.ok) throw new Error(typeof value === "object" && value !== null && "error" in value ? String(value.error) : "authentication.request_rejected");
-    return value as T;
+    throw new AccessAuthenticationError(403, "csrf_rejected");
+  }
+
+  private async csrfToken(): Promise<string> {
+    if (this.csrf !== undefined) return this.csrf;
+    const response = await this.fetcher("/auth/v1/csrf", { credentials: "same-origin", cache: "no-store" });
+    const value = await response.json() as { token?: string };
+    if (!response.ok || typeof value.token !== "string" || value.token.length === 0) throw new AccessAuthenticationError(response.status, "authentication.csrf_unavailable");
+    this.csrf = value.token;
+    return value.token;
   }
 }
 

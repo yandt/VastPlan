@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AccessAuthenticationClient, accessBrandAssetURL, accessLocaleDirection, accessReturnTo, localizeAccessText, providerTestSelection } from "./access-authentication-client";
+import { AccessAuthenticationClient, AccessAuthenticationError, accessBrandAssetURL, accessLocaleDirection, accessReturnTo, localizeAccessText, providerTestSelection } from "./access-authentication-client";
 
 describe("AccessAuthenticationClient", () => {
   it("loads only host-governed access and method descriptions", async () => {
@@ -23,6 +23,49 @@ describe("AccessAuthenticationClient", () => {
     };
     await new AccessAuthenticationClient(fetcher, "/").begin("password", "zh-CN");
     expect(calls[1].init?.headers).toMatchObject({ "X-VastPlan-CSRF": "safe" });
+  });
+
+  it("renews a rejected CSRF token and retries the untouched mutation once", async () => {
+    const calls: Array<{ input: string; token?: string }> = [];
+    let csrf = 0, mutation = 0;
+    const fetcher = async (input: string, init?: RequestInit) => {
+      calls.push({ input, token: new Headers(init?.headers).get("X-VastPlan-CSRF") ?? undefined });
+      if (input === "/auth/v1/csrf") return new Response(JSON.stringify({ token: csrf++ === 0 ? "stale" : "renewed" }));
+      if (mutation++ === 0) return new Response(JSON.stringify({ error: "csrf_rejected" }), { status: 403 });
+      return new Response(JSON.stringify({ transactionId: "t".repeat(32), result: { state: "challenge" } }), { status: 201 });
+    };
+
+    await new AccessAuthenticationClient(fetcher, "/").begin("password", "zh-CN");
+
+    expect(calls).toEqual([
+      { input: "/auth/v1/csrf", token: undefined },
+      { input: "/auth/v1/transactions", token: "stale" },
+      { input: "/auth/v1/csrf", token: undefined },
+      { input: "/auth/v1/transactions", token: "renewed" },
+    ]);
+  });
+
+  it("does not loop when a renewed CSRF token is also rejected", async () => {
+    let calls = 0;
+    const fetcher = async (input: string) => {
+      calls++;
+      return input === "/auth/v1/csrf"
+        ? new Response(JSON.stringify({ token: `token-${calls}` }))
+        : new Response(JSON.stringify({ error: "csrf_rejected" }), { status: 403 });
+    };
+
+    await expect(new AccessAuthenticationClient(fetcher, "/").begin("password", "zh-CN"))
+      .rejects.toEqual(expect.objectContaining<Partial<AccessAuthenticationError>>({ code: "csrf_rejected", status: 403 }));
+    expect(calls).toBe(4);
+  });
+
+  it("preserves an expired transaction code for the login lifecycle", async () => {
+    const fetcher = async (input: string) => input === "/auth/v1/csrf"
+      ? new Response(JSON.stringify({ token: "safe" }))
+      : new Response(JSON.stringify({ error: "authentication_transaction_rejected" }), { status: 401 });
+
+    await expect(new AccessAuthenticationClient(fetcher, "/").continue("t".repeat(32), "s".repeat(32), []))
+      .rejects.toEqual(expect.objectContaining<Partial<AccessAuthenticationError>>({ code: "authentication_transaction_rejected", status: 401 }));
   });
 
   it("rejects cross-origin and malformed returnTo values", () => {

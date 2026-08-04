@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { completeAuthenticationNavigation, installAccessPageResumeGuard } from "./access-login-lifecycle";
+import { authenticationExpiryDelay, completeAuthenticationNavigation, installAccessPageResumeGuard } from "./access-login-lifecycle";
 
 describe("access login lifecycle", () => {
   it("replaces the completed login document instead of retaining a stale transaction in history", () => {
@@ -21,6 +21,13 @@ describe("access login lifecycle", () => {
     dispose();
     target.dispatchEvent(pageShow(true));
     expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it("turns the trusted step expiry into a bounded automatic restart delay", () => {
+    const now = Date.parse("2026-08-04T12:00:00.000Z");
+    expect(authenticationExpiryDelay("2026-08-04T12:00:10.000Z", now)).toBe(10_025);
+    expect(authenticationExpiryDelay("2026-08-04T11:59:59.000Z", now)).toBe(0);
+    expect(authenticationExpiryDelay("invalid", now)).toBeUndefined();
   });
 });
 

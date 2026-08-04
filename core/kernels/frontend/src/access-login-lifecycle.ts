@@ -11,3 +11,10 @@ export function installAccessPageResumeGuard(target: Pick<EventTarget, "addEvent
   target.addEventListener("pageshow", onPageShow);
   return () => target.removeEventListener("pageshow", onPageShow);
 }
+
+/** Restarts just after the trusted challenge expires, while bounding browser timer input. */
+export function authenticationExpiryDelay(expiresAt: string, now = Date.now()): number | undefined {
+  const deadline = Date.parse(expiresAt);
+  if (!Number.isFinite(deadline)) return undefined;
+  return Math.min(Math.max(0, deadline - now + 25), 2_147_483_647);
+}

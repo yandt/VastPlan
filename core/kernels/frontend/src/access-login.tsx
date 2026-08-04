@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { AccessAuthenticationClient, accessBrandAssetURL, accessLocaleDirection, accessReturnTo, localizeAccessText as localized, providerTestSelection, type AccessBootstrap, type AuthenticationMethod, type AuthenticationStep } from "./access-authentication-client";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { AccessAuthenticationClient, AccessAuthenticationError, accessBrandAssetURL, accessLocaleDirection, accessReturnTo, localizeAccessText as localized, providerTestSelection, type AccessBootstrap, type AuthenticationMethod, type AuthenticationStep } from "./access-authentication-client";
 import { accessAppearance } from "./access-appearance";
 import { AccessLocaleSelector } from "./access-locale-selector";
 import { AccessMethodSelector } from "./access-method-selector";
-import { completeAuthenticationNavigation, installAccessPageResumeGuard } from "./access-login-lifecycle";
+import { authenticationExpiryDelay, completeAuthenticationNavigation, installAccessPageResumeGuard } from "./access-login-lifecycle";
 import { useAccessSystemScheme } from "./access-system-scheme";
 import type { ModuleFetcher } from "./module-loader";
 
@@ -55,17 +55,29 @@ export function AccessLoginPage({ fetcher }: { fetcher: ModuleFetcher }) {
   const copy = localizedMessages(locale);
   const styles = useMemo(() => accessAppearance(access?.accessTemplate, systemScheme), [access?.accessTemplate, systemScheme]);
 
-  const begin = async (nextMethodID = methodId, replaceCurrent = false) => {
-    if (nextMethodID === "") return;
+  const begin = useCallback(async (nextMethodID = methodId, replaceCurrent = false): Promise<boolean> => {
+    if (nextMethodID === "") return false;
     setBusy(true); setError(undefined);
     try {
       if (replaceCurrent && transactionId !== undefined) { try { await client.cancel(transactionId); } catch { /* expired transaction is already terminal */ } }
       setMethodId(nextMethodID); setTransactionId(undefined); setStep(undefined);
       const value = await beginAuthentication(client, providerTest, nextMethodID, locale);
       setTransactionId(value.transactionId); setStep(value.result.step);
-    } catch { setError("beginFailed"); if (methods.length > 1) setMethodId(""); }
+      return true;
+    } catch { setError("beginFailed"); if (methods.length > 1) setMethodId(""); return false; }
     finally { setBusy(false); }
-  };
+  }, [client, locale, methodId, methods.length, providerTest, transactionId]);
+
+  useEffect(() => {
+    if (busy || step === undefined || methodId === "") return;
+    const delay = authenticationExpiryDelay(step.expiresAt);
+    if (delay === undefined) return;
+    const timer = globalThis.setTimeout(() => {
+      void begin(methodId, true).then((restarted) => { if (restarted) setError("expired"); });
+    }, delay);
+    return () => globalThis.clearTimeout(timer);
+  }, [begin, busy, methodId, step]);
+
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (transactionId === undefined || step === undefined) return;
@@ -80,7 +92,12 @@ export function AccessLoginPage({ fetcher }: { fetcher: ModuleFetcher }) {
         return;
       }
       setStep(value.result.step); setError(resultMessage(value.result.state, step.kind));
-    } catch { setError("authenticationFailed"); }
+    } catch (error) {
+      if (error instanceof AccessAuthenticationError && error.code === "authentication_transaction_rejected") {
+        const restarted = await begin(methodId);
+        if (restarted) setError("expired");
+      } else setError("authenticationFailed");
+    }
     finally { setBusy(false); }
   };
   const resend = async () => {
