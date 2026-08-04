@@ -13,7 +13,7 @@ import (
 )
 
 func (s *Service) executeSchemaController(ctx context.Context, host sdk.Host, call *contractv1.CallContext,
-	operation string, ref databasev1.ConnectionRef, entry recordstore.ModelEntry) (*contractv1.CallResult, []byte, error) {
+	operation string, ref databasev1.ConnectionRef, entry recordstore.ModelEntry, request *recordstorev1.SchemaRequest) (*contractv1.CallResult, []byte, error) {
 	if call.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_SYSTEM {
 		return recordResult(nil, NewRuntimeError(databasev1.ErrorInvalidRequest, false, errors.New("Schema Controller 只允许可信系统调用")))
 	}
@@ -37,7 +37,7 @@ func (s *Service) executeSchemaController(ctx context.Context, host sdk.Host, ca
 			if readErr != nil {
 				return readErr
 			}
-			plan, planErr := schemaPlan(dialect, state, entry)
+			plan, planErr := s.resolveSchemaPlan(dialect, state, entry, request.MigrationID)
 			value = recordstorev1.SchemaPlanResult{Kind: string(plan.Kind), Statements: len(plan.Statements), Reasons: append([]string(nil), plan.Reasons...)}
 			return planErr
 		case recordstorev1.OperationSchemaStatus:
@@ -53,7 +53,9 @@ func (s *Service) executeSchemaController(ctx context.Context, host sdk.Host, ca
 			value = status
 			return nil
 		case recordstorev1.OperationSchemaApply:
-			plan, applyErr := applySchema(ctx, pinned, dialect, entry)
+			plan, applyErr := s.applySchema(ctx, pinned, dialect, entry, request.MigrationID, func(migrationID string) bool {
+				return hasSignedMigrationEvidence(call, ref, entry.Model.ID, migrationID)
+			})
 			value = recordstorev1.SchemaPlanResult{Kind: string(plan.Kind), Statements: len(plan.Statements), Reasons: append([]string(nil), plan.Reasons...)}
 			return applyErr
 		default:
@@ -61,6 +63,27 @@ func (s *Service) executeSchemaController(ctx context.Context, host sdk.Host, ca
 		}
 	})
 	return recordResult(value, err)
+}
+
+func hasSignedMigrationEvidence(call *contractv1.CallContext, ref databasev1.ConnectionRef, modelID, migrationID string) bool {
+	base := ref.ResourceID + "/" + modelID + "/" + migrationID
+	required := map[string]bool{
+		"database.schema-backup/" + base:   false,
+		"database.schema-approval/" + base: false,
+	}
+	for _, credential := range call.GetCredentials() {
+		if credential.GetScope() == "service" {
+			if _, expected := required[credential.GetName()]; expected {
+				required[credential.GetName()] = true
+			}
+		}
+	}
+	for _, present := range required {
+		if !present {
+			return false
+		}
+	}
+	return true
 }
 
 func hasSchemaControllerEvidence(call *contractv1.CallContext, ref databasev1.ConnectionRef) bool {
@@ -87,13 +110,30 @@ func schemaPlan(dialect recordstore.Dialect, state *recordstore.SchemaState, ent
 	return recordstore.PlanMigration(dialect, previous, entry.Model)
 }
 
-func applySchema(ctx context.Context, pinned PinnedSession, dialect recordstore.Dialect, entry recordstore.ModelEntry) (recordstore.MigrationPlan, error) {
+func (s *Service) resolveSchemaPlan(dialect recordstore.Dialect, state *recordstore.SchemaState,
+	entry recordstore.ModelEntry, migrationID string) (recordstore.MigrationPlan, error) {
+	plan, err := schemaPlan(dialect, state, entry)
+	if err != nil || plan.Kind != recordstore.MigrationManual || migrationID == "" {
+		return plan, err
+	}
+	if state == nil {
+		return plan, recordstore.ErrMigrationNeeded
+	}
+	migration, err := s.recordModels.ResolveMigration(entry, *state, migrationID)
+	if err != nil {
+		return plan, err
+	}
+	return recordstore.SignedMigrationPlan(dialect, migration)
+}
+
+func (s *Service) applySchema(ctx context.Context, pinned PinnedSession, dialect recordstore.Dialect,
+	entry recordstore.ModelEntry, migrationID string, signedEvidence func(string) bool) (recordstore.MigrationPlan, error) {
 	if dialect.ProviderID() == "postgresql" {
 		transaction, err := pinned.Begin(ctx, databasev1.TransactionOptions{Isolation: "serializable", TimeoutMS: 60_000})
 		if err != nil {
 			return recordstore.MigrationPlan{}, err
 		}
-		plan, err := applySchemaSession(ctx, transaction, dialect, entry, true)
+		plan, err := s.applySchemaSession(ctx, transaction, dialect, entry, true, migrationID, signedEvidence)
 		if err == nil {
 			err = transaction.Commit(ctx)
 		} else {
@@ -109,11 +149,11 @@ func applySchema(ctx context.Context, pinned PinnedSession, dialect recordstore.
 		return recordstore.MigrationPlan{}, err
 	}
 	defer pinned.Query(context.Background(), recordstore.SchemaUnlockStatement(dialect), 1)
-	return applySchemaSession(ctx, pinned, dialect, entry, false)
+	return s.applySchemaSession(ctx, pinned, dialect, entry, false, migrationID, signedEvidence)
 }
 
-func applySchemaSession(ctx context.Context, session recordstore.Session, dialect recordstore.Dialect,
-	entry recordstore.ModelEntry, lockInTransaction bool) (recordstore.MigrationPlan, error) {
+func (s *Service) applySchemaSession(ctx context.Context, session recordstore.Session, dialect recordstore.Dialect,
+	entry recordstore.ModelEntry, lockInTransaction bool, migrationID string, signedEvidence func(string) bool) (recordstore.MigrationPlan, error) {
 	if lockInTransaction {
 		lock, err := session.Query(ctx, recordstore.SchemaLockStatement(dialect), 1)
 		if err != nil {
@@ -132,7 +172,7 @@ func applySchemaSession(ctx context.Context, session recordstore.Session, dialec
 	if err != nil {
 		return recordstore.MigrationPlan{}, err
 	}
-	plan, err := schemaPlan(dialect, state, entry)
+	plan, err := s.resolveSchemaPlan(dialect, state, entry, migrationID)
 	if err != nil || plan.Kind == recordstore.MigrationManual {
 		if err == nil {
 			err = recordstore.ErrMigrationNeeded
@@ -141,6 +181,9 @@ func applySchemaSession(ctx context.Context, session recordstore.Session, dialec
 	}
 	if plan.Kind == recordstore.MigrationNone {
 		return plan, nil
+	}
+	if plan.Kind == recordstore.MigrationSigned && (signedEvidence == nil || !signedEvidence(plan.MigrationID)) {
+		return plan, recordstore.ErrStorageDenied
 	}
 	statements := append([]databasev1.Statement(nil), plan.Statements...)
 	if plan.Kind == recordstore.MigrationCreate {
@@ -151,7 +194,7 @@ func applySchemaSession(ctx context.Context, session recordstore.Session, dialec
 			return plan, err
 		}
 	}
-	ledger, err := recordstore.SchemaLedgerInsert(dialect, entry)
+	ledger, err := recordstore.SchemaLedgerInsert(dialect, entry, plan.MigrationID)
 	if err != nil {
 		return plan, err
 	}

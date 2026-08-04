@@ -12,7 +12,7 @@ import (
 const (
 	SchemaURL       = "https://schemas.cdsoft.com.cn/vastplan/recordstore/v1/vastplan.record-store.schema.json"
 	Capability      = "foundation.data.record-store"
-	ContractVersion = "1.0.0"
+	ContractVersion = "1.1.0"
 
 	OperationSyncModels   = "syncModels"
 	OperationCreate       = "create"
@@ -50,18 +50,37 @@ type ModelRef struct {
 
 type SignedModel struct {
 	OwnerPluginID  string   `json:"ownerPluginId"`
+	ArtifactSHA256 string   `json:"artifactSha256"`
 	Model          ModelRef `json:"model"`
 	DocumentBase64 string   `json:"documentBase64"`
 }
 
+type MigrationRef struct {
+	ID          string `json:"id"`
+	ModelID     string `json:"modelId"`
+	FromVersion uint64 `json:"fromVersion"`
+	ToVersion   uint64 `json:"toVersion"`
+	SHA256      string `json:"sha256"`
+}
+
+type SignedMigration struct {
+	OwnerPluginID  string       `json:"ownerPluginId"`
+	ArtifactSHA256 string       `json:"artifactSha256"`
+	Migration      MigrationRef `json:"migration"`
+	DocumentBase64 string       `json:"documentBase64"`
+}
+
 type SyncModelsRequest struct {
-	Generation uint64        `json:"generation"`
-	Models     []SignedModel `json:"models"`
+	Generation      uint64            `json:"generation"`
+	InventoryDigest string            `json:"inventoryDigest"`
+	Models          []SignedModel     `json:"models"`
+	Migrations      []SignedMigration `json:"migrations,omitempty"`
 }
 
 type SyncModelsResult struct {
 	Generation uint64 `json:"generation"`
 	Models     int    `json:"models"`
+	Migrations int    `json:"migrations"`
 }
 
 // StorageTarget is empty for a reserved platform-control model. A normal
@@ -189,8 +208,9 @@ type AppendOutboxResult struct {
 }
 
 type SchemaRequest struct {
-	Storage StorageTarget `json:"storage"`
-	Model   ModelRef      `json:"model"`
+	Storage     StorageTarget `json:"storage"`
+	Model       ModelRef      `json:"model"`
+	MigrationID string        `json:"migrationId,omitempty"`
 }
 
 type SchemaPlanResult struct {

@@ -54,6 +54,10 @@ go run ./engineering/tools/datamodelgen \
 - 迁移由单一 Schema Controller 在备份检查、数据库迁移锁和持久账本保护下执行；
 - 普通 Repository 或 Workflow 无权自行运行 DDL。
 
+签名迁移的真源是插件制品而不是单独的临时密钥：插件在 `data-migrations/*.json` 交付 `data.migration.v1`，Manifest `backend.dataMigrations[]` 固定其路径、版本边和 SHA-256，整个 Manifest 再由制品供应链验签。可信组合器只能携带已验证 Plugin Inventory digest 和 Artifact SHA 同步目录；Runtime 要求目标模型与迁移属于同一插件、同一 Artifact，并按 generation 原子切换。
+
+破坏性迁移必须显式声明 `requiresBackup=true`、`requiresApproval=true` 和 `retrySafe=true`。Schema Controller 只接受受限单条 SQL 列表，禁止注释、多语句、事务控制和 `vastplan_*` 内部表；执行前必须同时验证当前连接 leader、备份完成与审批完成的宿主 evidence。账本成功记录模型版本、摘要和 migration ID；失败不会推进目标版本，调用方只能在恢复检查后重试同一已签名、声明可重放的迁移或从备份恢复。
+
 首个真实模型是 Database Capability Pack 中的 `platform.database.connection`。它用于验证签名外部模型、Go/TypeScript 双语言生成和零漂移门禁；其业务工作流迁移属于 P5，不能因为生成了 Repository 类型就宣称状态已经进入 SQL。
 
 ## 5. 当前实施状态
@@ -66,4 +70,4 @@ go run ./engineering/tools/datamodelgen \
 
 P3b 已在 Database Runtime 内部实现 `record.store.v1` 的 CRUD、受限分页、Batch、实例亲和 UnitOfWork、幂等账本、事务内 Outbox，以及 PostgreSQL/MySQL Schema Controller 和 SQL Shared State。Schema Controller 只自动执行建表、增加可空字段和非唯一索引，并同时要求可信 SYSTEM 调用、Schema Controller credential evidence、数据库迁移锁和持久账本；其他变化保持 manual。SQL Shared State 延续既有 `sharedstate.Store` 的 1 MiB、CAS revision、游标分页、tenant/service 隔离和 fail-closed 语义。
 
-这些模块目前仍是 Runtime 内部能力，主入口和公开 Manifest 暂不注册：P4 必须先通过 Bootstrap 注入保留的 Platform Control Store 会话，P6 必须解决 active-active 副本的同代模型目录与本地优先路由，之后才能公开为可调用 capability。破坏性签名迁移包也尚未完成，因此 P3 仍未整体封板。
+这些模块目前仍是 Runtime 内部能力，主入口和公开 Manifest 暂不注册：P4 必须先通过 Bootstrap 注入保留的 Platform Control Store 会话，P6 必须解决 active-active 副本的同代模型目录与本地优先路由，之后才能公开为可调用 capability。P3 的实现面已经闭合；真实 PostgreSQL/MySQL 集成矩阵仍需在 Docker daemon 恢复后补跑，未通过前不把 P3 标记为完成验收。

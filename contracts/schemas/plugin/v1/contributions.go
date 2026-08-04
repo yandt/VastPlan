@@ -170,6 +170,43 @@ func ManifestDataModels(manifest Manifest) ([]DataModelReference, error) {
 	return append([]DataModelReference(nil), backend.DataModels...), nil
 }
 
+// ManifestDataMigrations returns immutable migration documents carried by the
+// verified plugin artifact. IDs and model/version edges are unique per plugin.
+func ManifestDataMigrations(manifest Manifest) ([]DataMigrationReference, error) {
+	var backend struct {
+		DataMigrations []DataMigrationReference `json:"dataMigrations"`
+	}
+	if raw := manifest.Contributes["backend"]; len(raw) != 0 {
+		if err := json.Unmarshal(raw, &backend); err != nil {
+			return nil, fmt.Errorf("解析 backend.dataMigrations: %w", err)
+		}
+	}
+	models, err := ManifestDataModels(manifest)
+	if err != nil {
+		return nil, err
+	}
+	modelIDs := map[string]struct{}{}
+	for _, model := range models {
+		modelIDs[model.ID] = struct{}{}
+	}
+	ids, edges := map[string]struct{}{}, map[string]struct{}{}
+	for _, reference := range backend.DataMigrations {
+		if _, declared := modelIDs[reference.ModelID]; !declared || reference.FromVersion >= reference.ToVersion {
+			return nil, fmt.Errorf("backend.dataMigrations 未绑定有效 DataModel 版本边: %s", reference.ID)
+		}
+		if _, duplicate := ids[reference.ID]; duplicate {
+			return nil, fmt.Errorf("backend.dataMigrations ID 重复: %s", reference.ID)
+		}
+		ids[reference.ID] = struct{}{}
+		edge := fmt.Sprintf("%s:%d:%d", reference.ModelID, reference.FromVersion, reference.ToVersion)
+		if _, duplicate := edges[edge]; duplicate {
+			return nil, fmt.Errorf("backend.dataMigrations 版本边重复: %s", edge)
+		}
+		edges[edge] = struct{}{}
+	}
+	return append([]DataMigrationReference(nil), backend.DataMigrations...), nil
+}
+
 // IsLocalPermissionAuxiliary reports whether a contribution is a host-local
 // authorization guard that may be co-located with a service unit whose
 // schedulable capability uses a cluster policy. The exception is intentionally

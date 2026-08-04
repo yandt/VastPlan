@@ -4,7 +4,7 @@
 
 能力：`tool.package/foundation.data.relational.runtime`
 
-当前制品版本：`0.8.0`
+当前制品版本：`0.8.1`
 
 当前公开 Capability 契约：`foundation.data.relational.runtime@1.1.0`
 
@@ -75,4 +75,6 @@ connection-manager 以持久化 outbox 发布完整的非敏感 `ConnectionSpec`
 
 按 [ADR-0194](../decisions/ADR-0194-平台控制数据库与声明式数据分层.md)，同一签名制品已增加 Record Store、Schema Controller 和 SQL Shared State 内部模块；它们不是新的独立进程或普通应用插件。P3b 已完成声明式 CRUD、Batch、实例亲和 UnitOfWork、幂等/Outbox 账本、安全增量迁移、数据库迁移锁、迁移账本和 SQL Shared State 的 PostgreSQL/MySQL 实现。
 
-这些模块尚未加入公开 Manifest 和进程主入口。原因不是实现缺失，而是生命周期尚未闭合：P4 需要由 Bootstrap 可信绑定保留控制库会话，P6 需要保证 active-active 副本持有同一 generation 的模型目录并实现本地优先/故障转移。在此之前，运行时不能对外宣称 Record Store 或 SQL Shared State Ready。破坏性签名迁移包仍是 P3 的剩余工作。
+P3c 已补齐破坏性迁移：`data.migration.v1` 文件由签名 Manifest 固定摘要，并在同步目录时继续绑定已验证 Plugin Inventory 与 Artifact SHA；Schema Controller 需要 leader、备份和审批三类宿主 evidence，只执行声明可安全重试的受限 SQL，成功账本同时记录 migration ID。
+
+这些模块尚未加入公开 Manifest 和进程主入口。原因不是实现缺失，而是生命周期尚未闭合：P4 需要由 Bootstrap 可信绑定保留控制库会话，P6 需要保证 active-active 副本持有同一 generation 的模型/迁移目录并实现本地优先/故障转移。在此之前，运行时不能对外宣称 Record Store 或 SQL Shared State Ready。单元、全仓 Go 与前端门禁已通过；真实 PostgreSQL/MySQL 矩阵需在本机 Docker daemon 恢复后补跑。

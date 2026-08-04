@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	datamigrationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/datamigration/v1"
 	datamodelv1 "cdsoft.com.cn/VastPlan/contracts/schemas/datamodel/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/engineering/internal/datamodelgen"
@@ -48,22 +49,52 @@ func TestSignedDataModelsAndGeneratedRepositoriesHaveNoDrift(t *testing.T) {
 	})
 }
 
+func TestSignedDataMigrationsHaveNoDrift(t *testing.T) {
+	forEachPluginManifest(t, "extensions/plugins", func(manifestPath string, manifest pluginv1.Manifest) {
+		references, err := pluginv1.ManifestDataMigrations(manifest)
+		if err != nil {
+			t.Errorf("%s: %v", manifestPath, err)
+			return
+		}
+		pluginRoot := filepath.Dir(manifestPath)
+		for _, reference := range references {
+			t.Run(manifest.ID+"/"+reference.ID, func(t *testing.T) {
+				raw, err := os.ReadFile(safePluginPath(t, pluginRoot, reference.Path))
+				if err != nil {
+					t.Fatal(err)
+				}
+				digest := fmt.Sprintf("%x", sha256.Sum256(raw))
+				if digest != reference.SHA256 {
+					t.Fatalf("DataMigration 签名漂移: manifest=%s actual=%s", reference.SHA256, digest)
+				}
+				migration, err := datamigrationv1.Parse(raw)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if migration.ID != reference.ID || migration.ModelID != reference.ModelID || migration.From.SchemaVersion != reference.FromVersion || migration.To.SchemaVersion != reference.ToVersion || reference.ContractVersion != datamigrationv1.ContractVersion {
+					t.Fatalf("DataMigration 身份不一致: ref=%+v migration=%+v", reference, migration)
+				}
+			})
+		}
+	})
+}
+
 func safePluginPath(t *testing.T, root, relative string) string {
 	t.Helper()
 	path := filepath.Clean(filepath.Join(root, filepath.FromSlash(relative)))
 	rel, err := filepath.Rel(root, path)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		t.Fatalf("DataModel 路径越出插件目录: %s", relative)
+		t.Fatalf("声明文件路径越出插件目录: %s", relative)
 	}
 	current := root
 	for _, segment := range strings.Split(filepath.FromSlash(relative), string(filepath.Separator)) {
 		current = filepath.Join(current, segment)
 		info, statErr := os.Lstat(current)
 		if statErr != nil {
-			t.Fatalf("检查 DataModel 路径: %v", statErr)
+			t.Fatalf("检查声明文件路径: %v", statErr)
 		}
 		if info.Mode()&os.ModeSymlink != 0 {
-			t.Fatalf("DataModel 路径不得经过符号链接: %s", current)
+			t.Fatalf("声明文件路径不得经过符号链接: %s", current)
 		}
 	}
 	return path

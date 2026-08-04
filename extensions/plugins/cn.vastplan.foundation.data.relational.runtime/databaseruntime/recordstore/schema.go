@@ -17,13 +17,34 @@ const (
 	MigrationNone     MigrationKind = "none"
 	MigrationCreate   MigrationKind = "create"
 	MigrationAdditive MigrationKind = "additive"
+	MigrationSigned   MigrationKind = "signed"
 	MigrationManual   MigrationKind = "manual"
 )
 
 type MigrationPlan struct {
-	Kind       MigrationKind
-	Statements []databasev1.Statement
-	Reasons    []string
+	Kind        MigrationKind
+	MigrationID string
+	Statements  []databasev1.Statement
+	Reasons     []string
+}
+
+func SignedMigrationPlan(dialect Dialect, entry MigrationEntry) (MigrationPlan, error) {
+	if dialect == nil {
+		return MigrationPlan{}, errors.New("签名迁移 Dialect 不能为空")
+	}
+	provider, ok := entry.Migration.Plan(dialect.ProviderID())
+	if !ok {
+		return MigrationPlan{Kind: MigrationManual, Reasons: []string{"签名迁移不支持当前数据库 Provider"}}, ErrMigrationNeeded
+	}
+	statements := make([]databasev1.Statement, 0, len(provider.Statements))
+	for _, sql := range provider.Statements {
+		statement := databasev1.Statement{SQL: sql, Parameters: []databasev1.Value{}}
+		if err := databasev1.ValidateStatement(statement); err != nil {
+			return MigrationPlan{}, err
+		}
+		statements = append(statements, statement)
+	}
+	return MigrationPlan{Kind: MigrationSigned, MigrationID: entry.Migration.ID, Statements: statements}, nil
 }
 
 func PlanMigration(dialect Dialect, previous *datamodelv1.Model, next datamodelv1.Model) (MigrationPlan, error) {
@@ -175,13 +196,13 @@ func createIndexStatement(dialect Dialect, model datamodelv1.Model, index datamo
 func InternalSchemaStatements(dialect Dialect) []databasev1.Statement {
 	if dialect.ProviderID() == "postgresql" {
 		return []databasev1.Statement{
-			ddl(`CREATE TABLE IF NOT EXISTS "vastplan_schema_migrations" ("model_id" TEXT NOT NULL, "schema_version" BIGINT NOT NULL, "model_sha256" CHAR(64) NOT NULL, "model_document" JSONB NOT NULL, "applied_at" TIMESTAMPTZ NOT NULL, PRIMARY KEY ("model_id", "schema_version"))`),
+			ddl(`CREATE TABLE IF NOT EXISTS "vastplan_schema_migrations" ("model_id" TEXT NOT NULL, "schema_version" BIGINT NOT NULL, "model_sha256" CHAR(64) NOT NULL, "migration_id" TEXT NULL, "model_document" JSONB NOT NULL, "applied_at" TIMESTAMPTZ NOT NULL, PRIMARY KEY ("model_id", "schema_version"))`),
 			ddl(`CREATE TABLE IF NOT EXISTS "vastplan_record_idempotency" ("owner_plugin_id" TEXT NOT NULL, "model_id" TEXT NOT NULL, "tenant_id" TEXT NOT NULL, "service_id" TEXT NOT NULL, "caller_id" TEXT NOT NULL, "idempotency_key" TEXT NOT NULL, "operation_digest" CHAR(64) NOT NULL, "response" JSONB NOT NULL, "created_at" TIMESTAMPTZ NOT NULL, PRIMARY KEY ("owner_plugin_id", "model_id", "tenant_id", "service_id", "caller_id", "idempotency_key"))`),
 			ddl(`CREATE TABLE IF NOT EXISTS "vastplan_record_outbox" ("id" CHAR(36) NOT NULL, "owner_plugin_id" TEXT NOT NULL, "model_id" TEXT NOT NULL, "tenant_id" TEXT NOT NULL, "service_id" TEXT NOT NULL, "topic" TEXT NOT NULL, "payload" JSONB NOT NULL, "idempotency_key" TEXT NOT NULL, "created_at" TIMESTAMPTZ NOT NULL, "published_at" TIMESTAMPTZ NULL, PRIMARY KEY ("id"), UNIQUE ("owner_plugin_id", "model_id", "tenant_id", "service_id", "idempotency_key"))`),
 		}
 	}
 	return []databasev1.Statement{
-		ddl("CREATE TABLE IF NOT EXISTS `vastplan_schema_migrations` (`model_id` VARCHAR(160) NOT NULL, `schema_version` BIGINT NOT NULL, `model_sha256` CHAR(64) NOT NULL, `model_document` JSON NOT NULL, `applied_at` DATETIME(6) NOT NULL, PRIMARY KEY (`model_id`, `schema_version`))"),
+		ddl("CREATE TABLE IF NOT EXISTS `vastplan_schema_migrations` (`model_id` VARCHAR(160) NOT NULL, `schema_version` BIGINT NOT NULL, `model_sha256` CHAR(64) NOT NULL, `migration_id` VARCHAR(160) NULL, `model_document` JSON NOT NULL, `applied_at` DATETIME(6) NOT NULL, PRIMARY KEY (`model_id`, `schema_version`))"),
 		ddl("CREATE TABLE IF NOT EXISTS `vastplan_record_idempotency` (`owner_plugin_id` VARCHAR(160) NOT NULL, `model_id` VARCHAR(160) NOT NULL, `tenant_id` VARCHAR(160) NOT NULL, `service_id` VARCHAR(160) NOT NULL, `caller_id` VARCHAR(160) NOT NULL, `idempotency_key` VARCHAR(200) NOT NULL, `operation_digest` CHAR(64) NOT NULL, `response` JSON NOT NULL, `created_at` DATETIME(6) NOT NULL, PRIMARY KEY (`owner_plugin_id`, `model_id`, `tenant_id`, `service_id`, `caller_id`, `idempotency_key`))"),
 		ddl("CREATE TABLE IF NOT EXISTS `vastplan_record_outbox` (`id` CHAR(36) NOT NULL, `owner_plugin_id` VARCHAR(160) NOT NULL, `model_id` VARCHAR(160) NOT NULL, `tenant_id` VARCHAR(160) NOT NULL, `service_id` VARCHAR(160) NOT NULL, `topic` VARCHAR(160) NOT NULL, `payload` JSON NOT NULL, `idempotency_key` VARCHAR(200) NOT NULL, `created_at` DATETIME(6) NOT NULL, `published_at` DATETIME(6) NULL, PRIMARY KEY (`id`), UNIQUE KEY `vastplan_outbox_idempotency` (`owner_plugin_id`, `model_id`, `tenant_id`, `service_id`, `idempotency_key`))"),
 	}

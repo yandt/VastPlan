@@ -127,7 +127,8 @@ func runDeclarativeDataIntegration(t *testing.T, providerID string, pool Pool) {
 		t.Fatal("真实第一方 Provider 必须支持 pinned Schema session")
 	}
 	if err := pinned.WithPinned(ctx, func(session PinnedSession) error {
-		_, applyErr := applySchema(ctx, session, dialect, entry)
+		schemaService := &Service{recordModels: recordstore.NewCatalog()}
+		_, applyErr := schemaService.applySchema(ctx, session, dialect, entry, "", nil)
 		return applyErr
 	}); err != nil {
 		t.Fatal(err)

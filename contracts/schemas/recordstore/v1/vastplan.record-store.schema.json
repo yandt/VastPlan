@@ -53,12 +53,34 @@
       }
     },
     "signedModel": {
-      "type": "object", "additionalProperties": false, "required": ["ownerPluginId", "model", "documentBase64"],
-      "properties": { "ownerPluginId": { "$ref": "#/$defs/id" }, "model": { "$ref": "#/$defs/modelRef" }, "documentBase64": { "type": "string", "minLength": 16, "maxLength": 1048576, "contentEncoding": "base64" } }
+      "type": "object", "additionalProperties": false, "required": ["ownerPluginId", "artifactSha256", "model", "documentBase64"],
+      "properties": { "ownerPluginId": { "$ref": "#/$defs/id" }, "artifactSha256": { "$ref": "#/$defs/sha256" }, "model": { "$ref": "#/$defs/modelRef" }, "documentBase64": { "type": "string", "minLength": 16, "maxLength": 1048576, "contentEncoding": "base64" } }
+    },
+    "migrationRef": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "modelId", "fromVersion", "toVersion", "sha256"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" }, "modelId": { "$ref": "#/$defs/id" },
+        "fromVersion": { "type": "integer", "minimum": 1 },
+        "toVersion": { "type": "integer", "minimum": 2 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "signedMigration": {
+      "type": "object", "additionalProperties": false, "required": ["ownerPluginId", "artifactSha256", "migration", "documentBase64"],
+      "properties": {
+        "ownerPluginId": { "$ref": "#/$defs/id" }, "artifactSha256": { "$ref": "#/$defs/sha256" }, "migration": { "$ref": "#/$defs/migrationRef" },
+        "documentBase64": { "type": "string", "minLength": 16, "maxLength": 4194304, "contentEncoding": "base64" }
+      }
     },
     "syncModelsRequest": {
-      "type": "object", "additionalProperties": false, "required": ["generation", "models"],
-      "properties": { "generation": { "type": "integer", "minimum": 1 }, "models": { "type": "array", "maxItems": 512, "items": { "$ref": "#/$defs/signedModel" } } }
+      "type": "object", "additionalProperties": false, "required": ["generation", "inventoryDigest", "models"],
+      "properties": {
+        "generation": { "type": "integer", "minimum": 1 },
+        "inventoryDigest": { "$ref": "#/$defs/sha256" },
+        "models": { "type": "array", "maxItems": 512, "items": { "$ref": "#/$defs/signedModel" } },
+        "migrations": { "type": "array", "maxItems": 1024, "items": { "$ref": "#/$defs/signedMigration" } }
+      }
     },
     "base": {
       "type": "object", "required": ["storage", "model"],
@@ -101,7 +123,7 @@
     },
     "schemaRequest": {
       "type": "object", "additionalProperties": false, "required": ["storage", "model"],
-      "properties": { "storage": { "$ref": "#/$defs/storage" }, "model": { "$ref": "#/$defs/modelRef" } }
+      "properties": { "storage": { "$ref": "#/$defs/storage" }, "model": { "$ref": "#/$defs/modelRef" }, "migrationId": { "$ref": "#/$defs/id" } }
     }
   }
 }

@@ -39,8 +39,8 @@ func (s *Service) recordHandler(operation string) sdk.Handler {
 			return recordResult(nil, NewRuntimeError(databasev1.ErrorInvalidRequest, false, err))
 		}
 		if request, ok := parsed.(*recordstorev1.SyncModelsRequest); ok {
-			if call.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_SYSTEM {
-				return recordResult(nil, NewRuntimeError(databasev1.ErrorInvalidRequest, false, errors.New("只有可信系统组合器可以同步 DataModel")))
+			if call.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_SYSTEM || !hasInventoryEvidence(call, request.InventoryDigest) {
+				return recordResult(nil, NewRuntimeError(databasev1.ErrorInvalidRequest, false, errors.New("只有持有已验证 Plugin Inventory 证据的系统组合器可以同步数据目录")))
 			}
 			value, syncErr := s.recordModels.Replace(*request)
 			return recordResult(value, syncErr)
@@ -53,6 +53,16 @@ func (s *Service) recordHandler(operation string) sdk.Handler {
 		}
 		return s.executeRecord(ctx, host, call, operation, parsed)
 	}
+}
+
+func hasInventoryEvidence(call *contractv1.CallContext, inventoryDigest string) bool {
+	expected := "plugin.inventory/" + inventoryDigest
+	for _, credential := range call.GetCredentials() {
+		if credential.GetName() == expected && credential.GetScope() == "service" {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Service) executeRecord(ctx context.Context, host sdk.Host, call *contractv1.CallContext, operation string, request any) (*contractv1.CallResult, []byte, error) {
@@ -84,7 +94,7 @@ func (s *Service) executeRecord(ctx context.Context, host sdk.Host, call *contra
 	trusted := recordstore.TrustedScope{TenantID: scope.TenantID, ServiceID: call.GetCaller().GetId(), ActorID: call.GetCaller().GetId()}
 	identity := recordstore.ExecutionIdentity{OwnerPluginID: entry.OwnerPluginID, ModelID: entry.Model.ID, TenantID: scope.TenantID, ServiceID: trusted.ServiceID, CallerID: scope.CallerID}
 	if operation == recordstorev1.OperationSchemaPlan || operation == recordstorev1.OperationSchemaApply || operation == recordstorev1.OperationSchemaStatus {
-		return s.executeSchemaController(ctx, host, call, operation, ref, entry)
+		return s.executeSchemaController(ctx, host, call, operation, ref, entry, request.(*recordstorev1.SchemaRequest))
 	}
 	if operation == recordstorev1.OperationBegin {
 		return s.beginRecordTransaction(ctx, host, call, ref, entry, request.(*recordstorev1.BeginRequest))
@@ -298,5 +308,5 @@ func recordTransactionHandle(request any) string {
 }
 
 func recordDescriptor() []byte {
-	return []byte(`{"title":"Record Store","subcommands":[{"name":"syncModels","description":"同步同代签名 DataModel 目录"},{"name":"create","description":"创建声明式记录"},{"name":"get","description":"按主键读取声明式记录"},{"name":"list","description":"按受限过滤和游标分页列出记录"},{"name":"update","description":"按 CAS 更新声明式记录"},{"name":"delete","description":"按 CAS 删除声明式记录"},{"name":"batch","description":"在同一事务执行批量 mutation"},{"name":"begin","description":"开始 Repository UnitOfWork"},{"name":"commit","description":"提交 Repository UnitOfWork"},{"name":"rollback","description":"回滚 Repository UnitOfWork"},{"name":"appendOutbox","description":"在数据事务内追加 Outbox"},{"name":"schemaPlan","description":"读取 DataModel 迁移计划"},{"name":"schemaApply","description":"由唯一 Schema Controller 应用安全迁移"},{"name":"schemaStatus","description":"读取持久迁移账本状态"}]}`)
+	return []byte(`{"title":"Record Store","subcommands":[{"name":"syncModels","description":"同步同代已验证制品的 DataModel 与签名迁移目录"},{"name":"create","description":"创建声明式记录"},{"name":"get","description":"按主键读取声明式记录"},{"name":"list","description":"按受限过滤和游标分页列出记录"},{"name":"update","description":"按 CAS 更新声明式记录"},{"name":"delete","description":"按 CAS 删除声明式记录"},{"name":"batch","description":"在同一事务执行批量 mutation"},{"name":"begin","description":"开始 Repository UnitOfWork"},{"name":"commit","description":"提交 Repository UnitOfWork"},{"name":"rollback","description":"回滚 Repository UnitOfWork"},{"name":"appendOutbox","description":"在数据事务内追加 Outbox"},{"name":"schemaPlan","description":"读取 DataModel 迁移计划"},{"name":"schemaApply","description":"由唯一 Schema Controller 应用安全迁移"},{"name":"schemaStatus","description":"读取持久迁移账本状态"}]}`)
 }

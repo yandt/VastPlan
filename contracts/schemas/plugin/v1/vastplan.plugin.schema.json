@@ -874,7 +874,8 @@
         "runnerCapabilities": { "type": "array", "items": { "$ref": "#/$defs/runnerCapability" } },
         "authenticationProviders": { "type": "array", "items": { "$ref": "#/$defs/authenticationProvider" } },
         "configurationScopedResolvers": { "type": "array", "maxItems": 1, "items": { "$ref": "#/$defs/configurationScopedResolver" } },
-        "dataModels": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/dataModelReference" } }
+        "dataModels": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/dataModelReference" } },
+        "dataMigrations": { "type": "array", "maxItems": 128, "items": { "$ref": "#/$defs/dataMigrationReference" } }
       }
     },
     "dataModelReference": {
@@ -884,6 +885,19 @@
         "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 160 },
         "contractVersion": { "const": "1.1.0" },
         "path": { "type": "string", "pattern": "^data-models/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_.-]+\\.json$", "maxLength": 512 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "dataMigrationReference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "contractVersion", "modelId", "fromVersion", "toVersion", "path", "sha256"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 160 },
+        "contractVersion": { "const": "1.0.0" },
+        "modelId": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 160 },
+        "fromVersion": { "type": "integer", "minimum": 1 },
+        "toVersion": { "type": "integer", "minimum": 2 },
+        "path": { "type": "string", "pattern": "^data-migrations/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_.-]+\\.json$", "maxLength": 512 },
         "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
       }
     },

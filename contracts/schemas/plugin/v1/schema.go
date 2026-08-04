@@ -295,6 +295,19 @@ type DataModelReference struct {
 	SHA256          string `json:"sha256"`
 }
 
+// DataMigrationReference binds a migration document to the same signed plugin
+// artifact as its target DataModel. A digest match without an artifact trust
+// decision is insufficient for execution.
+type DataMigrationReference struct {
+	ID              string `json:"id"`
+	ContractVersion string `json:"contractVersion"`
+	ModelID         string `json:"modelId"`
+	FromVersion     uint64 `json:"fromVersion"`
+	ToVersion       uint64 `json:"toVersion"`
+	Path            string `json:"path"`
+	SHA256          string `json:"sha256"`
+}
+
 // State 声明各运行面的插件私有持久状态。Backend 1.0 只发布 backend 契约；
 // 其他运行面在各自内核封板时追加，不能借 additionalProperties 提前占位。
 type State struct {
@@ -366,6 +379,7 @@ var declarativeBackendContributionGroups = map[string]struct{}{
 	"apiContracts":      {},
 	"dataPlaneServices": {},
 	"dataModels":        {},
+	"dataMigrations":    {},
 }
 
 // BackendRuntimeContributions 把已经通过 Schema 的 backend 清单贡献规范化为协议总线

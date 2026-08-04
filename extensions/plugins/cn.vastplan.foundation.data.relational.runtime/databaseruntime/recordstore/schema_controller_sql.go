@@ -14,14 +14,15 @@ import (
 )
 
 type SchemaState struct {
-	Version  uint64
-	SHA256   string
-	Document datamodelv1.Model
+	Version     uint64
+	SHA256      string
+	MigrationID string
+	Document    datamodelv1.Model
 }
 
 func ReadSchemaState(ctx context.Context, session Session, dialect Dialect, modelID string) (*SchemaState, error) {
-	statement := databasev1.Statement{SQL: fmt.Sprintf("SELECT %s, %s, %s FROM %s WHERE %s = %s ORDER BY %s DESC LIMIT 1",
-		dialect.Quote("schema_version"), dialect.Quote("model_sha256"), dialect.Quote("model_document"),
+	statement := databasev1.Statement{SQL: fmt.Sprintf("SELECT %s, %s, %s, %s FROM %s WHERE %s = %s ORDER BY %s DESC LIMIT 1",
+		dialect.Quote("schema_version"), dialect.Quote("model_sha256"), dialect.Quote("migration_id"), dialect.Quote("model_document"),
 		dialect.Quote("vastplan_schema_migrations"), dialect.Quote("model_id"), dialect.Placeholder(1), dialect.Quote("schema_version")),
 		Parameters: []databasev1.Value{stringValue(modelID)}}
 	result, err := session.Query(ctx, statement, 1)
@@ -31,7 +32,7 @@ func ReadSchemaState(ctx context.Context, session Session, dialect Dialect, mode
 	if len(result.Rows) == 0 {
 		return nil, nil
 	}
-	if len(result.Rows) != 1 || len(result.Rows[0]) != 3 {
+	if len(result.Rows) != 1 || len(result.Rows[0]) != 4 {
 		return nil, errors.New("Schema migration ledger 响应无效")
 	}
 	var version, digest string
@@ -43,7 +44,15 @@ func ReadSchemaState(ctx context.Context, session Session, dialect Dialect, mode
 	if err != nil {
 		return nil, err
 	}
-	document, err := jsonWire(result.Rows[0][2])
+	migrationID := ""
+	if result.Rows[0][2].Type == "string" {
+		if json.Unmarshal(result.Rows[0][2].Value, &migrationID) != nil {
+			return nil, errors.New("Schema migration ledger migration ID 无效")
+		}
+	} else if result.Rows[0][2].Type != "null" {
+		return nil, errors.New("Schema migration ledger migration ID 类型无效")
+	}
+	document, err := jsonWire(result.Rows[0][3])
 	if err != nil {
 		return nil, err
 	}
@@ -51,18 +60,22 @@ func ReadSchemaState(ctx context.Context, session Session, dialect Dialect, mode
 	if err := json.Unmarshal(document, &model); err != nil || datamodelv1.Validate(model) != nil {
 		return nil, errors.New("Schema migration ledger DataModel 无效")
 	}
-	return &SchemaState{Version: parsedVersion, SHA256: digest, Document: model}, nil
+	return &SchemaState{Version: parsedVersion, SHA256: digest, MigrationID: migrationID, Document: model}, nil
 }
 
-func SchemaLedgerInsert(dialect Dialect, entry ModelEntry) (databasev1.Statement, error) {
+func SchemaLedgerInsert(dialect Dialect, entry ModelEntry, migrationID string) (databasev1.Statement, error) {
 	document, err := json.Marshal(entry.Model)
 	if err != nil {
 		return databasev1.Statement{}, err
 	}
-	columns := []string{"model_id", "schema_version", "model_sha256", "model_document", "applied_at"}
+	columns := []string{"model_id", "schema_version", "model_sha256", "migration_id", "model_document", "applied_at"}
+	migrationValue := databasev1.Value{Type: "null", Value: json.RawMessage("null")}
+	if migrationID != "" {
+		migrationValue = stringValue(migrationID)
+	}
 	parameters := []databasev1.Value{
 		stringValue(entry.Model.ID), {Type: "int64", Value: mustJSON(fmt.Sprintf("%d", entry.Model.SchemaVersion))},
-		stringValue(entry.Ref.SHA256), jsonValue(document), timestampValue(nowUTC()),
+		stringValue(entry.Ref.SHA256), migrationValue, jsonValue(document), timestampValue(nowUTC()),
 	}
 	return databasev1.Statement{SQL: fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", dialect.Quote("vastplan_schema_migrations"), quoteAll(dialect, columns), placeholders(dialect, len(columns))), Parameters: parameters}, nil
 }
