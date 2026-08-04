@@ -47,7 +47,7 @@ export const antdInsideInlineCSS = `
 
 export const antdFormFieldWidthCSS = `
 .vp-antd-form-field-value .ant-form-item-label{box-sizing:border-box;flex:0 0 min(var(--vp-form-label-width,var(--vp-form-label-min-width,112px)),48%)!important;width:min(var(--vp-form-label-width,var(--vp-form-label-min-width,112px)),48%);min-width:0;max-width:48%;padding-inline-end:12px}
-.vp-antd-form-field-value .ant-form-item-label>label{display:block;white-space:nowrap;overflow:visible;text-overflow:clip}
+.vp-antd-form-field-value .ant-form-item-label>label{display:inline-flex;align-items:center;white-space:nowrap;overflow:visible;text-overflow:clip}
 .vp-antd-form-field-value .ant-form-item-control-input-content>div{width:100%;min-width:0}
 .vp-antd-form-field-boolean .ant-form-item-control-input-content{justify-content:flex-start!important}
 .vp-antd-form-field-boolean .ant-form-item-control-input-content>div{width:auto}
