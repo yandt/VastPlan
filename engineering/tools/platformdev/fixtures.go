@@ -218,7 +218,18 @@ func renderPlatformProfile(template, portalCatalog []byte, runDir, stateDir, art
 		if profile.Services[index].ID == "platform-database-runtime" {
 			// 开发编排器只有一个 local-platform 节点。生产模板保持两个
 			// active-active 副本，开发投影显式缩为一个，避免伪造第二节点。
+			// 本地测试数据库通常没有 TLS；仅在 platformdev 的开发投影中
+			// 放宽 Provider 策略，生产模板继续保持默认拒绝明文传输。
 			profile.Services[index].Replicas = 1
+			plugins, ok := profile.Services[index].Config["plugins"].(map[string]any)
+			if !ok {
+				return nil, errors.New("开发 Platform Profile 的 platform-database-runtime plugins 配置无效")
+			}
+			databaseRuntime, ok := plugins["cn.vastplan.foundation.data.relational.runtime"].(map[string]any)
+			if !ok {
+				return nil, errors.New("开发 Platform Profile 缺少 Database Runtime 插件配置")
+			}
+			databaseRuntime["allowInsecureTLS"] = true
 			raw, err := json.MarshalIndent(profile, "", "  ")
 			if err != nil {
 				return nil, err

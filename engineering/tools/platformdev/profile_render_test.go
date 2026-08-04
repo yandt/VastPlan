@@ -51,6 +51,20 @@ func TestRenderPlatformProfileProducesValidProviderComposition(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	productionProfile, err := backendcompositionv1.ParsePlatformProfile(template)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, service := range productionProfile.Services {
+		if service.ID != "platform-database-runtime" {
+			continue
+		}
+		plugins := service.Config["plugins"].(map[string]any)
+		databaseRuntime := plugins["cn.vastplan.foundation.data.relational.runtime"].(map[string]any)
+		if databaseRuntime["allowInsecureTLS"] != false {
+			t.Fatalf("生产 Profile 必须默认拒绝无 TLS 数据库: %#v", databaseRuntime)
+		}
+	}
 	portalCatalog, err := os.ReadFile(filepath.Join("..", "..", "deploy", "portal-platform-catalog.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -71,8 +85,15 @@ func TestRenderPlatformProfileProducesValidProviderComposition(t *testing.T) {
 		t.Fatalf("渲染后的平台 Profile 无效: %v", err)
 	}
 	for _, service := range profile.Services {
-		if service.ID == "platform-database-runtime" && service.Replicas != 1 {
-			t.Fatalf("开发 Profile 必须把单节点 Database Runtime 缩放为 1: %#v", service)
+		if service.ID == "platform-database-runtime" {
+			if service.Replicas != 1 {
+				t.Fatalf("开发 Profile 必须把单节点 Database Runtime 缩放为 1: %#v", service)
+			}
+			plugins := service.Config["plugins"].(map[string]any)
+			databaseRuntime := plugins["cn.vastplan.foundation.data.relational.runtime"].(map[string]any)
+			if databaseRuntime["allowInsecureTLS"] != true {
+				t.Fatalf("本地测试 Profile 必须显式允许无 TLS 数据库，生产模板仍保持拒绝: %#v", databaseRuntime)
+			}
 		}
 		if service.ID == "platform-api-exposure" {
 			plugins := service.Config["plugins"].(map[string]any)
