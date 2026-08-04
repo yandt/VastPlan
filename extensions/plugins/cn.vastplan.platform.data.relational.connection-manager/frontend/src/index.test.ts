@@ -11,6 +11,7 @@ describe("database connections Workbench page", () => {
     const create = page.forms?.find((form) => form.id === "create");
     const edit = page.forms?.find((form) => form.id === "edit");
     const properties = create?.schema.schema.properties as Readonly<Record<string, Readonly<Record<string, unknown>>>> | undefined;
+    expect(create?.presentation).toMatchObject({ layout: "horizontal", labelPlacement: "inline" });
     expect(create?.presentation?.fields).toContainEqual(expect.objectContaining({ pointer: "/credentialValue", widget: "secretMaterial" }));
     expect(properties?.options).not.toHaveProperty("title");
     expect(properties?.pool).not.toHaveProperty("title");

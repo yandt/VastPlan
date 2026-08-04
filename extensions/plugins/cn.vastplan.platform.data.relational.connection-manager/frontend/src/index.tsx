@@ -59,7 +59,9 @@ export function createDatabaseConnectionsPage(client: PlatformAdminClient, servi
     schema,
     context: { editing: id === "edit" },
     presentation: {
-      layout: "vertical", navigation: "sections",
+      // 管理表单保持统一的行内 Label；FormDialog 只负责 Overlay 几何，
+      // Dynamic Form/Renderer 根据该语义统一计算 Label 列宽和字段宽度。
+      layout: "horizontal", labelPlacement: "inline", navigation: "sections",
       sections: [
         { id: "identity", title: message(namespace, "section.identity", "连接标识"), columns: 2, fields: ["/name", "/providerId", "/endpoint", "/database"] },
         { id: "options", title: message(namespace, "section.options", "Provider 连接选项"), columns: 1, fields: ["/options"] },
