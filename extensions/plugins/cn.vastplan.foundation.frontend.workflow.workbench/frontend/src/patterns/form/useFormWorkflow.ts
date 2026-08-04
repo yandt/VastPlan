@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formControlSize, message, usePortalI18n, usePortalUI, type FormRendererProps, type FormRendererValidationState } from "@vastplan/ui-primitives";
-import { resolveFormWorkflowSurface, validateFormPresentation, type WorkbenchFormDefinition, type WorkbenchFormPreparation } from "@vastplan/workbench-sdk";
+import { resolveFormWorkflowSurface, validateFormPresentation, type FormActionSpec, type WorkbenchFormDefinition, type WorkbenchFormPreparation } from "@vastplan/workbench-sdk";
 import type { CollectionRow } from "../collection/model.js";
 import { projectFormPresentation, resolveWorkbenchFormPresentation } from "./presentation.js";
 import { containsSecretMaterial, discardSecretMaterial, secretMaterialPointers } from "./secret-material.js";
@@ -30,6 +30,7 @@ export interface FormWorkflowController {
   value: Record<string, unknown>;
   loading: boolean;
   submitting: boolean;
+  runningActionID?: string;
   failure?: string;
   fieldErrors: Readonly<Record<string, string>>;
   validation: FormRendererValidationState;
@@ -39,6 +40,7 @@ export interface FormWorkflowController {
   setValidation(value: FormRendererValidationState): void;
   setActiveSection(value: string | undefined): void;
   requestClose(): Promise<void>;
+  runAction(action: FormActionSpec): Promise<void>;
   submit(): Promise<void>;
 }
 
@@ -50,6 +52,7 @@ export function useFormWorkflow(input: UseFormWorkflowInput): FormWorkflowContro
   const [baseline, setBaseline] = useState("{}");
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [runningActionID, setRunningActionID] = useState<string>();
   const [failure, setFailure] = useState<string>();
   const [fieldErrors, setFieldErrors] = useState<Readonly<Record<string, string>>>({});
   const [validation, setValidation] = useState<FormRendererValidationState>(emptyValidation);
@@ -57,12 +60,15 @@ export function useFormWorkflow(input: UseFormWorkflowInput): FormWorkflowContro
   const [preparation, setPreparation] = useState<WorkbenchFormPreparation>();
   const loadRef = useRef<AbortController>();
   const submitRef = useRef<AbortController>();
+  const actionRef = useRef<AbortController>();
   const stableSelected = useStableSelection(input.selected);
   const presentation = useMemo(() => resolveWorkbenchFormPresentation(preparation?.presentation ?? definition?.presentation), [definition?.presentation, preparation?.presentation]);
   const context = preparation?.context ?? definition?.context ?? emptyContext;
   const secretPointers = useMemo(() => secretMaterialPointers(presentation), [presentation]);
 
   useEffect(() => {
+    actionRef.current?.abort();
+    setRunningActionID(undefined);
     if (!open || definition === undefined) {
       setValue({}); setBaseline("{}"); setFieldErrors({}); setFailure(undefined); setPreparation(undefined);
       return;
@@ -88,7 +94,7 @@ export function useFormWorkflow(input: UseFormWorkflowInput): FormWorkflowContro
     return () => controller.abort();
   }, [definition, i18n.text, open, stableSelected]);
 
-  useEffect(() => () => submitRef.current?.abort(), []);
+  useEffect(() => () => { submitRef.current?.abort(); actionRef.current?.abort(); }, []);
   const schema = useMemo(() => definition === undefined ? undefined : projectFormPresentation(preparation?.schema ?? definition.schema, presentation, value, context, i18n.text), [context, definition, i18n.text, preparation?.schema, presentation, value]);
   const validate = useMemo<FormRendererProps["validate"]>(() => definition?.validate === undefined ? undefined : async ({ value: next, context: nextContext, signal }) => {
     return localizeFormFieldErrors(await definition.validate!({ value: next, context: nextContext, signal }), i18n.text);
@@ -105,7 +111,7 @@ export function useFormWorkflow(input: UseFormWorkflowInput): FormWorkflowContro
   }, []);
 
   const requestClose = useCallback(async () => {
-    if (submitting || definition === undefined) return;
+    if (submitting || runningActionID !== undefined || definition === undefined) return;
     if (dirty && !await ui.confirm({ title: i18n.text(message(namespace, "form.discardTitle", "放弃未保存的修改？")), content: i18n.text(message(namespace, "form.discardContent", "关闭后，本次输入不会保留。")) })) return;
     setFieldErrors({}); setFailure(undefined);
     if (resolveFormWorkflowSurface(definition.workflow) === "page") setValue(JSON.parse(baseline) as Record<string, unknown>);
@@ -113,10 +119,34 @@ export function useFormWorkflow(input: UseFormWorkflowInput): FormWorkflowContro
       const sanitized = discardSecretMaterial(value, secretPointers);
       setValue(sanitized); setBaseline(JSON.stringify(sanitized)); onClose?.();
     }
-  }, [baseline, definition, dirty, i18n.text, onClose, secretPointers, submitting, ui, value]);
+  }, [baseline, definition, dirty, i18n.text, onClose, runningActionID, secretPointers, submitting, ui, value]);
+
+  const runAction = useCallback(async (action: FormActionSpec) => {
+    if (definition?.runAction === undefined || submitting || runningActionID !== undefined || loading) return;
+    if (action.requiresValid !== false && (!validation.valid || validation.validating)) return;
+    if (action.confirm !== undefined && !await ui.confirm({ title: i18n.text(action.label), content: i18n.text(action.confirm) })) return;
+    actionRef.current?.abort();
+    const controller = new AbortController();
+    actionRef.current = controller;
+    setRunningActionID(action.id); setFailure(undefined); setFieldErrors({});
+    try {
+      const result = await definition.runAction({ action, value, selected: stableSelected, context }, controller.signal);
+      if (controller.signal.aborted || result === undefined) return;
+      if (result.fieldErrors !== undefined) setFieldErrors(localizeFormFieldErrors(result.fieldErrors, i18n.text));
+      if (result.notify !== undefined) ui.notify({
+        title: i18n.text(result.notify.title),
+        ...(result.notify.content === undefined ? {} : { content: i18n.text(result.notify.content) }),
+        kind: result.notify.kind ?? "success",
+      });
+    } catch (error) {
+      if (!controller.signal.aborted) setFailure(errorText(error));
+    } finally {
+      if (!controller.signal.aborted) setRunningActionID(undefined);
+    }
+  }, [context, definition, i18n.text, loading, runningActionID, stableSelected, submitting, ui, validation.valid, validation.validating, value]);
 
   const submit = useCallback(async () => {
-    if (definition === undefined || submitting || !validation.valid || validation.validating) return;
+    if (definition === undefined || submitting || runningActionID !== undefined || !validation.valid || validation.validating) return;
     if (definition.workflow.confirmBeforeSubmit !== undefined && !await ui.confirm({ title: i18n.text(definition.workflow.title), content: i18n.text(definition.workflow.confirmBeforeSubmit) })) return;
     submitRef.current?.abort();
     const controller = new AbortController();
@@ -145,12 +175,12 @@ export function useFormWorkflow(input: UseFormWorkflowInput): FormWorkflowContro
       setValue((current) => discardSecretMaterial(current, secretPointers));
       if (!controller.signal.aborted) setSubmitting(false);
     }
-  }, [context, definition, i18n.text, onClose, onRefresh, secretPointers, stableSelected, submitting, ui, validation.valid, validation.validating, value]);
+  }, [context, definition, i18n.text, onClose, onRefresh, runningActionID, secretPointers, stableSelected, submitting, ui, validation.valid, validation.validating, value]);
 
   return {
     definition, presentation, controlSize: presentation.size ?? definition?.size ?? definition?.workflow.size ?? formControlSize(presentation), schema, context, value, loading, submitting,
-    ...(failure === undefined ? {} : { failure }), fieldErrors, validation, ...(activeSection === undefined ? {} : { activeSection }),
-    ...(validate === undefined ? {} : { validate }), change, setValidation, setActiveSection, requestClose, submit,
+    ...(runningActionID === undefined ? {} : { runningActionID }), ...(failure === undefined ? {} : { failure }), fieldErrors, validation, ...(activeSection === undefined ? {} : { activeSection }),
+    ...(validate === undefined ? {} : { validate }), change, setValidation, setActiveSection, requestClose, runAction, submit,
   };
 }
 

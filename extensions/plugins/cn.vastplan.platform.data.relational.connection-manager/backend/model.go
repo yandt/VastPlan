@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"sync"
 
-	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfig"
 )
 
@@ -76,6 +76,12 @@ type persisted struct {
 	Pending       map[string]map[string]pendingDefinition        `json:"pending"`
 	Publications  map[string]map[string]runtimePublication       `json:"publications"`
 	Retire        map[string][]pluginconfig.ManagedCredentialRef `json:"retire,omitempty"`
+	TestCleanup   map[string][]testCredentialCleanup             `json:"testCleanup,omitempty"`
+}
+
+type testCredentialCleanup struct {
+	StageID string                            `json:"stageId"`
+	Ref     pluginconfig.ManagedCredentialRef `json:"ref"`
 }
 
 type connectionIdentity struct {
@@ -104,7 +110,7 @@ func newService(file string) (*service, error) {
 		FormatVersion: 3,
 		Tenants:       map[string]map[string]definition{}, Revisions: map[string]map[string]connectionIdentity{},
 		Pending: map[string]map[string]pendingDefinition{}, Publications: map[string]map[string]runtimePublication{},
-		Retire: map[string][]pluginconfig.ManagedCredentialRef{},
+		Retire: map[string][]pluginconfig.ManagedCredentialRef{}, TestCleanup: map[string][]testCredentialCleanup{},
 	}}
 	raw, err := os.ReadFile(file)
 	if errors.Is(err, os.ErrNotExist) {
@@ -133,6 +139,9 @@ func newService(file string) (*service, error) {
 	}
 	if service.data.Retire == nil {
 		service.data.Retire = map[string][]pluginconfig.ManagedCredentialRef{}
+	}
+	if service.data.TestCleanup == nil {
+		service.data.TestCleanup = map[string][]testCredentialCleanup{}
 	}
 	return service, nil
 }

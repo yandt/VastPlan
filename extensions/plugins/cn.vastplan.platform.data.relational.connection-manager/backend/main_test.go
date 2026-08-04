@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
@@ -39,6 +39,8 @@ type probeHost struct {
 	payload          []byte
 	activated        int
 	runtimeActivated int
+	retired          int
+	failRetire       int
 	failActivations  int
 	failRuntime      int
 }
@@ -57,7 +59,17 @@ func (h *probeHost) Call(_ context.Context, target *contractv1.CallTarget, _ *co
 			}
 			h.activated++
 			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, []byte(`{}`), nil
-		case "retireManaged", "abortManaged":
+		case "retireManaged":
+			if h.failRetire > 0 {
+				h.failRetire--
+				return nil, nil, errors.New("credential retirement temporarily unavailable")
+			}
+			h.retired++
+			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, []byte(`{}`), nil
+		case "abortManaged":
+			if h.activated > h.retired {
+				return nil, nil, errors.New("active credential cannot be aborted")
+			}
 			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, []byte(`{}`), nil
 		}
 	}
@@ -78,6 +90,59 @@ func (h *probeHost) Call(_ context.Context, target *contractv1.CallTarget, _ *co
 		}
 	}
 	return nil, nil, errors.New("unexpected capability or operation")
+}
+
+func TestInterruptedConnectionTestRecoversTemporaryCredentialRetirement(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "connections.json")
+	s, err := newService(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	host := &probeHost{failRetire: 2}
+	payload := []byte(`{"name":"draft","providerId":"postgresql","endpoint":"db.internal:5432","options":{"user":"app"},"credentialValue":"one-time-password"}`)
+	if _, _, err := s.handle(context.Background(), host, dbContext(), payload, "test"); err == nil {
+		t.Fatal("临时凭证无法退役时测试必须失败并保留回收任务")
+	}
+	if len(s.data.TestCleanup["tenant-a"]) != 1 {
+		t.Fatalf("临时凭证回收任务未耐久保留: %+v", s.data.TestCleanup)
+	}
+	reopened, err := newService(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := reopened.handle(context.Background(), host, dbContext(), []byte(`{}`), "list"); err != nil {
+		t.Fatal(err)
+	}
+	if len(reopened.data.TestCleanup["tenant-a"]) != 0 || host.retired != 1 {
+		t.Fatalf("重启后未收敛临时凭证回收: queue=%+v retired=%d", reopened.data.TestCleanup, host.retired)
+	}
+}
+
+func TestCurrentFormConnectionTestUsesTemporaryCredentialWithoutSavingDefinition(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "connections.json")
+	s, err := newService(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	host := &probeHost{}
+	payload := []byte(`{"name":"draft","providerId":"postgresql","endpoint":"db.internal:5432","database":"app","options":{"user":"app","tlsMode":"verify-full"},"credentialValue":"one-time-password"}`)
+	_, raw, err := s.handle(context.Background(), host, dbContext(), payload, "test")
+	if err != nil || !strings.Contains(string(raw), `"ready":true`) || !strings.Contains(string(raw), `"latencyMs":1`) {
+		t.Fatalf("当前表单连接测试失败: raw=%s err=%v", raw, err)
+	}
+	if host.activated != 1 || host.retired != 1 {
+		t.Fatalf("测试凭证没有完成短期激活和退役: activated=%d retired=%d", host.activated, host.retired)
+	}
+	if len(s.data.Tenants["tenant-a"]) != 0 || len(s.data.Revisions["tenant-a"]) != 0 || len(s.data.Publications["tenant-a"]) != 0 || len(s.data.Retire["tenant-a"]) != 0 || len(s.data.TestCleanup["tenant-a"]) != 0 {
+		t.Fatalf("连接测试污染了正式管理状态: %+v", s.data)
+	}
+	state, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(state), "one-time-password") || strings.Contains(string(state), "db.internal") {
+		t.Fatalf("测试状态泄露秘密或未保存连接定义: %s", state)
+	}
 }
 
 func TestRuntimePublicationOutboxRecoversWithoutLosingDefinition(t *testing.T) {
@@ -160,7 +225,7 @@ func TestConnectionDefinitionPersistsAndProbeHasNoSecret(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, raw, err := reopened.handle(context.Background(), host, dbContext(), []byte(`{"name":"primary"}`), "probe")
-	if err != nil || !strings.Contains(string(raw), `"ready":true`) || !strings.Contains(string(raw), `"providerId":"postgresql"`) {
+	if err != nil || !strings.Contains(string(raw), `"ready":true`) || !strings.Contains(string(raw), `"providerId":"postgresql"`) || !strings.Contains(string(raw), `"latencyMs":1`) {
 		t.Fatalf("probe failed raw=%s err=%v", raw, err)
 	}
 	if strings.Contains(string(host.payload), "password") || strings.Contains(string(host.payload), "secret") {

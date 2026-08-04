@@ -39,7 +39,7 @@ flowchart TB
 
 `FilterPanel` 是与 Collection、MasterDetail 平级的一级组合组件，统一字段 Schema、紧凑表单、草稿/提交策略、响应式分列和操作位置，但不发起数据请求。`CollectionWorkbench` 组合 FilterPanel，并共享查询、选择、动作、取消和错误状态机，提供 table/page 与 card/cursor 两种受控呈现：Table 保留列显示与顺序偏好、页码和总数；Card 固定标题、状态、摘要、内容与 footer 动作区，支持手动/视口增量加载。Workbench Page 根使用统一零 margin/零 padding Flow，以受治理 `sectionGap` 排列一级区域；FilterPanel 的 `flush/compact` inset 由 Workbench 组合上下文决定，功能插件不能借此设置外部间距。Collection 顶部筛选固定 `flush`，避免 FilterBar 自身 padding 与 Shell 16px 起始节奏叠加。FilterPanel 默认 `xs=1 / md=2 / xl=4`，可通过 `filterPanel.layout.columns` 覆盖；列偏好由工具栏锚定 Popover 即时写入，不使用阻断式确认 Dialog。表单工作流已提供默认 FormDialog 和显式 page、打开时动态 Schema/枚举准备、分区/标签/步骤、1–4 列、有限条件 DSL、脏状态保护、同步/异步/服务端字段错误、一次性提交和成功刷新。Overlay 统一承载 JSON 预览和审计表，并可按信息形态选择 Dialog 或 Drawer。视觉数值的唯一真相源是《[Portal 设计系统](../design/DESIGN.md)》的 `portalPageRhythm`。
 
-UI Contract 10.2 的 `SizeableProps` 为 Workbench 定义提供统一四档 `xs / sm / md / lg`，缺省为 `md`。Page、Workspace Section、Collection、FilterPanel、Card、Form、Overlay、Record、Descriptions 与 Dashboard 都通过同一 `ComponentSizeProvider` 继承，调用方只在组合根声明一次；Renderer 不得在每个组件重新复制默认分支。`Page.size` 管节奏而不管正文宽度，`Grid.size` 管默认 gap 而不管列数。Form/Overlay 的内容 `size` 与 `dialogWidth` / `width` 完全分离。
+UI Contract 10.4 的 `SizeableProps` 为 Workbench 定义提供统一四档 `xs / sm / md / lg`，缺省为 `md`。Page、Workspace Section、Collection、FilterPanel、Card、Form、Overlay、Record、Descriptions 与 Dashboard 都通过同一 `ComponentSizeProvider` 继承，调用方只在组合根声明一次；Renderer 不得在每个组件重新复制默认分支。`Page.size` 管节奏而不管正文宽度，`Grid.size` 管默认 gap 而不管列数。Form/Overlay 的内容 `size` 与 `dialogWidth` / `width` 完全分离。
 
 通用排序由 Workbench 内部 `patterns/interaction/SortableList` 统一承接，当前使用精确锁定的 dnd-kit；Pointer、Touch、自动滚动和碰撞反馈不再由各 Pattern 自行处理，键盘继续提供显式等价操作。第三方事件与 Sensor 不进入 UI Contract 或功能插件，dnd-kit 仅在 Sortable 表面实际挂载后加载。未来首页卡片使用 `DashboardGridSpec` 描述稳定卡片 ID 和响应式位置，可信宿主通过 `loadDashboardGrid()` 按需加载 `react-grid-layout` 并解析卡片内容；Grid 代码不进入普通 Workbench 页面入口。该基础不等于首页已经实现，卡片目录、偏好 CAS、权限裁剪和完整键盘缩放仍是正式启用前置项，详见 ADR-0162。
 
@@ -126,7 +126,7 @@ Collection 可选的状态摘要由 `CollectionSummary` 数据驱动定义。`ap
 
 ### 3.4 表单与 Overlay 工作流
 
-`FormSchema` 保持 Draft 7 数据约束，不将分栏、步骤和条件可见性伪装成校验规则。当前 UI Contract 10.2 提供：
+`FormSchema` 保持 Draft 7 数据约束，不将分栏、步骤和条件可见性伪装成校验规则。当前 UI Contract 10.4 提供：
 
 ```text
 FormPresentation
@@ -140,6 +140,7 @@ FormWorkflow
 ├── surface?: dialog（默认）| page（仅显式页内表单）
 ├── title / description / size（内容尺寸）
 ├── dialogWidth?: sm | md | lg / dialogHeight?: 160..10000px
+├── actions[]: footer.start | footer.end 的受治理 FormActionSpec
 ├── submitAction / cancelAction / confirmBeforeSubmit?
 ├── success: notify、refreshCollection、close、navigate
 └── failure: 字段错误映射、保留输入、可重试性
@@ -149,7 +150,7 @@ FormWorkflow
 
 `visibleWhen` / `readOnlyWhen` 使用有限 DSL：字段 JSON Pointer、`equals`、`in`、`exists`、`all`、`any`、`not`。它不能读取环境、调用网络、执行脚本或访问其他插件状态。需要复杂业务判断时，插件把已裁剪的只读 `context` 传给 Workbench，并由服务端在提交时再次验证。
 
-`FormDialog` 是非页面表单唯一的默认组合，由 Workbench 统一处理标题、焦点、ESC、关闭确认、校验、提交中禁用、一次性提交、字段级错误、成功刷新、失败保留和本地化。插件省略 `workflow.surface` 即使用 Dialog；只有独立表单页和记录页内编辑器可显式声明 `page`。FormDialog 内部表单控件统一比表单请求尺寸降低一档且最低为 `xs`，Dialog 框架和操作按钮仍保留原尺寸；该策略由 Workbench 组合一次，不要求功能插件重复声明。Drawer 只保留给只读详情、审计和辅助 Overlay，不再承载表单。`navigation: sections` 中直接拥有对象字段的分段是该对象唯一的可见标题；Workbench 只在渲染投影中移除该对象的 JSON Schema 标题，原始 Schema 与校验规则不变，因此功能插件不需要编写 Renderer 专用的 `ui:title` 补丁。Dialog 未指定 `dialogHeight` 时随内容自然撑开；指定后只接受 160–10000 的整数像素值，渲染适配器仍强制限制整体至视口 95%。FormDialog 的标题与提交区保持固定，超过可用空间时仅表单内容区内部滚动，页面背景不接管滚动。插件只给出 Schema、Presentation、Workflow 与 `submit(values, signal)` 处理器；处理器是运行时代码，绝不写入 Portal 发布配置。
+`FormDialog` 是非页面表单唯一的默认组合，由 Workbench 统一处理标题、焦点、ESC、关闭确认、校验、提交中禁用、一次性提交、字段级错误、成功刷新、失败保留和本地化。插件省略 `workflow.surface` 即使用 Dialog；只有独立表单页和记录页内编辑器可显式声明 `page`。FormDialog 内部表单控件统一比表单请求尺寸降低一档且最低为 `xs`，Dialog 框架和操作按钮仍保留原尺寸；该策略由 Workbench 组合一次，不要求功能插件重复声明。Drawer 只保留给只读详情、审计和辅助 Overlay，不再承载表单。`navigation: sections` 中直接拥有对象字段的分段是该对象唯一的可见标题；Workbench 只在渲染投影中移除该对象的 JSON Schema 标题，原始 Schema 与校验规则不变，因此功能插件不需要编写 Renderer 专用的 `ui:title` 补丁。Dialog 未指定 `dialogHeight` 时随内容自然撑开；指定后只接受 160–10000 的整数像素值，渲染适配器仍强制限制整体至视口 95%。FormDialog 的标题与提交区保持固定，超过可用空间时仅表单内容区内部滚动，页面背景不接管滚动。`FormActionSpec` 只允许稳定 ID、本地化标题、语义图标、位置、tone、有效性要求和确认文本，统一进入表单定义的 `runAction(context, signal)`；功能插件不得向 footer 注入 React 节点或框架按钮。插件只给出 Schema、Presentation、Workflow 与受治理处理器；处理器是运行时代码，绝不写入 Portal 发布配置。
 
 同步 JSON Schema 校验、异步校验和提交返回的字段错误必须先归一化到所属字段路径；只有无法归属字段的真正表单级错误使用 `$form`。Renderer 在控件后显示紧凑错误图标，并在鼠标悬停或键盘聚焦时使用红色 Tooltip 展示本地化详情，不再把字段错误作为表单底部的游离文字。异步校验的进行状态只用于禁止提交，不在 FormDialog 或页面表单中渲染动态提示，避免输入时改变表单高度和造成视觉抖动。功能插件只返回字段路径与本地化错误数据，不得自行拼装错误图标、Tooltip 或框架组件。
 

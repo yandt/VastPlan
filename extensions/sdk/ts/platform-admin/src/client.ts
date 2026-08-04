@@ -131,6 +131,9 @@ export class PlatformAdminClient {
   }
   public deleteDatabaseConnection(name: string): Promise<void> { return this.mutate(`${this.basePath}/database-connections/${segment(name)}`, "DELETE").then(() => undefined); }
   public probeDatabaseConnection(name: string): Promise<DatabaseProbe> { return this.mutate(`${this.basePath}/database-connections/${segment(name)}/probe`, "POST", {}); }
+  public testDatabaseConnection(name: string, value: PutDatabaseConnectionRequest): Promise<DatabaseProbe> {
+    return this.mutate(`${this.basePath}/database-connections/${segment(name)}/test`, "POST", value);
+  }
   public authenticationProviderState(): Promise<AuthenticationProviderManagementState> { return this.get(`${this.basePath}/authentication-providers`); }
   public createAuthenticationProviderDraft(expectedGeneration: number, profile: AuthenticationProviderProfile): Promise<AuthenticationProviderManagementState> { return this.mutate(`${this.basePath}/authentication-providers`, "POST", { expectedGeneration, profile }); }
   public validateAuthenticationProvider(id: string, expectedGeneration: number): Promise<AuthenticationProviderManagementState> { return this.authenticationProviderAction(id, "validate", { expectedGeneration }); }

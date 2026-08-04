@@ -6,7 +6,8 @@ import databaseConnectionsPlugin, { createDatabaseConnectionsPage } from "./inde
 describe("database connections Workbench page", () => {
   it("requires one-time material on create but never loads it for edit", async () => {
     const putDatabaseConnection = vi.fn(async () => ({}));
-    const client = { putDatabaseConnection, listDatabaseConnections: vi.fn(async () => []) } as unknown as PlatformAdminClient;
+    const testDatabaseConnection = vi.fn(async () => ({ ready: true, providerId: "postgresql", latencyMs: 12 }));
+    const client = { putDatabaseConnection, testDatabaseConnection, listDatabaseConnections: vi.fn(async () => []) } as unknown as PlatformAdminClient;
     const page = createDatabaseConnectionsPage(client, "database", "/settings/databases", message("test", "title", "Databases"));
     const create = page.forms?.find((form) => form.id === "create");
     const edit = page.forms?.find((form) => form.id === "edit");
@@ -27,11 +28,17 @@ describe("database connections Workbench page", () => {
       expect.objectContaining({ id: "pool", title: expect.objectContaining({ fallback: "连接池策略" }) }),
     ]));
     expect(create?.presentation?.sections).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: "credential" })]));
+    expect(create?.workflow.actions).toContainEqual(expect.objectContaining({ id: "test", placement: "footer.start", icon: "success", requiresValid: true }));
+    const testAction = create?.workflow.actions?.[0];
+    if (testAction === undefined) throw new Error("测试连接 Form Action 未注册");
     await expect(create?.validate?.({ value: { options: { user: "app" } }, context: {}, signal: new AbortController().signal })).resolves.toEqual({ "/options/password": expect.objectContaining({ key: "error.credentialRequired" }) });
     const loaded = await edit?.load?.([{ name: "main", resourceId: "r", revision: 1, providerId: "postgresql", endpoint: "db:5432", options: { user: "app" }, pool: { maxIdle: 8, maxOpen: 32, maxLifetimeMs: 1000, maxIdleTimeMs: 1000, acquireTimeoutMs: 100, idlePoolTtlMs: 1000 }, runtime: "ready", credential: { managed: true, version: 2 }, credentialState: "managed", credentialVersion: 2 }], new AbortController().signal);
     expect(loaded?.options).not.toHaveProperty("password");
     await create?.submit({ value: { name: "main", providerId: "postgresql", endpoint: "db:5432", options: { user: "app", password: "one-time" } }, selected: [] }, new AbortController().signal);
     expect(putDatabaseConnection).toHaveBeenCalledWith("main", expect.objectContaining({ options: { user: "app" }, credentialValue: "one-time" }));
+    const outcome = await create?.runAction?.({ action: testAction, value: { name: "main", providerId: "postgresql", endpoint: "db:5432", options: { user: "app", password: "one-time" } }, selected: [] }, new AbortController().signal);
+    expect(testDatabaseConnection).toHaveBeenCalledWith("main", expect.objectContaining({ options: { user: "app" }, credentialValue: "one-time" }));
+    expect(outcome?.notify).toMatchObject({ kind: "success", title: expect.objectContaining({ key: "test.success" }), content: expect.objectContaining({ values: { provider: "PostgreSQL", latency: 12 } }) });
   });
 
   it("uses Chinese functional labels in the Chinese locale", () => {
@@ -46,6 +53,8 @@ describe("database connections Workbench page", () => {
       "filter.provider": "数据库类型",
       "column.provider": "数据库类型",
       "column.runtime": "运行状态",
+      "action.test": "测试连接",
+      "test.success": "连接测试成功",
     });
   });
 });

@@ -1,4 +1,5 @@
 import type { OverlayWidth, SizeableProps } from "./component-size.js";
+import type { SemanticIconName } from "./icons.js";
 
 /** Serializable UI semantics shared by Web and Mobile renderers. */
 export { uiContractMajor, uiContractRange, uiContractVersion } from "./version.generated.js";
@@ -89,6 +90,21 @@ export interface FormPresentation extends SizeableProps {
   sections?: readonly FormSectionPresentation[];
   fields?: readonly FormFieldPresentation[];
 }
+export type FormActionPlacement = "footer.start" | "footer.end";
+/**
+ * Serializable action rendered by the governed Form surface. Functional
+ * plugins provide semantics only; Workbench owns the actual button component.
+ */
+export interface FormActionSpec {
+  id: string;
+  label: import("./i18n.js").LocalizedText;
+  icon: SemanticIconName;
+  placement: FormActionPlacement;
+  tone?: "neutral" | "primary" | "danger";
+  /** Defaults to true so actions cannot consume an invalid form accidentally. */
+  requiresValid?: boolean;
+  confirm?: import("./i18n.js").LocalizedText;
+}
 export interface FormWorkflow extends SizeableProps {
   /** Defaults to dialog. Page forms must opt in explicitly. */
   surface?: "page" | "dialog";
@@ -100,6 +116,8 @@ export interface FormWorkflow extends SizeableProps {
   dialogHeight?: number;
   submitLabel?: import("./i18n.js").LocalizedText;
   cancelLabel?: import("./i18n.js").LocalizedText;
+  /** Governed semantic button slots. Arbitrary framework nodes are forbidden. */
+  actions?: readonly FormActionSpec[];
   confirmBeforeSubmit?: import("./i18n.js").LocalizedText;
   success?: { notify?: import("./i18n.js").LocalizedText; refreshCollection?: boolean; close?: boolean };
 }

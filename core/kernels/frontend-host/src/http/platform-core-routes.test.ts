@@ -17,6 +17,7 @@ describe("Platform core management routes", () => {
     expect((await fetch(`${server.origin}/v1/portals/operations/platform/services/core/credentials/managed-audit?beforeId=9&limit=50`, { headers: server.readHeaders })).status).toBe(200);
     expect((await fetch(`${server.origin}/v1/portals/operations/platform/services/core/database-connections/main`, { method: "PUT", headers: server.writeHeaders, body: '{"name":"forged","providerId":"postgres","endpoint":"db:5432","options":{}}' })).status).toBe(200);
     expect((await fetch(`${server.origin}/v1/portals/operations/platform/services/core/database-connections/main/probe`, { method: "POST", headers: server.writeHeaders, body: "{}" })).status).toBe(200);
+    expect((await fetch(`${server.origin}/v1/portals/operations/platform/services/core/database-connections/main/test`, { method: "POST", headers: server.writeHeaders, body: '{"providerId":"postgresql","endpoint":"db:5432","options":{"user":"app"},"credentialValue":"temporary"}' })).status).toBe(200);
     expect(calls.map(({ capability, operation, payload }) => ({ capability, operation, payload }))).toEqual([
       { capability: "platform.settings", operation: "list", payload: { prefix: "ui." } },
       { capability: "platform.settings", operation: "put", payload: { key: "ui.theme", value: "dark", ifVersion: 2 } },
@@ -26,6 +27,7 @@ describe("Platform core management routes", () => {
       { capability: "platform.credentials", operation: "listManagedAudit", payload: { beforeId: 9, limit: 50 } },
       { capability: "platform.database", operation: "define", payload: { name: "main", providerId: "postgres", endpoint: "db:5432", options: {} } },
       { capability: "platform.database", operation: "probe", payload: { name: "main" } },
+      { capability: "platform.database", operation: "test", payload: { name: "main", providerId: "postgresql", endpoint: "db:5432", options: { user: "app" }, credentialValue: "temporary" } },
     ]);
     expect(calls.every((call) => call.logicalService === "platform.core.primary")).toBe(true);
   });
@@ -53,6 +55,6 @@ function fullBinding(): Record<string, unknown> {
   return managementBinding([
     { capability: "platform.settings", read: ["list"], write: ["put", "delete"] },
     { capability: "platform.credentials", read: ["list", "listManagedAudit"], write: ["put", "rotate", "revoke"] },
-    { capability: "platform.database", read: ["list"], write: ["define", "remove", "probe"] },
+    { capability: "platform.database", read: ["list"], write: ["define", "remove", "probe", "test"] },
   ]);
 }

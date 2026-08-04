@@ -35,6 +35,11 @@ export class PlatformDatabaseRoutes {
       await withRequestJSON(request, response, async () => this.call(principal, target, "probe", true, { name }, response, signal));
       return true;
     }
+    if (parts.length === 3 && parts[2] === "test" && method === "POST") {
+      if (!authorizePlatformOperation(this.client, target, capability, "test", true, response) || !requirePlatformRole(principal, "platform.database.probe", response)) return true;
+      await withRequestJSON(request, response, async (body) => this.call(principal, target, "test", true, { ...requireJSONObject(body), name }, response, signal));
+      return true;
+    }
     return reject(response, 405, "method_not_allowed", method);
   }
 

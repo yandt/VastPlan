@@ -6,20 +6,18 @@ import (
 	"errors"
 	"strings"
 
-	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfig"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
 func (s *service) define(ctx context.Context, host sdk.Host, call *contractv1.CallContext, tenantID string, input defineInput) (definition, error) {
-	if strings.TrimSpace(input.Name) == "" || len(input.Name) > 160 || strings.TrimSpace(input.ProviderID) == "" || len(input.ProviderID) > 80 || strings.TrimSpace(input.Endpoint) == "" || len(input.Endpoint) > 2048 || len(input.Database) > 256 || len(input.CredentialValue) > 4<<20 || len(input.Options) == 0 {
-		return definition{}, errors.New("数据库连接字段为空或超过长度上限")
+	pool, err := validateDefinitionInput(input)
+	if err != nil {
+		return definition{}, err
 	}
-	pool := defaultPoolPolicy()
-	if input.Pool != nil {
-		pool = *input.Pool
-	}
+
 	s.mu.RLock()
 	old, exists := s.data.Tenants[tenantID][input.Name]
 	identity, identityExists := s.data.Revisions[tenantID][input.Name]
@@ -139,4 +137,15 @@ func (s *service) define(ctx context.Context, host sdk.Host, call *contractv1.Ca
 	}
 	s.mu.Unlock()
 	return desired, nil
+}
+
+func validateDefinitionInput(input defineInput) (databasev1.PoolPolicy, error) {
+	if strings.TrimSpace(input.Name) == "" || len(input.Name) > 160 || strings.TrimSpace(input.ProviderID) == "" || len(input.ProviderID) > 80 || strings.TrimSpace(input.Endpoint) == "" || len(input.Endpoint) > 2048 || len(input.Database) > 256 || len(input.CredentialValue) > 4<<20 || len(input.Options) == 0 {
+		return databasev1.PoolPolicy{}, errors.New("数据库连接字段为空或超过长度上限")
+	}
+	pool := defaultPoolPolicy()
+	if input.Pool != nil {
+		pool = *input.Pool
+	}
+	return pool, nil
 }

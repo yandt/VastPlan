@@ -20,6 +20,20 @@ describe("PlatformAdminClient", () => {
     expect(() => client.deleteSetting("bad/name")).toThrowError(PlatformAdminError);
   });
 
+  it("tests current database form values through a fixed CSRF-protected route", async () => {
+    const calls: Array<{ path: string; method?: string; body?: string }> = [];
+    const client = new PlatformAdminClient(async (path, init) => {
+      calls.push({ path, method: init?.method, body: init?.body });
+      return { ok: true, status: 200, json: async () => path === "/v1/csrf" ? { token: "safe" } : { ready: true, providerId: "postgresql", latencyMs: 8 } };
+    }, "operations", "database");
+    await client.testDatabaseConnection("main", { providerId: "postgresql", endpoint: "db:5432", options: { user: "app" }, credentialValue: "one-time" });
+    expect(calls).toEqual([
+      { path: "/v1/csrf", method: "GET", body: undefined },
+      { path: "/v1/portals/operations/platform/services/database/database-connections/main/test", method: "POST", body: JSON.stringify({ providerId: "postgresql", endpoint: "db:5432", options: { user: "app" }, credentialValue: "one-time" }) },
+    ]);
+    expect(calls[1]!.path).not.toContain("one-time");
+  });
+
   it("reads redacted managed credential audit through a bounded fixed route", async () => {
     const calls: string[] = [];
     const client = new PlatformAdminClient(async (path) => {

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfig"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
@@ -117,6 +117,18 @@ func (s *service) reconcileRetire(ctx context.Context, host sdk.Host, call *cont
 			return err
 		}
 		s.mu.Unlock()
+	}
+	return nil
+}
+
+func (s *service) reconcileTestCredentials(ctx context.Context, host sdk.Host, call *contractv1.CallContext, tenantID string) error {
+	s.mu.RLock()
+	items := append([]testCredentialCleanup(nil), s.data.TestCleanup[tenantID]...)
+	s.mu.RUnlock()
+	for _, item := range items {
+		if err := s.cleanupTestCredential(ctx, host, call, tenantID, item); err != nil {
+			return err
+		}
 	}
 	return nil
 }

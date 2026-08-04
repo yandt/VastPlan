@@ -147,7 +147,13 @@ export interface PutDatabaseConnectionRequest {
   credentialValue?: string;
 }
 
-export interface DatabaseProbe { ready: boolean; message?: string; }
+/** Result of a real provider handshake against a saved database connection. */
+export interface DatabaseProbe {
+  ready: boolean;
+  providerId: string;
+  latencyMs: number;
+  message?: string;
+}
 export type AuthenticationProviderState = "draft" | "validated" | "tested" | "approved" | "published" | "retired";
 export type AuthenticationProviderReadiness = "unknown" | "blocked" | "ready" | "degraded" | "failed";
 export interface AuthenticationProviderProfile {

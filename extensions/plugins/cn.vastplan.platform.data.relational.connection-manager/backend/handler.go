@@ -6,8 +6,8 @@ import (
 	"errors"
 	"sort"
 
-	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
@@ -22,6 +22,9 @@ func (s *service) handle(ctx context.Context, host sdk.Host, call *contractv1.Ca
 	s.opMu.Lock()
 	defer s.opMu.Unlock()
 	if err := s.reconcilePending(ctx, host, call, tenantID); err != nil {
+		return nil, nil, err
+	}
+	if err := s.reconcileTestCredentials(ctx, host, call, tenantID); err != nil {
 		return nil, nil, err
 	}
 	if operation == "resolveRuntime" {
@@ -78,6 +81,16 @@ func (s *service) handleManagement(ctx context.Context, host sdk.Host, call *con
 		_ = s.reconcilePublications(ctx, host, call, tenantID)
 		_ = s.reconcileRetire(ctx, host, call, tenantID)
 		output = view(saved, s.runtimeStatus(tenantID, saved))
+	} else if operation == "test" {
+		var input defineInput
+		if err := json.Unmarshal(payload, &input); err != nil {
+			return nil, nil, err
+		}
+		var err error
+		output, err = s.testConnection(ctx, host, call, tenantID, input)
+		if err != nil {
+			return nil, nil, err
+		}
 	} else {
 		var input struct {
 			Name string `json:"name"`

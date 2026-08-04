@@ -22,9 +22,9 @@ export function FormDialog({ form, open }: { form: FormWorkflowController; open:
     height={definition.workflow.dialogHeight}
     contentOverflow="scroll"
     footer={<FormActions form={form} />}
-    onClose={() => { if (!form.submitting) void form.requestClose(); }}
+    onClose={() => { if (!form.submitting && form.runningActionID === undefined) void form.requestClose(); }}
   >
     <FormContent form={form} density="dialog" showDescription={false} />
-    <ActionExecutionFeedback active={form.submitting} actionLabel={i18n.text(definition.workflow.submitLabel ?? message(namespace, "action.submit", "提交"))} />
+    <ActionExecutionFeedback active={form.submitting || form.runningActionID !== undefined} actionLabel={i18n.text(form.runningActionID === undefined ? definition.workflow.submitLabel ?? message(namespace, "action.submit", "提交") : definition.workflow.actions?.find((action) => action.id === form.runningActionID)?.label ?? message(namespace, "action.execute", "执行"))} />
   </ui.Dialog>;
 }

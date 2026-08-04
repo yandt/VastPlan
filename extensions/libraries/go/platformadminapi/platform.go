@@ -83,6 +83,8 @@ type PutDatabaseConnectionRequest struct {
 }
 
 type DatabaseProbe struct {
-	Ready   bool   `json:"ready"`
-	Message string `json:"message,omitempty"`
+	Ready      bool   `json:"ready"`
+	ProviderID string `json:"providerId"`
+	LatencyMS  int64  `json:"latencyMs"`
+	Message    string `json:"message,omitempty"`
 }

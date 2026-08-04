@@ -11,7 +11,7 @@ import (
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
-const id, version, capability = "cn.vastplan.platform.data.relational.connection-manager", "0.11.0", "platform.database"
+const id, version, capability = "cn.vastplan.platform.data.relational.connection-manager", "0.11.1", "platform.database"
 
 const credentialCapability = "platform.credentials"
 
@@ -32,7 +32,7 @@ func main() {
 		Descriptor:     descriptor(),
 		Handlers: map[string]sdk.Handler{
 			"define": handler("define"), "describe": handler("describe"), "list": handler("list"),
-			"remove": handler("remove"), "probe": handler("probe"), "resolveRuntime": handler("resolveRuntime"),
+			"remove": handler("remove"), "probe": handler("probe"), "test": handler("test"), "resolveRuntime": handler("resolveRuntime"),
 		},
 	})
 	if err := plugin.Serve(); err != nil {
@@ -46,6 +46,7 @@ func descriptor() []byte {
 		{"name":"describe","description":"读取连接定义","paramsSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}},
 		{"name":"list","description":"列出连接定义","paramsSchema":{"type":"object","properties":{}}},
 		{"name":"remove","description":"删除连接定义","paramsSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}},
-		{"name":"probe","description":"由数据库运行服务使用托管凭证探测连接","paramsSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}}
+		{"name":"probe","description":"由数据库运行服务使用托管凭证探测连接","paramsSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}},
+		{"name":"test","description":"使用当前表单值和短期托管凭证测试连接，不保存连接定义","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"name":{"type":"string"},"providerId":{"type":"string"},"endpoint":{"type":"string"},"database":{"type":"string"},"options":{"type":"object"},"pool":{"type":"object"},"credentialValue":{"type":"string"}},"required":["name","providerId","endpoint","options"]}}
 	]}`)
 }

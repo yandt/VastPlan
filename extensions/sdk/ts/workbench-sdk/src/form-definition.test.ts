@@ -50,4 +50,12 @@ describe("Workbench form definition", () => {
     expect(() => defineCollectionPage(page({ id: "edit", schema, workflow: { title: "Edit", dialogHeight: 159 }, async submit() {} }))).toThrow("160..10000");
     expect(() => defineCollectionPage(page({ id: "edit", schema, workflow: { surface: "page", title: "Edit", dialogHeight: 640 }, async submit() {} }))).toThrow("仅可用于 dialog");
   });
+
+  it("accepts governed Form Action slots and requires one workflow handler", () => {
+    const action = { id: "test", label: "Test", icon: "success", placement: "footer.start" } as const;
+    expect(() => defineCollectionPage(page({ id: "edit", schema, workflow: { title: "Edit", actions: [action] }, async runAction() {}, async submit() {} }))).not.toThrow();
+    expect(() => defineCollectionPage(page({ id: "edit", schema, workflow: { title: "Edit", actions: [action] }, async submit() {} }))).toThrow("没有 runAction");
+    expect(() => defineCollectionPage(page({ id: "edit", schema, workflow: { title: "Edit", actions: [{ ...action, placement: "body" as never }] }, async runAction() {}, async submit() {} }))).toThrow("Action test 无效");
+    expect(() => defineCollectionPage(page({ id: "edit", schema, workflow: { title: "Edit", actions: [{ ...action, component: "Button" } as never] }, async runAction() {}, async submit() {} }))).toThrow("不受支持的字段");
+  });
 });
