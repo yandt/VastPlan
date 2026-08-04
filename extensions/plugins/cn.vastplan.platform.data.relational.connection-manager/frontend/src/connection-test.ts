@@ -1,4 +1,4 @@
-import type { DatabaseProbe } from "@vastplan/platform-admin";
+import { PlatformAdminError, type DatabaseProbe } from "@vastplan/platform-admin";
 import { message, type CollectionActionResult } from "@vastplan/workbench-sdk";
 
 const namespace = "cn.vastplan.platform.data.relational.connection-manager";
@@ -15,10 +15,13 @@ export function connectionTestResult(result: DatabaseProbe): NonNullable<Collect
   };
 }
 
-export function connectionTestFailure(): NonNullable<CollectionActionResult["notify"]> {
+export function connectionTestFailure(error?: unknown): NonNullable<CollectionActionResult["notify"]> {
+  const detail = error instanceof PlatformAdminError && error.code === "database_connection_invalid"
+    ? message(namespace, "test.invalidDetail", "连接参数无效，请检查地址、端口、用户名和传输加密设置。")
+    : message(namespace, "test.failureDetail", "请检查地址、数据库、用户名、密码和传输加密设置后重试。");
   return {
     title: message(namespace, "test.failure", "连接测试失败"),
-    content: message(namespace, "test.failureDetail", "请检查地址、数据库、用户名、密码和传输加密设置后重试。"),
+    content: detail,
     kind: "error",
   };
 }

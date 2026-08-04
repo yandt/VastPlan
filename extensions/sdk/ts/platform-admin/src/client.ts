@@ -376,9 +376,16 @@ export function createBrowserPlatformAdminClient(portalID: string, serviceID: st
 
 export class PlatformAdminError extends Error {
   public constructor(public readonly status: number, public readonly code: string) {
-    super(`Platform administration request failed: ${code}`);
+    super(platformAdminErrorMessage(code));
     this.name = "PlatformAdminError";
   }
+}
+
+function platformAdminErrorMessage(code: string): string {
+  if (code === "database_connection_invalid") return "数据库连接配置无效，请检查地址、端口、用户名和传输加密设置。";
+  if (code === "database_connection_failed") return "数据库连接未能建立，请检查网络、账户密码和服务端状态。";
+  if (code === "database_runtime_unavailable") return "数据库运行服务暂时不可用，请稍后重试。";
+  return `Platform administration request failed: ${code}`;
 }
 
 function isCSRFRejected(error: unknown): boolean {

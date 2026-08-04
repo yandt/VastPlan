@@ -43,10 +43,13 @@ describe("database connections Workbench page", () => {
       "/host": expect.objectContaining({ key: "error.hostInvalid" }),
       "/port": expect.objectContaining({ key: "error.portInvalid" }),
     });
+    await expect(create?.validate?.({ value: { name: "main", providerId: "postgresql", host: "db", port: 5432, options: { password: "one-time" } }, context: {}, signal: new AbortController().signal })).resolves.toMatchObject({
+      "/options/user": expect.objectContaining({ key: "error.userRequired" }),
+    });
     const loaded = await edit?.load?.([{ name: "main", resourceId: "r", revision: 1, providerId: "postgresql", endpoint: "db:5432", options: { user: "app" }, pool: { maxIdle: 8, maxOpen: 32, maxLifetimeMs: 1000, maxIdleTimeMs: 1000, acquireTimeoutMs: 100, idlePoolTtlMs: 1000 }, runtime: "ready", credential: { managed: true, version: 2 }, credentialState: "managed", credentialVersion: 2 }], new AbortController().signal);
     expect(loaded?.options).not.toHaveProperty("password");
     expect(loaded).toMatchObject({ host: "db", port: 5432 });
-    await create?.submit({ value: { name: "main", providerId: "postgresql", host: "db", port: 5432, options: { user: "app", password: "one-time" } }, selected: [] }, new AbortController().signal);
+    await create?.submit({ value: { name: "main", providerId: "postgresql", host: "db", port: 5432, options: { user: "app", password: "one-time", network: "tcp", readTimeoutMs: 500 } }, selected: [] }, new AbortController().signal);
     expect(putDatabaseConnection).toHaveBeenCalledWith("main", expect.objectContaining({ endpoint: "db:5432", options: { user: "app" }, credentialValue: "one-time" }));
     const outcome = await create?.runAction?.({ action: testAction, value: { name: "main", providerId: "postgresql", host: "db", port: 5432, options: { user: "app", password: "one-time" } }, selected: [] }, new AbortController().signal);
     expect(testDatabaseConnection).toHaveBeenCalledWith("main", expect.objectContaining({ endpoint: "db:5432", options: { user: "app" }, credentialValue: "one-time" }));

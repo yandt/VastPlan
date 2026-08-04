@@ -59,6 +59,15 @@ describe("Platform core management routes", () => {
     expect(response.status).toBe(422);
     expect(await response.json()).toEqual({ error: "database_connection_failed" });
   });
+
+  it("returns a database-specific safe code when the Provider rejects form parameters", async () => {
+    const invoker: TrustedCapabilityInvoker = { async invoke() { throw new CapabilityApplicationError("platform.database.invalid", "provider-private-detail"); } };
+    const server = await startPlatformManagementTestServer(invoker, ["platform.database.probe"], fullBinding());
+    close.push(server.close);
+    const response = await fetch(`${server.origin}/v1/portals/operations/platform/services/core/database-connections/main/test`, { method: "POST", headers: server.writeHeaders, body: '{"providerId":"postgresql","endpoint":"db:5432","options":{"user":"app"},"credentialValue":"temporary"}' });
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: "database_connection_invalid" });
+  });
 });
 
 function fullBinding(): Record<string, unknown> {
