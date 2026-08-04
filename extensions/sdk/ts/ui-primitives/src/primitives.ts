@@ -126,7 +126,7 @@ export interface DialogProps extends SizeableProps {
   /** Form Dialogs use the governed compact content rhythm without changing field control size. */
   variant?: "default" | "form";
   width?: OverlayWidth;
-  /** Optional governed pixel height. Renderers always clamp it to 90vh. */
+  /** Optional governed pixel height. Renderers clamp it to the overlay variant's viewport maximum. */
   height?: number;
   /** Defaults to scroll so a Dialog body, not its containing page, owns overflow. */
   contentOverflow?: "visible" | "scroll";
