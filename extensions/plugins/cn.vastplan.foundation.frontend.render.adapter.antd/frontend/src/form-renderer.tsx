@@ -13,7 +13,7 @@ import { safeAntdTemplates } from "./safe-rjsf-theme";
 import { PresentedField, antdFormFieldWidthCSS, antdInsideInlineCSS } from "./inside-inline-field";
 import { antdComponentSize } from "./component-size";
 import { resolveFormLabelWidth } from "./form-label-width";
-import { DurationWidget } from "./duration-widget";
+import { DurationWidget, antdDurationWidgetCSS } from "./duration-widget";
 
 const validator = cspJSONSchemaValidator;
 const emptyFormContext: Readonly<Record<string, unknown>> = Object.freeze({});
@@ -229,7 +229,7 @@ export function FormRenderer({ schema, value, onChange, size: requestedSize, pre
     margin: componentSizeRecipes.layout[size].outerMargin,
   } as CSSProperties;
   return <ConfigProvider componentSize={antdComponentSize[size]} theme={compact ? compactFormTheme : undefined}>
-    <style>{formGridCSS}{controlAlignmentCSS}{antdFormFieldWidthCSS}{formLabelPlacement(presentation) === "inside-inline" ? antdInsideInlineCSS : ""}</style>
+    <style>{formGridCSS}{controlAlignmentCSS}{antdFormFieldWidthCSS}{antdDurationWidgetCSS}{formLabelPlacement(presentation) === "inside-inline" ? antdInsideInlineCSS : ""}</style>
     <div className={`vp-antd-form-controls-${controlAlignment}`} data-form-control-alignment={controlAlignment} style={rhythmStyle}>{form}</div>
   </ConfigProvider>;
 }

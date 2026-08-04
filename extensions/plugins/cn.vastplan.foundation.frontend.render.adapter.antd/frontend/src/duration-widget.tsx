@@ -1,4 +1,4 @@
-import { InputNumber, Select, Space } from "antd";
+import { InputNumber, Select } from "antd";
 import type { WidgetProps } from "@rjsf/utils";
 import { durationUnits, message, usePortalI18n, type DurationUnit, type FormDurationPresentation } from "@vastplan/ui-primitives";
 import { useEffect, useState } from "react";
@@ -24,14 +24,14 @@ export function DurationWidget({ id, value, disabled, readonly, required, option
   const displayed = numeric === undefined ? undefined : durationDisplayValue(numeric, config.storageUnit, unit);
   const minimum = finiteNumber(schema.minimum);
   const maximum = finiteNumber(schema.maximum);
-  return <Space.Compact block style={{ width: "100%" }}><InputNumber
+  return <div className="vp-antd-duration-input" data-disabled={disabled || readonly || undefined}><InputNumber
     id={id}
     value={displayed}
     disabled={disabled}
     readOnly={readonly}
     required={required}
     aria-label={label}
-    style={{ flex: "1 1 auto", minWidth: 0, width: 0 }}
+    variant="borderless"
     min={minimum === undefined ? undefined : durationDisplayValue(minimum, config.storageUnit, unit)}
     max={maximum === undefined ? undefined : durationDisplayValue(maximum, config.storageUnit, unit)}
     step={unit === "millisecond" ? 1 : 0.1}
@@ -43,16 +43,26 @@ export function DurationWidget({ id, value, disabled, readonly, required, option
     onBlur={() => onBlur(id, value)}
     onFocus={() => onFocus(id, value)}
   /><Select
-      aria-label={i18n.text(message(namespace, "form.duration.unit", "时间单位"))}
-      value={unit}
-      disabled={disabled || readonly}
-      variant="borderless"
-      popupMatchSelectWidth={false}
-      style={{ width: 88 }}
-      options={config.units.map((candidate) => ({ value: candidate, label: i18n.text(durationUnitLabel(candidate)) }))}
-      onChange={(next: DurationUnit) => setUnit(next)}
-    /></Space.Compact>;
+    aria-label={i18n.text(message(namespace, "form.duration.unit", "时间单位"))}
+    value={unit}
+    disabled={disabled || readonly}
+    variant="borderless"
+    popupMatchSelectWidth={false}
+    options={config.units.map((candidate) => ({ value: candidate, label: i18n.text(durationUnitLabel(candidate)) }))}
+    onChange={(next: DurationUnit) => setUnit(next)}
+  /></div>;
 }
+
+export const antdDurationWidgetCSS = `
+.vp-antd-duration-input{box-sizing:border-box;display:flex;align-items:stretch;width:100%;min-width:0;border:1px solid var(--ant-color-border);border-radius:var(--ant-border-radius);background:var(--ant-color-bg-container);overflow:hidden;transition:border-color .15s,box-shadow .15s}
+.vp-antd-duration-input:hover:not([data-disabled="true"]){border-color:var(--ant-color-primary-hover)}
+.vp-antd-duration-input:focus-within{border-color:var(--ant-color-primary);box-shadow:0 0 0 2px color-mix(in srgb,var(--ant-color-primary) 10%,transparent)}
+.vp-antd-duration-input[data-disabled="true"]{background:var(--ant-color-bg-container-disabled);cursor:not-allowed}
+.ant-form-item-has-error .vp-antd-duration-input{border-color:var(--ant-color-error)}
+.ant-form-item-has-error .vp-antd-duration-input:focus-within{box-shadow:0 0 0 2px color-mix(in srgb,var(--ant-color-error) 10%,transparent)}
+.vp-antd-duration-input>.ant-input-number{flex:1 1 auto;width:0;min-width:0;border:0!important;border-radius:0;box-shadow:none!important;background:transparent!important}
+.vp-antd-duration-input>.ant-select{flex:0 0 88px;width:88px;min-width:0}
+`;
 
 /** Conversion does not mutate the stored value when only the display unit changes. */
 export function durationDisplayValue(value: number, storageUnit: DurationUnit, displayUnit: DurationUnit): number {

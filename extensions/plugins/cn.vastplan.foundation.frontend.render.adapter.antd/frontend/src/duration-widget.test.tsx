@@ -38,5 +38,11 @@ describe("Ant Design duration widget", () => {
     expect(html).toContain('aria-valuenow="10"');
     expect(html).toContain("秒");
     expect(html).not.toContain("小时");
+    expect(html).toContain("vp-antd-duration-input");
+    expect(html).toContain("ant-select-borderless");
+    expect(html).toContain("ant-input-number-borderless");
+    expect(html).not.toContain("ant-input-number-suffix");
+    expect(html).not.toContain("ant-space-compact");
+    expect(html.indexOf("ant-input-number")).toBeLessThan(html.indexOf("ant-select"));
   });
 });
