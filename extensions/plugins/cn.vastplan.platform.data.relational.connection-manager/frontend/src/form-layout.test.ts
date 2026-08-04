@@ -10,7 +10,7 @@ describe("database connection form layout", () => {
     const presentation = page.forms?.find((form) => form.id === "create")?.presentation;
 
     expect(presentation?.sections).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: "identity", columns: 2 }),
+      expect.objectContaining({ id: "identity", columns: 2, fields: ["/name", "/providerId", "/host", "/port", "/socketPath", "/database"] }),
       expect.objectContaining({ id: "options", columns: 2, fields: ["/options"] }),
       expect.objectContaining({ id: "pool", columns: 2 }),
     ]));

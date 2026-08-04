@@ -12,6 +12,7 @@ import {
   type WorkbenchFrontendPluginContext,
 } from "@vastplan/workbench-sdk";
 import { connectionTestFailure, connectionTestResult } from "./connection-test.js";
+import { connectionEndpoint, connectionEndpointFields, defaultConnectionPort } from "./connection-endpoint.js";
 
 const namespace = "cn.vastplan.platform.data.relational.connection-manager";
 
@@ -19,11 +20,13 @@ function databaseConnectionSchema(passwordRequired: boolean): FormSchema {
   return {
   id: "platform-database-connection.v2",
   schema: {
-    $schema: jsonSchemaDialect, type: "object", additionalProperties: false, required: ["name", "providerId", "endpoint", "options"],
+    $schema: jsonSchemaDialect, type: "object", additionalProperties: false, required: ["name", "providerId", "options"],
     properties: {
       name: { type: "string", title: "连接名称", minLength: 1, maxLength: 160 },
       providerId: { type: "string", title: "数据库类型", oneOf: [{ const: "postgresql", title: "PostgreSQL" }, { const: "mysql", title: "MySQL" }] },
-      endpoint: { type: "string", title: "地址", minLength: 1 },
+      host: { type: "string", title: "地址", minLength: 1 },
+      port: { type: "integer", title: "端口", minimum: 1, maximum: 65535 },
+      socketPath: { type: "string", title: "Unix 套接字路径", minLength: 1 },
       database: { type: "string", title: "数据库" },
       // 该对象由 presentation.sections 的“连接选项”命名；不再定义内部标题，
       // 从源头避免 RJSF 与各 Renderer 重复渲染对象标题。
@@ -41,9 +44,14 @@ function databaseConnectionSchema(passwordRequired: boolean): FormSchema {
         maxLifetimeMs: { type: "integer", title: "连接最长生命周期", minimum: 1000 }, maxIdleTimeMs: { type: "integer", title: "最长空闲时间", minimum: 1000 }, acquireTimeoutMs: { type: "integer", title: "获取连接超时", minimum: 100 }, idlePoolTtlMs: { type: "integer", title: "空池回收时间", minimum: 1000 },
       } },
     },
+    allOf: [{
+      if: { required: ["providerId", "options"], properties: { providerId: { const: "mysql" }, options: { required: ["network"], properties: { network: { const: "unix" } } } } },
+      then: { required: ["socketPath"] },
+      else: { required: ["host", "port"] },
+    }],
   },
   localization: {
-    "/properties/name/title": message(namespace,"form.name","连接名称"), "/properties/providerId/title": message(namespace,"form.provider","数据库类型"), "/properties/endpoint/title": message(namespace,"form.endpoint","地址"), "/properties/database/title": message(namespace,"form.database","数据库"),
+    "/properties/name/title": message(namespace,"form.name","连接名称"), "/properties/providerId/title": message(namespace,"form.provider","数据库类型"), "/properties/host/title": message(namespace,"form.host","地址"), "/properties/port/title": message(namespace,"form.port","端口"), "/properties/socketPath/title": message(namespace,"form.socketPath","Unix 套接字路径"), "/properties/database/title": message(namespace,"form.database","数据库"),
     "/properties/options/properties/user/title": message(namespace,"form.user","用户名"), "/properties/options/properties/password/title": message(namespace,"form.credential","密码"), "/properties/options/properties/tlsMode/title": message(namespace,"form.tlsMode","传输加密模式"), "/properties/options/properties/connectTimeoutMs/title": message(namespace,"form.connectTimeout","连接超时"),
     "/properties/options/properties/serverName/title": message(namespace,"form.serverName","证书校验服务器名称"), "/properties/options/properties/applicationName/title": message(namespace,"form.applicationName","客户端应用名称"), "/properties/options/properties/network/title": message(namespace,"form.network","网络类型"), "/properties/options/properties/readTimeoutMs/title": message(namespace,"form.readTimeout","读取超时"), "/properties/options/properties/writeTimeoutMs/title": message(namespace,"form.writeTimeout","写入超时"), "/properties/options/properties/rejectReadOnly/title": message(namespace,"form.rejectReadOnly","拒绝只读实例"),
     "/properties/options/properties/tlsMode/oneOf/0/title": message(namespace,"option.verifyFull","完整校验（推荐）"), "/properties/options/properties/tlsMode/oneOf/1/title": message(namespace,"option.tlsDisable","关闭（仅受控测试环境）"),
@@ -55,7 +63,7 @@ function databaseConnectionSchema(passwordRequired: boolean): FormSchema {
 
 type DatabaseRow = DatabaseConnection & { credentialState: "managed" | "missing"; credentialVersion?: number } & Record<string, unknown>;
 
-const defaults = (): Readonly<Record<string, unknown>> => ({ providerId: "postgresql", options: { tlsMode: "verify-full", connectTimeoutMs: 10000 }, pool: { minIdle: 0, maxIdle: 8, maxOpen: 32, maxLifetimeMs: 1800000, maxIdleTimeMs: 300000, acquireTimeoutMs: 5000, idlePoolTtlMs: 900000 } });
+const defaults = (): Readonly<Record<string, unknown>> => ({ providerId: "postgresql", port: defaultConnectionPort("postgresql"), options: { tlsMode: "verify-full", connectTimeoutMs: 10000 }, pool: { minIdle: 0, maxIdle: 8, maxOpen: 32, maxLifetimeMs: 1800000, maxIdleTimeMs: 300000, acquireTimeoutMs: 5000, idlePoolTtlMs: 900000 } });
 
 export function createDatabaseConnectionsPage(client: PlatformAdminClient, serviceID: string, path: string, title: ReturnType<typeof message>): CollectionPageDefinition<DatabaseRow> {
   const form = (id: "create" | "edit"): WorkbenchFormDefinition<DatabaseRow> => ({
@@ -67,13 +75,17 @@ export function createDatabaseConnectionsPage(client: PlatformAdminClient, servi
       // Dynamic Form/Renderer 根据该语义统一计算 Label 列宽和字段宽度。
       layout: "horizontal", labelPlacement: "inline", navigation: "sections",
       sections: [
-        { id: "identity", title: message(namespace, "section.identity", "连接标识"), columns: 2, fields: ["/name", "/providerId", "/endpoint", "/database"] },
+        { id: "identity", title: message(namespace, "section.identity", "连接标识"), columns: 2, fields: ["/name", "/providerId", "/host", "/port", "/socketPath", "/database"] },
         { id: "options", title: message(namespace, "section.options", "连接选项"), columns: 2, fields: ["/options"] },
         { id: "pool", title: message(namespace, "section.pool", "连接池策略"), columns: 2, fields: ["/pool"] },
       ],
       fields: [
         { pointer: "/name", readOnlyWhen: { pointer: "/context/editing", equals: true } },
-        { pointer: "/providerId" }, { pointer: "/endpoint" }, { pointer: "/database" }, { pointer: "/options", span: 2 }, { pointer: "/pool", span: 2 },
+        { pointer: "/providerId" },
+        { pointer: "/host", visibleWhen: { not: { all: [{ pointer: "/providerId", equals: "mysql" }, { pointer: "/options/network", equals: "unix" }] } } },
+        { pointer: "/port", visibleWhen: { not: { all: [{ pointer: "/providerId", equals: "mysql" }, { pointer: "/options/network", equals: "unix" }] } } },
+        { pointer: "/socketPath", visibleWhen: { all: [{ pointer: "/providerId", equals: "mysql" }, { pointer: "/options/network", equals: "unix" }] } },
+        { pointer: "/database" }, { pointer: "/options", span: 2 }, { pointer: "/pool", span: 2 },
         { pointer: "/options/connectTimeoutMs", widget: "duration", duration: { storageUnit: "millisecond", units: ["millisecond", "second", "minute"], defaultUnit: "second" } },
         { pointer: "/options/serverName", visibleWhen: { pointer: "/options/tlsMode", equals: "verify-full" } },
         { pointer: "/options/applicationName", visibleWhen: { pointer: "/providerId", equals: "postgresql" } },
@@ -100,22 +112,32 @@ export function createDatabaseConnectionsPage(client: PlatformAdminClient, servi
     async load(selected) {
       const item = selected[0];
       if (item === undefined) return defaults();
-      return { name: item.name, providerId: item.providerId, endpoint: item.endpoint, ...(item.database ? { database: item.database } : {}), options: item.options, pool: item.pool };
+      if (item.providerId === "mysql" && record(item.options)?.network === "unix") {
+        return { name: item.name, providerId: item.providerId, socketPath: item.endpoint, ...(item.database ? { database: item.database } : {}), options: item.options, pool: item.pool };
+      }
+      const endpoint = connectionEndpointFields(item.endpoint, item.providerId);
+      return { name: item.name, providerId: item.providerId, host: endpoint.host, port: endpoint.port, ...(item.database ? { database: item.database } : {}), options: item.options, pool: item.pool };
     },
     async validate({ value }): Promise<WorkbenchFormFieldErrors> {
       const options = record(value.options);
-      if (id === "create" && text(options?.password) === undefined) return { "/options/password": message(namespace, "error.credentialRequired", "新建连接必须输入密码") };
-      return {};
+      const mysqlUnix = text(value.providerId) === "mysql" && text(record(value.options)?.network) === "unix";
+      const endpointInvalid = mysqlUnix ? text(value.socketPath)?.startsWith("/") !== true : connectionEndpoint(value.host, value.port) === undefined;
+      return {
+        ...(id === "create" && text(options?.password) === undefined ? { "/options/password": message(namespace, "error.credentialRequired", "新建连接必须输入密码") } : {}),
+        ...(endpointInvalid ? (mysqlUnix
+          ? { "/socketPath": message(namespace, "error.socketPathInvalid", "请输入以 / 开头的 Unix 套接字路径") }
+          : { "/host": message(namespace, "error.hostInvalid", "请输入不含端口的有效地址"), "/port": message(namespace, "error.portInvalid", "端口必须为 1 到 65535 的整数") }) : {}),
+      };
     },
     async submit({ value }) {
       const input = databaseConnectionInput(value);
-      if (input === undefined) return { fieldErrors: requiredConnectionErrors() };
+      if (input === undefined) return { fieldErrors: requiredConnectionErrors(value) };
       await client.putDatabaseConnection(input.name, input.request);
     },
     async runAction({ action, value }) {
       if (action.id !== "test") return;
       const input = databaseConnectionInput(value);
-      if (input === undefined) return { fieldErrors: requiredConnectionErrors() };
+      if (input === undefined) return { fieldErrors: requiredConnectionErrors(value) };
       try {
         return { notify: connectionTestResult(await client.testDatabaseConnection(input.name, input.request)) };
       } catch {
@@ -170,13 +192,22 @@ function text(value: unknown): string | undefined { return typeof value === "str
 function record(value: unknown): Record<string, unknown> | undefined { return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined; }
 function pool(value: unknown): DatabasePoolPolicy | undefined { return record(value) as DatabasePoolPolicy | undefined; }
 function databaseConnectionInput(value: Readonly<Record<string, unknown>>): { name: string; request: PutDatabaseConnectionRequest } | undefined {
-  const name = text(value.name), providerId = text(value.providerId), endpoint = text(value.endpoint), options = record(value.options);
+  const name = text(value.name), providerId = text(value.providerId), options = record(value.options);
+  const mysqlUnix = providerId === "mysql" && text(options?.network) === "unix";
+  const endpoint = mysqlUnix ? text(value.socketPath) : connectionEndpoint(value.host, value.port);
   if (name === undefined || providerId === undefined || endpoint === undefined || options === undefined) return undefined;
   const { password, ...connectionOptions } = options;
   return { name, request: { providerId, endpoint, options: connectionOptions, ...(text(value.database) === undefined ? {} : { database: text(value.database) }), ...(pool(value.pool) === undefined ? {} : { pool: pool(value.pool) }), ...(text(password) === undefined ? {} : { credentialValue: text(password) }) } };
 }
-function requiredConnectionErrors(): WorkbenchFormFieldErrors {
-  return { "/name": message(namespace,"error.nameRequired","连接名称不能为空"), "/endpoint": message(namespace,"error.endpointRequired","连接地址不能为空") };
+function requiredConnectionErrors(value: Readonly<Record<string, unknown>>): WorkbenchFormFieldErrors {
+  const options = record(value.options);
+  const mysqlUnix = text(value.providerId) === "mysql" && text(options?.network) === "unix";
+  return {
+    ...(text(value.name) === undefined ? { "/name": message(namespace,"error.nameRequired","连接名称不能为空") } : {}),
+    ...(mysqlUnix
+      ? { "/socketPath": message(namespace,"error.socketPathInvalid","请输入以 / 开头的 Unix 套接字路径") }
+      : { "/host": message(namespace,"error.hostInvalid","请输入不含端口的有效地址"), "/port": message(namespace,"error.portInvalid","端口必须为 1 到 65535 的整数") }),
+  };
 }
 
 export default {
@@ -191,7 +222,7 @@ export default {
     }
   },
   localization: { defaultLocale:"zh-CN", messages: {
-    "zh-CN": { "form.name":"连接名称","form.provider":"数据库类型","form.endpoint":"地址","form.database":"数据库","form.options":"连接选项","form.pool":"连接池","form.credential":"密码","form.user":"用户名","form.tlsMode":"传输加密模式","form.connectTimeout":"连接超时","form.serverName":"证书校验服务器名称","form.applicationName":"客户端应用名称","form.network":"网络类型","form.readTimeout":"读取超时","form.writeTimeout":"写入超时","form.rejectReadOnly":"拒绝只读实例","option.verifyFull":"完整校验（推荐）","option.tlsDisable":"关闭（仅受控测试环境）","option.networkTcp":"TCP","option.networkUnix":"Unix 套接字","form.minIdle":"最小空闲连接","form.maxIdle":"最大空闲连接","form.maxOpen":"最大连接数","form.maxLifetime":"连接最长生命周期","form.maxIdleTime":"最长空闲时间","form.acquireTimeout":"获取连接超时","form.idlePoolTtl":"空池回收时间","section.identity":"连接标识","section.options":"连接选项","section.pool":"连接池策略","form.createTitle":"新增数据库连接","form.editTitle":"编辑数据库连接","form.description":"连接定义和池策略保存在数据库插件中；密码明文仅用于本次连接请求。","error.credentialRequired":"新建连接必须输入密码","error.nameRequired":"连接名称不能为空","error.endpointRequired":"连接地址不能为空","notice.saved":"数据库连接已保存","filter.name":"连接名称","filter.provider":"数据库类型","column.name":"名称","column.provider":"数据库类型","column.endpoint":"地址","column.runtime":"运行状态","column.credential":"密码状态","column.credentialVersion":"密码版本","runtime.ready":"已就绪","runtime.pending":"待发布","credential.managed":"已设置","credential.missing":"未设置","action.create":"新增连接","action.edit":"编辑","action.save":"保存","action.test":"测试连接","action.delete":"删除","confirm.delete":"确认删除此连接并清理其密码？","test.success":"连接测试成功","test.successDetail":"{provider} 响应正常，耗时 {latency} 毫秒","test.failure":"连接测试失败","test.failureDetail":"请检查地址、数据库、用户名、密码和传输加密设置后重试。","page.title":"数据库连接","page.titleService":"数据库连接 · {service}","page.description":"在数据库插件内配置连接、数据库类型、连接池与密码" },
-    "en-US": { "form.name":"Connection name","form.provider":"Provider","form.endpoint":"Endpoint","form.database":"Database","form.options":"Connection options","form.pool":"Connection pool","form.credential":"Password","form.user":"User","form.tlsMode":"TLS mode","form.connectTimeout":"Connect timeout","form.serverName":"TLS server name","form.applicationName":"PostgreSQL application name","form.network":"MySQL network","form.readTimeout":"MySQL read timeout","form.writeTimeout":"MySQL write timeout","form.rejectReadOnly":"Reject read-only MySQL instances","option.verifyFull":"Verify fully (recommended)","option.tlsDisable":"Disabled (controlled test environments only)","option.networkTcp":"TCP","option.networkUnix":"Unix socket","form.minIdle":"Minimum idle","form.maxIdle":"Maximum idle","form.maxOpen":"Maximum open","form.maxLifetime":"Maximum lifetime","form.maxIdleTime":"Maximum idle time","form.acquireTimeout":"Acquire timeout","form.idlePoolTtl":"Idle-pool TTL","section.identity":"Connection identity","section.options":"Connection options","section.pool":"Pool policy","form.createTitle":"Create database connection","form.editTitle":"Edit database connection","form.description":"The database plugin stores connection and pool policy. The plaintext password is used only for this connection request.","error.credentialRequired":"A password is required for a new connection","error.nameRequired":"Connection name is required","error.endpointRequired":"Endpoint is required","notice.saved":"Database connection saved","filter.name":"Connection name","filter.provider":"Provider","column.name":"Name","column.provider":"Provider","column.endpoint":"Endpoint","column.runtime":"Runtime","column.credential":"Password status","column.credentialVersion":"Password version","runtime.ready":"Ready","runtime.pending":"Pending publication","credential.managed":"Set","credential.missing":"Not set","action.create":"Create connection","action.edit":"Edit","action.save":"Save","action.test":"Test connection","action.delete":"Delete","confirm.delete":"Delete this connection and remove its password?","test.success":"Connection test succeeded","test.successDetail":"{provider} responded in {latency} ms","test.failure":"Connection test failed","test.failureDetail":"Check the endpoint, database, user, password, and transport encryption settings, then try again.","page.title":"Database connections","page.titleService":"Database connections · {service}","page.description":"Configure providers, pools and passwords in the database plugin" }
+"zh-CN": { "form.name":"连接名称","form.provider":"数据库类型","form.host":"地址","form.port":"端口","form.socketPath":"Unix 套接字路径","form.database":"数据库","form.options":"连接选项","form.pool":"连接池","form.credential":"密码","form.user":"用户名","form.tlsMode":"传输加密模式","form.connectTimeout":"连接超时","form.serverName":"证书校验服务器名称","form.applicationName":"客户端应用名称","form.network":"网络类型","form.readTimeout":"读取超时","form.writeTimeout":"写入超时","form.rejectReadOnly":"拒绝只读实例","option.verifyFull":"完整校验（推荐）","option.tlsDisable":"关闭（仅受控测试环境）","option.networkTcp":"TCP","option.networkUnix":"Unix 套接字","form.minIdle":"最小空闲连接","form.maxIdle":"最大空闲连接","form.maxOpen":"最大连接数","form.maxLifetime":"连接最长生命周期","form.maxIdleTime":"最长空闲时间","form.acquireTimeout":"获取连接超时","section.identity":"连接标识","section.options":"连接选项","section.pool":"连接池策略","form.createTitle":"新增数据库连接","form.editTitle":"编辑数据库连接","form.description":"连接定义和池策略保存在数据库插件中；密码明文仅用于本次连接请求。","error.credentialRequired":"新建连接必须输入密码","error.nameRequired":"连接名称不能为空","error.hostInvalid":"请输入不含端口的有效地址","error.portInvalid":"端口必须为 1 到 65535 的整数","error.socketPathInvalid":"请输入以 / 开头的 Unix 套接字路径","notice.saved":"数据库连接已保存","filter.name":"连接名称","filter.provider":"数据库类型","column.name":"名称","column.provider":"数据库类型","column.endpoint":"地址","column.runtime":"运行状态","column.credential":"密码状态","column.credentialVersion":"密码版本","runtime.ready":"已就绪","runtime.pending":"待发布","credential.managed":"已设置","credential.missing":"未设置","action.create":"新增连接","action.edit":"编辑","action.save":"保存","action.test":"测试连接","action.delete":"删除","confirm.delete":"确认删除此连接并清理其密码？","test.success":"连接测试成功","test.successDetail":"{provider} 响应正常，耗时 {latency} 毫秒","test.failure":"连接测试失败","test.failureDetail":"请检查地址、数据库、用户名、密码和传输加密设置后重试。","page.title":"数据库连接","page.titleService":"数据库连接 · {service}","page.description":"在数据库插件内配置连接、数据库类型、连接池与密码" },
+    "en-US": { "form.name":"Connection name","form.provider":"Provider","form.host":"Host","form.port":"Port","form.socketPath":"Unix socket path","form.database":"Database","form.options":"Connection options","form.pool":"Connection pool","form.credential":"Password","form.user":"User","form.tlsMode":"TLS mode","form.connectTimeout":"Connect timeout","form.serverName":"TLS server name","form.applicationName":"PostgreSQL application name","form.network":"MySQL network","form.readTimeout":"MySQL read timeout","form.writeTimeout":"MySQL write timeout","form.rejectReadOnly":"Reject read-only MySQL instances","option.verifyFull":"Verify fully (recommended)","option.tlsDisable":"Disabled (controlled test environments only)","option.networkTcp":"TCP","option.networkUnix":"Unix socket","form.minIdle":"Minimum idle","form.maxIdle":"Maximum idle","form.maxOpen":"Maximum open","form.maxLifetime":"Maximum lifetime","form.maxIdleTime":"Maximum idle time","form.acquireTimeout":"Acquire timeout","form.idlePoolTtl":"Idle-pool TTL","section.identity":"Connection identity","section.options":"Connection options","section.pool":"Pool policy","form.createTitle":"Create database connection","form.editTitle":"Edit database connection","form.description":"The database plugin stores connection and pool policy. The plaintext password is used only for this connection request.","error.credentialRequired":"A password is required for a new connection","error.nameRequired":"Connection name is required","error.hostInvalid":"Enter a valid host without a port","error.portInvalid":"Port must be an integer from 1 to 65535","error.socketPathInvalid":"Enter an absolute Unix socket path starting with /","notice.saved":"Database connection saved","filter.name":"Connection name","filter.provider":"Provider","column.name":"Name","column.provider":"Provider","column.endpoint":"Endpoint","column.runtime":"Runtime","column.credential":"Password status","column.credentialVersion":"Password version","runtime.ready":"Ready","runtime.pending":"Pending publication","credential.managed":"Set","credential.missing":"Not set","action.create":"Create connection","action.edit":"Edit","action.save":"Save","action.test":"Test connection","action.delete":"Delete","confirm.delete":"Delete this connection and remove its password?","test.success":"Connection test succeeded","test.successDetail":"{provider} responded in {latency} ms","test.failure":"Connection test failed","test.failureDetail":"Check the host, port, database, user, password, and transport encryption settings, then try again.","page.title":"Database connections","page.titleService":"Database connections · {service}","page.description":"Configure providers, pools and passwords in the database plugin" }
   } },
 };
