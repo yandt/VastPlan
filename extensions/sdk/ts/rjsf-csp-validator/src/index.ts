@@ -63,9 +63,20 @@ function compile(schema: Schema): SchemaNode {
 function pointerProperty(pointer: unknown): string {
   if (typeof pointer !== "string" || pointer === "" || pointer === "#") return "";
   const parts = pointer.replace(/^#\/?/, "").split("/").filter(Boolean).map((part) => part.replace(/~1/g, "/").replace(/~0/g, "~"));
-  return parts.map((part) => /^\d+$/.test(part)
-    ? `[${part}]`
-    : /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(part) ? `.${part}` : `['${part.replace(/'/g, "\\'")}']`).join("");
+  return parts.map(propertySegment).join("");
+}
+
+function propertySegment(part: string): string {
+  if (/^\d+$/.test(part)) return `[${part}]`;
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(part)
+    ? `.${part}`
+    : `['${part.replace(/'/g, "\\'")}']`;
+}
+
+function requiredProperty(parent: string, missingProperty: unknown): string {
+  if (typeof missingProperty !== "string" || missingProperty === "") return parent;
+  const segment = propertySegment(missingProperty);
+  return parent.endsWith(segment) ? parent : `${parent}${segment}`;
 }
 
 function errorName(code: string): string {
@@ -111,9 +122,13 @@ function errorParams(error: JsonError): Record<string, unknown> {
 }
 
 function toRJSFError(error: JsonError): RJSFValidationError {
-  const property = pointerProperty(error.data?.pointer);
+  const name = errorName(typeof error.code === "string" ? error.code : "schema-error");
+  const parentProperty = pointerProperty(error.data?.pointer);
+  const property = name === "required"
+    ? requiredProperty(parentProperty, error.data?.key)
+    : parentProperty;
   return {
-    name: errorName(typeof error.code === "string" ? error.code : "schema-error"),
+    name,
     property,
     message: error.message,
     params: errorParams(error),

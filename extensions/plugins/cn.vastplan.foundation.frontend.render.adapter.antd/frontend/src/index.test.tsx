@@ -146,7 +146,7 @@ describe("Ant Design portal UI renderer", () => {
       value={{}}
       onChange={() => undefined}
       presentation={{ navigation: "sections", sections: [{ id: "identity", title: "Identity", columns: 2, columnWidths: [35, 65], fields: ["/name", "/credential"] }] }}
-      errors={{ name: "Name is already used" }}
+      errors={{ "/name": "Name is already used" }}
     /></PortalI18nProvider>);
     expect(markup).toContain("Identity");
     expect(markup).toContain("vp-antd-form-section-heading");
@@ -161,7 +161,34 @@ describe("Ant Design portal UI renderer", () => {
     expect(markup).toContain('data-form-control-alignment="end"');
     expect(markup).toContain("vp-antd-form-controls-end");
     expect(markup.match(/Name is already used/g)).toHaveLength(1);
+    expect(markup).toContain("vp-antd-field-error-indicator");
+    expect(markup).toContain('data-tooltip-color="red"');
+    expect(markup).toContain('aria-label="Name is already used"');
     expect(markup).not.toContain("Submit");
+  });
+
+  it("anchors missing required properties to their owning fields", () => {
+    const schema: RJSFSchema = {
+      type: "object",
+      required: ["name", "options"],
+      properties: {
+        name: { type: "string" },
+        options: {
+          type: "object",
+          required: ["password"],
+          properties: { password: { type: "string" } },
+        },
+      },
+    };
+    const validation = cspJSONSchemaValidator.validateFormData({ options: {} }, schema);
+
+    expect(validation.errors.map((error) => error.property)).toEqual(expect.arrayContaining([".name", ".options.password"]));
+    expect(validation.errorSchema).toMatchObject({
+      name: { __errors: expect.any(Array) },
+      options: { password: { __errors: expect.any(Array) } },
+    });
+    expect(validation.errorSchema.__errors).toBeUndefined();
+    expect(validation.errorSchema.options?.__errors).toBeUndefined();
   });
 
   it("lets a section own the title of its direct nested object", () => {

@@ -1,15 +1,26 @@
-import { Form, Tooltip, Typography } from "antd";
+import { ExclamationCircleFilled } from "@ant-design/icons";
+import { Form, Tooltip } from "antd";
 import type { FieldTemplateProps } from "@rjsf/utils";
+import type { ReactNode } from "react";
 import type { FormLabelPlacement } from "@vastplan/ui-primitives";
 import { AntdFieldTemplate } from "./safe-rjsf-theme";
 
 export function PresentedField(props: FieldTemplateProps & { placement?: FormLabelPlacement }) {
-  if (props.hidden || props.schema.type === "object" || props.schema.type === "array" || props.placement === "stacked") return <AntdFieldTemplate {...props} />;
+  if (props.hidden || props.schema.type === "object" || props.schema.type === "array") return <AntdFieldTemplate {...props} />;
   const label = props.displayLabel === false ? "" : props.label;
-  const error = props.rawErrors?.[0];
   const booleanField = props.schema.type === "boolean";
   const fieldClassName = booleanField ? "vp-antd-form-field-boolean" : "vp-antd-form-field-value";
   const labelColumnWidth = "min(var(--vp-form-label-width,var(--vp-form-label-min-width,112px)),48%)";
+  if (props.placement === "stacked") return <Form.Item
+    className={fieldClassName}
+    label={booleanField || label === "" ? undefined : label}
+    required={booleanField ? false : props.required}
+    extra={props.rawHelp ?? props.rawDescription}
+    validateStatus={(props.rawErrors?.length ?? 0) > 0 ? "error" : undefined}
+    help={null}
+    colon={false}
+    style={{ marginBottom: "var(--vp-form-item-margin-bottom, 16px)" }}
+  ><FieldControl errors={props.rawErrors}>{props.children}</FieldControl></Form.Item>;
   if (props.placement === "inline") return <Form.Item
     className={fieldClassName}
     label={booleanField || label === "" ? undefined : label}
@@ -23,17 +34,35 @@ export function PresentedField(props: FieldTemplateProps & { placement?: FormLab
       : { flex: "1 1 0", style: { minWidth: 0 } }}
     colon={false}
     style={{ marginBottom: "var(--vp-form-item-margin-bottom, 16px)" }}
-  ><div>{props.children}{error === undefined ? null : <Typography.Text id={`${props.id}__error`} type="danger" role="alert" style={{ display: "block", marginTop: 4 }}>{error}</Typography.Text>}</div></Form.Item>;
+  ><FieldControl errors={props.rawErrors}>{props.children}</FieldControl></Form.Item>;
   return <Form.Item
     required={props.required}
     extra={props.rawHelp ?? props.rawDescription}
     validateStatus={(props.rawErrors?.length ?? 0) > 0 ? "error" : undefined}
     help={null}
     style={{ marginBottom: 0 }}
-  ><div className="vp-antd-inside-inline-field">
-    {label === "" ? null : <Tooltip title={label}><label className="vp-inside-inline-label" htmlFor={props.id} aria-label={label}>{label}{props.required ? <span aria-hidden style={{ color: "var(--ant-color-error)" }}> *</span> : null}</label></Tooltip>}
-    <div className="vp-inside-inline-control">{props.children}</div>
-  </div>{error === undefined ? null : <Typography.Text id={`${props.id}__error`} type="danger" role="alert" style={{ display: "block", marginTop: 4 }}>{error}</Typography.Text>}</Form.Item>;
+  ><FieldControl errors={props.rawErrors}><div className="vp-antd-inside-inline-field">
+      {label === "" ? null : <Tooltip title={label}><label className="vp-inside-inline-label" htmlFor={props.id} aria-label={label}>{label}{props.required ? <span aria-hidden style={{ color: "var(--ant-color-error)" }}> *</span> : null}</label></Tooltip>}
+      <div className="vp-inside-inline-control">{props.children}</div>
+    </div></FieldControl></Form.Item>;
+}
+
+function FieldControl({ children, errors }: { children: ReactNode; errors?: readonly string[] }) {
+  const messages = [...new Set(errors?.filter((error) => error.trim() !== "") ?? [])];
+  return <div className="vp-antd-form-field-control">
+    {children}
+    {messages.length === 0 ? null : <Tooltip
+      color="red"
+      placement="topRight"
+      title={messages.length === 1 ? messages[0] : <div className="vp-antd-field-error-tooltip">{messages.map((message) => <div key={message}>{message}</div>)}</div>}
+    ><span
+      className="vp-antd-field-error-indicator"
+      role="img"
+      tabIndex={0}
+      aria-label={messages.join("；")}
+      data-tooltip-color="red"
+    ><ExclamationCircleFilled /></span></Tooltip>}
+  </div>;
 }
 
 export const antdInsideInlineCSS = `
@@ -49,6 +78,11 @@ export const antdFormFieldWidthCSS = `
 .vp-antd-form-field-value .ant-form-item-label{box-sizing:border-box;flex:0 0 min(var(--vp-form-label-width,var(--vp-form-label-min-width,112px)),48%)!important;width:min(var(--vp-form-label-width,var(--vp-form-label-min-width,112px)),48%);min-width:0;max-width:48%;padding-inline-end:12px}
 .vp-antd-form-field-value .ant-form-item-label>label{display:inline-flex;align-items:center;white-space:nowrap;overflow:visible;text-overflow:clip}
 .vp-antd-form-field-value .ant-form-item-control-input-content>div{width:100%;min-width:0}
+.vp-antd-form-field-control{display:flex;align-items:center;gap:6px;width:100%;min-width:0}
+.vp-antd-form-field-control>:first-child{flex:1 1 auto;min-width:0}
+.vp-antd-field-error-indicator{display:inline-flex;align-items:center;justify-content:center;flex:none;color:var(--ant-color-error);font-size:1em;line-height:1;cursor:help}
+.vp-antd-field-error-indicator:focus-visible{outline:2px solid var(--ant-color-error);outline-offset:2px;border-radius:50%}
+.vp-antd-field-error-tooltip{display:grid;gap:2px}
 .vp-antd-form-field-boolean .ant-form-item-control-input-content{justify-content:flex-start!important}
 .vp-antd-form-field-boolean .ant-form-item-control-input-content>div{width:auto}
 @media(max-width:479px){

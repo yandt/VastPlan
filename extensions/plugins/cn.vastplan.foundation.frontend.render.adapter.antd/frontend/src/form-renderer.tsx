@@ -250,15 +250,16 @@ function formFieldSpan(presentation: FormPresentation | undefined, pointer: stri
 }
 
 function errorPath(error: { property?: string; name?: string; params?: { missingProperty?: unknown } }): string {
-  let path = error.property?.replace(/^\./, "") ?? "";
-  if (error.name === "required" && typeof error.params?.missingProperty === "string") path = path === "" ? error.params.missingProperty : `${path}.${error.params.missingProperty}`;
-  return path.replace(/\['([^']+)'\]/g, "$1");
+  const parts = rjsfPropertyParts(error.property ?? "");
+  const missingProperty = error.params?.missingProperty;
+  if (error.name === "required" && typeof missingProperty === "string" && parts.at(-1) !== missingProperty) parts.push(missingProperty);
+  return parts.join(".");
 }
 
 function errorSchema(errors: Readonly<Record<string, string>>): Record<string, unknown> {
   const root: Record<string, unknown> = {};
   for (const [path, value] of Object.entries(errors)) {
-    const parts = path === "$form" ? [] : path.replace(/\[(\d+)\]/g, ".$1").split(".").filter(Boolean);
+    const parts = externalErrorPathParts(path);
     let node = root;
     for (const part of parts) {
       if (typeof node[part] !== "object" || node[part] === null || Array.isArray(node[part])) node[part] = {};
@@ -267,4 +268,21 @@ function errorSchema(errors: Readonly<Record<string, string>>): Record<string, u
     node.__errors = [...(Array.isArray(node.__errors) ? node.__errors as string[] : []), value];
   }
   return root;
+}
+
+function externalErrorPathParts(path: string): string[] {
+  if (path === "$form") return [];
+  if (path.startsWith("/") || path.startsWith("#/")) {
+    return path.replace(/^#/, "").split("/").filter(Boolean).map((part) => part.replace(/~1/g, "/").replace(/~0/g, "~"));
+  }
+  return rjsfPropertyParts(path);
+}
+
+function rjsfPropertyParts(path: string): string[] {
+  return path
+    .replace(/^\./, "")
+    .replace(/\['((?:\\'|[^'])+)'\]/g, (_, part: string) => `.${part.replace(/\\'/g, "'")}`)
+    .replace(/\[(\d+)\]/g, ".$1")
+    .split(".")
+    .filter(Boolean);
 }
