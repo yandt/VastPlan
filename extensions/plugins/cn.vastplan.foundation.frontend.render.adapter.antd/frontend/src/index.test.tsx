@@ -163,6 +163,19 @@ describe("Ant Design portal UI renderer", () => {
     expect(markup).not.toContain("Submit");
   });
 
+  it("lets a section own the title of its direct nested object", () => {
+    const Form = antdPortalUIComponents.FormRenderer;
+    const markup = renderToStaticMarkup(<PortalI18nProvider policy={{ defaultLocale: "en-US", supportedLocales: ["en-US"] }} catalogs={{}} candidates={["en-US"]}><Form
+      schema={{ id: "database", schema: { type: "object", properties: { options: { type: "object", title: "Connection options", properties: { user: { type: "string", title: "User" } } } } } }}
+      value={{ options: { user: "admin" } }}
+      onChange={() => undefined}
+      presentation={{ navigation: "sections", sections: [{ id: "options", title: "Provider options", fields: ["/options"] }] }}
+    /></PortalI18nProvider>);
+    expect(markup).toContain("Provider options");
+    expect(markup).not.toContain(">Connection options<");
+    expect(markup).toContain("User");
+  });
+
   it("localizes JSON Schema validation errors without exposing validator internals", () => {
     const catalogs = { [namespace]: antdRenderer.localization! };
     const schema: RJSFSchema = { type: "object", properties: { reason: { type: "string", minLength: 4 } } };
