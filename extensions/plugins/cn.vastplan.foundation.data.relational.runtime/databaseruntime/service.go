@@ -48,10 +48,11 @@ const definitionLeaseTTL = time.Second
 type ServiceOptions struct {
 	InstanceID      string
 	MaxTransactions int
+	ManagerPolicy   ManagerPolicy
 }
 
 func NewService(registry *Registry, options ServiceOptions) (*Service, error) {
-	manager, err := NewPoolManager(registry, DefaultManagerPolicy())
+	manager, err := NewPoolManager(registry, options.ManagerPolicy)
 	if err != nil {
 		return nil, err
 	}

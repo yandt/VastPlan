@@ -8,7 +8,7 @@
 
 ## 当前阶段
 
-0.7.2 已完成 Database Runtime v1 wire 契约、Provider SPI、可信运行实例 identity、加密 Material Lease 中继、统一 Pool Manager、PostgreSQL/MySQL Provider、connection-manager 发布闭环、active-active 无状态执行、实例亲和事务以及标准指标出口。两个 Provider 共用 `database/sql` 执行适配层、无损 wire 值转换、稳定错误分类、结果行数上限和池指标；Pool Manager 继续负责节点/租户/连接三级预算、调用方并发和等待队列上限、revision/generation 原子切换、旧池有界排空与关闭失败保守占额。
+0.11.0 已完成 Database Runtime v1 wire 契约、Provider SPI、可信运行实例 identity、加密 Material Lease 中继、统一 Pool Manager、PostgreSQL/MySQL Provider、connection-manager 发布闭环、active-active 无状态执行、实例亲和事务、SQL Shared State、Schema Controller 以及标准指标出口。两个 Provider 共用 `database/sql` 执行适配层、无损 wire 值转换、稳定错误分类、结果行数上限和池指标；Pool Manager 继续负责节点/租户/连接三级预算、调用方并发和等待队列上限、revision/generation 原子切换、旧池有界排空与关闭失败保守占额。
 
 当前制品开放 `providers/metrics/probe/activate/retire/query/execute`。只有 connection-manager 能发布、探测和退役连接；`metrics` 仅允许 connection-manager 或 SYSTEM 监控采集器读取；`query/execute` 拒绝用户直调，普通插件、Agent 或 Runner 还必须取得宿主投影的 `database.connection/<resourceId>` grant。管理面主动发布会命中一个 queue 副本，其他 active-active 副本首次收到该 revision 请求时，通过只允许 Runtime 调用的 `resolveRuntime` 内部操作惰性取得定义并幂等建池，因此扩容和重启不依赖伪广播。每个副本最多缓存 1 秒管理面确认；过期后同一连接的并发请求合并验证，删除会在该有界 lease 内排空本副本所有 project 池，避免未命中主动 retire 的副本无限继续服务。
 
@@ -28,6 +28,7 @@ Provider options 强制使用结构化 JSON，不接受 DSN。两者都要求 `u
 - 第三方 Provider 不实现本 Go SPI，而是经未来的隔离进程和版本化 RPC 接入。
 - `allowInsecureTLS` 是 service 级重启配置，默认 `false`；只有受控测试环境可设置为 `true`，连接定义自身不能绕过该部署策略。
 - `maxTransactions` 是每个 Runtime 实例的活动事务硬上限，默认 4096；达到上限时拒绝新事务，不影响无状态查询。
+- `clusterMaxOpen` 是全部 Runtime 副本共享的物理连接硬预算，`maxReplicas` 必须等于或高于 Deployment/Autoscaling 允许的最大副本数。每个实例只取得 `floor(clusterMaxOpen / maxReplicas)`，Pool Manager 对活动代和排空代共同计数，因此两代热切换不会额外突破集群预算。扩容前必须先提高 `maxReplicas` 并确认每副本预算仍至少能容纳两个 generation；不能靠运行中副本互传 socket 或临时借额。
 
 ## 指标与告警
 

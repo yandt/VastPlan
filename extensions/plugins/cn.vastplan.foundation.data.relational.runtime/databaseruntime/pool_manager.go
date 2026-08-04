@@ -37,6 +37,28 @@ func DefaultManagerPolicy() ManagerPolicy {
 	}
 }
 
+// ClusterManagerPolicy derives a hard per-instance budget from the deployment
+// envelope. PoolManager already accounts every active and draining generation,
+// so dividing the cluster ceiling by the maximum replica count also bounds the
+// two-generation rolling-upgrade overlap without sharing sockets or counters
+// between nodes.
+func ClusterManagerPolicy(clusterMaxOpen, maxReplicas int) (ManagerPolicy, error) {
+	if clusterMaxOpen < 1 || maxReplicas < 1 {
+		return ManagerPolicy{}, errors.New("clusterMaxOpen 与 maxReplicas 必须大于 0")
+	}
+	defaults := DefaultManagerPolicy()
+	perInstance := clusterMaxOpen / maxReplicas
+	if perInstance < defaults.MaxGenerations {
+		return ManagerPolicy{}, errors.New("集群连接预算不足以容纳每副本的双代轮换")
+	}
+	return ManagerPolicy{
+		NodeMaxOpen: perInstance, TenantMaxOpen: perInstance, ConnectionMaxOpen: perInstance,
+		MaxGenerations: defaults.MaxGenerations, MaxWaitersPerPool: defaults.MaxWaitersPerPool,
+		MaxConcurrentPerCaller: defaults.MaxConcurrentPerCaller, DrainTimeout: defaults.DrainTimeout,
+		ClosedHistoryLimit: defaults.ClosedHistoryLimit,
+	}, nil
+}
+
 func (p ManagerPolicy) normalize() (ManagerPolicy, error) {
 	defaults := DefaultManagerPolicy()
 	if p.NodeMaxOpen == 0 {

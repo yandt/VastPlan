@@ -19,9 +19,17 @@ func main() {
 	var startup struct {
 		AllowInsecureTLS bool `json:"allowInsecureTLS"`
 		MaxTransactions  int  `json:"maxTransactions"`
+		ClusterMaxOpen   int  `json:"clusterMaxOpen"`
+		MaxReplicas      int  `json:"maxReplicas"`
 	}
 	if err := sdk.DecodeStartupConfiguration(&startup); err != nil {
 		log.Fatalf("解析 Database Runtime 启动配置: %v", err)
+	}
+	if startup.ClusterMaxOpen == 0 {
+		startup.ClusterMaxOpen = 4096
+	}
+	if startup.MaxReplicas == 0 {
+		startup.MaxReplicas = 1
 	}
 	registry, err := runtime.NewDefaultRegistry(runtime.ProviderSecurityPolicy{AllowInsecureTLS: startup.AllowInsecureTLS})
 	if err != nil {
@@ -41,8 +49,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("初始化 SQL Shared State Capability: %v", err)
 	}
+	policy, err := runtime.ClusterManagerPolicy(startup.ClusterMaxOpen, startup.MaxReplicas)
+	if err != nil {
+		log.Fatalf("计算 Database Runtime 集群连接预算: %v", err)
+	}
 	service, err := runtime.NewService(registry, runtime.ServiceOptions{
-		InstanceID: os.Getenv(protocol.RuntimeAudienceEnvKey), MaxTransactions: startup.MaxTransactions,
+		InstanceID: os.Getenv(protocol.RuntimeAudienceEnvKey), MaxTransactions: startup.MaxTransactions, ManagerPolicy: policy,
 	})
 	if err != nil {
 		log.Fatalf("初始化 Database Runtime: %v", err)
