@@ -26,8 +26,8 @@ const controlAlignmentCSS = `
 .vp-antd-form-controls-end .ant-form-item-control-input-content{justify-content:flex-end}
 .vp-antd-form-controls-start .ant-form-item-control-input-content>*,.vp-antd-form-controls-end .ant-form-item-control-input-content>*{max-width:100%}
 .vp-antd-form-section{display:grid;gap:var(--vp-form-grid-gap,12px);min-width:0}
-.vp-antd-form-section-heading{display:grid;gap:6px;line-height:1.4}
-.vp-antd-form-section-heading>span{display:block;height:1px;background:var(--ant-color-split,#f0f0f0)}
+.vp-antd-form-section-heading{display:flex;align-items:center;gap:8px;min-width:0;line-height:1.4}
+.vp-antd-form-section-heading>span[aria-hidden="true"]{display:block;flex:1 1 auto;min-width:24px;height:1px;background:var(--ant-color-split,#f0f0f0)}
 .vp-antd-form-section-collapsible>summary{cursor:pointer;font-weight:600}
 `;
 
@@ -120,15 +120,24 @@ function PresentedObject({ presentation, activeSection, onSectionChange, ...prop
   const size = useComponentSize();
   const compactRoot = props.fieldPathId.path.length === 0 && presentation?.layout === "compact";
   if (props.fieldPathId.path.length !== 0) {
-    const rootField = props.fieldPathId.path[0] ?? "";
-    const sectionOwnsTitle = presentation?.navigation === "sections" && props.fieldPathId.path.length === 1 && presentation.sections?.some((section) => section.fields.some((field) => formFieldName(field) === rootField)) === true;
-    return <section className="vp-antd-form-object">{sectionOwnsTitle || props.title === "" ? null : <Typography.Title level={5}>{props.title}</Typography.Title>}{props.description}{props.properties.filter((property) => !property.hidden).map((property) => <div key={property.name}>{property.content}</div>)}</section>;
+    const rootField = String(props.fieldPathId.path[0] ?? "");
+    const directPointer = formPropertyPointer([], rootField);
+    const owningSection = presentation?.navigation === "sections" && props.fieldPathId.path.length === 1
+      ? presentation.sections?.find((section) => section.fields.includes(directPointer))
+      : undefined;
+    const columns = owningSection === undefined ? 1 : formGridColumns(presentation, owningSection);
+    const properties = props.properties.filter((property) => !property.hidden).map((property) => {
+      const pointer = formPropertyPointer(props.fieldPathId.path, property.name);
+      const span = formFieldSpan(presentation, pointer, columns);
+      return <div key={property.name} style={owningSection === undefined ? undefined : { gridColumn: `span ${span}` }}>{property.content}</div>;
+    });
+    return <section className="vp-antd-form-object">{owningSection !== undefined || props.title === "" ? null : <Typography.Title level={5}>{props.title}</Typography.Title>}{props.description}{owningSection === undefined ? properties : <div className={formGridClassName} style={formGridStyle(presentation, owningSection)}>{properties}</div>}</section>;
   }
   if (presentation?.sections === undefined || presentation.sections.length === 0) {
     const columns = formGridColumns(presentation);
     return <section className="vp-antd-form-object">{compactRoot || props.title === "" ? null : <Typography.Title level={5}>{props.title}</Typography.Title>}{props.description}<div className={formGridClassName} style={formGridStyle(presentation)}>{props.properties.filter((property) => !property.hidden).map((property) => {
-      const span = presentation?.fields?.find((field) => formFieldName(field.pointer) === property.name)?.span ?? 1;
-      return <div key={property.name} style={{ gridColumn: `span ${Math.min(Math.max(1, span), columns)}` }}>{property.content}</div>;
+      const span = formFieldSpan(presentation, formPropertyPointer([], property.name), columns);
+      return <div key={property.name} style={{ gridColumn: `span ${span}` }}>{property.content}</div>;
     })}</div></section>;
   }
   const sections = presentation.sections;
@@ -139,8 +148,8 @@ function PresentedObject({ presentation, activeSection, onSectionChange, ...prop
     const fields = section.fields.map(formFieldName);
     const columns = formGridColumns(presentation, section);
     const body = <div className={formGridClassName} style={formGridStyle(presentation, section)}>{props.properties.filter((property) => fields.includes(property.name) && !property.hidden).map((property) => {
-      const span = presentation.fields?.find((field) => formFieldName(field.pointer) === property.name)?.span ?? 1;
-      return <div key={property.name} style={{ gridColumn: `span ${Math.min(Math.max(1, span), columns)}` }}>{property.content}</div>;
+      const span = formFieldSpan(presentation, formPropertyPointer([], property.name), columns);
+      return <div key={property.name} style={{ gridColumn: `span ${span}` }}>{property.content}</div>;
     })}</div>;
     const description = section.description === undefined ? null : <Typography.Paragraph type="secondary" style={{ marginBlock: 0 }}>{i18n.text(section.description)}</Typography.Paragraph>;
     if (presentation.navigation !== "sections") return <>{description}{body}</>;
@@ -155,7 +164,7 @@ function PresentedObject({ presentation, activeSection, onSectionChange, ...prop
     const current = Math.max(0, sections.findIndex((section) => section.id === selected.id));
     return <><Steps current={current} onChange={(index) => onSectionChange?.(sections[index]!.id)} items={sections.map((section, index) => ({ title: section.title === undefined ? `${index + 1}` : i18n.text(section.title) }))} /><div style={{ marginTop: 24 }}>{renderSection(selected)}</div>{remaining}</>;
   }
-  return <div className="vp-antd-form-object vp-antd-form-sections" style={{ display: "grid", gap: componentSizeRecipes.layout[size].gap }}>{sections.map((section) => <div key={section.id}>{renderSection(section)}</div>)}{remaining}</div>;
+  return <div className="vp-antd-form-object vp-antd-form-sections" style={{ display: "grid", gap: `var(--vp-form-section-gap, ${componentSizeRecipes.layout[size].gap}px)` }}>{sections.map((section) => <div key={section.id}>{renderSection(section)}</div>)}{remaining}</div>;
 }
 
 export function FormRenderer({ schema, value, onChange, size: requestedSize, presentation, presentationSection, onPresentationSectionChange, readOnly, submitting, errors: externalErrors = {}, context: suppliedContext, validate, validationDelayMs = 250, onValidationChange }: FormRendererProps) {
@@ -212,7 +221,9 @@ export function FormRenderer({ schema, value, onChange, size: requestedSize, pre
     widgets={widgets}
   ><></></RJSFForm>;
   const rhythmStyle = {
-    "--vp-form-grid-gap": `${componentSizeRecipes.layout[size].gap}px`,
+    "--vp-form-grid-gap": `var(--vp-form-dialog-row-gap, ${componentSizeRecipes.layout[size].gap}px)`,
+    "--vp-form-section-gap": `var(--vp-form-dialog-section-gap, ${componentSizeRecipes.layout[size].gap}px)`,
+    "--vp-form-item-margin-bottom": "var(--vp-form-dialog-item-margin, 16px)",
     "--vp-form-label-width": `${resolveFormLabelWidth(localizedSchema, size)}px`,
     margin: componentSizeRecipes.layout[size].outerMargin,
   } as CSSProperties;
@@ -226,6 +237,15 @@ export function FormRenderer({ schema, value, onChange, size: requestedSize, pre
 function formFieldName(pointer: string): string {
   const first = pointer.startsWith("/") ? pointer.slice(1).split("/")[0] ?? "" : pointer;
   return first.replace(/~1/g, "/").replace(/~0/g, "~");
+}
+
+function formPropertyPointer(path: readonly (string | number)[], property: string): string {
+  return `/${[...path, property].map((part) => String(part).replace(/~/g, "~0").replace(/\//g, "~1")).join("/")}`;
+}
+
+function formFieldSpan(presentation: FormPresentation | undefined, pointer: string, columns: number): number {
+  const span = presentation?.fields?.find((field) => field.pointer === pointer)?.span ?? 1;
+  return Math.min(Math.max(1, span), columns);
 }
 
 function errorPath(error: { property?: string; name?: string; params?: { missingProperty?: unknown } }): string {

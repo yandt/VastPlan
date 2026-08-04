@@ -56,10 +56,19 @@ export function Dialog({ open, title, description, children, footer, variant = "
   const recipe = componentSizeRecipes.layout[size];
   const formRecipe = componentSizeRecipes.formDialog[size];
   const bodyPadding = variant === "form" ? formRecipe.bodyPadding : recipe.padding;
+  const modalWidth = variant === "form" ? `min(${dialogWidths[width]}px, calc(100vw - 48px))` : dialogWidths[width];
+  const formVariables = variant === "form" ? {
+    "--vp-form-label-min-width": `${formRecipe.inlineLabelMinWidth}px`,
+    "--vp-form-dialog-row-gap": `${formRecipe.contentGap}px`,
+    "--vp-form-dialog-section-gap": `${formRecipe.contentGap * 2}px`,
+    "--vp-form-dialog-item-margin": "0px",
+  } as CSSProperties : {};
   const modalTitle = description === undefined ? title : <div className="vp-antd-dialog-title"><div>{title}</div><Typography.Text type="secondary" style={{ display: "block", marginTop: 4, fontSize: componentSizeRecipes.control[size].fontSize, fontWeight: 400, lineHeight: 1.5 }}>{description}</Typography.Text></div>;
-  return <Modal open={open} title={modalTitle} footer={footer ?? null} className={variant === "form" ? "vp-antd-form-dialog" : undefined} width={dialogWidths[width]} onCancel={onClose} destroyOnHidden styles={{
-    container: { ...dialogFrameStyle(height), display: "flex", flexDirection: "column", overflow: "hidden", ...(variant === "form" ? { "--vp-form-label-min-width": `${formRecipe.inlineLabelMinWidth}px` } as CSSProperties : {}) },
+  return <Modal open={open} title={modalTitle} footer={footer ?? null} className={variant === "form" ? "vp-antd-form-dialog" : undefined} width={modalWidth} onCancel={onClose} destroyOnHidden styles={{
+    container: { ...dialogFrameStyle(height), display: "flex", flexDirection: "column", overflow: "hidden", ...formVariables },
     body: { ...dialogBodyStyle(contentOverflow), padding: bodyPadding, ...(scrollable ? { flex: "1 1 auto" } : {}) },
+    header: { flex: "0 0 auto" },
+    footer: { flex: "0 0 auto", marginTop: 0 },
   }}><ComponentSizeProvider size={size}>{children}</ComponentSizeProvider></Modal>;
 }
 

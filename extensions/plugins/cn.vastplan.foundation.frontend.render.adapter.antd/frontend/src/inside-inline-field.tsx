@@ -9,7 +9,7 @@ export function PresentedField(props: FieldTemplateProps & { placement?: FormLab
   const error = props.rawErrors?.[0];
   const booleanField = props.schema.type === "boolean";
   const fieldClassName = booleanField ? "vp-antd-form-field-boolean" : "vp-antd-form-field-value";
-  const labelColumnWidth = "min(var(--vp-form-label-width,var(--vp-form-label-min-width,112px)),42%)";
+  const labelColumnWidth = "min(var(--vp-form-label-width,var(--vp-form-label-min-width,112px)),48%)";
   if (props.placement === "inline") return <Form.Item
     className={fieldClassName}
     label={booleanField || label === "" ? undefined : label}
@@ -22,7 +22,7 @@ export function PresentedField(props: FieldTemplateProps & { placement?: FormLab
       ? { flex: "1 1 0", style: { minWidth: 0, marginInlineStart: labelColumnWidth } }
       : { flex: "1 1 0", style: { minWidth: 0 } }}
     colon={false}
-    style={{ marginBottom: 16 }}
+    style={{ marginBottom: "var(--vp-form-item-margin-bottom, 16px)" }}
   ><div>{props.children}{error === undefined ? null : <Typography.Text id={`${props.id}__error`} type="danger" role="alert" style={{ display: "block", marginTop: 4 }}>{error}</Typography.Text>}</div></Form.Item>;
   return <Form.Item
     required={props.required}
@@ -46,9 +46,16 @@ export const antdInsideInlineCSS = `
 `;
 
 export const antdFormFieldWidthCSS = `
-.vp-antd-form-field-value .ant-form-item-label{box-sizing:border-box;flex:0 0 min(var(--vp-form-label-width,var(--vp-form-label-min-width,112px)),42%)!important;width:min(var(--vp-form-label-width,var(--vp-form-label-min-width,112px)),42%);min-width:0;max-width:42%;padding-inline-end:12px}
-.vp-antd-form-field-value .ant-form-item-label>label{display:block;white-space:normal;overflow:visible;text-overflow:clip}
+.vp-antd-form-field-value .ant-form-item-label{box-sizing:border-box;flex:0 0 min(var(--vp-form-label-width,var(--vp-form-label-min-width,112px)),48%)!important;width:min(var(--vp-form-label-width,var(--vp-form-label-min-width,112px)),48%);min-width:0;max-width:48%;padding-inline-end:12px}
+.vp-antd-form-field-value .ant-form-item-label>label{display:block;white-space:nowrap;overflow:visible;text-overflow:clip}
 .vp-antd-form-field-value .ant-form-item-control-input-content>div{width:100%;min-width:0}
 .vp-antd-form-field-boolean .ant-form-item-control-input-content{justify-content:flex-start!important}
 .vp-antd-form-field-boolean .ant-form-item-control-input-content>div{width:auto}
+@media(max-width:479px){
+.vp-antd-form-field-value .ant-form-item-row{display:block}
+.vp-antd-form-field-value .ant-form-item-label{box-sizing:border-box;width:100%!important;max-width:100%;height:auto;min-height:0;flex:none!important;padding:0 0 4px;text-align:start}
+.vp-antd-form-field-value .ant-form-item-label>label{height:auto;white-space:normal}
+.vp-antd-form-field-value .ant-form-item-control{box-sizing:border-box;width:100%;max-width:100%}
+.vp-antd-form-field-boolean .ant-form-item-control{margin-inline-start:0!important}
+}
 `;
