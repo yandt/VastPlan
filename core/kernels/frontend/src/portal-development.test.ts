@@ -119,4 +119,23 @@ describe("portal development updates", () => {
     expect(replace).not.toHaveBeenCalled();
     expect(errors).toEqual([]);
   });
+
+  it("reloads once when a restarted development host presents a new epoch", () => {
+    const source = new FakeEventSource();
+    const reload = vi.fn();
+    const values = new Map([["vastplan.portal.development.epoch", "run-before"]]);
+    const epochStore = { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); } };
+    startPortalDevelopmentUpdates({
+      manager: { replace: vi.fn(async () => ({} as never)) } as unknown as PortalGenerationManager,
+      runtimeSource: developmentSource(async () => new Response(JSON.stringify(runtime), { status: 200, headers: { "Content-Type": "application/json" } })),
+      pathname: () => "/operations",
+      eventSource: source,
+      epochStore,
+      reload,
+    });
+    source.emit("hello", { epoch: "run-after" });
+    expect(reload).toHaveBeenCalledOnce();
+    expect(source.closed).toBe(true);
+    expect(values.get("vastplan.portal.development.epoch")).toBe("run-after");
+  });
 });

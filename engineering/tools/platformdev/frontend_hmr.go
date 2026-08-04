@@ -31,6 +31,7 @@ var (
 
 type frontendHMR struct {
 	root, runDir, portalURL, portalAssetsDir string
+	epoch                                    string
 	mu                                       sync.RWMutex
 	generation                               uint64
 	current                                  map[string]frontendHMRModule
@@ -79,6 +80,7 @@ func (r *runtime) startFrontendHMR(ctx context.Context) error {
 	}
 	hmr := &frontendHMR{
 		root: r.options.root, runDir: filepath.Join(r.runDir, "frontend-hmr"), portalURL: "http://" + r.options.portalListen, portalAssetsDir: portalAssetsDir,
+		epoch:   filepath.Base(r.runDir),
 		current: map[string]frontendHMRModule{}, objects: map[string]frontendHMRObject{}, subscribers: map[chan frontendHMREvent]struct{}{},
 		assets: assets, identity: r.identity,
 	}
@@ -136,9 +138,12 @@ func (h *frontendHMR) watch(ctx context.Context, signatures frontendSourceSignat
 				}
 				changed, rebuildAll := changedFrontendPlugins(pluginState, nextPluginState)
 				pluginState = nextPluginState
-				if rebuildAll {
+				foundationChanged, foundationErr := h.foundationPluginChanged(changed)
+				if foundationErr != nil {
+					err = foundationErr
+				} else if rebuildAll {
 					err = h.buildPlugins(ctx, changed, rebuildAll)
-				} else if sharedChanged {
+				} else if sharedChanged || foundationChanged {
 					err = h.buildSharedHost(ctx, changed)
 				} else if len(changed) > 0 {
 					err = h.buildPlugins(ctx, changed, false)
@@ -149,6 +154,23 @@ func (h *frontendHMR) watch(ctx context.Context, signatures frontendSourceSignat
 			}
 		}
 	}
+}
+
+// UI foundations own React context and the component constructors consumed by
+// every dynamic form. Replacing only their module graph can leave an already
+// mounted FormDialog on the previous component tree. A host reload keeps the
+// normal HMR path for feature plugins but remounts UI foundations atomically.
+func (h *frontendHMR) foundationPluginChanged(pluginIDs []string) (bool, error) {
+	for _, pluginID := range pluginIDs {
+		contract, err := readFrontendHMRUIContract(h.root, pluginID)
+		if err != nil {
+			return false, fmt.Errorf("识别前端基础模块 %s: %w", pluginID, err)
+		}
+		if contract != nil {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (h *frontendHMR) buildPlugins(ctx context.Context, pluginIDs []string, rebuildAll bool) error {
@@ -477,6 +499,7 @@ func (h *frontendHMR) events(w http.ResponseWriter, request *http.Request) {
 	updates := make(chan frontendHMREvent, 4)
 	h.mu.Lock()
 	h.subscribers[updates] = struct{}{}
+	updates <- frontendHMREvent{Name: "hello", Data: map[string]string{"epoch": h.epoch}}
 	if h.generation > 0 {
 		updates <- frontendHMREvent{Name: "generation", Data: map[string]any{"generation": h.generation}}
 	}

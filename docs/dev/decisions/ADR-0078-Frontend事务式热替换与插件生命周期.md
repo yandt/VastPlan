@@ -70,3 +70,9 @@ Frontend Kernel 增加事务式 Portal Generation（Portal 运行代）和可选
 4. 旧页面收到宿主级 `reload` 后不得先消费新插件 Generation；它应关闭开发事件源并整页刷新，使 import map、Portal Kernel、共享 vendor 与插件模块来自同一候选。
 
 这是对“Portal Shell 不整页 reload”的明确边界：该规则适用于插件级更新；共享单例或 Kernel 自身变化必须刷新 JavaScript 模块图，否则无法保证类型和值身份一致。
+
+## 实施澄清：UI Foundation 不保留挂载中的 React 树
+
+`Runtime Engine`、Render Adapter/Renderer、Shell/Shell Library 与 Workbench 都带有 UI Contract，并拥有跨业务插件共享的 React Context 或组件构造器。即使它们的契约范围未变化，直接在已挂载的动态表单、Dialog 或 Shell 内替换其模块，也可能令旧组件树继续持有旧构造器与状态。
+
+因此开发编排器识别到上述 UI Foundation 模块源码变更时，必须走完整宿主候选构建并发送 `reload`；只有普通功能插件继续使用无页面刷新 Generation 替换。开发事件还携带本次宿主 epoch，浏览器发现 `platformdev` 重启导致 epoch 改变时自动刷新一次，避免较小的重新计数 generation 被旧页面忽略。

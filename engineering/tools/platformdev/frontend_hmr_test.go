@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -11,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 )
@@ -82,6 +84,24 @@ func TestFrontendHMRInstallsDigestBoundModuleAndOverlaysRuntime(t *testing.T) {
 	}
 	if runtime.Modules[0]["url"] != "/__vastplan_dev/modules/"+sha+".js" || runtime.Modules[0]["sha256"] != sha || runtime.Modules[0]["packageSha256"] != strings.Repeat("c", 64) {
 		t.Fatalf("unexpected overlay: %#v", runtime.Modules[0])
+	}
+}
+
+func TestFrontendHMREventsStartWithRunEpoch(t *testing.T) {
+	hmr := &frontendHMR{epoch: "20260804T010954", subscribers: map[chan frontendHMREvent]struct{}{}}
+	request := httptest.NewRequest(http.MethodGet, "/__vastplan_dev/events", nil)
+	request.RemoteAddr = "127.0.0.1:43210"
+	ctx, cancel := context.WithCancel(request.Context())
+	defer cancel()
+	request = request.WithContext(ctx)
+	response := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() { hmr.events(response, request); close(done) }()
+	time.Sleep(10 * time.Millisecond)
+	cancel()
+	<-done
+	if !strings.Contains(response.Body.String(), "event: hello") || !strings.Contains(response.Body.String(), `"epoch":"20260804T010954"`) {
+		t.Fatalf("HMR initial events = %q", response.Body.String())
 	}
 }
 
@@ -390,6 +410,22 @@ func TestChangedFrontendPluginsSelectsOnlyChangedPluginAndEscalatesSharedChanges
 	next.shared = "shared-v2"
 	if changed, rebuildAll := changedFrontendPlugins(previous, next); !rebuildAll || len(changed) != 0 {
 		t.Fatalf("shared change must rebuild all: changed=%v rebuildAll=%t", changed, rebuildAll)
+	}
+}
+
+func TestFrontendHMRReloadsHostForUIFoundationPluginChanges(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	hmr := &frontendHMR{root: root}
+	foundation, err := hmr.foundationPluginChanged([]string{"cn.vastplan.foundation.frontend.workflow.workbench"})
+	if err != nil || !foundation {
+		t.Fatalf("Workbench foundation classification = %t, %v", foundation, err)
+	}
+	feature, err := hmr.foundationPluginChanged([]string{"cn.vastplan.platform.data.relational.connection-manager"})
+	if err != nil || feature {
+		t.Fatalf("Database feature classification = %t, %v", feature, err)
 	}
 }
 

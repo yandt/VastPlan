@@ -16,15 +16,24 @@ export interface PortalDevelopmentOptions {
   eventSource?: DevelopmentEventSource;
   eventSourceFactory?(url: string): DevelopmentEventSource;
   eventsEndpoint?: string;
+  epochStore?: DevelopmentEpochStore;
   reload?(): void;
   onError?(error: unknown): void;
   onRuntime?(spec: PortalRuntimeSpec): void;
 }
 
+export interface DevelopmentEpochStore {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+}
+
+const developmentEpochKey = "vastplan.portal.development.epoch";
+
 /** Coalesces local build events and never lets an older update overtake a newer one. */
 export function startPortalDevelopmentUpdates(options: PortalDevelopmentOptions): () => void {
   const eventsEndpoint = options.eventsEndpoint ?? "/__vastplan_dev/events";
   const source = options.eventSource ?? (options.eventSourceFactory ?? defaultEventSourceFactory)(eventsEndpoint);
+  const epochStore = options.epochStore ?? sessionEpochStore();
   let requested = 0;
   let applied = 0;
   let running = false;
@@ -56,6 +65,21 @@ export function startPortalDevelopmentUpdates(options: PortalDevelopmentOptions)
       if (!Number.isSafeInteger(payload.generation) || Number(payload.generation) <= requested) return;
       requested = Number(payload.generation);
       void drain();
+    } catch (error) {
+      options.onError?.(error);
+    }
+  });
+  source.addEventListener("hello", (event) => {
+    if (closed) return;
+    try {
+      const payload = JSON.parse(event.data) as { epoch?: unknown };
+      if (typeof payload.epoch !== "string" || payload.epoch.length === 0) throw new PortalDevelopmentError("EPOCH_INVALID", "开发态 Portal epoch 无效");
+      const previous = epochStore?.getItem(developmentEpochKey);
+      epochStore?.setItem(developmentEpochKey, payload.epoch);
+      if (previous === null || previous === undefined || previous === payload.epoch) return;
+      closed = true;
+      source.close();
+      (options.reload ?? (() => globalThis.location?.reload()))();
     } catch (error) {
       options.onError?.(error);
     }
@@ -100,6 +124,10 @@ export async function fetchDevelopmentRuntime(fetcher: ModuleFetcher, endpoint: 
 
 function defaultEventSourceFactory(url: string): DevelopmentEventSource {
   return new EventSource(url, { withCredentials: true });
+}
+
+function sessionEpochStore(): DevelopmentEpochStore | undefined {
+  try { return globalThis.sessionStorage; } catch { return undefined; }
 }
 
 export class PortalDevelopmentError extends Error {
