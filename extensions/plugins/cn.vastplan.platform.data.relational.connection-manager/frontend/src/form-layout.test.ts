@@ -11,14 +11,14 @@ describe("database connection form layout", () => {
 
     expect(presentation?.sections).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: "identity", columns: 2 }),
-      expect.objectContaining({ id: "options", columns: 2, fields: ["/options", "/credentialValue"] }),
+      expect.objectContaining({ id: "options", columns: 2, fields: ["/options"] }),
       expect.objectContaining({ id: "pool", columns: 2 }),
     ]));
     expect(presentation?.sections).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: "credential" })]));
     expect(presentation?.fields).toEqual(expect.arrayContaining([
       expect.objectContaining({ pointer: "/options", span: 2 }),
       expect.objectContaining({ pointer: "/pool", span: 2 }),
-      expect.objectContaining({ pointer: "/credentialValue", span: 2 }),
+      expect.objectContaining({ pointer: "/options/password", widget: "secretMaterial" }),
     ]));
   });
 });
