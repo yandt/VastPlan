@@ -10,8 +10,14 @@ describe("database connections Workbench page", () => {
     const page = createDatabaseConnectionsPage(client, "database", "/settings/databases", message("test", "title", "Databases"));
     const create = page.forms?.find((form) => form.id === "create");
     const edit = page.forms?.find((form) => form.id === "edit");
+    const properties = create?.schema.schema.properties as Readonly<Record<string, Readonly<Record<string, unknown>>>> | undefined;
     expect(create?.presentation?.fields).toContainEqual(expect.objectContaining({ pointer: "/credentialValue", widget: "secretMaterial" }));
-    expect(create?.schema.uiSchema).toMatchObject({ options: { "ui:title": "" }, pool: { "ui:title": "" } });
+    expect(properties?.options).not.toHaveProperty("title");
+    expect(properties?.pool).not.toHaveProperty("title");
+    expect(create?.presentation?.sections).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "options", title: expect.objectContaining({ fallback: "Provider 连接选项" }) }),
+      expect.objectContaining({ id: "pool", title: expect.objectContaining({ fallback: "连接池策略" }) }),
+    ]));
     await expect(create?.validate?.({ value: {}, context: {}, signal: new AbortController().signal })).resolves.toEqual({ credentialValue: expect.objectContaining({ key: "error.credentialRequired" }) });
     const loaded = await edit?.load?.([{ name: "main", resourceId: "r", revision: 1, providerId: "postgresql", endpoint: "db:5432", options: { user: "app" }, pool: { maxIdle: 8, maxOpen: 32, maxLifetimeMs: 1000, maxIdleTimeMs: 1000, acquireTimeoutMs: 100, idlePoolTtlMs: 1000 }, runtime: "ready", credential: { managed: true, version: 2 }, credentialState: "managed", credentialVersion: 2 }], new AbortController().signal);
     expect(loaded).not.toHaveProperty("credentialValue");

@@ -23,25 +23,25 @@ const schema: FormSchema = {
       providerId: { type: "string", title: "Provider", oneOf: [{ const: "postgresql", title: "PostgreSQL" }, { const: "mysql", title: "MySQL" }] },
       endpoint: { type: "string", title: "地址", minLength: 1 },
       database: { type: "string", title: "数据库" },
-      options: { type: "object", title: "连接选项", additionalProperties: false, required: ["user"], properties: {
+      // 该对象由 presentation.sections 的“Provider 连接选项”命名；不再定义内部标题，
+      // 从源头避免 RJSF 与各 Renderer 重复渲染对象标题。
+      options: { type: "object", additionalProperties: false, required: ["user"], properties: {
         user: { type: "string", title: "用户名", minLength: 1, maxLength: 128 },
         tlsMode: { type: "string", title: "TLS 模式", oneOf: [{ const: "verify-full", title: "完整校验（推荐）" }, { const: "disable", title: "关闭（仅受控测试环境）" }] },
         serverName: { type: "string", title: "TLS Server Name" }, connectTimeoutMs: { type: "integer", title: "连接超时（毫秒）", minimum: 100, maximum: 300000 },
         applicationName: { type: "string", title: "PostgreSQL Application Name" }, network: { type: "string", title: "MySQL 网络", oneOf: [{ const: "tcp", title: "TCP" }, { const: "unix", title: "Unix Socket" }] },
         readTimeoutMs: { type: "integer", title: "MySQL 读取超时（毫秒）", minimum: 0, maximum: 300000 }, writeTimeoutMs: { type: "integer", title: "MySQL 写入超时（毫秒）", minimum: 0, maximum: 300000 }, rejectReadOnly: { type: "boolean", title: "MySQL 拒绝只读实例" },
       } },
-      pool: { type: "object", title: "连接池", additionalProperties: false, properties: {
+      // 同上：唯一可见标题由“连接池策略”分段提供。
+      pool: { type: "object", additionalProperties: false, properties: {
         minIdle: { type: "integer", title: "最小空闲连接", minimum: 0 }, maxIdle: { type: "integer", title: "最大空闲连接", minimum: 0 }, maxOpen: { type: "integer", title: "最大连接数", minimum: 1 },
         maxLifetimeMs: { type: "integer", title: "连接最长生命周期（毫秒）", minimum: 1000 }, maxIdleTimeMs: { type: "integer", title: "最长空闲时间（毫秒）", minimum: 1000 }, acquireTimeoutMs: { type: "integer", title: "获取连接超时（毫秒）", minimum: 100 }, idlePoolTtlMs: { type: "integer", title: "空池回收时间（毫秒）", minimum: 1000 },
       } },
       credentialValue: { type: "string", title: "数据库凭证", format: "vastplan-secret-material", writeOnly: true },
     },
   },
-  // options 与 pool 已由外层 Form section 命名。禁止 RJSF 再生成对象标题，
-  // 避免出现“Provider 连接选项 / 连接选项”这类重复层级。
-  uiSchema: { options: { "ui:title": "" }, pool: { "ui:title": "" } },
   localization: {
-    "/properties/name/title": message(namespace,"form.name","连接名称"), "/properties/providerId/title": message(namespace,"form.provider","Provider"), "/properties/endpoint/title": message(namespace,"form.endpoint","地址"), "/properties/database/title": message(namespace,"form.database","数据库"), "/properties/options/title": message(namespace,"form.options","连接选项"), "/properties/pool/title": message(namespace,"form.pool","连接池"), "/properties/credentialValue/title": message(namespace,"form.credential","数据库凭证"),
+    "/properties/name/title": message(namespace,"form.name","连接名称"), "/properties/providerId/title": message(namespace,"form.provider","Provider"), "/properties/endpoint/title": message(namespace,"form.endpoint","地址"), "/properties/database/title": message(namespace,"form.database","数据库"), "/properties/credentialValue/title": message(namespace,"form.credential","数据库凭证"),
     "/properties/options/properties/user/title": message(namespace,"form.user","用户名"), "/properties/options/properties/tlsMode/title": message(namespace,"form.tlsMode","TLS 模式"), "/properties/options/properties/connectTimeoutMs/title": message(namespace,"form.connectTimeout","连接超时（毫秒）"),
     "/properties/options/properties/serverName/title": message(namespace,"form.serverName","TLS Server Name"), "/properties/options/properties/applicationName/title": message(namespace,"form.applicationName","PostgreSQL Application Name"), "/properties/options/properties/network/title": message(namespace,"form.network","MySQL 网络"), "/properties/options/properties/readTimeoutMs/title": message(namespace,"form.readTimeout","MySQL 读取超时（毫秒）"), "/properties/options/properties/writeTimeoutMs/title": message(namespace,"form.writeTimeout","MySQL 写入超时（毫秒）"), "/properties/options/properties/rejectReadOnly/title": message(namespace,"form.rejectReadOnly","MySQL 拒绝只读实例"),
     "/properties/options/properties/tlsMode/oneOf/0/title": message(namespace,"option.verifyFull","完整校验（推荐）"), "/properties/options/properties/tlsMode/oneOf/1/title": message(namespace,"option.tlsDisable","关闭（仅受控测试环境）"),
