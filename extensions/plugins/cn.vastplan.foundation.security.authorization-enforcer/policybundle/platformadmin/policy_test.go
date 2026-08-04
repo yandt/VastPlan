@@ -10,6 +10,7 @@ import (
 	configurationscopedv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configurationscoped/v1"
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
+	sharedstatev1 "cdsoft.com.cn/VastPlan/contracts/schemas/sharedstate/v1"
 	stagingv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionstaging/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationactivation"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationauthority"
@@ -244,6 +245,11 @@ func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
 		}
 		if got, _ := decide(businessPlugin, extpoint.PermissionRequest{Capability: capability}); got == extpoint.DecisionAllow {
 			t.Fatalf("其他插件不得调用 Platform Control 内核端口 %s: %s", capability, got)
+		}
+	}
+	for _, capability := range []string{sharedstatev1.KernelService(sharedstatev1.OperationGet), sharedstatev1.FencedKernelService(sharedstatev1.OperationCreate), sharedstatev1.FencedKernelService(sharedstatev1.OperationUpdate)} {
+		if got, _ := decide(connectionManager, extpoint.PermissionRequest{Capability: capability}); got != extpoint.DecisionAllow {
+			t.Fatalf("连接管理插件应能调用受限 Shared State 端口 %s: %s", capability, got)
 		}
 	}
 	marketplace := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.vastplan.platform.artifacts.marketplace"}}

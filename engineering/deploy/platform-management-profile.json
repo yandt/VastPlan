@@ -289,7 +289,7 @@
       "logical_service": "platform.database",
       "startup_tier": "bootstrap",
       "instance_policy": "leader",
-      "state_model": "leader-owned",
+      "state_model": "external-shared",
       "visibility": "cluster",
       "routing": "leader",
       "routing_domain": "platform",
@@ -297,16 +297,15 @@
       "placement": { "nodeSelector": { "environment": "local-platform" } },
       "config": {
         "environment_allowlist": {
-          "cn.vastplan.foundation.security.authorization-enforcer": ["VASTPLAN_AUTHORIZATION_PERMISSION_CATALOG", "VASTPLAN_AUTHORIZATION_POLICY_SNAPSHOT", "VASTPLAN_AUTHORIZATION_POLICY_TRUST", "VASTPLAN_AUTHORIZATION_POLICY_AUDIENCE", "VASTPLAN_AUTHORIZATION_DIRECTORY_GROUPS"],
-          "cn.vastplan.platform.data.relational.connection-manager": ["VASTPLAN_DATABASE_CONNECTIONS_STATE_FILE"]
+          "cn.vastplan.foundation.security.authorization-enforcer": ["VASTPLAN_AUTHORIZATION_PERMISSION_CATALOG", "VASTPLAN_AUTHORIZATION_POLICY_SNAPSHOT", "VASTPLAN_AUTHORIZATION_POLICY_TRUST", "VASTPLAN_AUTHORIZATION_POLICY_AUDIENCE", "VASTPLAN_AUTHORIZATION_DIRECTORY_GROUPS"]
         },
         "kernel_service_grants": {
-          "cn.vastplan.platform.data.relational.connection-manager": ["kernel.platform-control.status", "kernel.platform-control.test", "kernel.platform-control.configure"]
+          "cn.vastplan.platform.data.relational.connection-manager": ["kernel.platform-control.status", "kernel.platform-control.test", "kernel.platform-control.configure", "kernel.state.shared.get", "kernel.state.shared.fenced.create", "kernel.state.shared.fenced.update"]
         }
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.4.1", "channel": "stable" },
-        { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.14.0", "channel": "stable" }
+        { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.15.0", "channel": "stable" }
       ]
     },
     {

@@ -24,6 +24,10 @@ func (s *service) handle(ctx context.Context, host sdk.Host, call *contractv1.Ca
 	// older credential after a newer candidate has already won.
 	s.opMu.Lock()
 	defer s.opMu.Unlock()
+	if err := s.beginStateOperation(ctx, host, call, tenantID); err != nil {
+		return nil, nil, err
+	}
+	defer s.endStateOperation()
 	if err := s.reconcilePending(ctx, host, call, tenantID); err != nil {
 		return nil, nil, err
 	}

@@ -73,3 +73,5 @@ P4d 已完成受限管理闭环：
 - 同一数据库全栈插件增加 Workbench Form Page，覆盖未配置、测试、初始化、Ready 和 Recovery 状态。当前非敏感 Profile 可在授权页面回填，语言切换仍由插件目录驱动。
 
 开发编排器默认启用两阶段 Profile 路径、全新 Seed 无 Portal Activation 时的静态恢复入口，以及 Seed Recovery 可写动作仍属于 P4 的最后一个检查点。
+
+P5 第一批迁移已删除 Connection Manager 的直接 JSON 状态文件。普通数据库管理请求通过统一 Workflow 进入按租户、Leader-fenced 的 Shared State CAS 聚合；连接定义、凭证候选、Runtime publication outbox 和回收队列保持原有原子边界。Platform Control 配置操作在 Shared State 尚未绑定时仍走独立受限内核端口，因此不会形成“为了配置数据库而先依赖数据库”的循环。

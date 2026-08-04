@@ -95,8 +95,8 @@ func TestManagedArtifactSourceUsesSeedBootstrapAndPersistentRepository(t *testin
 	}
 	environment := r.serviceEnv()
 	wantStateRoot := filepath.Join(stateRoot, "state")
-	if environment["VASTPLAN_DATABASE_CONNECTIONS_STATE_FILE"] != filepath.Join(wantStateRoot, "database-connections.json") {
-		t.Fatalf("有永久引用或治理事实的插件状态必须跨普通重启保留: %#v", environment)
+	if _, legacy := environment["VASTPLAN_DATABASE_CONNECTIONS_STATE_FILE"]; legacy {
+		t.Fatalf("数据库连接状态迁入 Shared State 后不得继续注入本机文件: %#v", environment)
 	}
 	if environment["VASTPLAN_AUTHORIZATION_POLICY_STATE"] != environment["VASTPLAN_AUTHORIZATION_POLICY_BOOTSTRAP_STATE"] {
 		t.Fatalf("Seed Runtime Snapshot v1 必须同时支持旧 Policy Store 与新 Bootstrap State 宿主契约: %#v", environment)

@@ -4,22 +4,18 @@ package main
 import (
 	"context"
 	"log"
-	"os"
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
-const id, version, capability = "cn.vastplan.platform.data.relational.connection-manager", "0.14.0", "platform.database"
+const id, version, capability = "cn.vastplan.platform.data.relational.connection-manager", "0.15.0", "platform.database"
 
 const credentialCapability = "platform.credentials"
 
 func main() {
-	service, err := newService(os.Getenv("VASTPLAN_DATABASE_CONNECTIONS_STATE_FILE"))
-	if err != nil {
-		log.Fatal(err)
-	}
+	service := newSharedStateService()
 	plugin := sdk.New(id, version, map[string]string{"backend": "^0.1"})
 	handler := func(operation string) sdk.Handler {
 		return func(ctx context.Context, host sdk.Host, call *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {

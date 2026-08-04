@@ -347,7 +347,7 @@ func allowedKernelCallback(c *v1.CallContext, request extpoint.PermissionRequest
 	case databasev1.RuntimePluginID:
 		return request.Capability == "kernel.credential.material-lease"
 	case databasev1.ConnectionManagerPluginID:
-		return request.Capability == platformcontrolv1.KernelStatusService || request.Capability == platformcontrolv1.KernelTestService || request.Capability == platformcontrolv1.KernelConfigureService
+		return request.Capability == platformcontrolv1.KernelStatusService || request.Capability == platformcontrolv1.KernelTestService || request.Capability == platformcontrolv1.KernelConfigureService || authorizationPolicySharedStateKernelService(request.Capability)
 	case "cn.vastplan.platform.artifacts.marketplace":
 		return request.Capability == "kernel.credential.material-lease" && request.Operation == "issue"
 	case "cn.vastplan.platform.infrastructure.deployment-manager":

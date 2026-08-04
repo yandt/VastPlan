@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -96,22 +98,19 @@ type runtimePublication struct {
 }
 
 type service struct {
-	opMu sync.Mutex
-	mu   sync.RWMutex
-	file string
-	data persisted
+	opMu      sync.Mutex
+	mu        sync.RWMutex
+	file      string
+	data      persisted
+	shared    bool
+	operation *sharedStateOperation
 }
 
 func newService(file string) (*service, error) {
 	if file == "" {
 		return nil, errors.New("VASTPLAN_DATABASE_CONNECTIONS_STATE_FILE 不能为空")
 	}
-	service := &service{file: file, data: persisted{
-		FormatVersion: 3,
-		Tenants:       map[string]map[string]definition{}, Revisions: map[string]map[string]connectionIdentity{},
-		Pending: map[string]map[string]pendingDefinition{}, Publications: map[string]map[string]runtimePublication{},
-		Retire: map[string][]pluginconfig.ManagedCredentialRef{}, TestCleanup: map[string][]testCredentialCleanup{},
-	}}
+	service := &service{file: file, data: emptyPersisted()}
 	raw, err := os.ReadFile(file)
 	if errors.Is(err, os.ErrNotExist) {
 		return service, nil
@@ -119,37 +118,69 @@ func newService(file string) (*service, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := json.Unmarshal(raw, &service.data); err != nil {
+	if err := decodePersisted(raw, &service.data); err != nil {
 		return nil, err
 	}
-	if service.data.FormatVersion != 3 {
-		return nil, fmt.Errorf("数据库连接状态格式版本 %d 不受支持；开发环境请删除旧状态后重建", service.data.FormatVersion)
-	}
-	if service.data.Tenants == nil {
-		service.data.Tenants = map[string]map[string]definition{}
-	}
-	if service.data.Pending == nil {
-		service.data.Pending = map[string]map[string]pendingDefinition{}
-	}
-	if service.data.Revisions == nil {
-		service.data.Revisions = map[string]map[string]connectionIdentity{}
-	}
-	if service.data.Publications == nil {
-		service.data.Publications = map[string]map[string]runtimePublication{}
-	}
-	if service.data.Retire == nil {
-		service.data.Retire = map[string][]pluginconfig.ManagedCredentialRef{}
-	}
-	if service.data.TestCleanup == nil {
-		service.data.TestCleanup = map[string][]testCredentialCleanup{}
-	}
 	return service, nil
+}
+
+func newSharedStateService() *service {
+	return &service{shared: true, data: emptyPersisted()}
+}
+
+func emptyPersisted() persisted {
+	return persisted{
+		FormatVersion: 3,
+		Tenants:       map[string]map[string]definition{}, Revisions: map[string]map[string]connectionIdentity{},
+		Pending: map[string]map[string]pendingDefinition{}, Publications: map[string]map[string]runtimePublication{},
+		Retire: map[string][]pluginconfig.ManagedCredentialRef{}, TestCleanup: map[string][]testCredentialCleanup{},
+	}
+}
+
+func decodePersisted(raw []byte, target *persisted) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return errors.New("数据库连接状态只能包含一个 JSON 文档")
+	}
+	if target.FormatVersion != 3 {
+		return fmt.Errorf("数据库连接状态格式版本 %d 不受支持；开发环境请删除旧状态后重建", target.FormatVersion)
+	}
+	if target.Tenants == nil {
+		target.Tenants = map[string]map[string]definition{}
+	}
+	if target.Pending == nil {
+		target.Pending = map[string]map[string]pendingDefinition{}
+	}
+	if target.Revisions == nil {
+		target.Revisions = map[string]map[string]connectionIdentity{}
+	}
+	if target.Publications == nil {
+		target.Publications = map[string]map[string]runtimePublication{}
+	}
+	if target.Retire == nil {
+		target.Retire = map[string][]pluginconfig.ManagedCredentialRef{}
+	}
+	if target.TestCleanup == nil {
+		target.TestCleanup = map[string][]testCredentialCleanup{}
+	}
+	return nil
 }
 
 func (s *service) save() error {
 	raw, err := json.Marshal(s.data)
 	if err != nil {
 		return err
+	}
+	if s.shared {
+		if s.operation == nil {
+			return errors.New("数据库 Shared State 保存缺少当前操作")
+		}
+		return s.operation.save(raw)
 	}
 	if err := os.MkdirAll(filepath.Dir(s.file), 0o700); err != nil {
 		return err

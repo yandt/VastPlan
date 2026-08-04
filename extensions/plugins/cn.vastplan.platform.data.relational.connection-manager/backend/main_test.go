@@ -9,12 +9,14 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	sharedstatev1 "cdsoft.com.cn/VastPlan/contracts/schemas/sharedstate/v1"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
@@ -58,6 +60,81 @@ func TestPlatformControlOperationsForwardOnlyValidatedRequestsToKernelServices(t
 	result, _, err = callPlatformControl(context.Background(), host, dbContext(), operationPlatformControlConfigure, []byte(`{"profile":{"schemaVersion":1,"generation":8},"expectedGeneration":0}`))
 	if err != nil || result.GetError().GetCode() != "platform.database.platform_control_invalid" {
 		t.Fatalf("非法配置必须在插件边界拒绝: result=%+v err=%v", result, err)
+	}
+}
+
+type sharedStateProbeHost struct {
+	probeHost
+	values    map[string][]byte
+	revisions map[string]uint64
+}
+
+func newSharedStateProbeHost() *sharedStateProbeHost {
+	return &sharedStateProbeHost{values: map[string][]byte{}, revisions: map[string]uint64{}}
+}
+
+func (h *sharedStateProbeHost) Call(ctx context.Context, target *contractv1.CallTarget, call *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+	operation := ""
+	switch target.GetCapability() {
+	case sharedstatev1.KernelService(sharedstatev1.OperationGet):
+		operation = sharedstatev1.OperationGet
+	case sharedstatev1.FencedKernelService(sharedstatev1.OperationCreate):
+		operation = sharedstatev1.OperationCreate
+	case sharedstatev1.FencedKernelService(sharedstatev1.OperationUpdate):
+		operation = sharedstatev1.OperationUpdate
+	default:
+		return h.probeHost.Call(ctx, target, call, payload)
+	}
+	key := call.GetTenantId()
+	if operation == sharedstatev1.OperationGet {
+		if h.revisions[key] == 0 {
+			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: "state.not_found", Message: "not found"}}, nil, nil
+		}
+		return sharedStateEntryResult(h.values[key], h.revisions[key])
+	}
+	parsed, err := sharedstatev1.ParseRequest(operation, payload)
+	if err != nil {
+		return nil, nil, err
+	}
+	request := parsed.(*sharedstatev1.WriteRequest)
+	value, err := sharedstatev1.DecodeValue(request.Value)
+	if err != nil {
+		return nil, nil, err
+	}
+	if operation == sharedstatev1.OperationCreate && h.revisions[key] != 0 || operation == sharedstatev1.OperationUpdate && request.ExpectedRevision != h.revisions[key] {
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: "state.conflict", Message: "conflict", Retryable: true}}, nil, nil
+	}
+	h.revisions[key]++
+	h.values[key] = append([]byte(nil), value...)
+	return sharedStateEntryResult(value, h.revisions[key])
+}
+
+func sharedStateEntryResult(value []byte, revision uint64) (*contractv1.CallResult, []byte, error) {
+	raw, err := json.Marshal(sharedstatev1.Entry{Protocol: sharedstatev1.Protocol, Key: sharedStateKey, Value: sharedstatev1.EncodeValue(value), Revision: revision, UpdatedAt: time.Now().UTC()})
+	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, err
+}
+
+func TestSharedStateProtocolPersistsTenantSagaAcrossPluginRestart(t *testing.T) {
+	host := newSharedStateProbeHost()
+	service := newSharedStateService()
+	payload := []byte(`{"name":"primary","providerId":"postgresql","endpoint":"db.internal:5432","options":{"user":"app"},"credentialValue":"one-time-password"}`)
+	result, raw, err := service.handle(context.Background(), host, dbContext(), payload, "define")
+	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK || !strings.Contains(string(raw), `"name":"primary"`) {
+		t.Fatalf("Shared State 定义连接失败: result=%+v raw=%s err=%v", result, raw, err)
+	}
+	if host.revisions["tenant-a"] < 2 || strings.Contains(string(host.values["tenant-a"]), "one-time-password") {
+		t.Fatalf("Shared State 未形成 CAS 工作流或泄漏密码: revision=%d state=%s", host.revisions["tenant-a"], host.values["tenant-a"])
+	}
+	restarted := newSharedStateService()
+	result, raw, err = restarted.handle(context.Background(), host, dbContext(), []byte(`{}`), "list")
+	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK || !strings.Contains(string(raw), `"name":"primary"`) {
+		t.Fatalf("插件重启后未从 Shared State 恢复连接: result=%+v raw=%s err=%v", result, raw, err)
+	}
+	other := dbContext()
+	other.TenantId = "tenant-b"
+	_, raw, err = restarted.handle(context.Background(), host, other, []byte(`{}`), "list")
+	if err != nil || string(raw) != "[]" {
+		t.Fatalf("租户状态未隔离: raw=%s err=%v", raw, err)
 	}
 }
 

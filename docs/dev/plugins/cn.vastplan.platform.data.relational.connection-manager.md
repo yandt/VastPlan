@@ -2,11 +2,11 @@
 
 插件 ID：`cn.vastplan.platform.data.relational.connection-manager`
 能力：`tool.package/platform.database`
-当前制品版本：`0.14.0`
+当前制品版本：`0.15.0`
 
 ## 边界
 
-本插件管理租户隔离的数据库连接定义：稳定 `resourceId`、单调 revision、Provider、非敏感 options、连接池策略、端点、数据库名和不透明托管凭证引用。删除后只保留不含秘密的 identity/revision tombstone，因此同名重建仍递增 revision，不会被尚存旧池的副本当作版本回退。`define` 可接收一次性的只写 `credentialValue`，立即交给凭证插件加密托管；明文不进入连接状态文件、响应或日志。连接定义、凭证候选和 Runtime publication 都以可恢复状态收敛，状态文件使用 `0600` 原子替换。
+本插件管理租户隔离的数据库连接定义：稳定 `resourceId`、单调 revision、Provider、非敏感 options、连接池策略、端点、数据库名和不透明托管凭证引用。删除后只保留不含秘密的 identity/revision tombstone，因此同名重建仍递增 revision，不会被尚存旧池的副本当作版本回退。`define` 可接收一次性的只写 `credentialValue`，立即交给凭证插件加密托管；明文不进入 Shared State、响应或日志。连接定义、凭证候选和 Runtime publication 在同一个按租户 CAS 聚合中保持可恢复事务边界。
 
 `probe` 和发布现已调用 dedicated 的 `cn.vastplan.foundation.data.relational.runtime`，旧 `kernel.database.probe` 路径已移除。Runtime 负责真实 Provider、本地池和执行，本插件继续只做 leader 管理面；Kernel 不编入 PostgreSQL、MySQL 或其他数据库驱动。完整边界和实施顺序见 [ADR-0095](../decisions/ADR-0095-Database-Runtime多Provider连接池与集群事务.md)。
 
@@ -20,7 +20,7 @@
 
 ## 运行配置
 
-第一方进程须从受控环境变量 `VASTPLAN_DATABASE_CONNECTIONS_STATE_FILE` 取得连接定义状态位置；Node Agent 必须显式列入环境白名单。文件必须位于持久卷，权限建议为 `0600`。插件采用 leader 运行策略，因此同一逻辑服务只有一个定义写入者。
+0.15.0 删除 `VASTPLAN_DATABASE_CONNECTIONS_STATE_FILE`。组合根只注入统一 `state.shared.v1` Kernel Service；插件固定选择按租户、Leader-fenced 的 Shared State 协议实现，启动与嵌套工作流不再自行判断开发/生产。每次管理 Workflow 先加载当前租户聚合并记录 Store revision，随后凭证候选、连接定义、Runtime publication outbox 和回收队列的每个耐久步骤都使用 CAS 推进。Shared State 不可用或 revision 冲突时 fail-closed，不回退本机 JSON。插件仍采用 leader 路由，fence 与 Store CAS 共同阻止旧实例写入。
 
 ## API
 
