@@ -18,7 +18,8 @@ export function evaluateFormCondition(condition: FormCondition, value: Readonly<
 }
 
 export function projectFormPresentation(schema: FormSchema, presentation: FormPresentation | undefined, value: Readonly<Record<string, unknown>>, context: Readonly<Record<string, unknown>>, text: (value: FormPresentationText) => string): FormSchema {
-  if (presentation?.fields === undefined || presentation.fields.length === 0) return schema;
+  const renderedSchema = withoutSectionOwnedObjectTitles(schema.schema, presentation);
+  if (presentation?.fields === undefined || presentation.fields.length === 0) return renderedSchema === schema.schema ? schema : { ...schema, schema: renderedSchema };
   const uiSchema = clone(schema.uiSchema ?? {});
   for (const field of presentation.fields) {
     const node = uiNode(uiSchema, field.pointer);
@@ -31,7 +32,7 @@ export function projectFormPresentation(schema: FormSchema, presentation: FormPr
       node["ui:options"] = { ...options, vastplanSpan: field.span };
     }
   }
-  return { ...schema, uiSchema };
+  return { ...schema, schema: renderedSchema, uiSchema };
 }
 
 type FormPresentationText = NonNullable<NonNullable<FormPresentation["fields"]>[number]["help"]>;
@@ -57,6 +58,36 @@ function uiNode(root: Record<string, unknown>, pointer: string): Record<string, 
     node = current;
   }
   return node;
+}
+
+/**
+ * A sequential FormDialog section is the visible group label. A direct object
+ * field in that section must therefore not render a second JSON Schema title.
+ * This creates a display-only schema projection: validation constraints and
+ * the source definition stay intact, while every Renderer receives one stable
+ * title-ownership rule instead of plugin-specific ui:title workarounds.
+ */
+function withoutSectionOwnedObjectTitles(schema: FormSchema["schema"], presentation: FormPresentation | undefined): FormSchema["schema"] {
+  if (presentation?.navigation !== "sections" || presentation.sections === undefined) return schema;
+  const properties = record(schema.properties);
+  const owned = new Set(presentation.sections.flatMap((section) => section.fields.map(directRootField).filter((field): field is string => field !== undefined)));
+  let changed = false;
+  const projected = { ...properties };
+  for (const field of owned) {
+    const property = record(properties[field]);
+    if (property.type !== "object" || !("title" in property)) continue;
+    const { title: _title, ...withoutTitle } = property;
+    projected[field] = withoutTitle;
+    changed = true;
+  }
+  return changed ? { ...schema, properties: projected } as FormSchema["schema"] : schema;
+}
+
+function directRootField(pointer: string): string | undefined {
+  if (!pointer.startsWith("/")) return undefined;
+  const parts = pointer.slice(1).split("/");
+  if (parts.length !== 1 || parts[0] === "") return undefined;
+  return parts[0]!.replace(/~1/g, "/").replace(/~0/g, "~");
 }
 
 function widget(value: FormWidget): string {

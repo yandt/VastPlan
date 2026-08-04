@@ -48,7 +48,7 @@
       },
       "workbench": {
         "id": "cn.vastplan.foundation.frontend.workflow.workbench",
-        "version": "7.0.1",
+        "version": "7.0.2",
         "channel": "stable",
         "uiContract": "^10.1.0"
       },
@@ -64,7 +64,7 @@
         { "id": "cn.vastplan.foundation.frontend.structure.shell", "version": "9.0.2", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.structure.layout.standard", "version": "6.1.2", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.structure.layout.top-navigation", "version": "6.1.2", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.frontend.workflow.workbench", "version": "7.0.1", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.frontend.workflow.workbench", "version": "7.0.2", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.identity.account-center", "version": "0.7.1", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "6.1.4", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.9.1", "channel": "stable" },

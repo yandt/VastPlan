@@ -37,4 +37,14 @@ describe("FormPresentation", () => {
     expect(projectFormPresentation(schema, presentation, { providerId: "postgresql" }, {}, String).uiSchema).toMatchObject({ options: { network: { "ui:widget": "hidden" } } });
     expect(projectFormPresentation(schema, presentation, { providerId: "mysql" }, {}, String).uiSchema).toMatchObject({ options: { applicationName: { "ui:widget": "hidden" } } });
   });
+
+  it("lets a FormDialog section own the title of its direct object field", () => {
+    const schema = { id: "database", schema: { type: "object", properties: { options: { type: "object", title: "连接选项", properties: { user: { type: "string", title: "用户名" } } } } } } as const;
+    const presentation = { navigation: "sections" as const, sections: [{ id: "options", title: "Provider 连接选项", fields: ["/options"] }] };
+
+    const projected = projectFormPresentation(schema, presentation, {}, {}, String);
+
+    expect((projected.schema.properties as Record<string, Record<string, unknown>>).options).not.toHaveProperty("title");
+    expect((schema.schema.properties.options as Record<string, unknown>)).toHaveProperty("title", "连接选项");
+  });
 });
