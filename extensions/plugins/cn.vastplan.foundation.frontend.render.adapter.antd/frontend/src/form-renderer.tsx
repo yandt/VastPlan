@@ -155,7 +155,7 @@ function PresentedObject({ presentation, activeSection, onSectionChange, ...prop
     const current = Math.max(0, sections.findIndex((section) => section.id === selected.id));
     return <><Steps current={current} onChange={(index) => onSectionChange?.(sections[index]!.id)} items={sections.map((section, index) => ({ title: section.title === undefined ? `${index + 1}` : i18n.text(section.title) }))} /><div style={{ marginTop: 24 }}>{renderSection(selected)}</div>{remaining}</>;
   }
-  return <div className="vp-antd-form-sections" style={{ display: "grid", gap: componentSizeRecipes.layout[size].gap }}>{sections.map((section) => <div key={section.id}>{renderSection(section)}</div>)}{remaining}</div>;
+  return <div className="vp-antd-form-object vp-antd-form-sections" style={{ display: "grid", gap: componentSizeRecipes.layout[size].gap }}>{sections.map((section) => <div key={section.id}>{renderSection(section)}</div>)}{remaining}</div>;
 }
 
 export function FormRenderer({ schema, value, onChange, size: requestedSize, presentation, presentationSection, onPresentationSectionChange, readOnly, submitting, errors: externalErrors = {}, context: suppliedContext, validate, validationDelayMs = 250, onValidationChange }: FormRendererProps) {

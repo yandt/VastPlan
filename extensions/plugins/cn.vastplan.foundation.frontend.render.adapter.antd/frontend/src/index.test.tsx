@@ -151,6 +151,7 @@ describe("Ant Design portal UI renderer", () => {
     expect(markup).toContain("Identity");
     expect(markup).toContain("vp-antd-form-section-heading");
     expect(markup).toContain("vp-antd-form-section");
+    expect(markup).toContain('class="vp-antd-form-object vp-antd-form-sections"');
     expect(markup).not.toContain("ant-card");
     expect(markup).toContain("Name");
     expect(markup).toContain("credential://");
