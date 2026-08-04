@@ -3,6 +3,7 @@ import { AccessAuthenticationClient, accessBrandAssetURL, accessLocaleDirection,
 import { accessAppearance } from "./access-appearance";
 import { AccessLocaleSelector } from "./access-locale-selector";
 import { AccessMethodSelector } from "./access-method-selector";
+import { completeAuthenticationNavigation, installAccessPageResumeGuard } from "./access-login-lifecycle";
 import { useAccessSystemScheme } from "./access-system-scheme";
 import type { ModuleFetcher } from "./module-loader";
 
@@ -22,6 +23,8 @@ export function AccessLoginPage({ fetcher }: { fetcher: ModuleFetcher }) {
   const [error, setError] = useState<MessageKey>();
   const [clock, setClock] = useState(Date.now());
   const systemScheme = useAccessSystemScheme();
+
+  useEffect(() => installAccessPageResumeGuard(globalThis, () => globalThis.location?.reload()), []);
 
   useEffect(() => {
     let active = true;
@@ -72,7 +75,10 @@ export function AccessLoginPage({ fetcher }: { fetcher: ModuleFetcher }) {
     event.currentTarget.reset();
     try {
       const value = await client.continue(transactionId, step.stepId, responses);
-      if (value.result.state === "authenticated") { globalThis.location?.assign(value.returnTo ?? "/"); return; }
+      if (value.result.state === "authenticated") {
+        if (globalThis.location !== undefined) completeAuthenticationNavigation(globalThis.location, value.returnTo ?? "/");
+        return;
+      }
       setStep(value.result.step); setError(resultMessage(value.result.state, step.kind));
     } catch { setError("authenticationFailed"); }
     finally { setBusy(false); }
