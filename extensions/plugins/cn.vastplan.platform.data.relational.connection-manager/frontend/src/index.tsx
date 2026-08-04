@@ -37,6 +37,9 @@ const schema: FormSchema = {
       credentialValue: { type: "string", title: "数据库凭证", format: "vastplan-secret-material", writeOnly: true },
     },
   },
+  // options 与 pool 已由外层 Form section 命名。禁止 RJSF 再生成对象标题，
+  // 避免出现“Provider 连接选项 / 连接选项”这类重复层级。
+  uiSchema: { options: { "ui:title": "" }, pool: { "ui:title": "" } },
   localization: {
     "/properties/name/title": message(namespace,"form.name","连接名称"), "/properties/providerId/title": message(namespace,"form.provider","Provider"), "/properties/endpoint/title": message(namespace,"form.endpoint","地址"), "/properties/database/title": message(namespace,"form.database","数据库"), "/properties/options/title": message(namespace,"form.options","连接选项"), "/properties/pool/title": message(namespace,"form.pool","连接池"), "/properties/credentialValue/title": message(namespace,"form.credential","数据库凭证"),
     "/properties/options/properties/user/title": message(namespace,"form.user","用户名"), "/properties/options/properties/tlsMode/title": message(namespace,"form.tlsMode","TLS 模式"), "/properties/options/properties/connectTimeoutMs/title": message(namespace,"form.connectTimeout","连接超时（毫秒）"),

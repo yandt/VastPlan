@@ -11,6 +11,7 @@ describe("database connections Workbench page", () => {
     const create = page.forms?.find((form) => form.id === "create");
     const edit = page.forms?.find((form) => form.id === "edit");
     expect(create?.presentation?.fields).toContainEqual(expect.objectContaining({ pointer: "/credentialValue", widget: "secretMaterial" }));
+    expect(create?.schema.uiSchema).toMatchObject({ options: { "ui:title": "" }, pool: { "ui:title": "" } });
     await expect(create?.validate?.({ value: {}, context: {}, signal: new AbortController().signal })).resolves.toEqual({ credentialValue: expect.objectContaining({ key: "error.credentialRequired" }) });
     const loaded = await edit?.load?.([{ name: "main", resourceId: "r", revision: 1, providerId: "postgresql", endpoint: "db:5432", options: { user: "app" }, pool: { maxIdle: 8, maxOpen: 32, maxLifetimeMs: 1000, maxIdleTimeMs: 1000, acquireTimeoutMs: 100, idlePoolTtlMs: 1000 }, runtime: "ready", credential: { managed: true, version: 2 }, credentialState: "managed", credentialVersion: 2 }], new AbortController().signal);
     expect(loaded).not.toHaveProperty("credentialValue");
