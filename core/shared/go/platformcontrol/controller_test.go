@@ -113,3 +113,31 @@ func TestControllerFailsClosedWithoutCommittingOrFallback(t *testing.T) {
 		t.Fatal("失败时不得绑定本地 JSON 或候选 Store")
 	}
 }
+
+func TestControllerTestsCandidateWithoutInitializingOrCommitting(t *testing.T) {
+	root := t.TempDir()
+	profiles := &FileProfileStore{Path: filepath.Join(root, "platform-control.json")}
+	binding := sharedstate.NewBindingStore()
+	bootstrapper := &fakeBootstrapper{}
+	controller, err := NewController(profiles, func(platformcontrolv1.SecretRef) (SecretSource, error) {
+		return staticSecretSource{value: []byte("secret")}, nil
+	}, bootstrapper, binding)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := controller.TestCandidate(context.Background(), testProfile(filepath.Join(root, "password"), 1), 0); err != nil {
+		t.Fatal(err)
+	}
+	if bootstrapper.tested != 1 || bootstrapper.initialized != 0 || bootstrapper.opened != 0 {
+		t.Fatalf("测试候选不得初始化或打开 Store: %+v", bootstrapper)
+	}
+	if profile, err := profiles.Load(context.Background()); err != nil || profile != nil {
+		t.Fatalf("测试候选不得提交 Profile: profile=%+v err=%v", profile, err)
+	}
+	if _, _, ready := binding.Snapshot(); ready {
+		t.Fatal("测试候选不得绑定 Shared State")
+	}
+	if status := controller.Status(); status.Phase != platformcontrolv1.PhaseUnconfigured || status.Generation != 0 {
+		t.Fatalf("空环境测试成功后应恢复未配置状态: %+v", status)
+	}
+}

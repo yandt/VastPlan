@@ -16,6 +16,9 @@ func (s *service) handle(ctx context.Context, host sdk.Host, call *contractv1.Ca
 	if err != nil {
 		return nil, nil, err
 	}
+	if isPlatformControlOperation(operation) {
+		return callPlatformControl(ctx, host, call, operation, payload)
+	}
 	// Configuration writes are infrequent. Serializing the complete local saga
 	// prevents two concurrent updates of the same connection from activating an
 	// older credential after a newer candidate has already won.

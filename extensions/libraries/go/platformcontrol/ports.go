@@ -39,3 +39,11 @@ type Bootstrapper interface {
 	Initialize(context.Context, platformcontrolv1.Profile, SecretSource) (ManagedStore, error)
 	Open(context.Context, platformcontrolv1.Profile, SecretSource) (ManagedStore, error)
 }
+
+// Administration is the trusted host workflow used by the Seed database
+// configuration surface. It never exposes the selected Store or secret bytes.
+type Administration interface {
+	Status() platformcontrolv1.Status
+	TestCandidate(context.Context, platformcontrolv1.Profile, uint64) error
+	Configure(context.Context, platformcontrolv1.Profile, uint64) error
+}

@@ -6,6 +6,25 @@ const close: (() => Promise<void>)[] = [];
 afterEach(async () => Promise.all(close.splice(0).map((action) => action())));
 
 describe("Platform core management routes", () => {
+  it("routes Platform Control bootstrap status, test and configure through the database capability", async () => {
+    const calls: PlatformInvocation[] = [];
+    const server = await startPlatformManagementTestServer(
+      recordingPlatformInvoker(calls, (_capability, operation) => ({ phase: operation === "platformControlConfigure" ? "ready" : "unconfigured", generation: operation === "platformControlConfigure" ? 1 : undefined })),
+      ["platform.database.read", "platform.database.probe", "platform.database.write"],
+      fullBinding(),
+    );
+    close.push(server.close);
+    const change = { profile: { schemaVersion: 1, generation: 1, providerId: "postgresql", endpoint: "db:5432", database: "vastplan", schema: "platform", tls: { mode: "verify-full", serverName: "db" }, username: "app", secretRef: { kind: "systemd-credential", name: "platform-db" }, contractRange: "^1.0.0" }, expectedGeneration: 0 };
+    expect((await fetch(`${server.origin}/v1/portals/operations/platform/services/core/platform-control`, { headers: server.readHeaders })).status).toBe(200);
+    expect((await fetch(`${server.origin}/v1/portals/operations/platform/services/core/platform-control/test`, { method: "POST", headers: server.writeHeaders, body: JSON.stringify(change) })).status).toBe(200);
+    expect((await fetch(`${server.origin}/v1/portals/operations/platform/services/core/platform-control`, { method: "PUT", headers: server.writeHeaders, body: JSON.stringify(change) })).status).toBe(200);
+    expect(calls.map(({ capability, operation, payload }) => ({ capability, operation, payload }))).toEqual([
+      { capability: "platform.database", operation: "platformControlStatus", payload: {} },
+      { capability: "platform.database", operation: "platformControlTest", payload: change },
+      { capability: "platform.database", operation: "platformControlConfigure", payload: change },
+    ]);
+  });
+
   it("routes Settings, Credentials and Database through verified server-owned targets", async () => {
     const calls: PlatformInvocation[] = [];
     const server = await startPlatformManagementTestServer(recordingPlatformInvoker(calls, (capability, operation) => capability === "platform.settings" && operation === "list" ? { items: [] } : {}), ["platform.settings.read", "platform.settings.write", "platform.credentials.audit", "platform.credentials.write", "platform.credentials.rotate", "platform.database.write", "platform.database.probe"], fullBinding());
@@ -106,6 +125,6 @@ function fullBinding(): Record<string, unknown> {
   return managementBinding([
     { capability: "platform.settings", read: ["list"], write: ["put", "delete"] },
     { capability: "platform.credentials", read: ["list", "listManagedAudit"], write: ["put", "rotate", "revoke"] },
-    { capability: "platform.database", read: ["list"], write: ["define", "remove", "probe", "test"] },
+    { capability: "platform.database", read: ["list", "platformControlStatus"], write: ["define", "remove", "probe", "test", "platformControlTest", "platformControlConfigure"] },
   ]);
 }

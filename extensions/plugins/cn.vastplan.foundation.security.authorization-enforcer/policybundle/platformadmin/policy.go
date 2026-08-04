@@ -14,6 +14,7 @@ import (
 	configurationresourcev1 "cdsoft.com.cn/VastPlan/contracts/schemas/configurationresource/v1"
 	configurationscopedv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configurationscoped/v1"
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
+	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
 	sharedstatev1 "cdsoft.com.cn/VastPlan/contracts/schemas/sharedstate/v1"
 	stagingv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionstaging/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactstorage"
@@ -345,6 +346,8 @@ func allowedKernelCallback(c *v1.CallContext, request extpoint.PermissionRequest
 		return authorizationPolicySharedStateKernelService(request.Capability)
 	case databasev1.RuntimePluginID:
 		return request.Capability == "kernel.credential.material-lease"
+	case databasev1.ConnectionManagerPluginID:
+		return request.Capability == platformcontrolv1.KernelStatusService || request.Capability == platformcontrolv1.KernelTestService || request.Capability == platformcontrolv1.KernelConfigureService
 	case "cn.vastplan.platform.artifacts.marketplace":
 		return request.Capability == "kernel.credential.material-lease" && request.Operation == "issue"
 	case "cn.vastplan.platform.infrastructure.deployment-manager":

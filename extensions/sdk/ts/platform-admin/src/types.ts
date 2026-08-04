@@ -154,6 +154,15 @@ export interface DatabaseProbe {
   latencyMs: number;
   message?: string;
 }
+export interface PlatformControlTLS { mode: "disable" | "verify-ca" | "verify-full"; serverName?: string; }
+export type PlatformControlSecretRef = { kind: "systemd-credential"; name: string } | { kind: "owner-file"; path: string };
+export interface PlatformControlProfile {
+  schemaVersion: 1; generation: number; providerId: "postgresql" | "mysql"; endpoint: string;
+  database: string; schema: string; tls: PlatformControlTLS; username: string;
+  secretRef: PlatformControlSecretRef; contractRange: string;
+}
+export interface PlatformControlStatus { phase: "unconfigured" | "testing" | "initializing" | "ready" | "recovery"; generation?: number; code?: string; profile?: PlatformControlProfile; }
+export interface PlatformControlChangeRequest { profile: PlatformControlProfile; expectedGeneration: number; }
 export type AuthenticationProviderState = "draft" | "validated" | "tested" | "approved" | "published" | "retired";
 export type AuthenticationProviderReadiness = "unknown" | "blocked" | "ready" | "degraded" | "failed";
 export interface AuthenticationProviderProfile {

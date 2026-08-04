@@ -7,17 +7,18 @@ package hostfactory
 import (
 	"sort"
 
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
 	sharedstatev1 "cdsoft.com.cn/VastPlan/contracts/schemas/sharedstate/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
+	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
+	"cdsoft.com.cn/VastPlan/core/shared/go/registry"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationauthority"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/credentiallease"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/deploymentpublication"
-	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
-	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/nodebootstrap"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfiguration"
-	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
-	"cdsoft.com.cn/VastPlan/core/shared/go/registry"
 )
 
 // KernelName 是 backend 内核规范 ID。
@@ -37,12 +38,25 @@ func NewWithDependencies(version string, logf func(string, ...any), dependencies
 	}
 	services = append(services, dependencyHostServices(dependencies)...)
 	services = append(services, platformProfileActivationServices(dependencies)...)
+	services = append(services, platformControlServices(dependencies)...)
 	services = append(services, configurationHostServices(dependencies)...)
 	services = append(services, sharedStateServices(dependencies, host)...)
 	if err := registerHostServices(host, services); err != nil {
 		return nil, err
 	}
 	return host, nil
+}
+
+func platformControlServices(dependencies kernelspi.Dependencies) []hostServiceRegistration {
+	if dependencies.PlatformControl == nil {
+		return nil
+	}
+	handlers := kernelPlatformControl(dependencies.PlatformControl)
+	return []hostServiceRegistration{
+		{name: platformcontrolv1.KernelStatusService, handler: handlers[platformcontrolv1.KernelStatusService]},
+		{name: platformcontrolv1.KernelTestService, handler: handlers[platformcontrolv1.KernelTestService]},
+		{name: platformcontrolv1.KernelConfigureService, handler: handlers[platformcontrolv1.KernelConfigureService]},
+	}
 }
 
 func backendRegistry() *registry.Registry {

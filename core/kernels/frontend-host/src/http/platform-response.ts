@@ -65,6 +65,11 @@ function mapCapabilityError(response: ServerResponse, code: string, head = false
   if (code === "platform.database.permission_denied") return sendAPIError(response, 422, "database_permission_denied", head);
   if (code === "platform.database.pool_exhausted") return sendAPIError(response, 429, "database_pool_exhausted", head);
   if (code === "platform.database.runtime_unavailable") return sendAPIError(response, 503, "database_runtime_unavailable", head);
+  if (code === "platform_control.profile_invalid" || code === "platform.database.platform_control_invalid") return sendAPIError(response, 422, "platform_control_invalid", head);
+  if (code === "platform_control.secret_unavailable") return sendAPIError(response, 422, "platform_control_secret_unavailable", head);
+  if (code === "platform_control.database_unavailable") return sendAPIError(response, 422, "platform_control_database_unavailable", head);
+  if (code === "platform_control.initialization_failed") return sendAPIError(response, 422, "platform_control_initialization_failed", head);
+  if (code === "platform_control.commit_conflict") return sendAPIError(response, 409, "platform_control_conflict", head);
   if (code === "platform.plugin_installation.invalid") return sendAPIError(response, 400, "invalid_installation_request", head);
   if (code === "platform.plugin_configuration.unavailable") return sendAPIError(response, 503, "configuration_unavailable", head);
   if (code === "platform.marketplace.catalog_unavailable") return sendAPIError(response, 503, "marketplace_unavailable", head);

@@ -17,6 +17,9 @@ const (
 	ErrorUnavailable          = "platform.control.unavailable"
 	ErrorConflict             = "platform.control.conflict"
 	ErrorInitializationFailed = "platform.control.initialization_failed"
+	KernelStatusService       = "kernel.platform-control.status"
+	KernelTestService         = "kernel.platform-control.test"
+	KernelConfigureService    = "kernel.platform-control.configure"
 )
 
 type SecretRef struct {
@@ -54,7 +57,13 @@ const (
 )
 
 type Status struct {
-	Phase      Phase  `json:"phase"`
-	Generation uint64 `json:"generation,omitempty"`
-	Code       string `json:"code,omitempty"`
+	Phase      Phase    `json:"phase"`
+	Generation uint64   `json:"generation,omitempty"`
+	Code       string   `json:"code,omitempty"`
+	Profile    *Profile `json:"profile,omitempty"`
+}
+
+type ChangeRequest struct {
+	Profile            Profile `json:"profile"`
+	ExpectedGeneration uint64  `json:"expectedGeneration"`
 }

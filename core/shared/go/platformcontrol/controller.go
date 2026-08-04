@@ -28,8 +28,9 @@ type Controller struct {
 	database Bootstrapper
 	binding  *sharedstate.BindingStore
 
-	mu     sync.RWMutex
-	status platformcontrolv1.Status
+	mu      sync.RWMutex
+	status  platformcontrolv1.Status
+	profile *platformcontrolv1.Profile
 }
 
 func NewController(profiles ProfileStore, resolve SecretResolver, database Bootstrapper, binding *sharedstate.BindingStore) (*Controller, error) {
@@ -49,6 +50,7 @@ func (c *Controller) Start(ctx context.Context) error {
 		c.setStatus(platformcontrolv1.PhaseUnconfigured, 0, "")
 		return nil
 	}
+	c.setProfile(*profile)
 	source, err := c.resolve(profile.SecretRef)
 	if err != nil {
 		c.setStatus(platformcontrolv1.PhaseRecovery, profile.Generation, CodeSecretUnavailable)
@@ -97,6 +99,7 @@ func (c *Controller) Configure(ctx context.Context, candidate platformcontrolv1.
 		c.setCandidateFailure(expectedGeneration, CodeCommitConflict)
 		return err
 	}
+	c.setProfile(candidate)
 	if err := c.binding.Bind(candidate.Generation, platformcontrolport.ProfileIdentity(candidate), store); err != nil {
 		_ = store.Close()
 		c.setStatus(platformcontrolv1.PhaseRecovery, candidate.Generation, CodeCommitConflict)
@@ -105,6 +108,35 @@ func (c *Controller) Configure(ctx context.Context, candidate platformcontrolv1.
 	c.setStatus(platformcontrolv1.PhaseReady, candidate.Generation, "")
 	return nil
 }
+
+func (c *Controller) TestCandidate(ctx context.Context, candidate platformcontrolv1.Profile, expectedGeneration uint64) error {
+	if err := platformcontrolv1.ValidateProfile(candidate); err != nil || candidate.Generation != expectedGeneration+1 {
+		c.setCandidateFailure(expectedGeneration, CodeProfileInvalid)
+		if err != nil {
+			return err
+		}
+		return ErrGenerationConflict
+	}
+	source, err := c.resolve(candidate.SecretRef)
+	if err != nil {
+		c.setCandidateFailure(expectedGeneration, CodeSecretUnavailable)
+		return err
+	}
+	c.setStatus(platformcontrolv1.PhaseTesting, expectedGeneration, "")
+	if err := c.database.Test(ctx, candidate, source); err != nil {
+		c.setCandidateFailure(expectedGeneration, CodeDatabaseUnavailable)
+		return err
+	}
+	generation, _, ready := c.binding.Snapshot()
+	if ready {
+		c.setStatus(platformcontrolv1.PhaseReady, generation, "")
+	} else {
+		c.setStatus(platformcontrolv1.PhaseUnconfigured, 0, "")
+	}
+	return nil
+}
+
+var _ platformcontrolport.Administration = (*Controller)(nil)
 
 func (c *Controller) setCandidateFailure(expectedGeneration uint64, code string) {
 	generation, _, ready := c.binding.Snapshot()
@@ -118,7 +150,19 @@ func (c *Controller) setCandidateFailure(expectedGeneration uint64, code string)
 func (c *Controller) Status() platformcontrolv1.Status {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.status
+	status := c.status
+	if c.profile != nil {
+		profile := *c.profile
+		status.Profile = &profile
+	}
+	return status
+}
+
+func (c *Controller) setProfile(profile platformcontrolv1.Profile) {
+	c.mu.Lock()
+	copy := profile
+	c.profile = &copy
+	c.mu.Unlock()
 }
 
 func (c *Controller) setStatus(phase platformcontrolv1.Phase, generation uint64, code string) {

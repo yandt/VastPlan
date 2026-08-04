@@ -12,7 +12,7 @@ import type {
 	CreateAuthorizationBindingRequest, CreateAuthorizationRoleRequest, CreateTestReleaseRequest, CredentialMetadata, DataPlaneExposureDraftRequest, DataPlaneExposureRevision,
 	DataPlaneTicketGrant, DatabaseConnection, DatabasePoolPolicy, DatabaseProbe, DeploymentTarget, ManagedAuthenticationProvider,
 	ManagedCredentialAuditEvent, ManagedCredentialAuditPage, ManagedCredentialMaintenanceStatus, ManagedNode, NodeBootstrapPlan, PlatformFetch,
-	PlatformFetchResponse, PluginConfigurationCandidate, PluginConfigurationCandidateStatus, PluginConfigurationDefinition, PluginConfigurationResourceCollection, PluginConfigurationResourceItem,
+	PlatformControlChangeRequest, PlatformControlStatus, PlatformFetchResponse, PluginConfigurationCandidate, PluginConfigurationCandidateStatus, PluginConfigurationDefinition, PluginConfigurationResourceCollection, PluginConfigurationResourceItem,
 	PluginConfigurationResourcePage, PluginConfigurationResourceResponse, PrepareArtifactMigrationRequest, PutDatabaseConnectionRequest, PutTestTargetBindingRequest, SeedHandoffState,
 	PluginInstallationCandidate, PluginInstallationPreview, PluginInstallationPreviewRequest, PluginInstallationTargetOption, SelfServicePluginInstallationRequest, ServiceAuditEvent, ServiceRevision, ServiceRevisionStatus, Setting, SubmitArtifactPublicationRequest, TestRelease,
 	TestReleaseStatus, TestTargetBinding, UpdateAuthorizationBindingRequest,
@@ -141,6 +141,9 @@ export class PlatformAdminClient {
   public testDatabaseConnection(name: string, value: PutDatabaseConnectionRequest): Promise<DatabaseProbe> {
     return this.mutate(`${this.basePath}/database-connections/${segment(name)}/test`, "POST", value);
   }
+  public platformControlStatus(): Promise<PlatformControlStatus> { return this.get(`${this.basePath}/platform-control`); }
+  public testPlatformControl(value: PlatformControlChangeRequest): Promise<PlatformControlStatus> { return this.mutate(`${this.basePath}/platform-control/test`, "POST", value); }
+  public configurePlatformControl(value: PlatformControlChangeRequest): Promise<PlatformControlStatus> { return this.mutate(`${this.basePath}/platform-control`, "PUT", value); }
   public authenticationProviderState(): Promise<AuthenticationProviderManagementState> { return this.get(`${this.basePath}/authentication-providers`); }
   public createAuthenticationProviderDraft(expectedGeneration: number, profile: AuthenticationProviderProfile): Promise<AuthenticationProviderManagementState> { return this.mutate(`${this.basePath}/authentication-providers`, "POST", { expectedGeneration, profile }); }
   public validateAuthenticationProvider(id: string, expectedGeneration: number): Promise<AuthenticationProviderManagementState> { return this.authenticationProviderAction(id, "validate", { expectedGeneration }); }
@@ -396,6 +399,11 @@ function platformAdminErrorMessage(code: string): string {
   if (code === "database_permission_denied") return "数据库账户没有所需权限。";
   if (code === "database_pool_exhausted") return "数据库连接资源暂时不足，请稍后重试。";
   if (code === "database_runtime_unavailable") return "数据库运行服务暂时不可用，请稍后重试。";
+  if (code === "platform_control_invalid") return "平台控制数据库配置无效，请检查数据库地址、凭证引用和契约范围。";
+  if (code === "platform_control_secret_unavailable") return "平台控制数据库密码引用不可用，请检查 systemd credential 或受保护文件。";
+  if (code === "platform_control_database_unavailable") return "平台控制数据库连接失败，请检查网络、账户、传输加密和数据库权限。";
+  if (code === "platform_control_initialization_failed") return "平台控制数据库初始化失败，请检查建表权限和迁移日志。";
+  if (code === "platform_control_conflict") return "平台控制数据库配置已被其他节点更新，请刷新后重试。";
   return `Platform administration request failed: ${code}`;
 }
 

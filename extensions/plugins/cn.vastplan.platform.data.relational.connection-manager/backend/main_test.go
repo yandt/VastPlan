@@ -11,7 +11,9 @@ import (
 	"testing"
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
+	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
@@ -32,6 +34,30 @@ func TestDescriptorMatchesSignedManifest(t *testing.T) {
 	var signed, runtime any
 	if len(contributions) != 1 || json.Unmarshal(contributions[0].Descriptor, &signed) != nil || json.Unmarshal(descriptor(), &runtime) != nil || !reflect.DeepEqual(signed, runtime) {
 		t.Fatalf("运行时 descriptor 与签名 Manifest 不一致\nsigned=%s\nruntime=%s", contributions[0].Descriptor, descriptor())
+	}
+}
+
+type platformControlHost struct {
+	target  *contractv1.CallTarget
+	payload []byte
+}
+
+func (h *platformControlHost) Call(_ context.Context, target *contractv1.CallTarget, _ *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+	h.target = target
+	h.payload = append([]byte(nil), payload...)
+	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, []byte(`{"phase":"unconfigured"}`), nil
+}
+
+func TestPlatformControlOperationsForwardOnlyValidatedRequestsToKernelServices(t *testing.T) {
+	host := &platformControlHost{}
+	request := []byte(`{"profile":{"schemaVersion":1,"generation":1,"providerId":"postgresql","endpoint":"db:5432","database":"vastplan","schema":"platform","tls":{"mode":"verify-full","serverName":"db"},"username":"app","secretRef":{"kind":"systemd-credential","name":"platform-db"},"contractRange":"^1.0.0"},"expectedGeneration":0}`)
+	result, _, err := callPlatformControl(context.Background(), host, dbContext(), operationPlatformControlTest, request)
+	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK || host.target.GetExtensionPoint() != extpoint.KernelService || host.target.GetCapability() != platformcontrolv1.KernelTestService || host.target.GetOperation() != "test" {
+		t.Fatalf("Platform Control 测试未通过受限内核端口转发: target=%+v result=%+v err=%v", host.target, result, err)
+	}
+	result, _, err = callPlatformControl(context.Background(), host, dbContext(), operationPlatformControlConfigure, []byte(`{"profile":{"schemaVersion":1,"generation":8},"expectedGeneration":0}`))
+	if err != nil || result.GetError().GetCode() != "platform.database.platform_control_invalid" {
+		t.Fatalf("非法配置必须在插件边界拒绝: result=%+v err=%v", result, err)
 	}
 }
 

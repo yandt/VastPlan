@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ManagementAPIClient, PlatformAdminClient, PlatformAdminError, type PlatformFetch } from "./index";
+import { ManagementAPIClient, PlatformAdminClient, PlatformAdminError, type PlatformControlChangeRequest, type PlatformFetch } from "./index";
 
 describe("PlatformAdminClient", () => {
   it("obtains CSRF before a write and never places credential plaintext in the URL", async () => {
@@ -78,6 +78,24 @@ describe("PlatformAdminClient", () => {
       { path: "/v1/portals/operations/platform/services/database/database-connections/main/test", method: "POST", body: JSON.stringify({ providerId: "postgresql", endpoint: "db:5432", options: { user: "app" }, credentialValue: "one-time" }) },
     ]);
     expect(calls[1]!.path).not.toContain("one-time");
+  });
+
+  it("uses fixed Platform Control bootstrap routes without placing secret material in the request", async () => {
+    const calls: Array<{ path: string; method?: string; body?: string }> = [];
+    const client = new PlatformAdminClient(async (path, init) => {
+      calls.push({ path, method: init?.method, body: init?.body });
+      return { ok: true, status: 200, json: async () => path === "/v1/csrf" ? { token: "safe" } : { phase: "unconfigured" } };
+    }, "operations", "database");
+    const request: PlatformControlChangeRequest = { profile: { schemaVersion: 1, generation: 1, providerId: "postgresql", endpoint: "db:5432", database: "vastplan", schema: "platform", tls: { mode: "verify-full", serverName: "db" }, username: "app", secretRef: { kind: "systemd-credential", name: "platform-db" }, contractRange: "^1.0.0" }, expectedGeneration: 0 };
+    await client.platformControlStatus();
+    await client.testPlatformControl(request);
+    await client.configurePlatformControl(request);
+    expect(calls.filter((call) => call.path !== "/v1/csrf")).toEqual([
+      { path: "/v1/portals/operations/platform/services/database/platform-control", method: "GET", body: undefined },
+      { path: "/v1/portals/operations/platform/services/database/platform-control/test", method: "POST", body: JSON.stringify(request) },
+      { path: "/v1/portals/operations/platform/services/database/platform-control", method: "PUT", body: JSON.stringify(request) },
+    ]);
+    expect(JSON.stringify(calls)).not.toContain("password");
   });
 
   it("gives database configuration rejections a usable client message", async () => {

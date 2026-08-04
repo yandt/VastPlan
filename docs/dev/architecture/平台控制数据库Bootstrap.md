@@ -64,4 +64,12 @@ P4c 已把进程边界接通：
 - 恢复由已验证能力目录的 topology change 触发，没有定时兜底轮询；Runtime 重建并重新登记 Capability 后，Controller 按已提交 Profile 幂等执行 Open；
 - P6 完成多副本逐实例初始化和事务亲和前，种子 Database Runtime 固定为单副本，禁止把 queue 路由误当成多副本 Shared State 已就绪。
 
-配置 API/UI 和 Seed Recovery 可写动作仍属于 P4 后续。
+P4d 已完成受限管理闭环：
+
+- Controller 实现统一 `Administration` 端口，`Status / TestCandidate / Configure` 均沿同一 Profile、SecretResolver 和 Bootstrapper 调用链执行；测试候选不会初始化数据库、提交 Profile 或绑定 Store；
+- Backend Kernel 只向精确的 Connection Manager 插件开放三个 `kernel.platform-control.*` 服务，插件策略与 Seed Profile 的 kernel service grant 同时收紧；
+- Connection Manager 公开 `platformControlStatus / platformControlTest / platformControlConfigure`，但自身不解释数据库驱动和秘密；其 Bootstrap 依赖于 Credentials 的部分降级为 soft，普通连接管理工作流在 Credentials 未就绪时仍然 fail-closed；
+- Portal BFF 使用固定、CSRF 保护且受 Management Binding 和角色权限约束的 `/platform-control` 路由。授权页面只接收 systemd credential name 或 owner-only 文件绝对路径，不接收密码明文；
+- 同一数据库全栈插件增加 Workbench Form Page，覆盖未配置、测试、初始化、Ready 和 Recovery 状态。当前非敏感 Profile 可在授权页面回填，语言切换仍由插件目录驱动。
+
+开发编排器默认启用两阶段 Profile 路径、全新 Seed 无 Portal Activation 时的静态恢复入口，以及 Seed Recovery 可写动作仍属于 P4 的最后一个检查点。

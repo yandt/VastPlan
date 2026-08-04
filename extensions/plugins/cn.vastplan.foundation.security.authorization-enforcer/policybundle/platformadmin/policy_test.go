@@ -9,6 +9,7 @@ import (
 	configurationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configuration/v1"
 	configurationscopedv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configurationscoped/v1"
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
+	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
 	stagingv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionstaging/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationactivation"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationauthority"
@@ -235,6 +236,15 @@ func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
 	}
 	if got, _ := decide(businessPlugin, runtimeLease); got != extpoint.DecisionDeny {
 		t.Fatalf("其他插件不得被平台策略授权 Runtime lease: %s", got)
+	}
+	connectionManager := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.vastplan.platform.data.relational.connection-manager"}}
+	for _, capability := range []string{platformcontrolv1.KernelStatusService, platformcontrolv1.KernelTestService, platformcontrolv1.KernelConfigureService} {
+		if got, _ := decide(connectionManager, extpoint.PermissionRequest{Capability: capability}); got != extpoint.DecisionAllow {
+			t.Fatalf("连接管理插件应能调用 Platform Control 内核端口 %s: %s", capability, got)
+		}
+		if got, _ := decide(businessPlugin, extpoint.PermissionRequest{Capability: capability}); got == extpoint.DecisionAllow {
+			t.Fatalf("其他插件不得调用 Platform Control 内核端口 %s: %s", capability, got)
+		}
 	}
 	marketplace := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.vastplan.platform.artifacts.marketplace"}}
 	if got, _ := decide(marketplace, extpoint.PermissionRequest{ExtensionPoint: extpoint.ToolPackage, Capability: platformadminapi.ArtifactsCapability, Operation: "listCatalog"}); got != extpoint.DecisionAllow {

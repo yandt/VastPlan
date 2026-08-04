@@ -9,14 +9,15 @@ import (
 	"fmt"
 
 	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
+	"cdsoft.com.cn/VastPlan/core/internal/runtimeidentity"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationauthority"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/credentiallease"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/deploymentpublication"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/nodebootstrap"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformcontrol"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformprofileactivation"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfiguration"
-	"cdsoft.com.cn/VastPlan/core/internal/runtimeidentity"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
 )
 
@@ -91,6 +92,7 @@ type Dependencies struct {
 	DeploymentPublication          deploymentpublication.Controller
 	DeploymentReadiness            deploymentpublication.ReadinessObserver
 	PlatformProfileActivation      platformprofileactivation.Controller
+	PlatformControl                platformcontrol.Administration
 	ConfigurationCatalogs          pluginconfiguration.Reader
 	ConfigurationAuthorityIssuer   configurationauthority.Issuer
 	ConfigurationAuthorityConsumer configurationauthority.Consumer

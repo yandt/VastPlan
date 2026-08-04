@@ -16,6 +16,7 @@ import (
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
+	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
 	"cdsoft.com.cn/VastPlan/core/internal/runtimeidentity"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationauthority"
@@ -23,6 +24,7 @@ import (
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/deploymentpublication"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/nodebootstrap"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/operationfence"
+	platformcontrol "cdsoft.com.cn/VastPlan/extensions/libraries/go/platformcontrol"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformprofileactivation"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfiguration"
@@ -39,6 +41,48 @@ type deploymentReadinessObserver struct{ called bool }
 type configurationCatalogReader struct{ tenant string }
 
 type profileActivationController struct{ tenant string }
+
+type platformControlAdministration struct {
+	status     platformcontrolv1.Status
+	tested     int
+	configured int
+}
+
+func (a *platformControlAdministration) Status() platformcontrolv1.Status { return a.status }
+func (a *platformControlAdministration) TestCandidate(_ context.Context, _ platformcontrolv1.Profile, expected uint64) error {
+	a.tested++
+	a.status = platformcontrolv1.Status{Phase: platformcontrolv1.PhaseUnconfigured, Generation: expected}
+	return nil
+}
+func (a *platformControlAdministration) Configure(_ context.Context, profile platformcontrolv1.Profile, _ uint64) error {
+	a.configured++
+	a.status = platformcontrolv1.Status{Phase: platformcontrolv1.PhaseReady, Generation: profile.Generation}
+	return nil
+}
+
+var _ platformcontrol.Administration = (*platformControlAdministration)(nil)
+
+func TestPlatformControlKernelServicesRequireExactConnectionManager(t *testing.T) {
+	admin := &platformControlAdministration{status: platformcontrolv1.Status{Phase: platformcontrolv1.PhaseUnconfigured}}
+	services := kernelPlatformControl(admin)
+	trusted := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: databaseConnectionManagerID}}
+	if result, raw, err := services[platformcontrolv1.KernelStatusService](context.Background(), trusted, []byte(`{}`)); err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK || !strings.Contains(string(raw), `"phase":"unconfigured"`) {
+		t.Fatalf("可信连接管理插件读取状态失败: result=%+v raw=%s err=%v", result, raw, err)
+	}
+	request := []byte(`{"profile":{"schemaVersion":1,"generation":1,"providerId":"postgresql","endpoint":"db:5432","database":"vastplan","schema":"platform","tls":{"mode":"verify-full","serverName":"db"},"username":"app","secretRef":{"kind":"systemd-credential","name":"platform-db"},"contractRange":"^1.0.0"},"expectedGeneration":0}`)
+	if result, _, err := services[platformcontrolv1.KernelTestService](context.Background(), trusted, request); err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK || admin.tested != 1 {
+		t.Fatalf("可信连接管理插件测试候选失败: result=%+v admin=%+v err=%v", result, admin, err)
+	}
+	if result, _, err := services[platformcontrolv1.KernelConfigureService](context.Background(), trusted, request); err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK || admin.configured != 1 {
+		t.Fatalf("可信连接管理插件提交候选失败: result=%+v admin=%+v err=%v", result, admin, err)
+	}
+	forged := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.example.attacker"}}
+	for name, service := range services {
+		if _, _, err := service(context.Background(), forged, request); err == nil {
+			t.Fatalf("其他插件不得调用 Platform Control 内核端口 %s", name)
+		}
+	}
+}
 
 func (c *profileActivationController) Prepare(_ context.Context, tenant string, _ platformprofileactivation.PrepareRequest) (platformprofileactivation.PrepareResult, error) {
 	c.tenant = tenant

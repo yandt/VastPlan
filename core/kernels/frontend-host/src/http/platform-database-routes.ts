@@ -13,8 +13,26 @@ export class PlatformDatabaseRoutes {
   public constructor(private readonly client: PlatformCapabilityPort) {}
 
   public async handle(parts: readonly string[], principal: Principal, target: PlatformManagementTarget, request: IncomingMessage, response: ServerResponse, signal: AbortSignal): Promise<boolean> {
-    if (parts[0] !== "database-connections") return false;
     const method = request.method ?? "GET";
+    if (parts[0] === "platform-control") {
+      if (parts.length === 1 && (method === "GET" || method === "HEAD")) {
+        if (!authorizePlatformOperation(this.client, target, capability, "platformControlStatus", false, response) || !requirePlatformRole(principal, "platform.database.read", response)) return true;
+        await this.call(principal, target, "platformControlStatus", false, {}, response, signal, method === "HEAD");
+        return true;
+      }
+      if (parts.length === 2 && parts[1] === "test" && method === "POST") {
+        if (!authorizePlatformOperation(this.client, target, capability, "platformControlTest", true, response) || !requirePlatformRole(principal, "platform.database.probe", response)) return true;
+        await withRequestJSON(request, response, async (body) => this.call(principal, target, "platformControlTest", true, requireJSONObject(body), response, signal));
+        return true;
+      }
+      if (parts.length === 1 && method === "PUT") {
+        if (!authorizePlatformOperation(this.client, target, capability, "platformControlConfigure", true, response) || !requirePlatformRole(principal, "platform.database.write", response)) return true;
+        await withRequestJSON(request, response, async (body) => this.call(principal, target, "platformControlConfigure", true, requireJSONObject(body), response, signal));
+        return true;
+      }
+      return reject(response, 405, "method_not_allowed", method);
+    }
+    if (parts[0] !== "database-connections") return false;
     if (parts.length === 1) {
       if (!authorizePlatformOperation(this.client, target, capability, "list", false, response) || !requirePlatformRole(principal, "platform.database.read", response)) return true;
       if (method !== "GET" && method !== "HEAD") return reject(response, 405, "method_not_allowed", method);

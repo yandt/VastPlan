@@ -299,11 +299,14 @@
         "environment_allowlist": {
           "cn.vastplan.foundation.security.authorization-enforcer": ["VASTPLAN_AUTHORIZATION_PERMISSION_CATALOG", "VASTPLAN_AUTHORIZATION_POLICY_SNAPSHOT", "VASTPLAN_AUTHORIZATION_POLICY_TRUST", "VASTPLAN_AUTHORIZATION_POLICY_AUDIENCE", "VASTPLAN_AUTHORIZATION_DIRECTORY_GROUPS"],
           "cn.vastplan.platform.data.relational.connection-manager": ["VASTPLAN_DATABASE_CONNECTIONS_STATE_FILE"]
+        },
+        "kernel_service_grants": {
+          "cn.vastplan.platform.data.relational.connection-manager": ["kernel.platform-control.status", "kernel.platform-control.test", "kernel.platform-control.configure"]
         }
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.4.1", "channel": "stable" },
-        { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.13.8", "channel": "stable" }
+        { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.14.0", "channel": "stable" }
       ]
     },
     {
