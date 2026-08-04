@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.foundation.data.relational.runtime",
   "name": "VastPlan Database Runtime",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -23,6 +23,13 @@
       {
         "extensionPoint": "tool.package",
         "capability": "foundation.data.relational.runtime", "contractVersion": "1.2.0",
+        "visibility": "cluster",
+        "routing": "queue",
+        "routingDomain": "platform"
+      },
+      {
+        "extensionPoint": "tool.package",
+        "capability": "foundation.data.record-store", "contractVersion": "1.0.0",
         "visibility": "cluster",
         "routing": "queue",
         "routingDomain": "platform"
@@ -85,6 +92,27 @@
             { "name": "begin", "description": "在当前 Runtime 实例开始短期事务" },
             { "name": "commit", "description": "提交实例亲和事务" },
             { "name": "rollback", "description": "回滚实例亲和事务" }
+          ]
+        },
+        {
+          "id": "foundation.data.record-store",
+          "service_role": "backend",
+          "title": "Record Store",
+          "subcommands": [
+            { "name": "syncModels", "description": "同步同代已验证制品的 DataModel 与签名迁移目录" },
+            { "name": "create", "description": "创建声明式记录" },
+            { "name": "get", "description": "按主键读取声明式记录" },
+            { "name": "list", "description": "按受限过滤和游标分页列出记录" },
+            { "name": "update", "description": "按 CAS 更新声明式记录" },
+            { "name": "delete", "description": "按 CAS 删除声明式记录" },
+            { "name": "batch", "description": "在同一事务执行批量 mutation" },
+            { "name": "begin", "description": "开始 Repository UnitOfWork" },
+            { "name": "commit", "description": "提交 Repository UnitOfWork" },
+            { "name": "rollback", "description": "回滚 Repository UnitOfWork" },
+            { "name": "appendOutbox", "description": "在数据事务内追加 Outbox" },
+            { "name": "schemaPlan", "description": "读取 DataModel 迁移计划" },
+            { "name": "schemaApply", "description": "由唯一 Schema Controller 应用安全迁移" },
+            { "name": "schemaStatus", "description": "读取持久迁移账本状态" }
           ]
         }
       ]

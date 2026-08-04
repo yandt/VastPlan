@@ -63,6 +63,7 @@ func main() {
 	defer service.Close()
 	plugin := sdk.New(runtime.PluginID, runtime.PluginVersion, map[string]string{"backend": "^0.1"})
 	plugin.Contribute(service.Contribution())
+	plugin.Contribute(service.RecordContribution())
 	plugin.Contribute(bootstrapService.Contribution())
 	plugin.Contribute(sharedStateService.Contribution())
 	if err := plugin.Serve(); err != nil {
