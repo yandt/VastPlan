@@ -48,6 +48,7 @@ func PlanMigration(dialect Dialect, previous *datamodelv1.Model, next datamodelv
 		previousFields[field.ID] = field
 	}
 	var statements []databasev1.Statement
+	var mysqlClauses []string
 	var reasons []string
 	for _, field := range next.Fields {
 		old, exists := previousFields[field.ID]
@@ -56,7 +57,11 @@ func PlanMigration(dialect Dialect, previous *datamodelv1.Model, next datamodelv
 				reasons = append(reasons, "新增非空字段 "+field.ID)
 				continue
 			}
-			statements = append(statements, databasev1.Statement{SQL: fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s NULL", dialect.Quote(next.Storage.Table), dialect.Quote(field.Column), sqlType(dialect.ProviderID(), field)), Parameters: []databasev1.Value{}})
+			if dialect.ProviderID() == "mysql" {
+				mysqlClauses = append(mysqlClauses, fmt.Sprintf("ADD COLUMN %s %s NULL", dialect.Quote(field.Column), sqlType(dialect.ProviderID(), field)))
+			} else {
+				statements = append(statements, databasev1.Statement{SQL: fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s NULL", dialect.Quote(next.Storage.Table), dialect.Quote(field.Column), sqlType(dialect.ProviderID(), field)), Parameters: []databasev1.Value{}})
+			}
 			continue
 		}
 		delete(previousFields, field.ID)
@@ -81,7 +86,15 @@ func PlanMigration(dialect Dialect, previous *datamodelv1.Model, next datamodelv
 				reasons = append(reasons, "新增唯一索引 "+index.ID)
 				continue
 			}
-			statements = append(statements, createIndexStatement(dialect, next, index))
+			if dialect.ProviderID() == "mysql" {
+				fields := map[string]datamodelv1.Field{}
+				for _, field := range next.Fields {
+					fields[field.ID] = field
+				}
+				mysqlClauses = append(mysqlClauses, fmt.Sprintf("ADD INDEX %s (%s)", dialect.Quote(constraintName(next.Storage.Table, index.ID)), joinColumns(dialect, fields, index.Fields)))
+			} else {
+				statements = append(statements, createIndexStatement(dialect, next, index))
+			}
 			continue
 		}
 		delete(oldIndexes, index.ID)
@@ -95,6 +108,9 @@ func PlanMigration(dialect Dialect, previous *datamodelv1.Model, next datamodelv
 	if len(reasons) != 0 {
 		sort.Strings(reasons)
 		return MigrationPlan{Kind: MigrationManual, Reasons: reasons}, nil
+	}
+	if len(mysqlClauses) != 0 {
+		statements = []databasev1.Statement{ddl(fmt.Sprintf("ALTER TABLE %s %s", dialect.Quote(next.Storage.Table), strings.Join(mysqlClauses, ", ")))}
 	}
 	if len(statements) == 0 {
 		return MigrationPlan{Kind: MigrationNone}, nil
@@ -117,7 +133,16 @@ func createTableStatement(dialect Dialect, model datamodelv1.Model) (databasev1.
 	for _, unique := range model.UniqueConstraints {
 		definitions = append(definitions, fmt.Sprintf("CONSTRAINT %s UNIQUE (%s)", dialect.Quote(constraintName(model.Storage.Table, unique.ID)), joinColumns(dialect, fields, unique.Fields)))
 	}
-	statement := databasev1.Statement{SQL: fmt.Sprintf("CREATE TABLE %s (%s)", dialect.Quote(model.Storage.Table), strings.Join(definitions, ", ")), Parameters: []databasev1.Value{}}
+	if dialect.ProviderID() == "mysql" {
+		for _, index := range model.Indexes {
+			unique := ""
+			if index.Unique {
+				unique = "UNIQUE "
+			}
+			definitions = append(definitions, fmt.Sprintf("%sKEY %s (%s)", unique, dialect.Quote(constraintName(model.Storage.Table, index.ID)), joinColumns(dialect, fields, index.Fields)))
+		}
+	}
+	statement := databasev1.Statement{SQL: fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (%s)", dialect.Quote(model.Storage.Table), strings.Join(definitions, ", ")), Parameters: []databasev1.Value{}}
 	if err := databasev1.ValidateStatement(statement); err != nil {
 		return databasev1.Statement{}, err
 	}
@@ -125,6 +150,9 @@ func createTableStatement(dialect Dialect, model datamodelv1.Model) (databasev1.
 }
 
 func IndexStatements(dialect Dialect, model datamodelv1.Model) []databasev1.Statement {
+	if dialect.ProviderID() == "mysql" {
+		return []databasev1.Statement{}
+	}
 	statements := make([]databasev1.Statement, 0, len(model.Indexes))
 	for _, index := range model.Indexes {
 		statements = append(statements, createIndexStatement(dialect, model, index))
@@ -167,7 +195,13 @@ func sqlType(provider string, field datamodelv1.Field) string {
 	if provider == "postgresql" {
 		return map[string]string{"string": "TEXT", "uuid": "UUID", "int64": "BIGINT", "float64": "DOUBLE PRECISION", "bool": "BOOLEAN", "bytes": "BYTEA", "timestamp": "TIMESTAMPTZ", "json": "JSONB"}[field.Type]
 	}
-	return map[string]string{"string": "VARCHAR(1024)", "uuid": "CHAR(36)", "int64": "BIGINT", "float64": "DOUBLE", "bool": "BOOLEAN", "bytes": "LONGBLOB", "timestamp": "DATETIME(6)", "json": "JSON"}[field.Type]
+	if field.Type == "string" {
+		if field.MaxLength > 0 {
+			return fmt.Sprintf("VARCHAR(%d)", field.MaxLength)
+		}
+		return "TEXT"
+	}
+	return map[string]string{"uuid": "CHAR(36)", "int64": "BIGINT", "float64": "DOUBLE", "bool": "BOOLEAN", "bytes": "LONGBLOB", "timestamp": "DATETIME(6)", "json": "JSON"}[field.Type]
 }
 
 func joinColumns(dialect Dialect, fields map[string]datamodelv1.Field, ids []string) string {

@@ -51,6 +51,7 @@ var errorCodes = map[string]struct{}{
 	ErrorDatabaseNotFound: {}, ErrorPermissionDenied: {},
 	ErrorDeadlineExceeded: {}, ErrorQueryFailed: {}, ErrorTransactionLost: {},
 	ErrorTransactionExpired: {}, ErrorTransactionConflict: {},
+	ErrorConstraintViolation: {},
 }
 
 func compileSchemas() {

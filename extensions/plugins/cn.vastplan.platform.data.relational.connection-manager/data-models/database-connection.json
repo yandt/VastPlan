@@ -5,10 +5,10 @@
   "storage": { "kind": "platform-control", "table": "database_connections" },
   "fields": [
     { "id": "id", "column": "id", "type": "uuid", "nullable": false, "sensitivity": "internal" },
-    { "id": "tenantId", "column": "tenant_id", "type": "string", "nullable": false, "sensitivity": "confidential" },
-    { "id": "serviceId", "column": "service_id", "type": "string", "nullable": false, "sensitivity": "internal" },
-    { "id": "name", "column": "name", "type": "string", "nullable": false, "sensitivity": "internal" },
-    { "id": "providerId", "column": "provider_id", "type": "string", "nullable": false, "sensitivity": "internal" },
+    { "id": "tenantId", "column": "tenant_id", "type": "string", "nullable": false, "sensitivity": "confidential", "maxLength": 160 },
+    { "id": "serviceId", "column": "service_id", "type": "string", "nullable": false, "sensitivity": "internal", "maxLength": 160 },
+    { "id": "name", "column": "name", "type": "string", "nullable": false, "sensitivity": "internal", "maxLength": 160 },
+    { "id": "providerId", "column": "provider_id", "type": "string", "nullable": false, "sensitivity": "internal", "maxLength": 80 },
     { "id": "endpoint", "column": "endpoint", "type": "string", "nullable": false, "sensitivity": "confidential" },
     { "id": "database", "column": "database_name", "type": "string", "nullable": true, "sensitivity": "confidential" },
     { "id": "options", "column": "provider_options", "type": "json", "nullable": false, "sensitivity": "confidential" },
@@ -27,7 +27,7 @@
   "uniqueConstraints": [
     { "id": "tenantServiceName", "fields": ["tenantId", "serviceId", "name"] }
   ],
-  "scope": { "tenant": "required", "service": "required" },
+  "scope": { "tenant": "required", "service": "none" },
   "optimisticLock": { "field": "revision" },
   "audit": { "createdAt": "createdAt", "updatedAt": "updatedAt" },
   "deletion": { "mode": "soft", "field": "deletedAt" }

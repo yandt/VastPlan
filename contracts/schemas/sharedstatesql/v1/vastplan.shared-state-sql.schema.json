@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/sharedstatesql/v1/vastplan.shared-state-sql.schema.json",
+  "type": "object",
+  "$defs": {
+    "component": { "type": "string", "minLength": 1, "maxLength": 320 },
+    "scope": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "pluginId", "runtimeScope", "namespace"],
+      "properties": { "kind": { "enum": ["tenant", "service"] }, "tenantId": { "$ref": "#/$defs/component" }, "pluginId": { "$ref": "#/$defs/component" }, "runtimeScope": { "$ref": "#/$defs/component" }, "namespace": { "$ref": "#/$defs/component" } },
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "tenant" } } }, "then": { "required": ["tenantId"] } },
+        { "if": { "properties": { "kind": { "const": "service" } } }, "then": { "not": { "required": ["tenantId"] } } }
+      ]
+    },
+    "keyRequest": { "type": "object", "additionalProperties": false, "required": ["scope", "key"], "properties": { "scope": { "$ref": "#/$defs/scope" }, "key": { "$ref": "#/$defs/component" } } },
+    "writeRequest": { "type": "object", "additionalProperties": false, "required": ["scope", "key", "valueBase64"], "properties": { "scope": { "$ref": "#/$defs/scope" }, "key": { "$ref": "#/$defs/component" }, "valueBase64": { "type": "string", "maxLength": 1398104, "contentEncoding": "base64" }, "expectedRevision": { "type": "integer", "minimum": 1 } } },
+    "deleteRequest": { "type": "object", "additionalProperties": false, "required": ["scope", "key", "expectedRevision"], "properties": { "scope": { "$ref": "#/$defs/scope" }, "key": { "$ref": "#/$defs/component" }, "expectedRevision": { "type": "integer", "minimum": 1 } } },
+    "listRequest": { "type": "object", "additionalProperties": false, "required": ["scope", "limit"], "properties": { "scope": { "$ref": "#/$defs/scope" }, "prefix": { "type": "string", "maxLength": 320 }, "limit": { "type": "integer", "minimum": 1, "maximum": 200 }, "cursor": { "type": "string", "maxLength": 320 } } }
+  }
+}

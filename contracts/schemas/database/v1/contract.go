@@ -11,6 +11,7 @@ import (
 
 const (
 	SchemaURL                 = "https://schemas.cdsoft.com.cn/vastplan/database/v1/vastplan.database-runtime.schema.json"
+	ContractVersion           = "1.1.0"
 	Capability                = "foundation.data.relational.runtime"
 	RuntimePluginID           = "cn.vastplan.foundation.data.relational.runtime"
 	ConnectionManagerPluginID = "cn.vastplan.platform.data.relational.connection-manager"
@@ -48,6 +49,7 @@ const (
 	ErrorTransactionLost              = "database.runtime.transaction_lost"
 	ErrorTransactionExpired           = "database.runtime.transaction_expired"
 	ErrorTransactionConflict          = "database.runtime.transaction_conflict"
+	ErrorConstraintViolation          = "database.runtime.constraint_violation"
 )
 
 type ProviderCapabilities struct {

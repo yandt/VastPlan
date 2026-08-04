@@ -24,6 +24,13 @@ func (l *PoolLease) Generation() uint64 {
 	return l.entry.generation
 }
 
+func (l *PoolLease) ProviderID() string {
+	if l == nil || l.entry == nil {
+		return ""
+	}
+	return l.entry.spec.ProviderID
+}
+
 func (l *PoolLease) Closed() <-chan struct{} {
 	if l == nil || l.entry == nil {
 		closed := make(chan struct{})
@@ -59,6 +66,17 @@ func (l *PoolLease) Begin(ctx context.Context, options databasev1.TransactionOpt
 		return nil, NewRuntimeError(databasev1.ErrorInvalidRequest, false, errors.New("pool lease begin 参数无效"))
 	}
 	return l.entry.pool.Begin(ctx, options)
+}
+
+func (l *PoolLease) WithPinned(ctx context.Context, work func(PinnedSession) error) error {
+	if l == nil || l.entry == nil || ctx == nil || work == nil {
+		return NewRuntimeError(databasev1.ErrorInvalidRequest, false, errors.New("pool lease pinned session 参数无效"))
+	}
+	pinned, ok := l.entry.pool.(PinnedPool)
+	if !ok {
+		return NewRuntimeError(databasev1.ErrorUnsupported, false, errors.New("Database Provider 不支持 Schema Controller pinned session"))
+	}
+	return pinned.WithPinned(ctx, work)
 }
 
 func (l *PoolLease) Release() {

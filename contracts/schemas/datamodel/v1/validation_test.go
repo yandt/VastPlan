@@ -11,7 +11,7 @@ func TestParseValidatesDataShapeWithoutBusinessActions(t *testing.T) {
   "storage":{"kind":"platform-control","table":"database_connections"},
   "fields":[
     {"id":"id","column":"id","type":"uuid","nullable":false,"sensitivity":"internal"},
-    {"id":"tenantId","column":"tenant_id","type":"string","nullable":false,"sensitivity":"confidential"},
+    {"id":"tenantId","column":"tenant_id","type":"string","nullable":false,"sensitivity":"confidential","maxLength":160},
     {"id":"revision","column":"revision","type":"int64","nullable":false,"sensitivity":"internal"},
     {"id":"createdAt","column":"created_at","type":"timestamp","nullable":false,"sensitivity":"internal"},
     {"id":"updatedAt","column":"updated_at","type":"timestamp","nullable":false,"sensitivity":"internal"}

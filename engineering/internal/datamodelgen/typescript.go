@@ -31,7 +31,7 @@ func generateTypeScript(model datamodelv1.Model) []byte {
 }
 
 func tsType(field datamodelv1.Field) string {
-	value := map[string]string{"string": "string", "uuid": "string", "int64": "number", "float64": "number", "bool": "boolean", "bytes": "Uint8Array", "timestamp": "string", "json": "unknown"}[field.Type]
+	value := map[string]string{"string": "string", "uuid": "string", "int64": "string", "float64": "number", "bool": "boolean", "bytes": "Uint8Array", "timestamp": "string", "json": "unknown"}[field.Type]
 	if field.Nullable {
 		return value + " | null"
 	}

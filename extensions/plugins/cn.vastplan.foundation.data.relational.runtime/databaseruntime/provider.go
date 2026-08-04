@@ -15,7 +15,7 @@ import (
 
 const (
 	PluginID      = databasev1.RuntimePluginID
-	PluginVersion = "0.7.10"
+	PluginVersion = "0.8.0"
 )
 
 // CredentialMaterial exists only during MaterialSource.WithMaterial. Provider
@@ -65,6 +65,19 @@ type Transaction interface {
 	Rollback(context.Context) error
 }
 
+// PinnedSession keeps advisory locks and DDL on one physical connection.
+// It is an optional first-party Provider extension used only by the Schema
+// Controller; ordinary Record Store operations continue through Pool.
+type PinnedSession interface {
+	Query(context.Context, databasev1.Statement, int) (databasev1.QueryResult, error)
+	Execute(context.Context, databasev1.Statement) (databasev1.ExecuteResult, error)
+	Begin(context.Context, databasev1.TransactionOptions) (Transaction, error)
+}
+
+type PinnedPool interface {
+	WithPinned(context.Context, func(PinnedSession) error) error
+}
+
 // RuntimeError is the only Provider error shape interpreted by the service.
 // Message remains diagnostic; callers branch only on the stable code.
 type RuntimeError struct {
@@ -85,6 +98,13 @@ func (e *RuntimeError) Unwrap() error {
 		return nil
 	}
 	return e.Err
+}
+
+func (e *RuntimeError) RuntimeCode() string {
+	if e == nil {
+		return ""
+	}
+	return e.Code
 }
 
 func NewRuntimeError(code string, retryable bool, err error) error {

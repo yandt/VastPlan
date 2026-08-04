@@ -2,6 +2,7 @@ package recordstore
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 
 	datamodelv1 "cdsoft.com.cn/VastPlan/contracts/schemas/datamodel/v1"
@@ -37,6 +38,16 @@ func TestCatalogAtomicallyReplacesSignedModels(t *testing.T) {
 	if _, err := catalog.Replace(tampered); err == nil {
 		t.Fatal("同 generation 或摘要漂移必须拒绝")
 	}
+	missing := ref
+	missing.ID = "example.missing"
+	if _, err := catalog.Resolve(missing); !errors.Is(err, ErrModelNotFound) {
+		t.Fatalf("未知模型应返回稳定错误: %v", err)
+	}
+	mismatch := ref
+	mismatch.SchemaVersion++
+	if _, err := catalog.Resolve(mismatch); !errors.Is(err, ErrModelMismatch) {
+		t.Fatalf("模型身份漂移应返回稳定错误: %v", err)
+	}
 }
 
 func testModel() datamodelv1.Model {
@@ -45,8 +56,8 @@ func testModel() datamodelv1.Model {
 		Storage: datamodelv1.StorageBinding{Kind: "connection-ref", Table: "orders"},
 		Fields: []datamodelv1.Field{
 			{ID: "id", Column: "id", Type: "uuid", Sensitivity: "internal"},
-			{ID: "tenantId", Column: "tenant_id", Type: "string", Sensitivity: "confidential"},
-			{ID: "name", Column: "name", Type: "string", Sensitivity: "internal"},
+			{ID: "tenantId", Column: "tenant_id", Type: "string", Sensitivity: "confidential", MaxLength: 160},
+			{ID: "name", Column: "name", Type: "string", Sensitivity: "internal", MaxLength: 160},
 			{ID: "revision", Column: "revision", Type: "int64", Sensitivity: "internal"},
 			{ID: "createdAt", Column: "created_at", Type: "timestamp", Sensitivity: "internal"},
 			{ID: "updatedAt", Column: "updated_at", Type: "timestamp", Sensitivity: "internal"},

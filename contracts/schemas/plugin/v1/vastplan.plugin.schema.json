@@ -882,7 +882,7 @@
       "required": ["id", "contractVersion", "path", "sha256"],
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 160 },
-        "contractVersion": { "const": "1.0.0" },
+        "contractVersion": { "const": "1.1.0" },
         "path": { "type": "string", "pattern": "^data-models/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_.-]+\\.json$", "maxLength": 512 },
         "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
       }

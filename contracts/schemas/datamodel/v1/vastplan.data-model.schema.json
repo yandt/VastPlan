@@ -49,7 +49,8 @@
         "column": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,62}$" },
         "type": { "enum": ["string", "int64", "float64", "bool", "bytes", "timestamp", "json", "uuid"] },
         "nullable": { "type": "boolean" },
-        "sensitivity": { "enum": ["public", "internal", "confidential", "secret"] }
+        "sensitivity": { "enum": ["public", "internal", "confidential", "secret"] },
+        "maxLength": { "type": "integer", "minimum": 1, "maximum": 4096 }
       }
     },
     "index": {

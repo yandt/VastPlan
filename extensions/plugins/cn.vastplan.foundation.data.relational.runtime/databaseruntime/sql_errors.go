@@ -67,6 +67,8 @@ func classifySQLError(err error, transaction bool) error {
 			return NewRuntimeError(databasev1.ErrorDatabaseNotFound, false, err)
 		case "42501":
 			return NewRuntimeError(databasev1.ErrorPermissionDenied, false, err)
+		case "23505", "23503", "23514", "23P01":
+			return NewRuntimeError(databasev1.ErrorConstraintViolation, false, err)
 		}
 		class := postgresError.Code
 		if len(class) >= 2 {
@@ -102,6 +104,8 @@ func classifySQLError(err error, transaction bool) error {
 				return NewRuntimeError(databasev1.ErrorTransactionConflict, true, err)
 			}
 			return NewRuntimeError(databasev1.ErrorQueryFailed, true, err)
+		case 1062, 1451, 1452, 3819:
+			return NewRuntimeError(databasev1.ErrorConstraintViolation, false, err)
 		case 1053, 2002, 2003, 2006, 2013:
 			return NewRuntimeError(databasev1.ErrorConnectionUnavailable, true, err)
 		default:

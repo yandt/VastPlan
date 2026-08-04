@@ -81,6 +81,26 @@ func Validate(model Model) error {
 			return fmt.Errorf("DataModel 主键字段无效或可空: %s", fieldID)
 		}
 	}
+	indexed := map[string]struct{}{}
+	for _, fieldID := range model.PrimaryKey {
+		indexed[fieldID] = struct{}{}
+	}
+	for _, index := range model.Indexes {
+		for _, fieldID := range index.Fields {
+			indexed[fieldID] = struct{}{}
+		}
+	}
+	for _, unique := range model.UniqueConstraints {
+		for _, fieldID := range unique.Fields {
+			indexed[fieldID] = struct{}{}
+		}
+	}
+	for fieldID := range indexed {
+		field := fields[fieldID]
+		if field.Type == "string" && field.MaxLength == 0 {
+			return fmt.Errorf("被索引的 string 字段 %s 必须声明 maxLength", fieldID)
+		}
+	}
 	seenConstraints := map[string]struct{}{}
 	for _, index := range model.Indexes {
 		if err := validateFieldSet(index.ID, index.Fields, fields, seenConstraints); err != nil {

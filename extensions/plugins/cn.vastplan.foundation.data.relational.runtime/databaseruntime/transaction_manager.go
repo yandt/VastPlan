@@ -14,8 +14,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 )
 
 const (
@@ -268,6 +268,14 @@ func (m *TransactionManager) Connection(handle string, call *contractv1.CallCont
 	return claims.Connection, nil
 }
 
+func (m *TransactionManager) ProviderID(handle string, call *contractv1.CallContext) (string, error) {
+	entry, _, err := m.resolve(handle, call, nil)
+	if err != nil {
+		return "", err
+	}
+	return entry.lease.ProviderID(), nil
+}
+
 func (m *TransactionManager) Query(ctx context.Context, call *contractv1.CallContext, request *databasev1.QueryRequest) (databasev1.QueryResult, error) {
 	entry, claims, err := m.resolve(request.TransactionHandle, call, &request.Connection)
 	if err != nil {
@@ -292,6 +300,26 @@ func (m *TransactionManager) Execute(ctx context.Context, call *contractv1.CallC
 		return databasev1.ExecuteResult{}, NewRuntimeError(databasev1.ErrorTransactionExpired, false, errors.New("事务已过期"))
 	}
 	return entry.transaction.Execute(ctx, request.Statement)
+}
+
+// WithTransaction runs a bounded Record Store operation on the exact pinned
+// driver transaction while preserving the same caller/scope validation and
+// serialization used by raw query/execute operations.
+func (m *TransactionManager) WithTransaction(ctx context.Context, call *contractv1.CallContext, handle string,
+	ref databasev1.ConnectionRef, work func(Transaction) error) error {
+	if work == nil {
+		return NewRuntimeError(databasev1.ErrorInvalidRequest, false, errors.New("事务工作函数不能为空"))
+	}
+	entry, claims, err := m.resolve(handle, call, &ref)
+	if err != nil {
+		return err
+	}
+	entry.mu.Lock()
+	defer entry.mu.Unlock()
+	if time.Now().UnixMilli() >= claims.ExpiresAt {
+		return NewRuntimeError(databasev1.ErrorTransactionExpired, false, errors.New("事务已过期"))
+	}
+	return work(entry.transaction)
 }
 
 func (m *TransactionManager) End(ctx context.Context, call *contractv1.CallContext, handle string, commit bool) error {

@@ -4,7 +4,9 @@
 
 能力：`tool.package/foundation.data.relational.runtime`
 
-当前制品版本：`0.7.9`
+当前制品版本：`0.8.0`
+
+当前公开 Capability 契约：`foundation.data.relational.runtime@1.1.0`
 
 ## 职责边界
 
@@ -71,4 +73,6 @@ connection-manager 以持久化 outbox 发布完整的非敏感 `ConnectionSpec`
 
 事务亲和、超时/崩溃丢失语义、凭证轮换 drain、真实 PostgreSQL/MySQL 故障矩阵和标准指标出口均已完成。后续重点是第三方 Provider Host，以及由独立监控插件实现的 Prometheus/OTel 采集适配、告警发送与长期存储；完整路线见 [ADR-0095](../decisions/ADR-0095-Database-Runtime多Provider连接池与集群事务.md)。
 
-按 [ADR-0194](../decisions/ADR-0194-平台控制数据库与声明式数据分层.md)，同一签名制品正在增加 Record Store、Schema Controller 和 SQL Shared State 内部模块；它们不是新的独立进程或普通应用插件。P3a 已完成 `record.store.v1` 契约、签名模型目录、PostgreSQL/MySQL CRUD 编译与安全迁移分类，但尚未注册运行时 capability。只有执行适配、幂等/Outbox 账本、迁移锁和 SQL Shared State 全部通过后才进入 Provider descriptor，避免 Manifest 宣称尚未存在的生命周期。
+按 [ADR-0194](../decisions/ADR-0194-平台控制数据库与声明式数据分层.md)，同一签名制品已增加 Record Store、Schema Controller 和 SQL Shared State 内部模块；它们不是新的独立进程或普通应用插件。P3b 已完成声明式 CRUD、Batch、实例亲和 UnitOfWork、幂等/Outbox 账本、安全增量迁移、数据库迁移锁、迁移账本和 SQL Shared State 的 PostgreSQL/MySQL 实现。
+
+这些模块尚未加入公开 Manifest 和进程主入口。原因不是实现缺失，而是生命周期尚未闭合：P4 需要由 Bootstrap 可信绑定保留控制库会话，P6 需要保证 active-active 副本持有同一 generation 的模型目录并实现本地优先/故障转移。在此之前，运行时不能对外宣称 Record Store 或 SQL Shared State Ready。破坏性签名迁移包仍是 P3 的剩余工作。

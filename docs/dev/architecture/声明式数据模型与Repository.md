@@ -27,6 +27,8 @@ DataModel 只描述持久化结构，不能包含动作、路由、权限或页�
 
 模型声明表名、字段与列映射、主键、索引、唯一约束、tenant/service 作用域、敏感级别、乐观锁、审计字段和删除策略。`storage.kind=platform-control` 只表示该模型有资格请求平台控制存储绑定，不代表插件可以读取保留连接；最终授权仍来自可信 Platform Profile。
 
+`data.model.v1` 当前契约版本为 `1.1.0`。所有进入主键、索引或唯一约束的 `string` 字段必须声明 `maxLength`：PostgreSQL 可继续使用受约束文本语义，MySQL 方言据此生成有界 `VARCHAR`，防止组合索引超过引擎上限。Wire `int64` 始终使用十进制字符串，因此 TypeScript 生成类型也是 `string`，不能在 Repository 边界提前转换为可能丢失精度的 JavaScript `number`。
+
 ## 3. 生成器
 
 可信工具 `engineering/tools/datamodelgen` 使用 Go 实现，因为 Manifest、发布门禁和 Database Runtime 的权威契约均以 Go 校验。它按目标插件语言输出独立文件：
@@ -62,4 +64,6 @@ go run ./engineering/tools/datamodelgen \
 - Database Connection 模型已作为首个真实样本接入；
 - 已建立摘要、路径、模型身份和生成物零漂移门禁。
 
-P3 的第一检查点已冻结独立 `record.store.v1` wire contract、签名模型目录、字段类型转换、可信 tenant/service scope 注入、PostgreSQL/MySQL 参数化 CRUD 编译器、游标分页和 Schema 变更分类器。该检查点尚未把新 capability 注册到 Runtime：只有完成执行适配、幂等账本、Outbox 与 Schema Controller 后才对插件开放。SQL Shared State 仍属于 P3 后续，平台控制数据库 Bootstrap 属于 P4。
+P3b 已在 Database Runtime 内部实现 `record.store.v1` 的 CRUD、受限分页、Batch、实例亲和 UnitOfWork、幂等账本、事务内 Outbox，以及 PostgreSQL/MySQL Schema Controller 和 SQL Shared State。Schema Controller 只自动执行建表、增加可空字段和非唯一索引，并同时要求可信 SYSTEM 调用、Schema Controller credential evidence、数据库迁移锁和持久账本；其他变化保持 manual。SQL Shared State 延续既有 `sharedstate.Store` 的 1 MiB、CAS revision、游标分页、tenant/service 隔离和 fail-closed 语义。
+
+这些模块目前仍是 Runtime 内部能力，主入口和公开 Manifest 暂不注册：P4 必须先通过 Bootstrap 注入保留的 Platform Control Store 会话，P6 必须解决 active-active 副本的同代模型目录与本地优先路由，之后才能公开为可调用 capability。破坏性签名迁移包也尚未完成，因此 P3 仍未整体封板。

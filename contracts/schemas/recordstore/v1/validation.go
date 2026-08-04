@@ -26,6 +26,7 @@ var requestDefinitions = map[string]string{
 	OperationList: "listRequest", OperationUpdate: "updateRequest", OperationDelete: "deleteRequest",
 	OperationBatch: "batchRequest", OperationBegin: "beginRequest", OperationCommit: "endRequest",
 	OperationRollback: "endRequest", OperationAppendOutbox: "appendOutboxRequest",
+	OperationSchemaPlan: "schemaRequest", OperationSchemaApply: "schemaRequest", OperationSchemaStatus: "schemaRequest",
 }
 
 func ParseRequest(operation string, raw []byte) (any, error) {
@@ -58,6 +59,8 @@ func ParseRequest(operation string, raw []byte) (any, error) {
 		target = &EndRequest{}
 	case OperationAppendOutbox:
 		target = &AppendOutboxRequest{}
+	case OperationSchemaPlan, OperationSchemaApply, OperationSchemaStatus:
+		target = &SchemaRequest{}
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()

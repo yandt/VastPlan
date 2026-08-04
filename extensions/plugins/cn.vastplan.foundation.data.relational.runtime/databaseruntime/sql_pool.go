@@ -106,6 +106,48 @@ func (p *sqlPool) Close() error {
 	return p.db.Close()
 }
 
+func (p *sqlPool) WithPinned(ctx context.Context, work func(PinnedSession) error) error {
+	if err := p.available(); err != nil {
+		return err
+	}
+	if ctx == nil || work == nil {
+		return NewRuntimeError(databasev1.ErrorInvalidRequest, false, errors.New("pinned session 参数无效"))
+	}
+	connection, err := p.db.Conn(ctx)
+	if err != nil {
+		return classifySQLError(err, false)
+	}
+	defer connection.Close()
+	return work(&sqlPinnedSession{connection: connection})
+}
+
+type sqlPinnedSession struct{ connection *sql.Conn }
+
+func (s *sqlPinnedSession) Query(ctx context.Context, statement databasev1.Statement, maxRows int) (databasev1.QueryResult, error) {
+	return querySQL(ctx, s.connection, statement, maxRows, false)
+}
+
+func (s *sqlPinnedSession) Execute(ctx context.Context, statement databasev1.Statement) (databasev1.ExecuteResult, error) {
+	return executeSQL(ctx, s.connection, statement, false)
+}
+
+func (s *sqlPinnedSession) Begin(ctx context.Context, options databasev1.TransactionOptions) (Transaction, error) {
+	if ctx == nil || options.TimeoutMS < 100 || options.TimeoutMS > 3_600_000 {
+		return nil, NewRuntimeError(databasev1.ErrorInvalidRequest, false, errors.New("pinned transaction 参数无效"))
+	}
+	isolation, err := sqlIsolation(options.Isolation)
+	if err != nil {
+		return nil, NewRuntimeError(databasev1.ErrorInvalidRequest, false, err)
+	}
+	transactionContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Duration(options.TimeoutMS)*time.Millisecond)
+	transaction, err := s.connection.BeginTx(transactionContext, &sql.TxOptions{Isolation: isolation, ReadOnly: options.ReadOnly})
+	if err != nil {
+		cancel()
+		return nil, classifySQLError(err, true)
+	}
+	return &sqlTransaction{transaction: transaction, cancel: cancel}, nil
+}
+
 func (p *sqlPool) warm(ctx context.Context) error {
 	p.warmMu.Lock()
 	defer p.warmMu.Unlock()

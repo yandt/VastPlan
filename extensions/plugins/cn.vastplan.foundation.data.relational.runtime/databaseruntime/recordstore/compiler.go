@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -380,13 +379,4 @@ func (c *Compiler) filter(filter recordstorev1.Filter, parameterOffset int) (str
 	default:
 		return "", nil, fmt.Errorf("Filter operator 无效: %s", filter.Operator)
 	}
-}
-
-func stableFields(values map[string]json.RawMessage) []string {
-	fields := make([]string, 0, len(values))
-	for field := range values {
-		fields = append(fields, field)
-	}
-	sort.Strings(fields)
-	return fields
 }

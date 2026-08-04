@@ -25,16 +25,21 @@ const (
 	OperationCommit       = "commit"
 	OperationRollback     = "rollback"
 	OperationAppendOutbox = "appendOutbox"
+	OperationSchemaPlan   = "schemaPlan"
+	OperationSchemaApply  = "schemaApply"
+	OperationSchemaStatus = "schemaStatus"
 
-	ErrorInvalidRequest  = "record.store.invalid_request"
-	ErrorModelNotFound   = "record.store.model_not_found"
-	ErrorModelMismatch   = "record.store.model_mismatch"
-	ErrorNotFound        = "record.store.not_found"
-	ErrorConflict        = "record.store.conflict"
-	ErrorAlreadyExists   = "record.store.already_exists"
-	ErrorStorageDenied   = "record.store.storage_denied"
-	ErrorMigrationNeeded = "record.store.migration_needed"
-	ErrorUnavailable     = "record.store.unavailable"
+	ErrorInvalidRequest     = "record.store.invalid_request"
+	ErrorModelNotFound      = "record.store.model_not_found"
+	ErrorModelMismatch      = "record.store.model_mismatch"
+	ErrorNotFound           = "record.store.not_found"
+	ErrorConflict           = "record.store.conflict"
+	ErrorAlreadyExists      = "record.store.already_exists"
+	ErrorStorageDenied      = "record.store.storage_denied"
+	ErrorMigrationNeeded    = "record.store.migration_needed"
+	ErrorUnavailable        = "record.store.unavailable"
+	ErrorTransactionLost    = "record.store.transaction_lost"
+	ErrorTransactionExpired = "record.store.transaction_expired"
 )
 
 type ModelRef struct {
@@ -177,4 +182,25 @@ type AppendOutboxRequest struct {
 	Payload           json.RawMessage `json:"payload"`
 	IdempotencyKey    string          `json:"idempotencyKey"`
 	TransactionHandle string          `json:"transactionHandle,omitempty"`
+}
+
+type AppendOutboxResult struct {
+	ID string `json:"id"`
+}
+
+type SchemaRequest struct {
+	Storage StorageTarget `json:"storage"`
+	Model   ModelRef      `json:"model"`
+}
+
+type SchemaPlanResult struct {
+	Kind       string   `json:"kind"`
+	Statements int      `json:"statements"`
+	Reasons    []string `json:"reasons"`
+}
+
+type SchemaStatusResult struct {
+	Ready         bool   `json:"ready"`
+	SchemaVersion uint64 `json:"schemaVersion,omitempty"`
+	SHA256        string `json:"sha256,omitempty"`
 }

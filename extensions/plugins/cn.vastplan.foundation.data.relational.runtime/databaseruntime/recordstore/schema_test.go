@@ -16,15 +16,19 @@ func TestSchemaPlanAllowsOnlySafeAdditiveChanges(t *testing.T) {
 		}
 		next := testModel()
 		next.SchemaVersion = 2
-		next.Fields = append(next.Fields, datamodelv1.Field{ID: "note", Column: "note", Type: "string", Nullable: true, Sensitivity: "internal"})
+		next.Fields = append(next.Fields, datamodelv1.Field{ID: "note", Column: "note", Type: "string", MaxLength: 256, Nullable: true, Sensitivity: "internal"})
 		next.Indexes = append(next.Indexes, datamodelv1.Index{ID: "byNote", Fields: []string{"note"}})
 		additive, err := PlanMigration(dialect, ptrModel(testModel()), next)
-		if err != nil || additive.Kind != MigrationAdditive || len(additive.Statements) != 2 {
+		expectedStatements := 2
+		if provider == "mysql" {
+			expectedStatements = 1
+		}
+		if err != nil || additive.Kind != MigrationAdditive || len(additive.Statements) != expectedStatements {
 			t.Fatalf("%s additive plan: %+v %v", provider, additive, err)
 		}
 		unsafe := testModel()
 		unsafe.SchemaVersion = 3
-		unsafe.Fields = append(unsafe.Fields, datamodelv1.Field{ID: "note", Column: "note", Type: "string", Nullable: true, Sensitivity: "internal"})
+		unsafe.Fields = append(unsafe.Fields, datamodelv1.Field{ID: "note", Column: "note", Type: "string", MaxLength: 256, Nullable: true, Sensitivity: "internal"})
 		unsafe.Indexes = append(unsafe.Indexes, datamodelv1.Index{ID: "byNote", Fields: []string{"note"}})
 		unsafe.Fields[2].Nullable = true
 		manual, err := PlanMigration(dialect, &next, unsafe)

@@ -13,7 +13,7 @@ export interface PlatformDatabaseConnection {
   options: unknown;
   pool: unknown;
   credentialRef: string;
-  revision: number;
+  revision: string;
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;

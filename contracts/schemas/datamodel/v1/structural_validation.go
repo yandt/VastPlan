@@ -32,6 +32,9 @@ func validateStructure(model Model) error {
 		if _, ok := validSensitivity[field.Sensitivity]; !ok {
 			return fmt.Errorf("DataModel 字段敏感级别无效: %s", field.Sensitivity)
 		}
+		if field.MaxLength != 0 && (field.Type != "string" || field.MaxLength < 1 || field.MaxLength > 4096) {
+			return fmt.Errorf("DataModel 字段 %s 的 maxLength 只适用于 string", field.ID)
+		}
 	}
 	for name, mode := range map[string]string{"tenant": model.Scope.Tenant, "service": model.Scope.Service} {
 		if mode != "none" && mode != "required" {

@@ -5,7 +5,7 @@ package datamodelv1
 
 const (
 	SchemaURL       = "https://schemas.cdsoft.com.cn/vastplan/datamodel/v1/vastplan.data-model.schema.json"
-	ContractVersion = "1.0.0"
+	ContractVersion = "1.1.0"
 )
 
 type Model struct {
@@ -34,6 +34,7 @@ type Field struct {
 	Type        string `json:"type"`
 	Nullable    bool   `json:"nullable"`
 	Sensitivity string `json:"sensitivity"`
+	MaxLength   int    `json:"maxLength,omitempty"`
 }
 
 type Index struct {

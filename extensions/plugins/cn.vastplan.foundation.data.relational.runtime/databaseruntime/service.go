@@ -12,6 +12,7 @@ import (
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
+	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.foundation.data.relational.runtime/databaseruntime/recordstore"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
@@ -33,6 +34,8 @@ type Service struct {
 	instanceID   string
 	validationMu sync.Mutex
 	validations  map[string]*definitionValidation
+	recordModels *recordstore.Catalog
+	recordEngine *recordstore.Engine
 }
 
 type definitionValidation struct {
@@ -66,7 +69,8 @@ func NewServiceWithManager(registry *Registry, manager *PoolManager, material Ma
 		return nil, err
 	}
 	return &Service{registry: registry, manager: manager, material: material, transactions: transactions,
-		instanceID: options.InstanceID, validations: map[string]*definitionValidation{}}, nil
+		instanceID: options.InstanceID, validations: map[string]*definitionValidation{},
+		recordModels: recordstore.NewCatalog(), recordEngine: recordstore.NewEngine()}, nil
 }
 
 func (s *Service) Close() error {

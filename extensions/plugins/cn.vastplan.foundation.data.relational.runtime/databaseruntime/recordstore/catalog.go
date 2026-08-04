@@ -78,16 +78,16 @@ func (c *Catalog) Replace(request recordstorev1.SyncModelsRequest) (recordstorev
 
 func (c *Catalog) Resolve(ref recordstorev1.ModelRef) (ModelEntry, error) {
 	if c == nil {
-		return ModelEntry{}, errors.New("Record Store 模型目录不可用")
+		return ModelEntry{}, ErrModelNotFound
 	}
 	c.mu.RLock()
 	entry, ok := c.models[ref.ID]
 	c.mu.RUnlock()
 	if !ok {
-		return ModelEntry{}, fmt.Errorf("DataModel %s 未登记", ref.ID)
+		return ModelEntry{}, fmt.Errorf("%w: %s", ErrModelNotFound, ref.ID)
 	}
 	if entry.Ref != ref {
-		return ModelEntry{}, fmt.Errorf("DataModel %s 版本或摘要不匹配", ref.ID)
+		return ModelEntry{}, fmt.Errorf("%w: %s", ErrModelMismatch, ref.ID)
 	}
 	return entry, nil
 }

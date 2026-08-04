@@ -98,6 +98,10 @@
     "endRequest": { "type": "object", "additionalProperties": false, "required": ["transactionHandle"], "properties": { "transactionHandle": { "$ref": "#/$defs/transactionHandle" } } },
     "appendOutboxRequest": {
       "allOf": [{ "$ref": "#/$defs/base" }, { "type": "object", "additionalProperties": false, "required": ["storage", "model", "topic", "payload", "idempotencyKey"], "properties": { "storage": { "$ref": "#/$defs/storage" }, "model": { "$ref": "#/$defs/modelRef" }, "topic": { "$ref": "#/$defs/id" }, "payload": true, "idempotencyKey": { "$ref": "#/$defs/idempotencyKey" }, "transactionHandle": { "$ref": "#/$defs/transactionHandle" } } }]
+    },
+    "schemaRequest": {
+      "type": "object", "additionalProperties": false, "required": ["storage", "model"],
+      "properties": { "storage": { "$ref": "#/$defs/storage" }, "model": { "$ref": "#/$defs/modelRef" } }
     }
   }
 }

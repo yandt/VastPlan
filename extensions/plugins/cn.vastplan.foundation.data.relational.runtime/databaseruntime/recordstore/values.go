@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strconv"
 	"time"
+	"unicode/utf8"
 
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	datamodelv1 "cdsoft.com.cn/VastPlan/contracts/schemas/datamodel/v1"
@@ -29,6 +30,9 @@ func wireValue(field datamodelv1.Field, raw json.RawMessage) (databasev1.Value, 
 		var parsed string
 		if err := json.Unmarshal(raw, &parsed); err != nil || parsed == "" && field.Type == "uuid" {
 			return databasev1.Value{}, fmt.Errorf("字段 %s 必须是字符串", field.ID)
+		}
+		if field.MaxLength > 0 && utf8.RuneCountInString(parsed) > field.MaxLength {
+			return databasev1.Value{}, fmt.Errorf("字段 %s 超过 maxLength=%d", field.ID, field.MaxLength)
 		}
 		value.Type = "string"
 	case "int64":
