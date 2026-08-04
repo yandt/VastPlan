@@ -51,6 +51,8 @@ function mapCapabilityError(response: ServerResponse, code: string, head = false
   if (code === "platform.plugin_installation.approval_required") return sendAPIError(response, 409, "installation_approval_required", head);
   if (["platform.plugin_installation.unsupported", "platform.plugin_installation.noop"].includes(code)) return sendAPIError(response, 409, code.endsWith("noop") ? "installation_noop" : "installation_unsupported", head);
   if (["platform.settings.invalid", "platform.credentials.invalid", "platform.database.invalid", "platform.deployment.invalid", "platform.plugin_configuration.invalid"].includes(code)) return sendAPIError(response, 400, "invalid_request", head);
+  if (code === "platform.database.connection_unavailable") return sendAPIError(response, 422, "database_connection_failed", head);
+  if (code === "platform.database.runtime_unavailable") return sendAPIError(response, 503, "database_runtime_unavailable", head);
   if (code === "platform.plugin_installation.invalid") return sendAPIError(response, 400, "invalid_installation_request", head);
   if (code === "platform.plugin_configuration.unavailable") return sendAPIError(response, 503, "configuration_unavailable", head);
   if (code === "platform.marketplace.catalog_unavailable") return sendAPIError(response, 503, "marketplace_unavailable", head);

@@ -43,6 +43,7 @@ type probeHost struct {
 	failRetire       int
 	failActivations  int
 	failRuntime      int
+	runtimeErrorCode string
 }
 
 var _ sdk.Host = (*probeHost)(nil)
@@ -84,12 +85,30 @@ func (h *probeHost) Call(_ context.Context, target *contractv1.CallTarget, _ *co
 			h.runtimeActivated++
 			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, []byte(`{"connection":{"resourceId":"connection-test","revision":1},"generation":1,"ready":true}`), nil
 		case databasev1.OperationProbe:
+			if h.runtimeErrorCode != "" {
+				return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: h.runtimeErrorCode, Message: "internal endpoint=db.internal password=do-not-leak", Retryable: true}}, nil, nil
+			}
 			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, []byte(`{"ready":true,"providerId":"postgresql","latencyMs":1}`), nil
 		case databasev1.OperationRetire:
 			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, []byte(`{}`), nil
 		}
 	}
 	return nil, nil, errors.New("unexpected capability or operation")
+}
+
+func TestCurrentFormConnectionTestMapsRuntimeFailureWithoutLeakingProviderDetail(t *testing.T) {
+	service, err := newService(filepath.Join(t.TempDir(), "connections.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	host := &probeHost{runtimeErrorCode: databasev1.ErrorConnectionUnavailable}
+	result, raw, err := service.handle(context.Background(), host, dbContext(), []byte(`{"name":"draft","providerId":"postgresql","endpoint":"db.internal:5432","options":{"user":"app"},"credentialValue":"one-time-password"}`), "test")
+	if err != nil || result.GetError().GetCode() != "platform.database.connection_unavailable" || result.GetError().GetMessage() != "数据库连接测试未能建立连接" || len(raw) != 0 {
+		t.Fatalf("Runtime 故障必须转换成安全平台错误: result=%+v raw=%s err=%v", result, raw, err)
+	}
+	if strings.Contains(result.GetError().GetMessage(), "db.internal") || strings.Contains(result.GetError().GetMessage(), "do-not-leak") {
+		t.Fatalf("Portal 可见错误不得包含 Provider 诊断: %q", result.GetError().GetMessage())
+	}
 }
 
 func TestInterruptedConnectionTestRecoversTemporaryCredentialRetirement(t *testing.T) {

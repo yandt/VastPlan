@@ -10,6 +10,10 @@
 
 `probe` 和发布现已调用 dedicated 的 `cn.vastplan.foundation.data.relational.runtime`，旧 `kernel.database.probe` 路径已移除。Runtime 负责真实 Provider、本地池和执行，本插件继续只做 leader 管理面；Kernel 不编入 PostgreSQL、MySQL 或其他数据库驱动。完整边界和实施顺序见 [ADR-0095](../decisions/ADR-0095-Database-Runtime多Provider连接池与集群事务.md)。
 
+## 测试连接错误边界
+
+`test` 使用短期托管凭证调用 Runtime 的一次性 `probe`，不保存连接定义。Runtime 的稳定错误码会映射为管理面结论：参数或 Provider 不兼容为 `platform.database.invalid`，连接、池或超时失败为 `platform.database.connection_unavailable`，其他 Runtime 故障为 `platform.database.runtime_unavailable`。Portal 仅向浏览器给出对应安全状态，不转发数据库地址、密码、DSN、TLS 握手或驱动诊断。
+
 ## 运行配置
 
 第一方进程须从受控环境变量 `VASTPLAN_DATABASE_CONNECTIONS_STATE_FILE` 取得连接定义状态位置；Node Agent 必须显式列入环境白名单。文件必须位于持久卷，权限建议为 `0600`。插件采用 leader 运行策略，因此同一逻辑服务只有一个定义写入者。

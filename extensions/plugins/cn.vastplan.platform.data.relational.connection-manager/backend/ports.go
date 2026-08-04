@@ -7,11 +7,27 @@ import (
 	"errors"
 	"fmt"
 
-	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
+
+// runtimeCallError preserves the Runtime's stable error classification across
+// the management-plane boundary. Its message deliberately excludes the
+// downstream diagnostic: a provider may include endpoint or TLS details that
+// must never reach the Portal or ordinary logs.
+type runtimeCallError struct {
+	code      string
+	retryable bool
+}
+
+func (e *runtimeCallError) Error() string {
+	if e == nil || e.code == "" {
+		return "Database Runtime 拒绝了请求"
+	}
+	return "Database Runtime 返回 " + e.code
+}
 
 func callCredential(ctx context.Context, host sdk.Host, call *contractv1.CallContext, operation string, input, output any) error {
 	payload, err := json.Marshal(input)
@@ -52,10 +68,10 @@ func callRuntime(ctx context.Context, host sdk.Host, call *contractv1.CallContex
 		return err
 	}
 	if result == nil || result.GetStatus() != contractv1.CallResult_STATUS_OK {
-		if result.GetError().GetCode() != "" {
-			return fmt.Errorf("Database Runtime %s: %s", result.GetError().GetCode(), result.GetError().GetMessage())
+		if code := result.GetError().GetCode(); code != "" {
+			return &runtimeCallError{code: code, retryable: result.GetError().GetRetryable()}
 		}
-		return errors.New("Database Runtime 暂不可用")
+		return &runtimeCallError{code: databasev1.ErrorConnectionUnavailable, retryable: true}
 	}
 	if output != nil {
 		return json.Unmarshal(raw, output)

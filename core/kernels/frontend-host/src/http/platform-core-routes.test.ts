@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { CapabilityApplicationError, type TrustedCapabilityInvoker } from "../capabilities/capability-invoker";
 import { managementBinding, recordingPlatformInvoker, startPlatformManagementTestServer, type PlatformInvocation } from "../testing/platform-management-test-harness";
 
 const close: (() => Promise<void>)[] = [];
@@ -48,6 +49,15 @@ describe("Platform core management routes", () => {
     expect(denied.status).toBe(403);
     expect(await denied.json()).toEqual({ error: "management_binding_forbidden" });
     expect(calls).toEqual([]);
+  });
+
+  it("maps database connection-test failures without exposing Runtime detail", async () => {
+    const invoker: TrustedCapabilityInvoker = { async invoke() { throw new CapabilityApplicationError("platform.database.connection_unavailable", "endpoint=db.internal password=do-not-leak"); } };
+    const server = await startPlatformManagementTestServer(invoker, ["platform.database.probe"], fullBinding());
+    close.push(server.close);
+    const response = await fetch(`${server.origin}/v1/portals/operations/platform/services/core/database-connections/main/test`, { method: "POST", headers: server.writeHeaders, body: '{"providerId":"postgresql","endpoint":"db:5432","options":{"user":"app"},"credentialValue":"temporary"}' });
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: "database_connection_failed" });
   });
 });
 
