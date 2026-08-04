@@ -46,6 +46,9 @@ var requestDefinition = map[string]string{
 var errorCodes = map[string]struct{}{
 	ErrorInvalidRequest: {}, ErrorProviderNotFound: {}, ErrorUnsupported: {},
 	ErrorConnectionNotFound: {}, ErrorConnectionUnavailable: {}, ErrorPoolExhausted: {},
+	ErrorTLSPolicyForbidden: {}, ErrorNameResolutionFailed: {}, ErrorConnectionRefused: {},
+	ErrorConnectionTimeout: {}, ErrorTLSVerificationFailed: {}, ErrorAuthenticationFailed: {},
+	ErrorDatabaseNotFound: {}, ErrorPermissionDenied: {},
 	ErrorDeadlineExceeded: {}, ErrorQueryFailed: {}, ErrorTransactionLost: {},
 	ErrorTransactionExpired: {}, ErrorTransactionConflict: {},
 }

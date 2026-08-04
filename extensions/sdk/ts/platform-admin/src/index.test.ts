@@ -88,6 +88,14 @@ describe("PlatformAdminClient", () => {
       .rejects.toMatchObject({ code: "database_connection_invalid", message: "数据库连接配置无效，请检查地址、端口、用户名和传输加密设置。" });
   });
 
+  it("gives safe database diagnoses a specific client message", async () => {
+    const client = new PlatformAdminClient(async (path) => path === "/v1/csrf"
+      ? { ok: true, status: 200, json: async () => ({ token: "safe" }) }
+      : { ok: false, status: 422, json: async () => ({ error: "database_authentication_failed" }) }, "operations", "database");
+    await expect(client.testDatabaseConnection("main", { providerId: "postgresql", endpoint: "db:5432", options: { user: "app" }, credentialValue: "one-time" }))
+      .rejects.toMatchObject({ code: "database_authentication_failed", message: "数据库用户名或密码验证失败。" });
+  });
+
   it("reads redacted managed credential audit through a bounded fixed route", async () => {
     const calls: string[] = [];
     const client = new PlatformAdminClient(async (path) => {

@@ -5,9 +5,12 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"net"
 	"reflect"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -171,15 +174,36 @@ func TestSQLValueConversionAndStableErrorClasses(t *testing.T) {
 		code        string
 		retryable   bool
 	}{
+		{err: &pgconn.PgError{Code: "28P01"}, code: databasev1.ErrorAuthenticationFailed, retryable: false},
+		{err: &pgconn.PgError{Code: "3D000"}, code: databasev1.ErrorDatabaseNotFound, retryable: false},
+		{err: &pgconn.PgError{Code: "42501"}, code: databasev1.ErrorPermissionDenied, retryable: false},
 		{err: &pgconn.PgError{Code: "40001"}, transaction: true, code: databasev1.ErrorTransactionConflict, retryable: true},
 		{err: &pgconn.PgError{Code: "23505"}, code: databasev1.ErrorQueryFailed, retryable: false},
+		{err: &mysql.MySQLError{Number: 1045}, code: databasev1.ErrorAuthenticationFailed, retryable: false},
+		{err: &mysql.MySQLError{Number: 1049}, code: databasev1.ErrorDatabaseNotFound, retryable: false},
+		{err: &mysql.MySQLError{Number: 1044}, code: databasev1.ErrorPermissionDenied, retryable: false},
 		{err: &mysql.MySQLError{Number: 1213}, transaction: true, code: databasev1.ErrorTransactionConflict, retryable: true},
 		{err: &mysql.MySQLError{Number: 1040}, code: databasev1.ErrorPoolExhausted, retryable: true},
+		{err: &net.DNSError{Err: "no such host", Name: "secret.internal"}, code: databasev1.ErrorNameResolutionFailed, retryable: true},
+		{err: fmt.Errorf("dial failed: %w", syscall.ECONNREFUSED), code: databasev1.ErrorConnectionRefused, retryable: true},
 	} {
 		code, retryable := ErrorDetails(classifySQLError(test.err, test.transaction))
 		if code != test.code || retryable != test.retryable {
 			t.Fatalf("错误分类错误: code=%s retryable=%t", code, retryable)
 		}
+	}
+}
+
+func TestRegistryPreservesTLSPolicyDiagnostic(t *testing.T) {
+	registry, err := NewDefaultRegistry(ProviderSecurityPolicy{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := providerSpec("postgresql", "db.internal:5432")
+	spec.Options = json.RawMessage(`{"user":"runtime","tlsMode":"disable"}`)
+	_, err = registry.Validate(context.Background(), spec)
+	if code, retryable := ErrorDetails(err); code != databasev1.ErrorTLSPolicyForbidden || retryable {
+		t.Fatalf("TLS 部署策略必须保留独立、不可重试的诊断码: code=%s retryable=%t err=%v", code, retryable, err)
 	}
 }
 

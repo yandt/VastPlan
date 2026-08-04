@@ -17,6 +17,8 @@ type ProviderSecurityPolicy struct {
 	AllowInsecureTLS bool
 }
 
+var errTLSPolicyForbidden = errors.New("部署策略禁止关闭数据库 TLS 校验")
+
 type providerOptions struct {
 	User             string `json:"user"`
 	TLSMode          string `json:"tlsMode,omitempty"`
@@ -89,7 +91,7 @@ func invalidControlRune(value rune) bool { return value < 0x20 || value == 0x7f 
 
 func enforceTLSMode(options providerOptions, policy ProviderSecurityPolicy) error {
 	if options.TLSMode == "disable" && !policy.AllowInsecureTLS {
-		return errors.New("部署策略禁止关闭数据库 TLS 校验")
+		return errTLSPolicyForbidden
 	}
 	return nil
 }

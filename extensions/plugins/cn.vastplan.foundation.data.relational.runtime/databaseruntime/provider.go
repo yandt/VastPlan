@@ -15,7 +15,7 @@ import (
 
 const (
 	PluginID      = databasev1.RuntimePluginID
-	PluginVersion = "0.7.7"
+	PluginVersion = "0.7.8"
 )
 
 // CredentialMaterial exists only during MaterialSource.WithMaterial. Provider
@@ -177,7 +177,8 @@ func (r *Registry) Validate(ctx context.Context, spec databasev1.ConnectionSpec)
 			fmt.Errorf("Database Provider %q 未注册", spec.ProviderID))
 	}
 	if err := provider.Validate(ctx, spec); err != nil {
-		return nil, NewRuntimeError(databasev1.ErrorInvalidRequest, false, err)
+		code, retryable := classifyProviderValidationError(err)
+		return nil, NewRuntimeError(code, retryable, err)
 	}
 	return provider, nil
 }

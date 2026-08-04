@@ -68,6 +68,27 @@ describe("Platform core management routes", () => {
     expect(response.status).toBe(422);
     expect(await response.json()).toEqual({ error: "database_connection_invalid" });
   });
+
+  it("preserves safe database diagnoses without exposing provider detail", async () => {
+    const diagnoses = [
+      ["platform.database.name_resolution_failed", "database_name_resolution_failed", 422],
+      ["platform.database.connection_refused", "database_connection_refused", 422],
+      ["platform.database.connection_timeout", "database_connection_timeout", 422],
+      ["platform.database.tls_verification_failed", "database_tls_verification_failed", 422],
+      ["platform.database.authentication_failed", "database_authentication_failed", 422],
+      ["platform.database.database_not_found", "database_not_found", 422],
+      ["platform.database.permission_denied", "database_permission_denied", 422],
+      ["platform.database.pool_exhausted", "database_pool_exhausted", 429],
+    ] as const;
+    for (const [platformCode, browserCode, status] of diagnoses) {
+      const invoker: TrustedCapabilityInvoker = { async invoke() { throw new CapabilityApplicationError(platformCode, "endpoint=db.internal password=do-not-leak"); } };
+      const server = await startPlatformManagementTestServer(invoker, ["platform.database.probe"], fullBinding());
+      close.push(server.close);
+      const response = await fetch(`${server.origin}/v1/portals/operations/platform/services/core/database-connections/main/test`, { method: "POST", headers: server.writeHeaders, body: '{"providerId":"postgresql","endpoint":"db:5432","options":{"user":"app"},"credentialValue":"temporary"}' });
+      expect(response.status).toBe(status);
+      expect(await response.json()).toEqual({ error: browserCode });
+    }
+  });
 });
 
 function fullBinding(): Record<string, unknown> {

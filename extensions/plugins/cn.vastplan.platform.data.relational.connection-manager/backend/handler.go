@@ -125,27 +125,6 @@ func (s *service) handleManagement(ctx context.Context, host sdk.Host, call *con
 	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
 }
 
-// databaseTestError exposes only safe, stable conclusions to the Portal. The
-// detailed Runtime/provider error stays inside the trusted Runtime boundary,
-// where it may contain deployment-specific endpoint or TLS information.
-func databaseTestError(err error) (*contractv1.CallResult, []byte, error) {
-	var runtimeErr *runtimeCallError
-	if errors.As(err, &runtimeErr) {
-		switch runtimeErr.code {
-		case databasev1.ErrorInvalidRequest, databasev1.ErrorProviderNotFound, databasev1.ErrorUnsupported:
-			return domainError("platform.database.invalid", errors.New("数据库连接参数不符合当前 Provider 要求"))
-		case databasev1.ErrorConnectionUnavailable, databasev1.ErrorPoolExhausted, databasev1.ErrorDeadlineExceeded:
-			return domainError("platform.database.connection_unavailable", errors.New("数据库连接测试未能建立连接"))
-		default:
-			return domainError("platform.database.runtime_unavailable", errors.New("数据库运行时暂时无法完成连接测试"))
-		}
-	}
-	// Credential lifecycle and local persistence failures retain their existing
-	// failure semantics. They are not Runtime conclusions and must not be
-	// disguised as a failed network probe.
-	return nil, nil, err
-}
-
 func (s *service) runtimeStatus(tenantID string, value definition) string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

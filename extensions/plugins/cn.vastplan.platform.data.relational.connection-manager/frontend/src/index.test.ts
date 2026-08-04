@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { PlatformAdminClient } from "@vastplan/platform-admin";
+import { PlatformAdminError, type PlatformAdminClient } from "@vastplan/platform-admin";
 import { message } from "@vastplan/workbench-sdk";
 import databaseConnectionsPlugin, { createDatabaseConnectionsPage } from "./index.js";
 
@@ -72,6 +72,17 @@ describe("database connections Workbench page", () => {
       "action.test": "测试连接",
       "test.success": "连接测试成功",
     });
+  });
+
+  it("renders a localized actionable diagnosis for connection-test failures", async () => {
+    const testDatabaseConnection = vi.fn(async () => { throw new PlatformAdminError(422, "database_authentication_failed"); });
+    const client = { testDatabaseConnection, listDatabaseConnections: vi.fn(async () => []) } as unknown as PlatformAdminClient;
+    const page = createDatabaseConnectionsPage(client, "database", "/settings/databases", message("test", "title", "Databases"));
+    const create = page.forms?.find((form) => form.id === "create");
+    const testAction = create?.workflow.actions?.find((action) => action.id === "test");
+    if (testAction === undefined) throw new Error("测试连接 Form Action 未注册");
+    const outcome = await create?.runAction?.({ action: testAction, value: { name: "main", providerId: "postgresql", host: "db", port: 5432, options: { user: "app", password: "wrong" } }, selected: [] }, new AbortController().signal);
+    expect(outcome?.notify).toMatchObject({ kind: "error", content: expect.objectContaining({ key: "test.authenticationDetail" }) });
   });
 
   it("preserves MySQL Unix socket endpoints without inventing a TCP port", async () => {

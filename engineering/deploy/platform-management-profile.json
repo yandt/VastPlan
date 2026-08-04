@@ -300,7 +300,7 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.4.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.13.3", "channel": "stable" }
+        { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.13.4", "channel": "stable" }
       ]
     },
     {
@@ -329,7 +329,7 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.4.0", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.data.relational.runtime", "version": "0.7.7", "channel": "stable" }
+        { "id": "cn.vastplan.foundation.data.relational.runtime", "version": "0.7.8", "channel": "stable" }
       ]
     },
     {

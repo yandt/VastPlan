@@ -154,3 +154,9 @@ active-active 不采用不可验证的“重复 queue 调用即广播”。管�
 Database Runtime 升级为 0.7.0，新增受限 `metrics` 操作和 `RuntimeMetricsResult v1`。它返回绝对 counter/gauge、`idle/ready/degraded/unavailable` 健康摘要，以及 Prometheus/OpenTelemetry 命名约定的样本列表；只允许 connection-manager 与 SYSTEM 采集器读取。Pool Manager 提供 open/idle/in-use/max、等待、budget/queue 拒绝、forced drain、关闭失败等事实；Transaction Manager 额外暴露 active/capacity 以及 begin/commit/rollback/expired/lost/rejected 的进程内累计计数。
 
 指标从源头限制为唯一的 provider 低基数标签，禁止 tenant、project、连接（含 hash）、endpoint、SQL、CredentialRef、material、事务句柄和 Runtime audience。连接级脱敏诊断继续只存在于受权限保护的本地快照，不能变成监控标签。counter 随 Runtime 重启归零，采集器按 reset 处理。契约和测试验收了访问授权、无敏感输出、health 退化、counter/gauge 类型和样本存在性；建议外部监控插件对 unavailable、资源拒绝/超时增量、事务使用率 80%、事务丢失和关闭失败增量告警。告警发送、长期时序存储和具体 Prometheus/OTel exporter 属于独立监控插件，不让 Database Runtime 直接依赖某一监控后端。
+
+## 补充决策（2026-08-04，结构化安全诊断）
+
+连接测试与建池错误采用分层稳定码，不允许管理面把所有 Provider 失败压缩为单一 `connection_unavailable`，也不允许把原始驱动文本直接透传给浏览器。Database Runtime 负责把 PostgreSQL SQLSTATE、MySQL 错误号、DNS、网络、TLS/x509 和部署策略错误归一为 `database.runtime.*`；connection-manager 保持语义映射为 `platform.database.*`；Portal Edge 只返回浏览器稳定码；功能插件按语言目录提供最终提示。
+
+可信 Runtime 日志允许记录稳定错误码、可重试性、操作阶段、Provider、trace ID，以及 PostgreSQL SQLSTATE、MySQL 错误号或受限网络/TLS 分类。禁止记录原始驱动字符串、endpoint、用户名、数据库名、SQL、CredentialRef 或 material。这样既能在日志中定位真实故障类型，也不会把可能含秘密或内部拓扑的驱动消息扩大到管理面和浏览器。

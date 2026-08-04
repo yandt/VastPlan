@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.platform.data.relational.connection-manager`
 能力：`tool.package/platform.database`
-当前制品版本：`0.13.3`
+当前制品版本：`0.13.4`
 
 ## 边界
 
@@ -12,7 +12,9 @@
 
 ## 测试连接错误边界
 
-`test` 使用短期托管凭证调用 Runtime 的一次性 `probe`，不保存连接定义。Runtime 的稳定错误码会映射为管理面结论：参数或 Provider 不兼容为 `platform.database.invalid`，连接、池或超时失败为 `platform.database.connection_unavailable`，其他 Runtime 故障为 `platform.database.runtime_unavailable`。Portal 对前者返回专用 `database_connection_invalid`（422），连接不可达返回 `database_connection_failed`（422），Runtime 不可用返回 `database_runtime_unavailable`（503）；浏览器不接收数据库地址、密码、DSN、TLS 握手或驱动诊断。前端在提交前会剔除切换 Provider 后遗留的隐藏字段，并明确校验用户名，避免有效连接被其他 Provider 的字段拒绝。
+`test` 使用短期托管凭证调用 Runtime 的一次性 `probe`，不保存连接定义。Runtime 的稳定诊断码在管理面保持一一对应，Portal 再转换为浏览器稳定码：参数无效、部署 TLS 策略、DNS 解析、拒绝连接、连接超时、证书校验、身份验证、数据库不存在、权限不足和连接池耗尽均能得到明确、可本地化的排查提示。无法归类的连接故障和 Runtime 故障继续使用安全兜底码。
+
+浏览器只接收稳定错误码，不接收数据库地址、密码、DSN、驱动原文或 TLS 握手细节。可信 Runtime 日志保留脱敏后的技术分类和驱动码，并关联 trace ID；前端根据插件语言目录生成面向用户的可操作提示。前端在提交前还会剔除切换 Provider 后遗留的隐藏字段，并明确校验用户名，避免有效连接被其他 Provider 的字段拒绝。
 
 ## 运行配置
 

@@ -4,7 +4,7 @@
 
 能力：`tool.package/foundation.data.relational.runtime`
 
-当前制品版本：`0.7.3`
+当前制品版本：`0.7.8`
 
 ## 职责边界
 
@@ -27,7 +27,9 @@ Database Runtime 是关系数据库数据面，负责 Provider、节点本地连
 
 值使用显式 `null/string/int64/decimal/bool/bytes/timestamp/json` 类型。`int64` 和 `decimal` 采用字符串编码，避免 JavaScript、Go、Python 等语言之间发生精度漂移。连接载荷拒绝 DSN/URL 和疑似密码、token、private key 配置，只接受非敏感 endpoint/options 与托管 CredentialRef。
 
-稳定错误码统一使用 `database.runtime.*`。ADR 中的 `TRANSACTION_LOST` 在 wire 上对应 `database.runtime.transaction_lost`。
+稳定错误码统一使用 `database.runtime.*`。连接诊断不会再全部压缩为“连接不可用”，而是区分部署 TLS 策略、DNS 解析、拒绝连接、连接超时、证书校验、身份验证、数据库不存在、权限不足和连接池耗尽。错误码供上层可靠映射；原始驱动文本不会进入 wire。ADR 中的 `TRANSACTION_LOST` 在 wire 上对应 `database.runtime.transaction_lost`。
+
+Runtime 在可信进程日志中记录 `operation/stage/provider/error_code/retryable/trace_id`，以及不含地址、用户名、数据库名和凭证的驱动证据，例如 PostgreSQL SQLSTATE、MySQL 错误号或网络/TLS 分类。日志禁止输出原始驱动字符串，因为驱动可能把 endpoint、账号或 DSN 拼入其中。
 
 ## Provider SPI
 

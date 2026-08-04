@@ -103,11 +103,42 @@ func TestCurrentFormConnectionTestMapsRuntimeFailureWithoutLeakingProviderDetail
 	}
 	host := &probeHost{runtimeErrorCode: databasev1.ErrorConnectionUnavailable}
 	result, raw, err := service.handle(context.Background(), host, dbContext(), []byte(`{"name":"draft","providerId":"postgresql","endpoint":"db.internal:5432","options":{"user":"app"},"credentialValue":"one-time-password"}`), "test")
-	if err != nil || result.GetError().GetCode() != "platform.database.connection_unavailable" || result.GetError().GetMessage() != "数据库连接测试未能建立连接" || len(raw) != 0 {
+	if err != nil || result.GetError().GetCode() != "platform.database.connection_unavailable" || result.GetError().GetMessage() != "数据库连接暂时不可用" || len(raw) != 0 {
 		t.Fatalf("Runtime 故障必须转换成安全平台错误: result=%+v raw=%s err=%v", result, raw, err)
 	}
 	if strings.Contains(result.GetError().GetMessage(), "db.internal") || strings.Contains(result.GetError().GetMessage(), "do-not-leak") {
 		t.Fatalf("Portal 可见错误不得包含 Provider 诊断: %q", result.GetError().GetMessage())
+	}
+}
+
+func TestCurrentFormConnectionTestPreservesSafeRuntimeDiagnosis(t *testing.T) {
+	for _, test := range []struct {
+		runtimeCode  string
+		platformCode string
+		message      string
+	}{
+		{databasev1.ErrorTLSPolicyForbidden, "platform.database.tls_policy_forbidden", "当前部署策略不允许关闭数据库传输加密校验"},
+		{databasev1.ErrorNameResolutionFailed, "platform.database.name_resolution_failed", "数据库地址无法解析"},
+		{databasev1.ErrorConnectionRefused, "platform.database.connection_refused", "数据库服务器拒绝了连接"},
+		{databasev1.ErrorConnectionTimeout, "platform.database.connection_timeout", "连接数据库超时"},
+		{databasev1.ErrorTLSVerificationFailed, "platform.database.tls_verification_failed", "数据库传输加密或证书校验失败"},
+		{databasev1.ErrorAuthenticationFailed, "platform.database.authentication_failed", "数据库用户名或密码验证失败"},
+		{databasev1.ErrorDatabaseNotFound, "platform.database.database_not_found", "指定的数据库不存在"},
+		{databasev1.ErrorPermissionDenied, "platform.database.permission_denied", "数据库账户没有所需权限"},
+	} {
+		t.Run(test.runtimeCode, func(t *testing.T) {
+			service, err := newService(filepath.Join(t.TempDir(), "connections.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, raw, err := service.handle(context.Background(), &probeHost{runtimeErrorCode: test.runtimeCode}, dbContext(), []byte(`{"name":"draft","providerId":"postgresql","endpoint":"db.internal:5432","options":{"user":"app"},"credentialValue":"one-time-password"}`), "test")
+			if err != nil || len(raw) != 0 || result.GetError().GetCode() != test.platformCode || result.GetError().GetMessage() != test.message {
+				t.Fatalf("诊断映射错误: result=%+v raw=%s err=%v", result, raw, err)
+			}
+			if strings.Contains(result.GetError().GetMessage(), "db.internal") || strings.Contains(result.GetError().GetMessage(), "do-not-leak") {
+				t.Fatalf("安全诊断泄露 Provider 原文: %q", result.GetError().GetMessage())
+			}
+		})
 	}
 }
 

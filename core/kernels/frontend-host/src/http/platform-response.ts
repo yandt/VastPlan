@@ -53,6 +53,15 @@ function mapCapabilityError(response: ServerResponse, code: string, head = false
   if (code === "platform.database.invalid") return sendAPIError(response, 422, "database_connection_invalid", head);
   if (["platform.settings.invalid", "platform.credentials.invalid", "platform.deployment.invalid", "platform.plugin_configuration.invalid"].includes(code)) return sendAPIError(response, 400, "invalid_request", head);
   if (code === "platform.database.connection_unavailable") return sendAPIError(response, 422, "database_connection_failed", head);
+  if (code === "platform.database.tls_policy_forbidden") return sendAPIError(response, 422, "database_tls_policy_forbidden", head);
+  if (code === "platform.database.name_resolution_failed") return sendAPIError(response, 422, "database_name_resolution_failed", head);
+  if (code === "platform.database.connection_refused") return sendAPIError(response, 422, "database_connection_refused", head);
+  if (code === "platform.database.connection_timeout") return sendAPIError(response, 422, "database_connection_timeout", head);
+  if (code === "platform.database.tls_verification_failed") return sendAPIError(response, 422, "database_tls_verification_failed", head);
+  if (code === "platform.database.authentication_failed") return sendAPIError(response, 422, "database_authentication_failed", head);
+  if (code === "platform.database.database_not_found") return sendAPIError(response, 422, "database_not_found", head);
+  if (code === "platform.database.permission_denied") return sendAPIError(response, 422, "database_permission_denied", head);
+  if (code === "platform.database.pool_exhausted") return sendAPIError(response, 429, "database_pool_exhausted", head);
   if (code === "platform.database.runtime_unavailable") return sendAPIError(response, 503, "database_runtime_unavailable", head);
   if (code === "platform.plugin_installation.invalid") return sendAPIError(response, 400, "invalid_installation_request", head);
   if (code === "platform.plugin_configuration.unavailable") return sendAPIError(response, 503, "configuration_unavailable", head);

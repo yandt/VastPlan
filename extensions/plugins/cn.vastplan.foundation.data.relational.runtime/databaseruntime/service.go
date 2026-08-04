@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
-	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
-	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
+	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
@@ -172,16 +172,20 @@ func (s *Service) probe(ctx context.Context, host sdk.Host, call *contractv1.Cal
 	}
 	material, err := s.materialFor(host, scope.TenantID, request.Connection.Credentials)
 	if err != nil {
-		return databasev1.ProbeResult{}, NewRuntimeError(databasev1.ErrorConnectionUnavailable, false, err)
+		failure := NewRuntimeError(databasev1.ErrorConnectionUnavailable, false, err)
+		logRuntimeDiagnostic(call, databasev1.OperationProbe, request.Connection.ProviderID, "material", failure)
+		return databasev1.ProbeResult{}, failure
 	}
 	started := time.Now()
 	pool, err := s.registry.OpenPool(ctx, request.Connection, material)
 	if err != nil {
+		logRuntimeDiagnostic(call, databasev1.OperationProbe, request.Connection.ProviderID, "open_pool", err)
 		return databasev1.ProbeResult{}, err
 	}
 	defer pool.Close()
 	if err := pool.Probe(ctx); err != nil {
-		return databasev1.ProbeResult{}, NewRuntimeError(databasev1.ErrorConnectionUnavailable, true, err)
+		logRuntimeDiagnostic(call, databasev1.OperationProbe, request.Connection.ProviderID, "probe", err)
+		return databasev1.ProbeResult{}, err
 	}
 	return databasev1.ProbeResult{Ready: true, ProviderID: request.Connection.ProviderID, LatencyMS: time.Since(started).Milliseconds()}, nil
 }
@@ -307,12 +311,8 @@ func (s *Service) acquire(ctx context.Context, host sdk.Host, call *contractv1.C
 func runtimeResult(value any, err error) (*contractv1.CallResult, []byte, error) {
 	if err != nil {
 		code, retryable := ErrorDetails(err)
-		message := "数据库运行时操作失败"
-		if code == databasev1.ErrorInvalidRequest || code == databasev1.ErrorUnsupported || code == databasev1.ErrorConnectionNotFound {
-			message = err.Error()
-		}
 		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{
-			Code: code, Message: message, Retryable: retryable,
+			Code: code, Message: runtimeSafeMessage(code), Retryable: retryable,
 		}}, nil, nil
 	}
 	raw, err := json.Marshal(value)

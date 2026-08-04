@@ -188,6 +188,10 @@ func TestDatabaseRuntimeErrorCodesAreStable(t *testing.T) {
 	for _, code := range []string{
 		databasev1.ErrorInvalidRequest, databasev1.ErrorProviderNotFound, databasev1.ErrorUnsupported,
 		databasev1.ErrorConnectionNotFound, databasev1.ErrorConnectionUnavailable,
+		databasev1.ErrorTLSPolicyForbidden, databasev1.ErrorNameResolutionFailed,
+		databasev1.ErrorConnectionRefused, databasev1.ErrorConnectionTimeout,
+		databasev1.ErrorTLSVerificationFailed, databasev1.ErrorAuthenticationFailed,
+		databasev1.ErrorDatabaseNotFound, databasev1.ErrorPermissionDenied,
 		databasev1.ErrorPoolExhausted, databasev1.ErrorDeadlineExceeded, databasev1.ErrorQueryFailed,
 		databasev1.ErrorTransactionLost, databasev1.ErrorTransactionExpired, databasev1.ErrorTransactionConflict,
 	} {

@@ -384,6 +384,15 @@ export class PlatformAdminError extends Error {
 function platformAdminErrorMessage(code: string): string {
   if (code === "database_connection_invalid") return "数据库连接配置无效，请检查地址、端口、用户名和传输加密设置。";
   if (code === "database_connection_failed") return "数据库连接未能建立，请检查网络、账户密码和服务端状态。";
+  if (code === "database_tls_policy_forbidden") return "当前部署策略不允许关闭数据库传输加密校验。";
+  if (code === "database_name_resolution_failed") return "数据库地址无法解析，请检查主机名或 DNS 配置。";
+  if (code === "database_connection_refused") return "数据库服务器拒绝了连接，请检查地址、端口和服务监听状态。";
+  if (code === "database_connection_timeout") return "连接数据库超时，请检查网络和连接超时设置。";
+  if (code === "database_tls_verification_failed") return "数据库传输加密或证书校验失败，请检查证书与服务器名称。";
+  if (code === "database_authentication_failed") return "数据库用户名或密码验证失败。";
+  if (code === "database_not_found") return "指定的数据库不存在。";
+  if (code === "database_permission_denied") return "数据库账户没有所需权限。";
+  if (code === "database_pool_exhausted") return "数据库连接资源暂时不足，请稍后重试。";
   if (code === "database_runtime_unavailable") return "数据库运行服务暂时不可用，请稍后重试。";
   return `Platform administration request failed: ${code}`;
 }
