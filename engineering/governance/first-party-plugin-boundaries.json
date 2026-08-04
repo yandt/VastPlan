@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "generatedFrom": "extensions/plugins/*/vastplan.plugin.json",
+  "policy": "ADR-0193",
+  "productCapabilities": [
+    {
+      "id": "platform.database",
+      "artifacts": [
+        "cn.vastplan.platform.data.relational.connection-manager",
+        "cn.vastplan.foundation.data.relational.runtime"
+      ],
+      "internalModules": ["postgresql", "mysql", "record-store", "sql-shared-state"]
+    }
+  ],
+  "signedLibraries": [
+    "cn.vastplan.foundation.frontend.render.adapter",
+    "cn.vastplan.foundation.frontend.render.adapter.antd",
+    "cn.vastplan.foundation.frontend.runtime.engine.react",
+    "cn.vastplan.foundation.frontend.structure.layout.standard",
+    "cn.vastplan.foundation.frontend.structure.layout.top-navigation",
+    "cn.vastplan.foundation.frontend.structure.shell",
+    "cn.vastplan.foundation.frontend.workflow.workbench"
+  ],
+  "runtimePlugins": [
+    "cn.vastplan.foundation.data.relational.runtime",
+    "cn.vastplan.foundation.frontend.identity.account-center",
+    "cn.vastplan.foundation.security.approval-policy.native",
+    "cn.vastplan.foundation.security.authentication-broker",
+    "cn.vastplan.foundation.security.authentication.provider.database",
+    "cn.vastplan.foundation.security.authentication.provider.oidc",
+    "cn.vastplan.foundation.security.authorization-enforcer",
+    "cn.vastplan.foundation.security.authorization-engine.native",
+    "cn.vastplan.foundation.security.authorization-session",
+    "cn.vastplan.foundation.security.bootstrap-policy",
+    "cn.vastplan.foundation.security.seed-access",
+    "cn.vastplan.foundation.versioning.content-staging",
+    "cn.vastplan.foundation.versioning.ledger",
+    "cn.vastplan.foundation.versioning.workspace",
+    "cn.vastplan.platform.artifacts.assessment.controller",
+    "cn.vastplan.platform.artifacts.assessment.database.file",
+    "cn.vastplan.platform.artifacts.assessment.provider",
+    "cn.vastplan.platform.artifacts.marketplace",
+    "cn.vastplan.platform.artifacts.repository",
+    "cn.vastplan.platform.artifacts.storage.file",
+    "cn.vastplan.platform.configuration.global-settings",
+    "cn.vastplan.platform.configuration.plugin-settings",
+    "cn.vastplan.platform.configuration.portal-composer",
+    "cn.vastplan.platform.data.relational.connection-manager",
+    "cn.vastplan.platform.infrastructure.composition-planner",
+    "cn.vastplan.platform.infrastructure.deployment-manager",
+    "cn.vastplan.platform.integration.api-exposure",
+    "cn.vastplan.platform.interaction.broker",
+    "cn.vastplan.platform.security.authentication.delivery.webhook",
+    "cn.vastplan.platform.security.authentication.method.otp",
+    "cn.vastplan.platform.security.authorization-policy",
+    "cn.vastplan.platform.security.credentials"
+  ],
+  "deferredPhysicalReviews": [
+    {
+      "artifacts": [
+        "cn.vastplan.foundation.frontend.structure.layout.standard",
+        "cn.vastplan.foundation.frontend.structure.layout.top-navigation"
+      ],
+      "reason": "继续作为同一 Shell Catalog 下的独立签名按需 Library；待统一 Library bundle 协议成熟后复审，不在本轮改变交付边界"
+    },
+    {
+      "artifacts": [
+        "cn.vastplan.platform.artifacts.assessment.controller",
+        "cn.vastplan.platform.artifacts.assessment.provider",
+        "cn.vastplan.platform.artifacts.assessment.database.file"
+      ],
+      "reason": "当前分别拥有编排、执行和本地数据库隔离边界；本轮仅记录，待远端 Provider 和集群故障数据充分后复审"
+    }
+  ]
+}
