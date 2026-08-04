@@ -1,6 +1,6 @@
 # UI 工作台组合框架
 
-> 状态：FilterPanel、Collection、RecordDetail/MasterDetail/TreeDetail、WorkspacePage、表单、Overlay、Table 行虚拟化、统一拖拽与延迟 Dashboard Grid 基础均已实施｜最后更新：2026-08-02
+> 状态：FilterPanel、Collection、RecordDetail/MasterDetail/TreeDetail、WorkspacePage、表单、Overlay、Table 行虚拟化、统一拖拽与延迟 Dashboard Grid 基础均已实施｜最后更新：2026-08-04
 >
 > 本文是 Portal 列表、卡片、动作、表单与 Overlay 工作流组合规范的单一真相源。架构取舍见 [ADR-0082](../decisions/ADR-0082-前端工作台组合框架.md)；命名边界见 [ADR-0083](../decisions/ADR-0083-前端UI分层术语与插件命名空间.md) 与 [ADR-0104](../decisions/ADR-0104-Frontend-Runtime-Engine与React单实现.md)；Portal 装载与基础插件边界见《[前端门户内核](前端门户内核.md)》，视觉基线见《[Portal 设计系统](../design/DESIGN.md)》。
 
@@ -39,7 +39,7 @@ flowchart TB
 
 `FilterPanel` 是与 Collection、MasterDetail 平级的一级组合组件，统一字段 Schema、紧凑表单、草稿/提交策略、响应式分列和操作位置，但不发起数据请求。`CollectionWorkbench` 组合 FilterPanel，并共享查询、选择、动作、取消和错误状态机，提供 table/page 与 card/cursor 两种受控呈现：Table 保留列显示与顺序偏好、页码和总数；Card 固定标题、状态、摘要、内容与 footer 动作区，支持手动/视口增量加载。Workbench Page 根使用统一零 margin/零 padding Flow，以受治理 `sectionGap` 排列一级区域；FilterPanel 的 `flush/compact` inset 由 Workbench 组合上下文决定，功能插件不能借此设置外部间距。Collection 顶部筛选固定 `flush`，避免 FilterBar 自身 padding 与 Shell 16px 起始节奏叠加。FilterPanel 默认 `xs=1 / md=2 / xl=4`，可通过 `filterPanel.layout.columns` 覆盖；列偏好由工具栏锚定 Popover 即时写入，不使用阻断式确认 Dialog。表单工作流已提供默认 FormDialog 和显式 page、打开时动态 Schema/枚举准备、分区/标签/步骤、1–4 列、有限条件 DSL、脏状态保护、同步/异步/服务端字段错误、一次性提交和成功刷新。Overlay 统一承载 JSON 预览和审计表，并可按信息形态选择 Dialog 或 Drawer。视觉数值的唯一真相源是《[Portal 设计系统](../design/DESIGN.md)》的 `portalPageRhythm`。
 
-UI Contract 9.0 的 `SizeableProps` 为 Workbench 定义提供统一四档 `xs / sm / md / lg`，缺省为 `md`。Page、Workspace Section、Collection、FilterPanel、Card、Form、Overlay、Record、Descriptions 与 Dashboard 都通过同一 `ComponentSizeProvider` 继承，调用方只在组合根声明一次；Renderer 不得在每个组件重新复制默认分支。`Page.size` 管节奏而不管正文宽度，`Grid.size` 管默认 gap 而不管列数。Form/Overlay 的内容 `size` 与 `dialogWidth` / `width` 完全分离。
+UI Contract 10.2 的 `SizeableProps` 为 Workbench 定义提供统一四档 `xs / sm / md / lg`，缺省为 `md`。Page、Workspace Section、Collection、FilterPanel、Card、Form、Overlay、Record、Descriptions 与 Dashboard 都通过同一 `ComponentSizeProvider` 继承，调用方只在组合根声明一次；Renderer 不得在每个组件重新复制默认分支。`Page.size` 管节奏而不管正文宽度，`Grid.size` 管默认 gap 而不管列数。Form/Overlay 的内容 `size` 与 `dialogWidth` / `width` 完全分离。
 
 通用排序由 Workbench 内部 `patterns/interaction/SortableList` 统一承接，当前使用精确锁定的 dnd-kit；Pointer、Touch、自动滚动和碰撞反馈不再由各 Pattern 自行处理，键盘继续提供显式等价操作。第三方事件与 Sensor 不进入 UI Contract 或功能插件，dnd-kit 仅在 Sortable 表面实际挂载后加载。未来首页卡片使用 `DashboardGridSpec` 描述稳定卡片 ID 和响应式位置，可信宿主通过 `loadDashboardGrid()` 按需加载 `react-grid-layout` 并解析卡片内容；Grid 代码不进入普通 Workbench 页面入口。该基础不等于首页已经实现，卡片目录、偏好 CAS、权限裁剪和完整键盘缩放仍是正式启用前置项，详见 ADR-0162。
 
@@ -126,7 +126,7 @@ Collection 可选的状态摘要由 `CollectionSummary` 数据驱动定义。`ap
 
 ### 3.4 表单与 Overlay 工作流
 
-`FormSchema` 保持 Draft 7 数据约束，不将分栏、步骤和条件可见性伪装成校验规则。当前 UI Contract 9.0 提供：
+`FormSchema` 保持 Draft 7 数据约束，不将分栏、步骤和条件可见性伪装成校验规则。当前 UI Contract 10.2 提供：
 
 ```text
 FormPresentation
@@ -144,6 +144,8 @@ FormWorkflow
 ├── success: notify、refreshCollection、close、navigate
 └── failure: 字段错误映射、保留输入、可重试性
 ```
+
+时长字段使用 `widget: duration`，并声明唯一 `storageUnit`、可显示的 `units[]` 与可选 `defaultUnit`。它只能绑定 JSON Schema 的 `number` 或 `integer` 字段；切换显示单位不改变底层值，编辑后统一换算回存储单位，因此后端契约无需理解 UI 当前选择。统一词表为毫秒、秒、分、小时、天、周、月，月份固定按 30 天换算，不能用于日历日期或账期。调用方只开放业务上合理的单位子集，Renderer 不得自行扩大选项。
 
 `visibleWhen` / `readOnlyWhen` 使用有限 DSL：字段 JSON Pointer、`equals`、`in`、`exists`、`all`、`any`、`not`。它不能读取环境、调用网络、执行脚本或访问其他插件状态。需要复杂业务判断时，插件把已裁剪的只读 `context` 传给 Workbench，并由服务端在提交时再次验证。
 

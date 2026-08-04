@@ -1,9 +1,10 @@
 import type { ActionSpec, CollectionDensity, CollectionSpec, ColumnSpec, ComponentSize, FilterPanelSpec, FormPresentation, FormSchema, FormWorkflow, JSONValue, LocalizedText, OverlayWidth, PageActionSpec, PageBodyLayout, RecordDetailSpec, RecordMasterSpec, RecordTreeSpec, ResponsiveColumnCount, SizeableProps } from "@vastplan/ui-contract";
-import { componentSizes, formControlAlignments, overlayWidths } from "@vastplan/ui-contract";
+import { componentSizes, durationUnits, formControlAlignments, overlayWidths } from "@vastplan/ui-contract";
 import { pageBodyLayouts } from "@vastplan/ui-contract";
 import type { PluginExtensionAccess } from "@vastplan/plugin-extension-contract";
 
-export type { ActionSpec, CollectionSpec, CollectionCardSpec, CollectionCardValueFormat, CollectionCardFieldSpec, ComponentSize, DashboardBreakpoint, DashboardCompaction, DashboardGridItem, DashboardGridLayouts, DashboardGridSpec, FilterPanelApplyMode, FilterPanelLayout, FilterPanelSpec, ColumnSpec, DataValueFormat, FilterSpec, FilterFieldKind, CollectionQueryMode, CollectionSelectionMode, CollectionView, FormCondition, FormControlAlignment, FormFieldPresentation, FormLabelPlacement, FormLayout, FormPresentation, FormPresentationPreset, FormSchema, FormSectionPresentation, FormWidget, FormWorkflow, JSONValue, OverlayWidth, PageActionDisplay, PageActionOverflow, PageActionSpec, PageBodyLayout, RecordDetailSpec, RecordFieldSpec, RecordMasterSpec, RecordSectionSpec, RecordTreeSpec, ResponsiveColumnCount, SizeableProps } from "@vastplan/ui-contract";
+export type { ActionSpec, CollectionSpec, CollectionCardSpec, CollectionCardValueFormat, CollectionCardFieldSpec, ComponentSize, DashboardBreakpoint, DashboardCompaction, DashboardGridItem, DashboardGridLayouts, DashboardGridSpec, DurationUnit, FilterPanelApplyMode, FilterPanelLayout, FilterPanelSpec, ColumnSpec, DataValueFormat, FilterSpec, FilterFieldKind, CollectionQueryMode, CollectionSelectionMode, CollectionView, FormCondition, FormControlAlignment, FormDurationPresentation, FormFieldPresentation, FormLabelPlacement, FormLayout, FormPresentation, FormPresentationPreset, FormSchema, FormSectionPresentation, FormWidget, FormWorkflow, JSONValue, OverlayWidth, PageActionDisplay, PageActionOverflow, PageActionSpec, PageBodyLayout, RecordDetailSpec, RecordFieldSpec, RecordMasterSpec, RecordSectionSpec, RecordTreeSpec, ResponsiveColumnCount, SizeableProps } from "@vastplan/ui-contract";
+export { durationUnits } from "@vastplan/ui-contract";
 export { dashboardBreakpointOrder, dashboardDefaultBreakpoints, dashboardDefaultColumns, jsonSchemaDialect, message } from "@vastplan/ui-contract";
 export { defineDashboardGrid } from "./dashboard.js";
 export type { LocalizedText, MessageDescriptor, MessageValues } from "@vastplan/ui-contract";
@@ -508,6 +509,10 @@ function validateFormDefinition(form: WorkbenchFormDefinition): void {
       if (node?.type !== "string" || node.format !== "vastplan-secret-material" || node.writeOnly !== true) throw new Error(`表单 ${form.id} 的 secretMaterial 字段必须声明 type=string、format=vastplan-secret-material 且 writeOnly=true`);
       if (pointerValue(form.initialValue, field.pointer).found) throw new Error(`表单 ${form.id} 的 secretMaterial 字段禁止出现在 initialValue`);
     }
+    if (field.widget === "duration") {
+      const node = schemaNode(form.schema.schema, field.pointer);
+      if (node?.type !== "integer" && node?.type !== "number") throw new Error(`表单 ${form.id} 的 duration 字段必须是 number 或 integer`);
+    }
   }
 }
 
@@ -524,6 +529,21 @@ export function validateFormPresentation(presentation: FormPresentation | undefi
   for (const section of sections) {
     if (!validIdentifier(section.id) || section.fields.length === 0 || section.fields.some((field) => !field.startsWith("/"))) throw new Error(`表单 ${formID} 的 section ${section.id} 无效`);
     validateFormColumns(formID, section.columns, section.columnWidths, `section ${section.id}`);
+  }
+  for (const field of presentation.fields ?? []) validateDurationPresentation(field, formID);
+}
+
+function validateDurationPresentation(field: NonNullable<FormPresentation["fields"]>[number], formID: string): void {
+  if (field.widget !== "duration") {
+    if (field.duration !== undefined) throw new Error(`表单 ${formID} 只有 duration widget 可以声明单位配置`);
+    return;
+  }
+  const config = field.duration;
+  const allowed = new Set(durationUnits);
+  if (config === undefined || !allowed.has(config.storageUnit) || config.units.length === 0 || config.units.length > durationUnits.length ||
+      new Set(config.units).size !== config.units.length || config.units.some((unit) => !allowed.has(unit)) ||
+      config.defaultUnit !== undefined && !config.units.includes(config.defaultUnit)) {
+    throw new Error(`表单 ${formID} 的 duration 单位配置无效`);
   }
 }
 

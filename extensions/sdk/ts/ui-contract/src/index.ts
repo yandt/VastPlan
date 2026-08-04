@@ -34,7 +34,17 @@ export type FormLabelPlacement = "inline" | "stacked" | "inside-inline";
 export const formControlAlignments = Object.freeze(["start", "end"] as const);
 export type FormControlAlignment = (typeof formControlAlignments)[number];
 export type FormPresentationPreset = "compact" | "standard" | "comfortable" | "guided";
-export type FormWidget = "text" | "textarea" | "number" | "select" | "boolean" | "date" | "datetime" | "credentialRef" | "secretMaterial" | "hidden";
+export const durationUnits = Object.freeze(["millisecond", "second", "minute", "hour", "day", "week", "month"] as const);
+export type DurationUnit = (typeof durationUnits)[number];
+export interface FormDurationPresentation {
+  /** Unit used by the numeric JSON value and backend contract. */
+  storageUnit: DurationUnit;
+  /** Units exposed by the renderer, in display order. */
+  units: readonly DurationUnit[];
+  /** Initial display unit. Defaults to the first exposed unit. */
+  defaultUnit?: DurationUnit;
+}
+export type FormWidget = "text" | "textarea" | "number" | "duration" | "select" | "boolean" | "date" | "datetime" | "credentialRef" | "secretMaterial" | "hidden";
 export type FormCondition =
   | { pointer: string; equals: JSONPrimitive }
   | { pointer: string; in: readonly JSONPrimitive[] }
@@ -46,6 +56,8 @@ export interface FormFieldPresentation {
   pointer: string;
   span?: number;
   widget?: FormWidget;
+  /** Required only for the duration widget. A month is a fixed 30-day duration. */
+  duration?: FormDurationPresentation;
   help?: import("./i18n.js").LocalizedText;
   visibleWhen?: FormCondition;
   readOnlyWhen?: FormCondition;

@@ -27,9 +27,13 @@ export function projectFormPresentation(schema: FormSchema, presentation: FormPr
     else if (field.widget !== undefined) node["ui:widget"] = widget(field.widget);
     if (field.readOnlyWhen !== undefined && evaluateFormCondition(field.readOnlyWhen, value, context)) node["ui:readonly"] = true;
     if (field.help !== undefined) node["ui:help"] = text(field.help);
-    if (field.span !== undefined) {
+    if (field.span !== undefined || field.duration !== undefined) {
       const options = record(node["ui:options"]);
-      node["ui:options"] = { ...options, vastplanSpan: field.span };
+      node["ui:options"] = {
+        ...options,
+        ...(field.span === undefined ? {} : { vastplanSpan: field.span }),
+        ...(field.duration === undefined ? {} : { vastplanDuration: field.duration }),
+      };
     }
   }
   return { ...schema, schema: renderedSchema, uiSchema };
@@ -91,7 +95,7 @@ function directRootField(pointer: string): string | undefined {
 }
 
 function widget(value: FormWidget): string {
-  return ({ text: "text", textarea: "textarea", number: "updown", select: "select", boolean: "checkbox", date: "date", datetime: "alt-datetime", credentialRef: "secretRef", secretMaterial: "password", hidden: "hidden" } as const)[value];
+  return ({ text: "text", textarea: "textarea", number: "updown", duration: "duration", select: "select", boolean: "checkbox", date: "date", datetime: "alt-datetime", credentialRef: "secretRef", secretMaterial: "password", hidden: "hidden" } as const)[value];
 }
 
 function record(value: unknown): Record<string, unknown> {

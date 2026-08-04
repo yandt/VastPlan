@@ -124,6 +124,25 @@ describe("defineCollectionPage", () => {
     expect(() => defineCollectionPage({ ...definition, forms: [{ ...definition.forms[0]!, initialValue: { value: "must-not-be-retained" } }] })).toThrow("initialValue");
   });
 
+  it("accepts duration units only for numeric duration fields", () => {
+    const form = {
+      id: "timeout",
+      schema: { id: "timeout", schema: { type: "object", properties: { timeoutMs: { type: "integer" } } } },
+      presentation: { fields: [{ pointer: "/timeoutMs", widget: "duration" as const, duration: { storageUnit: "millisecond" as const, units: ["millisecond", "second", "minute"] as const, defaultUnit: "second" as const } }] },
+      workflow: { title: "Timeout" },
+      async submit() {},
+    };
+    const definition = {
+      id: "timeouts", path: "/timeouts", title: "Timeouts",
+      collection: { id: "timeouts", title: "Timeouts", view: "table" as const, query: { mode: "page" as const, defaultPageSize: 20, pageSizeOptions: [20] }, columns: [] },
+      pageActions: [{ id: "new", label: "New", icon: "add" as const, form: "timeout" }], forms: [form],
+      async load() { return { items: [], total: 0 }; },
+    };
+    expect(() => defineCollectionPage(definition)).not.toThrow();
+    expect(() => defineCollectionPage({ ...definition, forms: [{ ...form, presentation: { fields: [{ pointer: "/timeoutMs", widget: "duration" as const }] } }] })).toThrow("单位配置无效");
+    expect(() => defineCollectionPage({ ...definition, forms: [{ ...form, schema: { id: "timeout", schema: { type: "object", properties: { timeoutMs: { type: "string" } } } } }] })).toThrow("number 或 integer");
+  });
+
   it("rejects actions that escape the governed overlay registry", () => {
     expect(() => defineCollectionPage({
       id: "revisions", path: "/revisions", title: "Revisions",

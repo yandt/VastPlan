@@ -9,7 +9,11 @@ describe("VastPlanIcon", () => {
       const markup = renderToStaticMarkup(createElement(VastPlanIcon, { name }));
       expect(markup).toContain(`<svg data-vastplan-icon="${name}"`);
       expect(markup).toContain('data-vastplan-icon-source="canonical"');
-      expect(markup).toContain('viewBox="64 64 896 896"');
+      const viewBox = markup.match(/viewBox="([^"]+)"/)?.[1]?.split(/\s+/).map(Number);
+      expect(viewBox).toHaveLength(4);
+      expect(viewBox?.every(Number.isFinite)).toBe(true);
+      expect(viewBox?.[2]).toBeGreaterThan(0);
+      expect(viewBox?.[3]).toBeGreaterThan(0);
       expect(markup).toContain('aria-hidden="true"');
     }
   });

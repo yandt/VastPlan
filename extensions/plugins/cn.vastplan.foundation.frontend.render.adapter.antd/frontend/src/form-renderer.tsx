@@ -13,6 +13,7 @@ import { safeAntdTemplates } from "./safe-rjsf-theme";
 import { PresentedField, antdFormFieldWidthCSS, antdInsideInlineCSS } from "./inside-inline-field";
 import { antdComponentSize } from "./component-size";
 import { resolveFormLabelWidth } from "./form-label-width";
+import { DurationWidget } from "./duration-widget";
 
 const validator = cspJSONSchemaValidator;
 const emptyFormContext: Readonly<Record<string, unknown>> = Object.freeze({});
@@ -199,7 +200,7 @@ export function FormRenderer({ schema, value, onChange, size: requestedSize, pre
     });
   }, [combinedExternalErrors, currentAsync.validating, onValidationChange, syncErrors, validation.errors]);
   const templates = useMemo(() => ({ ...safeAntdTemplates, FieldTemplate: (props: FieldTemplateProps) => <PresentedField {...props} placement={formLabelPlacement(presentation)} />, ObjectFieldTemplate: (props: ObjectFieldTemplateProps) => <PresentedObject {...props} presentation={presentation} activeSection={presentationSection} onSectionChange={onPresentationSectionChange} />, ButtonTemplates: { ...safeAntdTemplates.ButtonTemplates, SubmitButton: () => null } }), [onPresentationSectionChange, presentation, presentationSection]);
-  const widgets = useMemo(() => ({ ...antdWidgets, SelectWidget, secretRef: SecretRefWidget }), []);
+  const widgets = useMemo(() => ({ ...antdWidgets, SelectWidget, duration: DurationWidget, secretRef: SecretRefWidget }), []);
   const compact = presentation?.layout === "compact";
   const controlAlignment = formControlAlignment(presentation);
   const form = <RJSFForm

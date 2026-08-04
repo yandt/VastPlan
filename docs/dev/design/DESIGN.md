@@ -1,6 +1,6 @@
 # VastPlan Portal 设计系统
 
-> 状态：设计基线 v5｜最后更新：2026-08-02
+> 状态：设计基线 v5｜最后更新：2026-08-04
 >
 > 本文是 Portal 跨布局、基于 Ant Design 当前实现的视觉与交互单一真相源。组件职责和安全边界见《[前端门户内核](../architecture/前端门户内核.md)》，Renderer 收敛见 [ADR-0179](../decisions/ADR-0179-Ant-Design单实现与Renderer协议保留.md)。
 
@@ -14,7 +14,7 @@
 
 ## 2. 基础 Token
 
-UI Contract 9.0 暴露语义 token、账户外观契约与四级 `ComponentSize`，适配器映射到具体框架。布局插件不得读取 Ant Design 私有 token。列表、卡片、表单和操作区的一致性交给《[UI 工作台组合框架](../architecture/UI工作台组合框架.md)》；布局只决定它们所在区域的视觉位置。
+UI Contract 10.2 暴露语义 token、账户外观契约、四级 `ComponentSize` 与受治理的时长输入语义，适配器映射到具体框架。布局插件不得读取 Ant Design 私有 token。列表、卡片、表单和操作区的一致性交给《[UI 工作台组合框架](../architecture/UI工作台组合框架.md)》；布局只决定它们所在区域的视觉位置。
 
 | Token | 基线 | 用途 |
 |---|---:|---|

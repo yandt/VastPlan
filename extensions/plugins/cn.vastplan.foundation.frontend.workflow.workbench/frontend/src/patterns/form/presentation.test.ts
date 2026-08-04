@@ -38,6 +38,13 @@ describe("FormPresentation", () => {
     expect(projectFormPresentation(schema, presentation, { providerId: "mysql" }, {}, String).uiSchema).toMatchObject({ options: { applicationName: { "ui:widget": "hidden" } } });
   });
 
+  it("projects governed duration units without changing the numeric schema", () => {
+    const schema = { id: "timeouts", schema: { type: "object", properties: { timeoutMs: { type: "integer" } } } } as const;
+    const projected = projectFormPresentation(schema, { fields: [{ pointer: "/timeoutMs", widget: "duration", duration: { storageUnit: "millisecond", units: ["millisecond", "second", "minute"], defaultUnit: "second" } }] }, {}, {}, String);
+    expect(projected.schema).toBe(schema.schema);
+    expect(projected.uiSchema).toEqual({ timeoutMs: { "ui:widget": "duration", "ui:options": { vastplanDuration: { storageUnit: "millisecond", units: ["millisecond", "second", "minute"], defaultUnit: "second" } } } });
+  });
+
   it("lets a FormDialog section own the title of its direct object field", () => {
     const schema = { id: "database", schema: { type: "object", properties: { options: { type: "object", title: "连接选项", properties: { user: { type: "string", title: "用户名" } } } } } } as const;
     const presentation = { navigation: "sections" as const, sections: [{ id: "options", title: "Provider 连接选项", fields: ["/options"] }] };

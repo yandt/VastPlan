@@ -11,7 +11,7 @@ import (
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
-const id, version, capability = "cn.vastplan.platform.data.relational.connection-manager", "0.10.5", "platform.database"
+const id, version, capability = "cn.vastplan.platform.data.relational.connection-manager", "0.11.0", "platform.database"
 
 const credentialCapability = "platform.credentials"
 
@@ -42,10 +42,10 @@ func main() {
 
 func descriptor() []byte {
 	return []byte(`{"title":"数据库连接","subcommands":[
-		{"name":"define","description":"定义连接、Provider 参数和连接池策略，并发布到 Database Runtime","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"name":{"type":"string"},"providerId":{"type":"string"},"endpoint":{"type":"string"},"database":{"type":"string"},"options":{"type":"object"},"pool":{"type":"object"},"credentialValue":{"type":"string"}},"required":["name","providerId","endpoint","options"]}},
+		{"name":"define","description":"定义连接、数据库类型参数和连接池策略，并发布到数据库运行服务","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"name":{"type":"string"},"providerId":{"type":"string"},"endpoint":{"type":"string"},"database":{"type":"string"},"options":{"type":"object"},"pool":{"type":"object"},"credentialValue":{"type":"string"}},"required":["name","providerId","endpoint","options"]}},
 		{"name":"describe","description":"读取连接定义","paramsSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}},
 		{"name":"list","description":"列出连接定义","paramsSchema":{"type":"object","properties":{}}},
 		{"name":"remove","description":"删除连接定义","paramsSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}},
-		{"name":"probe","description":"由 Database Runtime 使用托管凭证探测连接","paramsSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}}
+		{"name":"probe","description":"由数据库运行服务使用托管凭证探测连接","paramsSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}}
 	]}`)
 }

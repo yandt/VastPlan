@@ -21,5 +21,11 @@ describe("database connection form layout", () => {
       expect.objectContaining({ pointer: "/options/password", widget: "secretMaterial" }),
       expect.objectContaining({ pointer: "/options/serverName", visibleWhen: { pointer: "/options/tlsMode", equals: "verify-full" } }),
     ]));
+    const durationFields = presentation?.fields?.filter((field) => field.widget === "duration") ?? [];
+    expect(durationFields.map((field) => field.pointer)).toEqual([
+      "/options/connectTimeoutMs", "/options/readTimeoutMs", "/options/writeTimeoutMs",
+      "/pool/maxLifetimeMs", "/pool/maxIdleTimeMs", "/pool/acquireTimeoutMs", "/pool/idlePoolTtlMs",
+    ]);
+    expect(durationFields.every((field) => field.duration?.storageUnit === "millisecond" && field.duration.units.length > 0)).toBe(true);
   });
 });

@@ -1,7 +1,8 @@
 export type { CollectionPreference } from "@vastplan/frontend-engine-contract";
 export type { PluginExtensionAccess, PortalExtensionContribution, PortalExtensionGraph, PortalExtensionPoint } from "@vastplan/plugin-extension-contract";
 
-export type { ComponentSize, FormCondition, FormControlAlignment, FormFieldPresentation, FormLabelPlacement, FormLayout, FormPresentation, FormPresentationPreset, FormSchema, FormSectionPresentation, FormUISchema, FormValidationIssue, FormValidationResult, FormWidget, FormWorkflow, InteractionAuditEvent, InteractionRecord, InteractionResponse, InteractionState, JSONPrimitive, JSONSchema, JSONValue, LocalizedText, LocaleDirection, MessageDescriptor, MessageValues, PageBodyLayout, PluginLocalization, PortalLocalizationPolicy, SizeableProps, UICapability } from "@vastplan/ui-contract";
+export type { ComponentSize, DurationUnit, FormCondition, FormControlAlignment, FormDurationPresentation, FormFieldPresentation, FormLabelPlacement, FormLayout, FormPresentation, FormPresentationPreset, FormSchema, FormSectionPresentation, FormUISchema, FormValidationIssue, FormValidationResult, FormWidget, FormWorkflow, InteractionAuditEvent, InteractionRecord, InteractionResponse, InteractionState, JSONPrimitive, JSONSchema, JSONValue, LocalizedText, LocaleDirection, MessageDescriptor, MessageValues, PageBodyLayout, PluginLocalization, PortalLocalizationPolicy, SizeableProps, UICapability } from "@vastplan/ui-contract";
+export { durationUnits } from "@vastplan/ui-contract";
 export { componentSizes } from "@vastplan/ui-contract";
 export { jsonSchemaDialect } from "@vastplan/ui-contract";
 export { formControlAlignments } from "@vastplan/ui-contract";
