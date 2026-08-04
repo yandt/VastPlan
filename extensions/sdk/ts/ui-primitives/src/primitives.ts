@@ -50,6 +50,8 @@ export interface StackProps extends SizeableProps {
   align?: "start" | "center" | "end" | "stretch";
   justify?: "start" | "center" | "end" | "between";
   wrap?: boolean;
+  /** Whether this stack occupies the full available width. Defaults to true. */
+  fill?: boolean;
   children: ReactNode;
 }
 

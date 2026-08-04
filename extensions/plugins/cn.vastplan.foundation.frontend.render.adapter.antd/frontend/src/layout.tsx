@@ -44,11 +44,11 @@ export function BodySections({ sections, size: requestedSize }: BodySectionsProp
   </div></ComponentSizeProvider>;
 }
 
-export function Stack({ direction = "column", gap, align = "stretch", justify = "start", wrap = false, children, size: requestedSize }: StackProps) {
+export function Stack({ direction = "column", gap, align = "stretch", justify = "start", wrap = false, fill = true, children, size: requestedSize }: StackProps) {
   const size = useComponentSize(requestedSize);
   const justifyContent = justify === "between" ? "space-between" : justify === "start" || justify === "end" ? `flex-${justify}` : justify;
   const alignItems = align === "start" || align === "end" ? `flex-${align}` : align;
-  return <ComponentSizeProvider size={size}><div data-size={size} style={{ display: "flex", width: "100%", minWidth: 0, flexDirection: direction, gap: gap === undefined ? componentSizeRecipes.layout[size].gap : gaps[gap], alignItems, justifyContent, flexWrap: wrap ? "wrap" : "nowrap" }}>{children}</div></ComponentSizeProvider>;
+  return <ComponentSizeProvider size={size}><div data-size={size} style={{ display: "flex", width: fill ? "100%" : undefined, minWidth: 0, flexDirection: direction, gap: gap === undefined ? componentSizeRecipes.layout[size].gap : gaps[gap], alignItems, justifyContent, flexWrap: wrap ? "wrap" : "nowrap" }}>{children}</div></ComponentSizeProvider>;
 }
 
 const breakpoints = ["xs", "sm", "md", "lg", "xl"] as const;

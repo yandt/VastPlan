@@ -16,8 +16,8 @@ export function FormActions({ form }: { form: FormWorkflowController }) {
       <ui.Stack direction="row" gap="xs" align="center"><ui.Icon name={action.icon} size="xs" />{i18n.text(action.label)}</ui.Stack>
     </ui.Button>);
   return <ui.Stack direction="row" gap="sm" justify="between" align="center" wrap>
-    <ui.Stack direction="row" gap="sm" align="center" wrap>{renderActions("footer.start")}</ui.Stack>
-    <ui.Stack direction="row" gap="sm" align="center" justify="end" wrap>
+    <ui.Stack direction="row" gap="sm" align="center" wrap fill={false}>{renderActions("footer.start")}</ui.Stack>
+    <ui.Stack direction="row" gap="sm" align="center" justify="end" wrap fill={false}>
     {renderActions("footer.end")}
     <ui.Button kind="secondary" disabled={running} onClick={() => void form.requestClose()}>{i18n.text(form.definition?.workflow.cancelLabel ?? message(namespace, "action.cancel", "取消"))}</ui.Button>
     {steps && sectionIndex > 0 ? <ui.Button kind="secondary" disabled={running} onClick={() => form.setActiveSection(sections[sectionIndex - 1]?.id)}>{i18n.text(message(namespace, "action.previous", "上一步"))}</ui.Button> : null}

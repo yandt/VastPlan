@@ -40,6 +40,13 @@ describe("Ant Design portal UI renderer", () => {
     expect(markup).toContain("Select Node A");
   });
 
+  it("lets nested action groups opt out of full-width Stack layout", () => {
+    const Stack = antdPortalUIComponents.Stack;
+    const markup = renderToStaticMarkup(<Stack direction="row" justify="between"><Stack direction="row" fill={false}>测试连接</Stack><Stack direction="row" fill={false}>取消 保存</Stack></Stack>);
+    expect(markup.match(/width:100%/g)).toHaveLength(1);
+    expect(markup).toContain("justify-content:space-between");
+  });
+
   it("accepts the governed right-side Tooltip placement used by compact side navigation", () => {
     const Tooltip = antdPortalUIComponents.Tooltip;
     const markup = renderToStaticMarkup(<Tooltip title="Operations" placement="right"><button type="button">Open</button></Tooltip>);
