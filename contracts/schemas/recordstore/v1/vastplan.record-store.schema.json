@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/recordstore/v1/vastplan.record-store.schema.json",
+  "type": "object",
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][A-Za-z0-9]*(?:[._-][A-Za-z0-9]+)*$", "maxLength": 160 },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "idempotencyKey": { "type": "string", "minLength": 8, "maxLength": 200, "pattern": "^[A-Za-z0-9._:-]+$" },
+    "transactionHandle": { "type": "string", "minLength": 32, "maxLength": 2048, "pattern": "^[A-Za-z0-9_.-]+$" },
+    "modelRef": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "schemaVersion", "sha256"],
+      "properties": { "id": { "$ref": "#/$defs/id" }, "schemaVersion": { "type": "integer", "minimum": 1 }, "sha256": { "$ref": "#/$defs/sha256" } }
+    },
+    "connectionRef": {
+      "type": "object", "additionalProperties": false, "required": ["resourceId", "revision"],
+      "properties": { "resourceId": { "$ref": "#/$defs/id" }, "revision": { "type": "integer", "minimum": 1 } }
+    },
+    "storage": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "connection": { "$ref": "#/$defs/connectionRef" } }
+    },
+    "record": {
+      "type": "object", "minProperties": 1, "maxProperties": 256,
+      "propertyNames": { "$ref": "#/$defs/id" }, "additionalProperties": true
+    },
+    "key": {
+      "type": "object", "minProperties": 1, "maxProperties": 16,
+      "propertyNames": { "$ref": "#/$defs/id" }, "additionalProperties": true
+    },
+    "filter": {
+      "type": "object", "additionalProperties": false, "required": ["field", "operator"],
+      "properties": {
+        "field": { "$ref": "#/$defs/id" },
+        "operator": { "enum": ["eq", "ne", "lt", "lte", "gt", "gte", "in", "prefix", "is-null", "not-null"] },
+        "value": true,
+        "values": { "type": "array", "minItems": 1, "maxItems": 100, "items": true }
+      },
+      "allOf": [
+        { "if": { "properties": { "operator": { "const": "in" } } }, "then": { "required": ["values"] } },
+        { "if": { "properties": { "operator": { "enum": ["eq", "ne", "lt", "lte", "gt", "gte", "prefix"] } } }, "then": { "required": ["value"] } }
+      ]
+    },
+    "sort": {
+      "type": "object", "additionalProperties": false, "required": ["field", "direction"],
+      "properties": { "field": { "$ref": "#/$defs/id" }, "direction": { "enum": ["asc", "desc"] } }
+    },
+    "transactionOptions": {
+      "type": "object", "additionalProperties": false, "required": ["isolation", "readOnly", "timeoutMs"],
+      "properties": {
+        "isolation": { "enum": ["default", "read-uncommitted", "read-committed", "repeatable-read", "serializable"] },
+        "readOnly": { "type": "boolean" }, "timeoutMs": { "type": "integer", "minimum": 100, "maximum": 3600000 }
+      }
+    },
+    "signedModel": {
+      "type": "object", "additionalProperties": false, "required": ["ownerPluginId", "model", "documentBase64"],
+      "properties": { "ownerPluginId": { "$ref": "#/$defs/id" }, "model": { "$ref": "#/$defs/modelRef" }, "documentBase64": { "type": "string", "minLength": 16, "maxLength": 1048576, "contentEncoding": "base64" } }
+    },
+    "syncModelsRequest": {
+      "type": "object", "additionalProperties": false, "required": ["generation", "models"],
+      "properties": { "generation": { "type": "integer", "minimum": 1 }, "models": { "type": "array", "maxItems": 512, "items": { "$ref": "#/$defs/signedModel" } } }
+    },
+    "base": {
+      "type": "object", "required": ["storage", "model"],
+      "properties": { "storage": { "$ref": "#/$defs/storage" }, "model": { "$ref": "#/$defs/modelRef" }, "transactionHandle": { "$ref": "#/$defs/transactionHandle" } }
+    },
+    "createRequest": {
+      "allOf": [{ "$ref": "#/$defs/base" }, { "type": "object", "additionalProperties": false, "required": ["storage", "model", "record", "idempotencyKey"], "properties": { "storage": { "$ref": "#/$defs/storage" }, "model": { "$ref": "#/$defs/modelRef" }, "record": { "$ref": "#/$defs/record" }, "idempotencyKey": { "$ref": "#/$defs/idempotencyKey" }, "transactionHandle": { "$ref": "#/$defs/transactionHandle" } } }]
+    },
+    "getRequest": {
+      "allOf": [{ "$ref": "#/$defs/base" }, { "type": "object", "additionalProperties": false, "required": ["storage", "model", "key"], "properties": { "storage": { "$ref": "#/$defs/storage" }, "model": { "$ref": "#/$defs/modelRef" }, "key": { "$ref": "#/$defs/key" }, "transactionHandle": { "$ref": "#/$defs/transactionHandle" } } }]
+    },
+    "listRequest": {
+      "allOf": [{ "$ref": "#/$defs/base" }, { "type": "object", "additionalProperties": false, "required": ["storage", "model", "filters", "sort", "limit"], "properties": { "storage": { "$ref": "#/$defs/storage" }, "model": { "$ref": "#/$defs/modelRef" }, "filters": { "type": "array", "maxItems": 32, "items": { "$ref": "#/$defs/filter" } }, "sort": { "type": "array", "maxItems": 8, "items": { "$ref": "#/$defs/sort" } }, "limit": { "type": "integer", "minimum": 1, "maximum": 200 }, "cursor": { "type": "string", "maxLength": 4096, "pattern": "^[A-Za-z0-9_-]+$" }, "transactionHandle": { "$ref": "#/$defs/transactionHandle" } } }]
+    },
+    "updateRequest": {
+      "allOf": [{ "$ref": "#/$defs/base" }, { "type": "object", "additionalProperties": false, "required": ["storage", "model", "key", "values", "expectedRevision", "idempotencyKey"], "properties": { "storage": { "$ref": "#/$defs/storage" }, "model": { "$ref": "#/$defs/modelRef" }, "key": { "$ref": "#/$defs/key" }, "values": { "$ref": "#/$defs/record" }, "expectedRevision": { "type": "integer", "minimum": 1 }, "idempotencyKey": { "$ref": "#/$defs/idempotencyKey" }, "transactionHandle": { "$ref": "#/$defs/transactionHandle" } } }]
+    },
+    "deleteRequest": {
+      "allOf": [{ "$ref": "#/$defs/base" }, { "type": "object", "additionalProperties": false, "required": ["storage", "model", "key", "expectedRevision", "idempotencyKey"], "properties": { "storage": { "$ref": "#/$defs/storage" }, "model": { "$ref": "#/$defs/modelRef" }, "key": { "$ref": "#/$defs/key" }, "expectedRevision": { "type": "integer", "minimum": 1 }, "idempotencyKey": { "$ref": "#/$defs/idempotencyKey" }, "transactionHandle": { "$ref": "#/$defs/transactionHandle" } } }]
+    },
+    "mutation": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "idempotencyKey"],
+      "properties": { "kind": { "enum": ["create", "update", "delete"] }, "record": { "$ref": "#/$defs/record" }, "key": { "$ref": "#/$defs/key" }, "values": { "$ref": "#/$defs/record" }, "expectedRevision": { "type": "integer", "minimum": 1 }, "idempotencyKey": { "$ref": "#/$defs/idempotencyKey" } },
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "create" } } }, "then": { "required": ["record"] } },
+        { "if": { "properties": { "kind": { "const": "update" } } }, "then": { "required": ["key", "values", "expectedRevision"] } },
+        { "if": { "properties": { "kind": { "const": "delete" } } }, "then": { "required": ["key", "expectedRevision"] } }
+      ]
+    },
+    "batchRequest": {
+      "allOf": [{ "$ref": "#/$defs/base" }, { "type": "object", "additionalProperties": false, "required": ["storage", "model", "mutations"], "properties": { "storage": { "$ref": "#/$defs/storage" }, "model": { "$ref": "#/$defs/modelRef" }, "mutations": { "type": "array", "minItems": 1, "maxItems": 100, "items": { "$ref": "#/$defs/mutation" } }, "transactionHandle": { "$ref": "#/$defs/transactionHandle" } } }]
+    },
+    "beginRequest": {
+      "type": "object", "additionalProperties": false, "required": ["storage", "model", "options"],
+      "properties": { "storage": { "$ref": "#/$defs/storage" }, "model": { "$ref": "#/$defs/modelRef" }, "options": { "$ref": "#/$defs/transactionOptions" } }
+    },
+    "endRequest": { "type": "object", "additionalProperties": false, "required": ["transactionHandle"], "properties": { "transactionHandle": { "$ref": "#/$defs/transactionHandle" } } },
+    "appendOutboxRequest": {
+      "allOf": [{ "$ref": "#/$defs/base" }, { "type": "object", "additionalProperties": false, "required": ["storage", "model", "topic", "payload", "idempotencyKey"], "properties": { "storage": { "$ref": "#/$defs/storage" }, "model": { "$ref": "#/$defs/modelRef" }, "topic": { "$ref": "#/$defs/id" }, "payload": true, "idempotencyKey": { "$ref": "#/$defs/idempotencyKey" }, "transactionHandle": { "$ref": "#/$defs/transactionHandle" } } }]
+    }
+  }
+}

@@ -70,3 +70,5 @@ connection-manager 以持久化 outbox 发布完整的非敏感 `ConnectionSpec`
 ## 当前限制与下一阶段
 
 事务亲和、超时/崩溃丢失语义、凭证轮换 drain、真实 PostgreSQL/MySQL 故障矩阵和标准指标出口均已完成。后续重点是第三方 Provider Host，以及由独立监控插件实现的 Prometheus/OTel 采集适配、告警发送与长期存储；完整路线见 [ADR-0095](../decisions/ADR-0095-Database-Runtime多Provider连接池与集群事务.md)。
+
+按 [ADR-0194](../decisions/ADR-0194-平台控制数据库与声明式数据分层.md)，同一签名制品正在增加 Record Store、Schema Controller 和 SQL Shared State 内部模块；它们不是新的独立进程或普通应用插件。P3a 已完成 `record.store.v1` 契约、签名模型目录、PostgreSQL/MySQL CRUD 编译与安全迁移分类，但尚未注册运行时 capability。只有执行适配、幂等/Outbox 账本、迁移锁和 SQL Shared State 全部通过后才进入 Provider descriptor，避免 Manifest 宣称尚未存在的生命周期。

@@ -1,0 +1,205 @@
+package recordstore
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"sort"
+	"strings"
+
+	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
+	datamodelv1 "cdsoft.com.cn/VastPlan/contracts/schemas/datamodel/v1"
+)
+
+type MigrationKind string
+
+const (
+	MigrationNone     MigrationKind = "none"
+	MigrationCreate   MigrationKind = "create"
+	MigrationAdditive MigrationKind = "additive"
+	MigrationManual   MigrationKind = "manual"
+)
+
+type MigrationPlan struct {
+	Kind       MigrationKind
+	Statements []databasev1.Statement
+	Reasons    []string
+}
+
+func PlanMigration(dialect Dialect, previous *datamodelv1.Model, next datamodelv1.Model) (MigrationPlan, error) {
+	if dialect == nil {
+		return MigrationPlan{}, errors.New("Schema migration Dialect 不能为空")
+	}
+	if err := datamodelv1.Validate(next); err != nil {
+		return MigrationPlan{}, err
+	}
+	if previous == nil {
+		statement, err := createTableStatement(dialect, next)
+		return MigrationPlan{Kind: MigrationCreate, Statements: []databasev1.Statement{statement}}, err
+	}
+	if err := datamodelv1.Validate(*previous); err != nil {
+		return MigrationPlan{}, fmt.Errorf("现有 DataModel 无效: %w", err)
+	}
+	if previous.ID != next.ID || previous.Storage != next.Storage || next.SchemaVersion <= previous.SchemaVersion {
+		return MigrationPlan{Kind: MigrationManual, Reasons: []string{"模型身份、存储绑定或 schemaVersion 不是安全前进变化"}}, nil
+	}
+	previousFields := map[string]datamodelv1.Field{}
+	for _, field := range previous.Fields {
+		previousFields[field.ID] = field
+	}
+	var statements []databasev1.Statement
+	var reasons []string
+	for _, field := range next.Fields {
+		old, exists := previousFields[field.ID]
+		if !exists {
+			if !field.Nullable {
+				reasons = append(reasons, "新增非空字段 "+field.ID)
+				continue
+			}
+			statements = append(statements, databasev1.Statement{SQL: fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s NULL", dialect.Quote(next.Storage.Table), dialect.Quote(field.Column), sqlType(dialect.ProviderID(), field)), Parameters: []databasev1.Value{}})
+			continue
+		}
+		delete(previousFields, field.ID)
+		if old != field {
+			reasons = append(reasons, "字段定义变化 "+field.ID)
+		}
+	}
+	for fieldID := range previousFields {
+		reasons = append(reasons, "删除字段 "+fieldID)
+	}
+	if !equalStrings(previous.PrimaryKey, next.PrimaryKey) || !equalUnique(previous.UniqueConstraints, next.UniqueConstraints) || previous.Scope != next.Scope || !equalLock(previous.OptimisticLock, next.OptimisticLock) || !equalAudit(previous.Audit, next.Audit) || previous.Deletion != next.Deletion {
+		reasons = append(reasons, "主键、唯一约束、作用域、乐观锁、审计或删除策略变化")
+	}
+	oldIndexes := map[string]datamodelv1.Index{}
+	for _, index := range previous.Indexes {
+		oldIndexes[index.ID] = index
+	}
+	for _, index := range next.Indexes {
+		old, exists := oldIndexes[index.ID]
+		if !exists {
+			if index.Unique {
+				reasons = append(reasons, "新增唯一索引 "+index.ID)
+				continue
+			}
+			statements = append(statements, createIndexStatement(dialect, next, index))
+			continue
+		}
+		delete(oldIndexes, index.ID)
+		if !equalIndex(old, index) {
+			reasons = append(reasons, "索引定义变化 "+index.ID)
+		}
+	}
+	for indexID := range oldIndexes {
+		reasons = append(reasons, "删除索引 "+indexID)
+	}
+	if len(reasons) != 0 {
+		sort.Strings(reasons)
+		return MigrationPlan{Kind: MigrationManual, Reasons: reasons}, nil
+	}
+	if len(statements) == 0 {
+		return MigrationPlan{Kind: MigrationNone}, nil
+	}
+	return MigrationPlan{Kind: MigrationAdditive, Statements: statements}, nil
+}
+
+func createTableStatement(dialect Dialect, model datamodelv1.Model) (databasev1.Statement, error) {
+	definitions := make([]string, 0, len(model.Fields)+len(model.UniqueConstraints)+1)
+	fields := map[string]datamodelv1.Field{}
+	for _, field := range model.Fields {
+		fields[field.ID] = field
+		nullability := " NOT NULL"
+		if field.Nullable {
+			nullability = " NULL"
+		}
+		definitions = append(definitions, fmt.Sprintf("%s %s%s", dialect.Quote(field.Column), sqlType(dialect.ProviderID(), field), nullability))
+	}
+	definitions = append(definitions, "PRIMARY KEY ("+joinColumns(dialect, fields, model.PrimaryKey)+")")
+	for _, unique := range model.UniqueConstraints {
+		definitions = append(definitions, fmt.Sprintf("CONSTRAINT %s UNIQUE (%s)", dialect.Quote(constraintName(model.Storage.Table, unique.ID)), joinColumns(dialect, fields, unique.Fields)))
+	}
+	statement := databasev1.Statement{SQL: fmt.Sprintf("CREATE TABLE %s (%s)", dialect.Quote(model.Storage.Table), strings.Join(definitions, ", ")), Parameters: []databasev1.Value{}}
+	if err := databasev1.ValidateStatement(statement); err != nil {
+		return databasev1.Statement{}, err
+	}
+	return statement, nil
+}
+
+func IndexStatements(dialect Dialect, model datamodelv1.Model) []databasev1.Statement {
+	statements := make([]databasev1.Statement, 0, len(model.Indexes))
+	for _, index := range model.Indexes {
+		statements = append(statements, createIndexStatement(dialect, model, index))
+	}
+	return statements
+}
+
+func createIndexStatement(dialect Dialect, model datamodelv1.Model, index datamodelv1.Index) databasev1.Statement {
+	fields := map[string]datamodelv1.Field{}
+	for _, field := range model.Fields {
+		fields[field.ID] = field
+	}
+	unique := ""
+	if index.Unique {
+		unique = "UNIQUE "
+	}
+	return databasev1.Statement{SQL: fmt.Sprintf("CREATE %sINDEX %s ON %s (%s)", unique, dialect.Quote(constraintName(model.Storage.Table, index.ID)), dialect.Quote(model.Storage.Table), joinColumns(dialect, fields, index.Fields)), Parameters: []databasev1.Value{}}
+}
+
+func InternalSchemaStatements(dialect Dialect) []databasev1.Statement {
+	if dialect.ProviderID() == "postgresql" {
+		return []databasev1.Statement{
+			ddl(`CREATE TABLE IF NOT EXISTS "vastplan_schema_migrations" ("model_id" TEXT NOT NULL, "schema_version" BIGINT NOT NULL, "model_sha256" CHAR(64) NOT NULL, "model_document" JSONB NOT NULL, "applied_at" TIMESTAMPTZ NOT NULL, PRIMARY KEY ("model_id", "schema_version"))`),
+			ddl(`CREATE TABLE IF NOT EXISTS "vastplan_record_idempotency" ("owner_plugin_id" TEXT NOT NULL, "model_id" TEXT NOT NULL, "tenant_id" TEXT NOT NULL, "service_id" TEXT NOT NULL, "caller_id" TEXT NOT NULL, "idempotency_key" TEXT NOT NULL, "operation_digest" CHAR(64) NOT NULL, "response" JSONB NOT NULL, "created_at" TIMESTAMPTZ NOT NULL, PRIMARY KEY ("owner_plugin_id", "model_id", "tenant_id", "service_id", "caller_id", "idempotency_key"))`),
+			ddl(`CREATE TABLE IF NOT EXISTS "vastplan_record_outbox" ("id" CHAR(36) NOT NULL, "owner_plugin_id" TEXT NOT NULL, "model_id" TEXT NOT NULL, "tenant_id" TEXT NOT NULL, "service_id" TEXT NOT NULL, "topic" TEXT NOT NULL, "payload" JSONB NOT NULL, "idempotency_key" TEXT NOT NULL, "created_at" TIMESTAMPTZ NOT NULL, "published_at" TIMESTAMPTZ NULL, PRIMARY KEY ("id"), UNIQUE ("owner_plugin_id", "model_id", "tenant_id", "service_id", "idempotency_key"))`),
+		}
+	}
+	return []databasev1.Statement{
+		ddl("CREATE TABLE IF NOT EXISTS `vastplan_schema_migrations` (`model_id` VARCHAR(160) NOT NULL, `schema_version` BIGINT NOT NULL, `model_sha256` CHAR(64) NOT NULL, `model_document` JSON NOT NULL, `applied_at` DATETIME(6) NOT NULL, PRIMARY KEY (`model_id`, `schema_version`))"),
+		ddl("CREATE TABLE IF NOT EXISTS `vastplan_record_idempotency` (`owner_plugin_id` VARCHAR(160) NOT NULL, `model_id` VARCHAR(160) NOT NULL, `tenant_id` VARCHAR(160) NOT NULL, `service_id` VARCHAR(160) NOT NULL, `caller_id` VARCHAR(160) NOT NULL, `idempotency_key` VARCHAR(200) NOT NULL, `operation_digest` CHAR(64) NOT NULL, `response` JSON NOT NULL, `created_at` DATETIME(6) NOT NULL, PRIMARY KEY (`owner_plugin_id`, `model_id`, `tenant_id`, `service_id`, `caller_id`, `idempotency_key`))"),
+		ddl("CREATE TABLE IF NOT EXISTS `vastplan_record_outbox` (`id` CHAR(36) NOT NULL, `owner_plugin_id` VARCHAR(160) NOT NULL, `model_id` VARCHAR(160) NOT NULL, `tenant_id` VARCHAR(160) NOT NULL, `service_id` VARCHAR(160) NOT NULL, `topic` VARCHAR(160) NOT NULL, `payload` JSON NOT NULL, `idempotency_key` VARCHAR(200) NOT NULL, `created_at` DATETIME(6) NOT NULL, `published_at` DATETIME(6) NULL, PRIMARY KEY (`id`), UNIQUE KEY `vastplan_outbox_idempotency` (`owner_plugin_id`, `model_id`, `tenant_id`, `service_id`, `idempotency_key`))"),
+	}
+}
+
+func ddl(sql string) databasev1.Statement {
+	return databasev1.Statement{SQL: sql, Parameters: []databasev1.Value{}}
+}
+
+func sqlType(provider string, field datamodelv1.Field) string {
+	if provider == "postgresql" {
+		return map[string]string{"string": "TEXT", "uuid": "UUID", "int64": "BIGINT", "float64": "DOUBLE PRECISION", "bool": "BOOLEAN", "bytes": "BYTEA", "timestamp": "TIMESTAMPTZ", "json": "JSONB"}[field.Type]
+	}
+	return map[string]string{"string": "VARCHAR(1024)", "uuid": "CHAR(36)", "int64": "BIGINT", "float64": "DOUBLE", "bool": "BOOLEAN", "bytes": "LONGBLOB", "timestamp": "DATETIME(6)", "json": "JSON"}[field.Type]
+}
+
+func joinColumns(dialect Dialect, fields map[string]datamodelv1.Field, ids []string) string {
+	values := make([]string, 0, len(ids))
+	for _, id := range ids {
+		values = append(values, dialect.Quote(fields[id].Column))
+	}
+	return strings.Join(values, ", ")
+}
+
+func constraintName(table, id string) string {
+	value := strings.ToLower(table + "_" + id)
+	value = strings.NewReplacer(".", "_", "-", "_").Replace(value)
+	if len(value) > 60 {
+		value = value[:60]
+	}
+	return value
+}
+
+func equalStrings(left, right []string) bool {
+	return string(mustMarshal(left)) == string(mustMarshal(right))
+}
+func equalUnique(left, right []datamodelv1.UniqueConstraint) bool {
+	return string(mustMarshal(left)) == string(mustMarshal(right))
+}
+func equalIndex(left, right datamodelv1.Index) bool {
+	return string(mustMarshal(left)) == string(mustMarshal(right))
+}
+func equalLock(left, right *datamodelv1.OptimisticLock) bool {
+	return string(mustMarshal(left)) == string(mustMarshal(right))
+}
+func equalAudit(left, right *datamodelv1.AuditFields) bool {
+	return string(mustMarshal(left)) == string(mustMarshal(right))
+}
+func mustMarshal(value any) []byte { raw, _ := json.Marshal(value); return raw }

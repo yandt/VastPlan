@@ -62,4 +62,4 @@ go run ./engineering/tools/datamodelgen \
 - Database Connection 模型已作为首个真实样本接入；
 - 已建立摘要、路径、模型身份和生成物零漂移门禁。
 
-Record Store、数据库方言、事务句柄、Schema Controller 与 SQL Shared State 属于 P3，平台控制数据库 Bootstrap 属于 P4。
+P3 的第一检查点已冻结独立 `record.store.v1` wire contract、签名模型目录、字段类型转换、可信 tenant/service scope 注入、PostgreSQL/MySQL 参数化 CRUD 编译器、游标分页和 Schema 变更分类器。该检查点尚未把新 capability 注册到 Runtime：只有完成执行适配、幂等账本、Outbox 与 Schema Controller 后才对插件开放。SQL Shared State 仍属于 P3 后续，平台控制数据库 Bootstrap 属于 P4。
