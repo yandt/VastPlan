@@ -510,6 +510,9 @@ importers:
       '@vastplan/credential-lease-node':
         specifier: workspace:*
         version: link:../../../sdk/node/credential-lease
+      '@vastplan/shared-state':
+        specifier: workspace:*
+        version: link:../../../sdk/node/shared-state
 
   extensions/plugins/cn.vastplan.platform.security.authorization-policy/frontend:
     dependencies:

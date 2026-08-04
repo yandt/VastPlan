@@ -1,15 +1,6 @@
-import path from "node:path";
-
 export const pluginId = "cn.vastplan.platform.security.authentication.delivery.webhook";
 export const profileCollectionKey = "delivery-profile";
 export const authorizationPurpose = "authentication.delivery.webhook";
-
-export function loadBootstrapConfiguration(raw = process.env.VASTPLAN_PLUGIN_CONFIG_JSON ?? "{}") {
-  const document = JSON.parse(raw);
-  exactObject(document, ["stateFile"], "Webhook Delivery 启动配置");
-  if (typeof document.stateFile !== "string" || !path.isAbsolute(document.stateFile) || path.normalize(document.stateFile) !== document.stateFile) throw new Error("Webhook Delivery stateFile 必须是规范绝对路径");
-  return Object.freeze({ stateFile: document.stateFile });
-}
 
 export function normalizeProfile(resourceId, values, managedCredentials) {
   exactObject(values, ["displayName", "endpoint", "channels", "timeoutMs"], `Webhook Delivery Profile ${resourceId}`);

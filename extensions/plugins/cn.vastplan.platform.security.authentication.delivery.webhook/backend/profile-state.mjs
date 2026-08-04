@@ -41,6 +41,16 @@ export function synchronizeProfiles(state, profiles) {
   }
 }
 
+export function synchronizeTenantProfiles(state, profiles, tenantId) {
+  const prefix = `${tenantId}\0`;
+  for (const key of profiles.keys()) if (key.startsWith(prefix)) profiles.delete(key);
+  const tenant = state.tenants[tenantId];
+  if (!tenant) return;
+  for (const [resourceId, item] of Object.entries(tenant.items)) {
+    profiles.set(profileMapKey(tenantId, resourceId), normalizeProfile(resourceId, item.values, item.managedCredentials));
+  }
+}
+
 export function resourceView(resourceId, item, now = item.updatedAt) {
   const profile = normalizeProfile(resourceId, item.values, item.managedCredentials);
   return {

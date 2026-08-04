@@ -1,52 +1,45 @@
-import fs from "node:fs";
-import path from "node:path";
+import { SharedStateClient, isSharedStateNotFound, MAX_SHARED_STATE_VALUE_BYTES } from "@vastplan/shared-state";
 
-const maximumStateBytes = 8 << 20;
+const namespace = "authentication.delivery.webhook.profiles.v1";
+const stateKey = "state";
 
-export class ProfileStateStore {
-  constructor(stateFile) {
-    if (typeof stateFile !== "string" || !path.isAbsolute(stateFile) || path.normalize(stateFile) !== stateFile) throw new Error("Webhook Profile stateFile 无效");
-    this.stateFile = stateFile;
-    this.#ensureDirectory();
+export class SharedProfileStateStore {
+  constructor(plugin) {
+    this.client = new SharedStateClient(plugin, { scope: "tenant", namespace, fenced: true });
+    this.revisions = new Map();
   }
 
-  load() {
-    let stat;
-    try { stat = fs.lstatSync(this.stateFile); }
-    catch (error) {
-      if (error.code === "ENOENT") return undefined;
-      throw error;
-    }
-    if (!stat.isFile() || stat.isSymbolicLink() || (stat.mode & 0o077) !== 0 || stat.size < 2 || stat.size > maximumStateBytes) throw new Error("Webhook Profile 状态文件必须是仅属主可访问且大小受限的普通文件");
-    return JSON.parse(fs.readFileSync(this.stateFile, "utf8"));
-  }
-
-  save(state) {
-    const raw = Buffer.from(JSON.stringify(state));
-    if (raw.length < 2 || raw.length > maximumStateBytes) throw new Error("Webhook Profile 状态超过大小上限");
-    const directory = path.dirname(this.stateFile);
-    const temporary = path.join(directory, `.webhook-profiles-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`);
-    let descriptor;
+  async load(callContext) {
+    const tenantId = trustedTenant(callContext);
     try {
-      descriptor = fs.openSync(temporary, "wx", 0o600);
-      fs.writeFileSync(descriptor, raw);
-      fs.fsyncSync(descriptor);
-      fs.closeSync(descriptor);
-      descriptor = undefined;
-      fs.renameSync(temporary, this.stateFile);
-      const directoryDescriptor = fs.openSync(directory, "r");
-      try { fs.fsyncSync(directoryDescriptor); } finally { fs.closeSync(directoryDescriptor); }
+      const entry = await this.client.get(callContext, stateKey);
+      this.revisions.set(tenantId, entry.revision);
+      return JSON.parse(entry.value.toString("utf8"));
+    } catch (error) {
+      if (!isSharedStateNotFound(error)) throw error;
+      this.revisions.set(tenantId, 0);
+      return undefined;
+    }
+  }
+
+  async save(state, callContext) {
+    const tenantId = trustedTenant(callContext);
+    const raw = Buffer.from(JSON.stringify(state));
+    if (raw.length < 2 || raw.length > MAX_SHARED_STATE_VALUE_BYTES) throw new Error("Webhook Profile Shared State 超过大小上限");
+    try {
+      const revision = this.revisions.get(tenantId) ?? 0;
+      const entry = revision === 0
+        ? await this.client.create(callContext, stateKey, raw)
+        : await this.client.update(callContext, stateKey, raw, revision);
+      this.revisions.set(tenantId, entry.revision);
     } finally {
-      if (descriptor !== undefined) fs.closeSync(descriptor);
-      try { fs.unlinkSync(temporary); } catch (error) { if (error.code !== "ENOENT") throw error; }
       raw.fill(0);
     }
   }
+}
 
-  #ensureDirectory() {
-    const directory = path.dirname(this.stateFile);
-    fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
-    const stat = fs.lstatSync(directory);
-    if (!stat.isDirectory() || stat.isSymbolicLink() || (stat.mode & 0o022) !== 0) throw new Error("Webhook Profile 状态目录不可由 group/other 写入且不能是符号链接");
-  }
+function trustedTenant(callContext) {
+  const tenantId = callContext?.tenant_id;
+  if (typeof tenantId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,255}$/.test(tenantId)) throw new Error("Webhook Profile 缺少可信 tenant");
+  return tenantId;
 }

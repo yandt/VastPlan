@@ -257,7 +257,7 @@
       "service_role": "backend",
       "logical_service": "authentication-delivery",
       "instance_policy": "leader",
-      "state_model": "leader-owned",
+      "state_model": "external-shared",
       "visibility": "cluster",
       "routing": "leader",
       "routing_domain": "security",
@@ -265,20 +265,18 @@
       "placement": { "nodeSelector": { "environment": "local-platform" } },
       "config": {
         "plugins": {
-          "cn.vastplan.platform.security.authentication.delivery.webhook": {
-            "stateFile": "__VASTPLAN_DEV_STATE__/authentication-delivery-webhook.json"
-          }
+          "cn.vastplan.platform.security.authentication.delivery.webhook": {}
         },
         "environment_allowlist": {
           "cn.vastplan.foundation.security.authorization-enforcer": ["VASTPLAN_AUTHORIZATION_PERMISSION_CATALOG", "VASTPLAN_AUTHORIZATION_POLICY_SNAPSHOT", "VASTPLAN_AUTHORIZATION_POLICY_TRUST", "VASTPLAN_AUTHORIZATION_POLICY_AUDIENCE", "VASTPLAN_AUTHORIZATION_DIRECTORY_GROUPS"]
         },
         "kernel_service_grants": {
-          "cn.vastplan.platform.security.authentication.delivery.webhook": ["kernel.credential.material-lease"]
+          "cn.vastplan.platform.security.authentication.delivery.webhook": ["kernel.credential.material-lease", "kernel.state.shared.get", "kernel.state.shared.fenced.create", "kernel.state.shared.fenced.update"]
         }
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.4.1", "channel": "stable" },
-        { "id": "cn.vastplan.platform.security.authentication.delivery.webhook", "version": "0.2.3", "channel": "stable" }
+        { "id": "cn.vastplan.platform.security.authentication.delivery.webhook", "version": "0.3.0", "channel": "stable" }
       ]
     },
     {

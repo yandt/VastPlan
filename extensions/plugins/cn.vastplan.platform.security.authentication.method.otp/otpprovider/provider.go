@@ -7,19 +7,20 @@ import (
 	"sync"
 	"time"
 
-	authenticationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authentication/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	authenticationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authentication/v1"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
 type Provider struct {
-	mu         sync.RWMutex
-	profiles   map[string]Profile
-	store      ChallengeStore
-	hmacKey    []byte
-	now        func() time.Time
-	stateFile  string
-	controller controllerState
+	mu                 sync.RWMutex
+	profiles           map[string]Profile
+	store              ChallengeStore
+	hmacKey            []byte
+	now                func() time.Time
+	controller         controllerState
+	controllerLoaded   bool
+	controllerRevision uint64
 }
 
 func New(configuration Configuration, stores ...ChallengeStore) (*Provider, error) {

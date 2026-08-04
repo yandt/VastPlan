@@ -6,7 +6,7 @@ import {
 } from "@vastplan/configuration-resource-controller-node";
 
 import { normalizeProfile, publicProfileValues } from "./config.mjs";
-import { cloneState, emptyState, observation, profileMapKey, resourceView, synchronizeProfiles, tenantState, validateState } from "./profile-state.mjs";
+import { cloneState, emptyState, observation, profileMapKey, resourceView, synchronizeTenantProfiles, tenantState, validateState } from "./profile-state.mjs";
 
 const maximumProfiles = 64;
 const minimumProfiles = 1;
@@ -19,15 +19,15 @@ export class WebhookProfileController {
     this.materialLease = materialLease;
     this.profiles = profiles;
     this.now = now;
-    this.state = validateState(store.load() ?? emptyState(collectionId), collectionId);
-    synchronizeProfiles(this.state, this.profiles);
+    this.states = new Map();
     this.tail = Promise.resolve();
   }
 
   list(request, runtime) {
     return this.#serial(async () => {
       this.#collection(request.collectionId);
-      const tenant = tenantState(this.state, runtime.context.tenant_id);
+      const state = await this.#state(runtime);
+      const tenant = tenantState(state, runtime.context.tenant_id);
       const ids = Object.keys(tenant.items).sort();
       const start = request.cursor === undefined ? 0 : ids.findIndex((id) => id > request.cursor);
       const offset = start < 0 ? ids.length : start;
@@ -40,7 +40,8 @@ export class WebhookProfileController {
   get(request, runtime) {
     return this.#serial(async () => {
       this.#collection(request.collectionId);
-      const item = tenantState(this.state, runtime.context.tenant_id).items[request.resourceId];
+      const state = await this.#state(runtime);
+      const item = tenantState(state, runtime.context.tenant_id).items[request.resourceId];
       if (!item) throw new Error("Webhook Delivery Profile 不存在");
       return { protocol: CONFIGURATION_RESOURCE_PROTOCOL, collectionId: this.collectionId, item: resourceView(request.resourceId, item), observedAt: this.now() };
     });
@@ -50,7 +51,8 @@ export class WebhookProfileController {
     return this.#serial(async () => {
       this.#collection(request.collectionId);
       const tenantId = runtime.context.tenant_id;
-      const tenant = tenantState(this.state, tenantId);
+      const state = await this.#state(runtime);
+      const tenant = tenantState(state, tenantId);
       const requestDigest = prepareResourceRequestDigest(request);
       const existing = tenant.candidates[request.candidateId];
       if (existing) {
@@ -70,9 +72,9 @@ export class WebhookProfileController {
         status: "Prepared", ready: true, ...(profile ? { values: publicProfileValues(profile), managedCredentials } : {}),
         retirePending, createdAt: this.now(), updatedAt: this.now(),
       };
-      const previous = cloneState(this.state);
+      const previous = cloneState(state);
       tenant.candidates[request.candidateId] = candidate;
-      try { this.store.save(this.state); } catch (error) { this.state = previous; throw error; }
+      try { await this.store.save(state, runtime.context); } catch (error) { this.states.set(tenantId, previous); throw error; }
       return observation(this.collectionId, request.resourceId, active, candidate, this.now());
     });
   }
@@ -80,11 +82,12 @@ export class WebhookProfileController {
   commit(request, runtime) {
     return this.#serial(async () => {
       const tenantId = runtime.context.tenant_id;
-      const tenant = tenantState(this.state, tenantId);
+      const state = await this.#state(runtime);
+      const tenant = tenantState(state, tenantId);
       const candidate = this.#candidate(tenant, request);
       if (candidate.status === "Aborted") throw new Error("已终止 Webhook Profile Candidate 不得提交");
       if (candidate.status === "Prepared") {
-        const previous = cloneState(this.state);
+        const previous = cloneState(state);
         if (candidate.action === "delete") delete tenant.items[candidate.resourceId];
         else {
           const current = tenant.items[candidate.resourceId];
@@ -92,25 +95,27 @@ export class WebhookProfileController {
         }
         candidate.status = "Committed";
         candidate.updatedAt = this.now();
-        try { this.store.save(this.state); } catch (error) { this.state = previous; throw error; }
-        synchronizeProfiles(this.state, this.profiles);
+        try { await this.store.save(state, runtime.context); } catch (error) { this.states.set(tenantId, previous); throw error; }
+        synchronizeTenantProfiles(state, this.profiles, tenantId);
       }
-      await this.#retireBestEffort(tenantId, candidate, runtime.host);
+      await this.#retireBestEffort(state, runtime, candidate);
       return observation(this.collectionId, candidate.resourceId, tenant.items[candidate.resourceId], candidate, this.now());
     });
   }
 
   abort(request, runtime) {
     return this.#serial(async () => {
-      const tenant = tenantState(this.state, runtime.context.tenant_id);
+      const tenantId = runtime.context.tenant_id;
+      const state = await this.#state(runtime);
+      const tenant = tenantState(state, tenantId);
       const candidate = this.#candidate(tenant, request);
       if (candidate.status === "Committed") throw new Error("已提交 Webhook Profile Candidate 不得终止");
       if (candidate.status === "Prepared") {
-        const previous = cloneState(this.state);
+        const previous = cloneState(state);
         candidate.status = "Aborted";
         candidate.ready = false;
         candidate.updatedAt = this.now();
-        try { this.store.save(this.state); } catch (error) { this.state = previous; throw error; }
+        try { await this.store.save(state, runtime.context); } catch (error) { this.states.set(tenantId, previous); throw error; }
       }
       return observation(this.collectionId, candidate.resourceId, tenant.items[candidate.resourceId], candidate, this.now());
     });
@@ -120,12 +125,13 @@ export class WebhookProfileController {
     return this.#serial(async () => {
       this.#collection(request.collectionId);
       const tenantId = runtime.context.tenant_id;
-      const tenant = tenantState(this.state, tenantId);
+      const state = await this.#state(runtime);
+      const tenant = tenantState(state, tenantId);
       let candidate;
       if (request.candidateId) {
         candidate = this.#candidate(tenant, request);
         if (candidate.resourceId !== request.resourceId) throw new Error("Webhook Profile Candidate 资源不匹配");
-        if (candidate.status === "Committed") await this.#retireBestEffort(tenantId, candidate, runtime.host);
+        if (candidate.status === "Committed") await this.#retireBestEffort(state, runtime, candidate);
       }
       return observation(this.collectionId, request.resourceId, tenant.items[request.resourceId], candidate, this.now());
     });
@@ -133,9 +139,11 @@ export class WebhookProfileController {
 
   health() {
     let profiles = 0, retirementPending = 0;
-    for (const tenant of Object.values(this.state.tenants)) {
-      profiles += Object.keys(tenant.items).length;
-      for (const candidate of Object.values(tenant.candidates)) retirementPending += candidate.retirePending?.length ?? 0;
+    for (const state of this.states.values()) {
+      for (const tenant of Object.values(state.tenants)) {
+        profiles += Object.keys(tenant.items).length;
+        for (const candidate of Object.values(tenant.candidates)) retirementPending += candidate.retirePending?.length ?? 0;
+      }
     }
     return { ready: profiles > 0, profiles, retirementPending };
   }
@@ -161,7 +169,9 @@ export class WebhookProfileController {
     });
   }
 
-  async #retireBestEffort(tenantId, candidate, host) {
+  async #retireBestEffort(state, runtime, candidate) {
+    const tenantId = runtime.context.tenant_id;
+    const host = runtime.host;
     if (!candidate.retirePending?.length || !host) return;
     const pending = [];
     for (const ref of candidate.retirePending) {
@@ -173,11 +183,24 @@ export class WebhookProfileController {
     if (pending.length !== candidate.retirePending.length) {
       candidate.retirePending = pending;
       candidate.updatedAt = this.now();
-      this.store.save(this.state);
+      await this.store.save(state, runtime.context);
     }
   }
 
   #collection(value) { if (value !== this.collectionId) throw new Error("Webhook Profile 集合不匹配"); }
+
+  async ensure(runtime) { return this.#serial(async () => { await this.#state(runtime); }); }
+
+  async #state(runtime) {
+    const tenantId = runtime?.context?.tenant_id;
+    if (this.states.has(tenantId)) return this.states.get(tenantId);
+    const loaded = validateState(await this.store.load(runtime.context) ?? emptyState(this.collectionId), this.collectionId);
+    if (Object.keys(loaded.tenants).some((id) => id !== tenantId)) throw new Error("Webhook Profile Shared State 包含跨租户状态");
+    tenantState(loaded, tenantId);
+    this.states.set(tenantId, loaded);
+    synchronizeTenantProfiles(loaded, this.profiles, tenantId);
+    return loaded;
+  }
 
   #serial(task) {
     const result = this.tail.then(task, task);

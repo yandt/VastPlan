@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 
-	authenticationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authentication/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	authenticationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authentication/v1"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
@@ -25,6 +25,9 @@ func (p *Provider) Contribution() sdk.Contribution {
 	return sdk.Contribution{ExtensionPoint: extpoint.AuthenticationProvider, ID: ProviderID, Descriptor: Descriptor(), Handlers: handlers}
 }
 func (p *Provider) handle(ctx context.Context, host sdk.Host, call *contractv1.CallContext, operation string, payload []byte) (*contractv1.CallResult, []byte, error) {
+	if err := p.ensureControllerState(ctx, host, call); err != nil {
+		return nil, nil, err
+	}
 	request, err := authenticationv1.ParseMethodRequest(operation, payload)
 	if err != nil {
 		return providerError(err), nil, nil

@@ -14,6 +14,7 @@ import (
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	authenticationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authentication/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	sharedstatev1 "cdsoft.com.cn/VastPlan/contracts/schemas/sharedstate/v1"
 )
 
 type deliveryHost struct {
@@ -21,9 +22,38 @@ type deliveryHost struct {
 	codes    []string
 	accepted bool
 	fail     bool
+	state    []byte
+	revision uint64
 }
 
 func (h *deliveryHost) Call(_ context.Context, target *contractv1.CallTarget, _ *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+	switch target.GetCapability() {
+	case sharedstatev1.KernelService(sharedstatev1.OperationGet):
+		if h.revision == 0 {
+			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: "state.not_found"}}, nil, nil
+		}
+		return otpSharedStateEntry(h.state, h.revision)
+	case sharedstatev1.FencedKernelService(sharedstatev1.OperationCreate), sharedstatev1.FencedKernelService(sharedstatev1.OperationUpdate):
+		operation := sharedstatev1.OperationCreate
+		if target.GetCapability() == sharedstatev1.FencedKernelService(sharedstatev1.OperationUpdate) {
+			operation = sharedstatev1.OperationUpdate
+		}
+		parsed, err := sharedstatev1.ParseRequest(operation, payload)
+		if err != nil {
+			return nil, nil, err
+		}
+		request := parsed.(*sharedstatev1.WriteRequest)
+		if operation == sharedstatev1.OperationCreate && h.revision != 0 || operation == sharedstatev1.OperationUpdate && request.ExpectedRevision != h.revision {
+			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: "state.conflict", Retryable: true}}, nil, nil
+		}
+		value, err := sharedstatev1.DecodeValue(request.Value)
+		if err != nil {
+			return nil, nil, err
+		}
+		h.revision++
+		h.state = append([]byte(nil), value...)
+		return otpSharedStateEntry(h.state, h.revision)
+	}
 	if h.fail {
 		return nil, nil, errors.New("delivery unavailable")
 	}
@@ -44,6 +74,11 @@ func (h *deliveryHost) Call(_ context.Context, target *contractv1.CallTarget, _ 
 	}
 	raw, _ := json.Marshal(result)
 	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
+}
+
+func otpSharedStateEntry(value []byte, revision uint64) (*contractv1.CallResult, []byte, error) {
+	raw, err := json.Marshal(sharedstatev1.Entry{Protocol: sharedstatev1.Protocol, Key: controllerStateKey, Value: sharedstatev1.EncodeValue(value), Revision: revision, UpdatedAt: time.Now().UTC()})
+	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, err
 }
 func (h *deliveryHost) latest() string {
 	h.mu.Lock()

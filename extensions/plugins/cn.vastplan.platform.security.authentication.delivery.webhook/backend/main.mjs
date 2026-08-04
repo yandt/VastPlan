@@ -1,23 +1,23 @@
 import { Contribution, Plugin, callResult } from "@vastplan/backend-plugin";
 import { configurationResourceCollectionId, configurationResourceControllerContribution } from "@vastplan/configuration-resource-controller-node";
 import { MaterialLeaseClient } from "@vastplan/credential-lease-node";
-import { loadBootstrapConfiguration, pluginId, profileCollectionKey } from "./config.mjs";
+import { pluginId, profileCollectionKey } from "./config.mjs";
 import { WebhookDelivery } from "./delivery.mjs";
 import { WebhookProfileController } from "./profile-controller.mjs";
-import { ProfileStateStore } from "./state-store.mjs";
+import { SharedProfileStateStore } from "./state-store.mjs";
 
-const plugin = new Plugin({ id:pluginId, version:"0.2.2", engines:{backend:"^0.1"} });
-const bootstrap = loadBootstrapConfiguration();
+const plugin = new Plugin({ id:pluginId, version:"0.3.0", engines:{backend:"^0.1"} });
 const materialLease = new MaterialLeaseClient(plugin, {audience:process.env.VASTPLAN_RUNTIME_AUDIENCE});
 const profiles = new Map();
 const profileController = new WebhookProfileController({
   collectionId: configurationResourceCollectionId(pluginId, profileCollectionKey),
-  store: new ProfileStateStore(bootstrap.stateFile), materialLease, profiles,
+  store: new SharedProfileStateStore(plugin), materialLease, profiles,
 });
 const delivery = new WebhookDelivery(profiles, { materialLease });
-const handler = (operation) => async (invocation, _host, context, payload) => {
+const handler = (operation) => async (invocation, host, context, payload) => {
   invocation.throwIfCancelled();
   try {
+    await profileController.ensure({ invocation, host, context });
     const value = operation === "health" ? profileController.health() : await delivery.deliver(JSON.parse(payload.toString("utf8")), context, invocation.signal.signal);
     return callResult.ok(Buffer.from(JSON.stringify(value)));
   } catch { return callResult.error("foundation.authentication.delivery.unavailable", "Authentication Delivery 不可用"); }

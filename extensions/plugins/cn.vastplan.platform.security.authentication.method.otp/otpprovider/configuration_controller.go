@@ -6,15 +6,15 @@ import (
 	"errors"
 	"reflect"
 
-	configurationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configuration/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	configurationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configuration/v1"
 	configurationcontrollersdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/configurationcontroller"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
 const (
 	controllerStateVersion = 1
-	maxControllerStateSize = 2 << 20
+	maxControllerStateSize = 1 << 20
 )
 
 type controllerConfiguration struct {
@@ -43,7 +43,7 @@ type controllerState struct {
 	Candidate       *controllerCandidate    `json:"candidate,omitempty"`
 }
 
-func (p *Provider) Prepare(_ context.Context, _ sdk.Host, _ *contractv1.CallContext, request configurationv1.PrepareRequest) (configurationv1.Observation, error) {
+func (p *Provider) Prepare(ctx context.Context, host sdk.Host, call *contractv1.CallContext, request configurationv1.PrepareRequest) (configurationv1.Observation, error) {
 	normalizedRequest, err := configurationv1.NormalizePrepareRequest(request)
 	if err != nil || len(normalizedRequest.ManagedCredentials) != 0 {
 		return configurationv1.Observation{}, errors.New("OTP configuration controller 不接受托管凭证字段")
@@ -62,8 +62,11 @@ func (p *Provider) Prepare(_ context.Context, _ sdk.Host, _ *contractv1.CallCont
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if configuration.StateFile != p.controller.Active.Configuration.StateFile || configuration.Capacity != p.controller.Active.Configuration.Capacity {
-		return configurationv1.Observation{}, errors.New("OTP stateFile 与 capacity 是不可热变更的运行参数")
+	if err := p.loadControllerStateLocked(ctx, host, call); err != nil {
+		return configurationv1.Observation{}, err
+	}
+	if configuration.Capacity != p.controller.Active.Configuration.Capacity {
+		return configurationv1.Observation{}, errors.New("OTP capacity 是不可热变更的运行参数")
 	}
 	if p.controller.ConfigurationID != "" && p.controller.ConfigurationID != request.ConfigurationID {
 		return configurationv1.Observation{}, errors.New("OTP configuration controller 已绑定其他配置资源")
@@ -91,16 +94,19 @@ func (p *Provider) Prepare(_ context.Context, _ sdk.Host, _ *contractv1.CallCont
 		CandidateID: request.CandidateID, RequestDigest: requestDigest, ConfigurationDigest: configurationDigest,
 		Status: configurationv1.StatusPrepared, Ready: true, Values: values, Configuration: configuration,
 	}
-	if err := p.saveControllerStateLocked(); err != nil {
+	if err := p.saveControllerStateLocked(ctx, host, call); err != nil {
 		p.controller = previous
 		return configurationv1.Observation{}, err
 	}
 	return p.observationLocked(), nil
 }
 
-func (p *Provider) Commit(_ context.Context, _ sdk.Host, _ *contractv1.CallContext, request configurationv1.CandidateRequest) (configurationv1.Observation, error) {
+func (p *Provider) Commit(ctx context.Context, host sdk.Host, call *contractv1.CallContext, request configurationv1.CandidateRequest) (configurationv1.Observation, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if err := p.loadControllerStateLocked(ctx, host, call); err != nil {
+		return configurationv1.Observation{}, err
+	}
 	candidate, err := p.boundCandidateLocked(request)
 	if err != nil {
 		return configurationv1.Observation{}, err
@@ -117,7 +123,7 @@ func (p *Provider) Commit(_ context.Context, _ sdk.Host, _ *contractv1.CallConte
 		Values: append(json.RawMessage(nil), candidate.Values...), Configuration: candidate.Configuration,
 	}
 	p.controller.Candidate.Status = configurationv1.StatusCommitted
-	if err := p.saveControllerStateLocked(); err != nil {
+	if err := p.saveControllerStateLocked(ctx, host, call); err != nil {
 		p.controller = previous
 		return configurationv1.Observation{}, err
 	}
@@ -125,9 +131,12 @@ func (p *Provider) Commit(_ context.Context, _ sdk.Host, _ *contractv1.CallConte
 	return p.observationLocked(), nil
 }
 
-func (p *Provider) Abort(_ context.Context, _ sdk.Host, _ *contractv1.CallContext, request configurationv1.CandidateRequest) (configurationv1.Observation, error) {
+func (p *Provider) Abort(ctx context.Context, host sdk.Host, call *contractv1.CallContext, request configurationv1.CandidateRequest) (configurationv1.Observation, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if err := p.loadControllerStateLocked(ctx, host, call); err != nil {
+		return configurationv1.Observation{}, err
+	}
 	candidate, err := p.boundCandidateLocked(request)
 	if err != nil {
 		return configurationv1.Observation{}, err
@@ -140,16 +149,19 @@ func (p *Provider) Abort(_ context.Context, _ sdk.Host, _ *contractv1.CallContex
 	}
 	previous := cloneControllerState(p.controller)
 	p.controller.Candidate.Status, p.controller.Candidate.Ready = configurationv1.StatusAborted, false
-	if err := p.saveControllerStateLocked(); err != nil {
+	if err := p.saveControllerStateLocked(ctx, host, call); err != nil {
 		p.controller = previous
 		return configurationv1.Observation{}, err
 	}
 	return p.observationLocked(), nil
 }
 
-func (p *Provider) Status(_ context.Context, _ sdk.Host, _ *contractv1.CallContext, request configurationv1.StatusRequest) (configurationv1.Observation, error) {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
+func (p *Provider) Status(ctx context.Context, host sdk.Host, call *contractv1.CallContext, request configurationv1.StatusRequest) (configurationv1.Observation, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if err := p.loadControllerStateLocked(ctx, host, call); err != nil {
+		return configurationv1.Observation{}, err
+	}
 	if p.controller.ConfigurationID != "" && p.controller.ConfigurationID != request.ConfigurationID {
 		return configurationv1.Observation{}, errors.New("OTP configuration controller 配置资源不匹配")
 	}
