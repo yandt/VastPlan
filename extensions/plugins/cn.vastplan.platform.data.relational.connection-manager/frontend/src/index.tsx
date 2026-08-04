@@ -71,6 +71,7 @@ export function createDatabaseConnectionsPage(client: PlatformAdminClient, servi
       fields: [
         { pointer: "/name", readOnlyWhen: { pointer: "/context/editing", equals: true } },
         { pointer: "/providerId" }, { pointer: "/endpoint" }, { pointer: "/database" }, { pointer: "/options", span: 2 }, { pointer: "/pool", span: 2 },
+        { pointer: "/options/serverName", visibleWhen: { pointer: "/options/tlsMode", equals: "verify-full" } },
         { pointer: "/options/applicationName", visibleWhen: { pointer: "/providerId", equals: "postgresql" } },
         { pointer: "/options/network", visibleWhen: { pointer: "/providerId", equals: "mysql" } },
         { pointer: "/options/readTimeoutMs", visibleWhen: { pointer: "/providerId", equals: "mysql" } },

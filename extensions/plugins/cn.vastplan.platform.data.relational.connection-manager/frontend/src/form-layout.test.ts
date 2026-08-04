@@ -19,6 +19,7 @@ describe("database connection form layout", () => {
       expect.objectContaining({ pointer: "/options", span: 2 }),
       expect.objectContaining({ pointer: "/pool", span: 2 }),
       expect.objectContaining({ pointer: "/options/password", widget: "secretMaterial" }),
+      expect.objectContaining({ pointer: "/options/serverName", visibleWhen: { pointer: "/options/tlsMode", equals: "verify-full" } }),
     ]));
   });
 });
