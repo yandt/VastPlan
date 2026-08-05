@@ -83,6 +83,9 @@ func (s *service) handleManagement(ctx context.Context, host sdk.Host, call *con
 		}
 		saved, err := s.define(ctx, host, call, tenantID, input)
 		if err != nil {
+			if issue, ok := databasev1.ValidationIssueFrom(err); ok {
+				return domainErrorDetails("platform.database.invalid", err, validationDetails(issue.Field, issue.Reason))
+			}
 			return nil, nil, err
 		}
 		_ = s.reconcilePublications(ctx, host, call, tenantID)
@@ -133,6 +136,10 @@ func (s *service) handleManagement(ctx context.Context, host sdk.Host, call *con
 		return nil, nil, err
 	}
 	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
+}
+
+func validationDetails(field, reason string) map[string]string {
+	return map[string]string{"validationField": field, "validationReason": reason}
 }
 
 func (s *service) runtimeStatus(tenantID string, value definition) string {

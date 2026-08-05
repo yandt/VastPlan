@@ -79,10 +79,7 @@ func TestBootstrapperTestsInitializesAndOpensQualifiedSharedState(t *testing.T) 
 		t.Fatal(err)
 	}
 	bootstrapper, _ := New(registry)
-	profile := platformcontrolv1.Profile{
-		SchemaVersion: 1, Generation: 1, ProviderID: "mysql", Endpoint: "db.internal:3306", Database: "platform", Schema: "platform",
-		TLS: platformcontrolv1.TLS{Mode: "verify-ca"}, Username: "vastplan", SecretRef: platformcontrolv1.SecretRef{Kind: "owner-file", Path: "/run/vastplan/password"}, ContractRange: "^1.0.0",
-	}
+	profile := bootstrapProfile("mysql", "db.internal:3306", "platform", "platform", "vastplan", "verify-ca", "/run/vastplan/password")
 	secret := bootstrapSecret("secret")
 	if err := bootstrapper.Test(context.Background(), profile, secret); err != nil || len(provider.pools) != 1 || !provider.pools[0].closed {
 		t.Fatalf("连接测试应关闭候选池: pools=%+v err=%v", provider.pools, err)
@@ -112,7 +109,7 @@ func TestBootstrapperRejectsMySQLCrossDatabaseSchema(t *testing.T) {
 	registry := databaseruntime.NewRegistry()
 	_ = registry.Register(&bootstrapProvider{})
 	bootstrapper, _ := New(registry)
-	profile := platformcontrolv1.Profile{SchemaVersion: 1, Generation: 1, ProviderID: "mysql", Endpoint: "db.internal:3306", Database: "platform", Schema: "other", TLS: platformcontrolv1.TLS{Mode: "verify-ca"}, Username: "vastplan", SecretRef: platformcontrolv1.SecretRef{Kind: "owner-file", Path: "/run/vastplan/password"}, ContractRange: "^1.0.0"}
+	profile := bootstrapProfile("mysql", "db.internal:3306", "platform", "other", "vastplan", "verify-ca", "/run/vastplan/password")
 	if _, err := bootstrapper.Initialize(context.Background(), profile, bootstrapSecret("secret")); err == nil {
 		t.Fatal("MySQL 控制 schema 不得越出连接 database")
 	}
@@ -122,3 +119,12 @@ var _ platformcontrol.SecretSource = bootstrapSecret(nil)
 var _ databaseruntime.Provider = (*bootstrapProvider)(nil)
 var _ databaseruntime.Pool = (*bootstrapPool)(nil)
 var _ databaseruntime.PinnedPool = (*bootstrapPool)(nil)
+
+func bootstrapProfile(providerID, endpoint, database, schema, username, tlsMode, secretPath string) platformcontrolv1.Profile {
+	options, _ := json.Marshal(map[string]any{"user": username, "tlsMode": tlsMode, "connectTimeoutMs": 10_000})
+	return platformcontrolv1.Profile{
+		SchemaVersion: 1, Generation: 1,
+		Connection: databasev1.ConnectionCandidate{ProviderID: providerID, Endpoint: endpoint, Database: database, Options: options, Pool: databasev1.DefaultPoolPolicy()},
+		Schema:     schema, SecretRef: platformcontrolv1.SecretRef{Kind: "owner-file", Path: secretPath}, ContractRange: "^1.0.0",
+	}
+}

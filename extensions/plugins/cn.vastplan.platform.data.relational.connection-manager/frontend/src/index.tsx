@@ -1,4 +1,4 @@
-import { createBrowserPlatformAdminClient, type DatabaseConnection, type DatabasePoolPolicy, type PlatformAdminClient, type PutDatabaseConnectionRequest } from "@vastplan/platform-admin";
+import { createBrowserPlatformAdminClient, PlatformAdminError, type DatabaseConnection, type DatabasePoolPolicy, type PlatformAdminClient, type PutDatabaseConnectionRequest } from "@vastplan/platform-admin";
 import {
   defineCollectionPage,
   jsonSchemaDialect,
@@ -137,7 +137,13 @@ export function createDatabaseConnectionsPage(client: PlatformAdminClient, servi
     async submit({ value }) {
       const input = databaseConnectionInput(value);
       if (input === undefined) return { fieldErrors: requiredConnectionErrors(value) };
-      await client.putDatabaseConnection(input.name, input.request);
+      try {
+        await client.putDatabaseConnection(input.name, input.request);
+      } catch (error) {
+        const fieldErrors = connectionValidationErrors(error);
+        if (fieldErrors !== undefined) return { fieldErrors };
+        throw error;
+      }
     },
     async runAction({ action, value }) {
       if (action.id !== "test") return;
@@ -146,6 +152,8 @@ export function createDatabaseConnectionsPage(client: PlatformAdminClient, servi
       try {
         return { notify: connectionTestResult(await client.testDatabaseConnection(input.name, input.request)) };
       } catch (error) {
+        const fieldErrors = connectionValidationErrors(error);
+        if (fieldErrors !== undefined) return { fieldErrors };
         return { notify: connectionTestFailure(error) };
       }
     },
@@ -203,7 +211,11 @@ function databaseConnectionInput(value: Readonly<Record<string, unknown>>): { na
   if (name === undefined || providerId === undefined || endpoint === undefined || options === undefined) return undefined;
   const password = text(options.password);
   const connectionOptions = providerConnectionOptions(providerId, options);
-  return { name, request: { providerId, endpoint, options: connectionOptions, ...(text(value.database) === undefined ? {} : { database: text(value.database) }), ...(pool(value.pool) === undefined ? {} : { pool: pool(value.pool) }), ...(text(password) === undefined ? {} : { credentialValue: text(password) }) } };
+  return { name, request: { connection: { providerId, endpoint, options: connectionOptions, ...(text(value.database) === undefined ? {} : { database: text(value.database) }), pool: pool(value.pool) ?? defaultPoolPolicy() }, ...(text(password) === undefined ? {} : { credentialValue: text(password) }) } };
+}
+
+function defaultPoolPolicy(): DatabasePoolPolicy {
+  return { minIdle: 0, maxIdle: 8, maxOpen: 32, maxLifetimeMs: 1800000, maxIdleTimeMs: 300000, acquireTimeoutMs: 5000, idlePoolTtlMs: 900000 };
 }
 
 // Keep a Provider's persisted wire options to its declared schema. Hidden
@@ -232,6 +244,18 @@ function requiredConnectionErrors(value: Readonly<Record<string, unknown>>): Wor
       ? { "/socketPath": message(namespace,"error.socketPathInvalid","请输入以 / 开头的 Unix 套接字路径") }
       : { "/host": message(namespace,"error.hostInvalid","请输入不含端口的有效地址"), "/port": message(namespace,"error.portInvalid","端口必须为 1 到 65535 的整数") }),
   };
+}
+
+function connectionValidationErrors(error: unknown): WorkbenchFormFieldErrors | undefined {
+  if (!(error instanceof PlatformAdminError) || error.validation === undefined) return undefined;
+  const pointer = ({
+    connection: "/providerId",
+    "connection.endpoint": "/host",
+    "connection.options": "/options",
+    "connection.pool": "/pool",
+  } as Record<string, string>)[error.validation.field];
+  if (pointer === undefined) return undefined;
+  return { [pointer]: message(namespace, `validation.${error.validation.field}.${error.validation.reason}`, "此连接字段配置无效，请检查后重试") };
 }
 
 export default {

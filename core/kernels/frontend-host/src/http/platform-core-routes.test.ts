@@ -14,7 +14,7 @@ describe("Platform core management routes", () => {
       fullBinding(),
     );
     close.push(server.close);
-    const change = { profile: { schemaVersion: 1, generation: 1, providerId: "postgresql", endpoint: "db:5432", database: "vastplan", schema: "platform", tls: { mode: "verify-full", serverName: "db" }, username: "app", secretRef: { kind: "systemd-credential", name: "platform-db" }, contractRange: "^1.0.0" }, expectedGeneration: 0 };
+    const change = { profile: { schemaVersion: 1, generation: 1, connection: connectionRequest().connection, schema: "platform", secretRef: { kind: "systemd-credential", name: "platform-db" }, contractRange: "^1.0.0" }, expectedGeneration: 0 };
     expect((await fetch(`${server.origin}/v1/portals/operations/platform/services/core/platform-control`, { headers: server.readHeaders })).status).toBe(200);
     expect((await fetch(`${server.origin}/v1/portals/operations/platform/services/core/platform-control/test`, { method: "POST", headers: server.writeHeaders, body: JSON.stringify(change) })).status).toBe(200);
     expect((await fetch(`${server.origin}/v1/portals/operations/platform/services/core/platform-control`, { method: "PUT", headers: server.writeHeaders, body: JSON.stringify(change) })).status).toBe(200);
@@ -35,9 +35,9 @@ describe("Platform core management routes", () => {
     expect((await fetch(`${server.origin}/v1/portals/operations/platform/services/core/credentials/vault.db`, { method: "PUT", headers: server.writeHeaders, body: '{"name":"forged","value":"secret"}' })).status).toBe(200);
     expect((await fetch(`${server.origin}/v1/portals/operations/platform/services/core/credentials/vault.db/rotate`, { method: "POST", headers: server.writeHeaders, body: "{}" })).status).toBe(200);
     expect((await fetch(`${server.origin}/v1/portals/operations/platform/services/core/credentials/managed-audit?beforeId=9&limit=50`, { headers: server.readHeaders })).status).toBe(200);
-    expect((await fetch(`${server.origin}/v1/portals/operations/platform/services/core/database-connections/main`, { method: "PUT", headers: server.writeHeaders, body: '{"name":"forged","providerId":"postgres","endpoint":"db:5432","options":{}}' })).status).toBe(200);
+    expect((await fetch(`${server.origin}/v1/portals/operations/platform/services/core/database-connections/main`, { method: "PUT", headers: server.writeHeaders, body: JSON.stringify({ name: "forged", ...connectionRequest() }) })).status).toBe(200);
     expect((await fetch(`${server.origin}/v1/portals/operations/platform/services/core/database-connections/main/probe`, { method: "POST", headers: server.writeHeaders, body: "{}" })).status).toBe(200);
-    expect((await fetch(`${server.origin}/v1/portals/operations/platform/services/core/database-connections/main/test`, { method: "POST", headers: server.writeHeaders, body: '{"providerId":"postgresql","endpoint":"db:5432","options":{"user":"app"},"credentialValue":"temporary"}' })).status).toBe(200);
+    expect((await fetch(`${server.origin}/v1/portals/operations/platform/services/core/database-connections/main/test`, { method: "POST", headers: server.writeHeaders, body: JSON.stringify(connectionRequest("temporary")) })).status).toBe(200);
     expect(calls.map(({ capability, operation, payload }) => ({ capability, operation, payload }))).toEqual([
       { capability: "platform.settings", operation: "list", payload: { prefix: "ui." } },
       { capability: "platform.settings", operation: "put", payload: { key: "ui.theme", value: "dark", ifVersion: 2 } },
@@ -45,9 +45,9 @@ describe("Platform core management routes", () => {
       { capability: "platform.credentials", operation: "put", payload: { name: "vault.db", value: "secret" } },
       { capability: "platform.credentials", operation: "rotate", payload: { name: "vault.db" } },
       { capability: "platform.credentials", operation: "listManagedAudit", payload: { beforeId: 9, limit: 50 } },
-      { capability: "platform.database", operation: "define", payload: { name: "main", providerId: "postgres", endpoint: "db:5432", options: {} } },
+      { capability: "platform.database", operation: "define", payload: { name: "main", ...connectionRequest() } },
       { capability: "platform.database", operation: "probe", payload: { name: "main" } },
-      { capability: "platform.database", operation: "test", payload: { name: "main", providerId: "postgresql", endpoint: "db:5432", options: { user: "app" }, credentialValue: "temporary" } },
+      { capability: "platform.database", operation: "test", payload: { name: "main", ...connectionRequest("temporary") } },
     ]);
     expect(calls.every((call) => call.logicalService === "platform.core.primary")).toBe(true);
   });
@@ -74,7 +74,7 @@ describe("Platform core management routes", () => {
     const invoker: TrustedCapabilityInvoker = { async invoke() { throw new CapabilityApplicationError("platform.database.connection_unavailable", "endpoint=db.internal password=do-not-leak"); } };
     const server = await startPlatformManagementTestServer(invoker, ["platform.database.probe"], fullBinding());
     close.push(server.close);
-    const response = await fetch(`${server.origin}/v1/portals/operations/platform/services/core/database-connections/main/test`, { method: "POST", headers: server.writeHeaders, body: '{"providerId":"postgresql","endpoint":"db:5432","options":{"user":"app"},"credentialValue":"temporary"}' });
+    const response = await fetch(`${server.origin}/v1/portals/operations/platform/services/core/database-connections/main/test`, { method: "POST", headers: server.writeHeaders, body: JSON.stringify(connectionRequest("temporary")) });
     expect(response.status).toBe(422);
     expect(await response.json()).toEqual({ error: "database_connection_failed" });
   });
@@ -83,9 +83,22 @@ describe("Platform core management routes", () => {
     const invoker: TrustedCapabilityInvoker = { async invoke() { throw new CapabilityApplicationError("platform.database.invalid", "provider-private-detail"); } };
     const server = await startPlatformManagementTestServer(invoker, ["platform.database.probe"], fullBinding());
     close.push(server.close);
-    const response = await fetch(`${server.origin}/v1/portals/operations/platform/services/core/database-connections/main/test`, { method: "POST", headers: server.writeHeaders, body: '{"providerId":"postgresql","endpoint":"db:5432","options":{"user":"app"},"credentialValue":"temporary"}' });
+    const response = await fetch(`${server.origin}/v1/portals/operations/platform/services/core/database-connections/main/test`, { method: "POST", headers: server.writeHeaders, body: JSON.stringify(connectionRequest("temporary")) });
     expect(response.status).toBe(422);
     expect(await response.json()).toEqual({ error: "database_connection_invalid" });
+  });
+
+  it("returns only whitelisted field-level validation details", async () => {
+    const invoker: TrustedCapabilityInvoker = { async invoke() {
+      throw new CapabilityApplicationError("platform.database.platform_control_invalid", "endpoint=db.internal password=do-not-leak", {
+        validationField: "profile.connection.endpoint", validationReason: "host_port_required", internalPath: "/secret/path",
+      });
+    } };
+    const server = await startPlatformManagementTestServer(invoker, ["platform.database.probe"], fullBinding());
+    close.push(server.close);
+    const response = await fetch(`${server.origin}/v1/portals/operations/platform/services/core/platform-control/test`, { method: "POST", headers: server.writeHeaders, body: "{}" });
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: "platform_control_invalid", validation: { field: "profile.connection.endpoint", reason: "host_port_required" } });
   });
 
   it("preserves safe database diagnoses without exposing provider detail", async () => {
@@ -105,7 +118,7 @@ describe("Platform core management routes", () => {
       const invoker: TrustedCapabilityInvoker = { async invoke() { throw new CapabilityApplicationError(platformCode, "endpoint=db.internal password=do-not-leak"); } };
       const server = await startPlatformManagementTestServer(invoker, ["platform.database.probe"], fullBinding());
       close.push(server.close);
-      const response = await fetch(`${server.origin}/v1/portals/operations/platform/services/core/database-connections/main/test`, { method: "POST", headers: server.writeHeaders, body: '{"providerId":"postgresql","endpoint":"db:5432","options":{"user":"app"},"credentialValue":"temporary"}' });
+      const response = await fetch(`${server.origin}/v1/portals/operations/platform/services/core/database-connections/main/test`, { method: "POST", headers: server.writeHeaders, body: JSON.stringify(connectionRequest("temporary")) });
       expect(response.status).toBe(status);
       expect(await response.json()).toEqual({ error: browserCode });
     }
@@ -127,4 +140,14 @@ function fullBinding(): Record<string, unknown> {
     { capability: "platform.credentials", read: ["list", "listManagedAudit"], write: ["put", "rotate", "revoke"] },
     { capability: "platform.database", read: ["list", "platformControlStatus"], write: ["define", "remove", "probe", "test", "platformControlTest", "platformControlConfigure"] },
   ]);
+}
+
+function connectionRequest(credentialValue?: string): Record<string, unknown> {
+  return {
+    connection: {
+      providerId: "postgresql", endpoint: "db:5432", database: "vastplan", options: { user: "app", tlsMode: "verify-full", serverName: "db" },
+      pool: { minIdle: 0, maxIdle: 8, maxOpen: 32, maxLifetimeMs: 1800000, maxIdleTimeMs: 300000, acquireTimeoutMs: 5000, idlePoolTtlMs: 900000 },
+    },
+    ...(credentialValue === undefined ? {} : { credentialValue }),
+  };
 }

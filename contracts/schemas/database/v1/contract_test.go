@@ -104,12 +104,12 @@ func TestRuntimeMetricsContractIsStrictAndLowCardinality(t *testing.T) {
 func TestConnectionSpecRejectsDSNAndSecretOptions(t *testing.T) {
 	spec := validConnection()
 	spec.Endpoint = "postgres://user:password@db.internal/orders"
-	if err := databasev1.ValidateConnectionSpec(spec); err == nil || !strings.Contains(err.Error(), "DSN") {
+	if err := databasev1.ValidateConnectionSpec(spec); err == nil || !hasValidationIssue(err, "connection.endpoint", "endpoint_required") {
 		t.Fatalf("含凭证 DSN 必须拒绝: %v", err)
 	}
 	spec = validConnection()
 	spec.Options = json.RawMessage(`{"tls":{"clientPrivateKey":"plaintext"}}`)
-	if err := databasev1.ValidateConnectionSpec(spec); err == nil || !strings.Contains(err.Error(), "CredentialRef") {
+	if err := databasev1.ValidateConnectionSpec(spec); err == nil || !hasValidationIssue(err, "connection.options", "secret_forbidden") {
 		t.Fatalf("嵌套秘密选项必须拒绝: %v", err)
 	}
 	spec = validConnection()
@@ -117,6 +117,22 @@ func TestConnectionSpecRejectsDSNAndSecretOptions(t *testing.T) {
 	if err := databasev1.ValidateConnectionSpec(spec); err == nil {
 		t.Fatal("无效池大小关系必须拒绝")
 	}
+}
+
+func TestConnectionCandidateIsReusableWithoutCredentialLifecycle(t *testing.T) {
+	candidate := validConnection().Candidate()
+	if err := databasev1.ValidateConnectionCandidate(candidate); err != nil {
+		t.Fatalf("有效候选被拒绝: %v", err)
+	}
+	raw, _ := json.Marshal(candidate)
+	if strings.Contains(string(raw), "credentials") || strings.Contains(string(raw), "resourceId") {
+		t.Fatalf("候选不得携带凭证或持久身份: %s", raw)
+	}
+}
+
+func hasValidationIssue(err error, field, reason string) bool {
+	issue, ok := databasev1.ValidationIssueFrom(err)
+	return ok && issue.Field == field && issue.Reason == reason
 }
 
 func TestConnectionRefValidationUsesWireSchema(t *testing.T) {

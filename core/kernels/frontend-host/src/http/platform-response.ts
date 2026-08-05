@@ -26,7 +26,7 @@ export async function sendPlatformResponse(options: {
 }
 
 export function sendCapabilityFailure(response: ServerResponse, error: unknown, head = false): void {
-  if (error instanceof CapabilityApplicationError) return mapCapabilityError(response, error.code, head);
+  if (error instanceof CapabilityApplicationError) return mapCapabilityError(response, error, head);
   sendAPIError(response, 502, "platform_service_unavailable", head);
 }
 
@@ -40,7 +40,8 @@ export function responseItems(value: unknown): unknown[] {
   return (value as { items: unknown[] }).items;
 }
 
-function mapCapabilityError(response: ServerResponse, code: string, head = false): void {
+function mapCapabilityError(response: ServerResponse, error: CapabilityApplicationError, head = false): void {
+  const code = error.code;
   if (code === "permission.denied") return sendAPIError(response, 403, "forbidden", head);
   if (["platform.settings.not_found", "platform.credentials.not_found", "platform.database.not_found", "platform.deployment.not_found", "platform.plugin_configuration.not_found"].includes(code)) return sendAPIError(response, 404, "not_found", head);
   if (["platform.settings.version_conflict", "platform.deployment.version_conflict", "platform.plugin_configuration.conflict"].includes(code)) return sendAPIError(response, 409, "version_conflict", head);
@@ -54,7 +55,7 @@ function mapCapabilityError(response: ServerResponse, code: string, head = false
   if (code === "platform.plugin_installation.approval_denied") return sendAPIError(response, 403, "installation_approval_denied", head);
   if (code === "platform.plugin_installation.approval_required") return sendAPIError(response, 409, "installation_approval_required", head);
   if (["platform.plugin_installation.unsupported", "platform.plugin_installation.noop"].includes(code)) return sendAPIError(response, 409, code.endsWith("noop") ? "installation_noop" : "installation_unsupported", head);
-  if (code === "platform.database.invalid") return sendAPIError(response, 422, "database_connection_invalid", head);
+  if (code === "platform.database.invalid") return sendValidationError(response, 422, "database_connection_invalid", error.details, head);
   if (["platform.settings.invalid", "platform.credentials.invalid", "platform.deployment.invalid", "platform.plugin_configuration.invalid"].includes(code)) return sendAPIError(response, 400, "invalid_request", head);
   if (code === "platform.database.connection_unavailable") return sendAPIError(response, 422, "database_connection_failed", head);
   if (code === "platform.database.credential_unavailable") return sendAPIError(response, 422, "database_credential_unavailable", head);
@@ -69,7 +70,7 @@ function mapCapabilityError(response: ServerResponse, code: string, head = false
   if (code === "platform.database.permission_denied") return sendAPIError(response, 422, "database_permission_denied", head);
   if (code === "platform.database.pool_exhausted") return sendAPIError(response, 429, "database_pool_exhausted", head);
   if (code === "platform.database.runtime_unavailable") return sendAPIError(response, 503, "database_runtime_unavailable", head);
-  if (code === "platform_control.profile_invalid" || code === "platform.database.platform_control_invalid") return sendAPIError(response, 422, "platform_control_invalid", head);
+  if (code === "platform_control.profile_invalid" || code === "platform.database.platform_control_invalid") return sendValidationError(response, 422, "platform_control_invalid", error.details, head);
   if (code === "platform_control.secret_unavailable") return sendAPIError(response, 422, "platform_control_secret_unavailable", head);
   if (code === "platform_control.database_unavailable") return sendAPIError(response, 422, "platform_control_database_unavailable", head);
   if (code === "platform_control.initialization_failed") return sendAPIError(response, 422, "platform_control_initialization_failed", head);
@@ -80,4 +81,13 @@ function mapCapabilityError(response: ServerResponse, code: string, head = false
   if (code === "platform.deployment.bootstrap_failed") return sendAPIError(response, 502, "bootstrap_failed", head);
   if (code === "platform.deployment.service_publish_failed") return sendAPIError(response, 502, "service_publish_failed", head);
   sendAPIError(response, 502, "platform_service_unavailable", head);
+}
+
+function sendValidationError(response: ServerResponse, status: number, code: string, details: Readonly<Record<string, string>>, head: boolean): void {
+  const field = details.validationField;
+  const reason = details.validationReason;
+  if (field === undefined || reason === undefined || !/^[a-z][a-zA-Z0-9_.]*$/.test(field) || !/^[a-z][a-z0-9_]*$/.test(reason)) {
+    return sendAPIError(response, status, code, head);
+  }
+  sendJSON(response, status, { error: code, validation: { field, reason } }, head);
 }

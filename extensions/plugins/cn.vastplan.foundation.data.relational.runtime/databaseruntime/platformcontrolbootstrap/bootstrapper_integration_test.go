@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.foundation.data.relational.runtime/databaseruntime"
 )
@@ -44,18 +43,7 @@ func runPlatformControlBootstrapIntegration(t *testing.T, providerID, prefix str
 	if providerID == "postgresql" {
 		schema = fmt.Sprintf("vastplan_control_%d", time.Now().UnixNano())
 	}
-	profile := platformcontrolv1.Profile{
-		SchemaVersion: 1,
-		Generation:    1,
-		ProviderID:    providerID,
-		Endpoint:      endpoint,
-		Database:      database,
-		Schema:        schema,
-		TLS:           platformcontrolv1.TLS{Mode: "disable"},
-		Username:      username,
-		SecretRef:     platformcontrolv1.SecretRef{Kind: "owner-file", Path: "/tmp/vastplan-platform-control-integration.secret"},
-		ContractRange: "^1.0.0",
-	}
+	profile := bootstrapProfile(providerID, endpoint, database, schema, username, "disable", "/tmp/vastplan-platform-control-integration.secret")
 	secret := bootstrapSecret(password)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -164,11 +152,7 @@ func runPlatformControlBackupFixture(t *testing.T, providerID, prefix string) {
 	if providerID == "postgresql" {
 		schema = "vastplan_control_backup"
 	}
-	profile := platformcontrolv1.Profile{
-		SchemaVersion: 1, Generation: 1, ProviderID: providerID, Endpoint: endpoint, Database: database, Schema: schema,
-		TLS: platformcontrolv1.TLS{Mode: "disable"}, Username: username,
-		SecretRef: platformcontrolv1.SecretRef{Kind: "owner-file", Path: "/tmp/vastplan-platform-control-backup.secret"}, ContractRange: "^1.0.0",
-	}
+	profile := bootstrapProfile(providerID, endpoint, database, schema, username, "disable", "/tmp/vastplan-platform-control-backup.secret")
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	bootstrapper := newIntegrationBootstrapper(t, providerID)
@@ -211,11 +195,7 @@ func runPlatformControlBackupFixture(t *testing.T, providerID, prefix string) {
 
 func TestPlatformControlBootstrapIntegrationDoesNotExposeSecret(t *testing.T) {
 	password := "integration-secret-must-not-leak"
-	profile := platformcontrolv1.Profile{
-		SchemaVersion: 1, Generation: 1, ProviderID: "postgresql", Endpoint: "127.0.0.1:1",
-		Database: "vastplan", Schema: "vastplan", TLS: platformcontrolv1.TLS{Mode: "disable"}, Username: "vastplan",
-		SecretRef: platformcontrolv1.SecretRef{Kind: "owner-file", Path: "/tmp/vastplan-platform-control-integration.secret"}, ContractRange: "^1.0.0",
-	}
+	profile := bootstrapProfile("postgresql", "127.0.0.1:1", "vastplan", "vastplan", "vastplan", "disable", "/tmp/vastplan-platform-control-integration.secret")
 	bootstrapper := newIntegrationBootstrapper(t, "postgresql")
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()

@@ -11,7 +11,7 @@ import (
 
 const (
 	SchemaURL                 = "https://schemas.cdsoft.com.cn/vastplan/database/v1/vastplan.database-runtime.schema.json"
-	ContractVersion           = "1.2.0"
+	ContractVersion           = "1.3.0"
 	Capability                = "foundation.data.relational.runtime"
 	RuntimePluginID           = "cn.vastplan.foundation.data.relational.runtime"
 	ConnectionManagerPluginID = "cn.vastplan.platform.data.relational.connection-manager"
@@ -85,6 +85,24 @@ type PoolPolicy struct {
 	IdlePoolTTLMS    int64 `json:"idlePoolTtlMs"`
 }
 
+// ConnectionCandidate is the single non-secret connection input shared by
+// managed connections and trusted bootstrap workflows. Credential and
+// persistence lifecycles intentionally remain outside this value.
+type ConnectionCandidate struct {
+	ProviderID string          `json:"providerId"`
+	Endpoint   string          `json:"endpoint"`
+	Database   string          `json:"database,omitempty"`
+	Options    json.RawMessage `json:"options"`
+	Pool       PoolPolicy      `json:"pool"`
+}
+
+func DefaultPoolPolicy() PoolPolicy {
+	return PoolPolicy{
+		MinIdle: 0, MaxIdle: 8, MaxOpen: 32, MaxLifetimeMS: 30 * 60_000,
+		MaxIdleTimeMS: 5 * 60_000, AcquireTimeoutMS: 5_000, IdlePoolTTLMS: 15 * 60_000,
+	}
+}
+
 type ConnectionSpec struct {
 	Ref         ConnectionRef                 `json:"ref"`
 	ProviderID  string                        `json:"providerId"`
@@ -93,6 +111,13 @@ type ConnectionSpec struct {
 	Options     json.RawMessage               `json:"options"`
 	Credentials commonv1.ManagedCredentialRef `json:"credentials"`
 	Pool        PoolPolicy                    `json:"pool"`
+}
+
+func (s ConnectionSpec) Candidate() ConnectionCandidate {
+	return ConnectionCandidate{
+		ProviderID: s.ProviderID, Endpoint: s.Endpoint, Database: s.Database,
+		Options: append(json.RawMessage(nil), s.Options...), Pool: s.Pool,
+	}
 }
 
 type Value struct {

@@ -59,11 +59,11 @@ Database Runtime 内部的 `platformcontrolbootstrap` 适配器复用 PostgreSQL
 
 P4a 已完成 Profile 契约、owner-only CAS 文件存储、systemd/development file Secret Source、两阶段 Controller 和不可回退 Binding Store，并覆盖空环境、首次成功、失败不提交、旧代保留、权限与秘密清零测试。
 
-P4b 已完成 Database Runtime 进程内 Bootstrap 适配：PostgreSQL/MySQL 初始化、限定 schema SQL Shared State、迁移锁、候选连接池回收和 TLS `verify-ca`。公开 Database Runtime Capability 为 `1.2.0`。
+P4b 已完成 Database Runtime 进程内 Bootstrap 适配：PostgreSQL/MySQL 初始化、限定 schema SQL Shared State、迁移锁、候选连接池回收和 TLS `verify-ca`。公开 Database Runtime Capability 为 `1.3.0`。
 
 P4c 已把进程边界接通：
 
-- Database Runtime `0.15.0` 同时贡献公开数据面、`foundation.data.record-store@1.2.0`，以及仅宿主可调用的 `foundation.state.shared.sql.bootstrap@1.0.0` 和 `foundation.state.shared.sql@1.0.0`；Controller 从 Deployment 锁定的已验证制品投影 DataModel Inventory，只向该 Runtime 注入宿主保留配置，Node Agent 在候选能力进入公开路由前使用 Host 固定的 SYSTEM 身份同步，并在收到与候选目录精确绑定的 Schema Activation 授权后执行迁移，再从普通插件配置中摘除目录；其用户配置 `clusterMaxOpen` 与 Scheduler 可信派生的 `clusterMaxReplicas` 在组合根生成每实例连接硬预算，覆盖 active-active 与双代轮换的最坏连接占用；
+- Database Runtime `0.16.0` 同时贡献公开数据面、`foundation.data.record-store@1.2.0`，以及仅宿主可调用的 `foundation.state.shared.sql.bootstrap@2.0.0` 和 `foundation.state.shared.sql@1.0.0`；Bootstrap 2.0 使用与普通连接相同的 `DatabaseConnectionCandidate`，但仍由可信宿主管理 secret、Profile 和 Store 绑定；Controller 从 Deployment 锁定的已验证制品投影 DataModel Inventory，只向该 Runtime 注入宿主保留配置，Node Agent 在候选能力进入公开路由前使用 Host 固定的 SYSTEM 身份同步，并在收到与候选目录精确绑定的 Schema Activation 授权后执行迁移，再从普通插件配置中摘除目录；其用户配置 `clusterMaxOpen` 与 Scheduler 可信派生的 `clusterMaxReplicas` 在组合根生成每实例连接硬预算，覆盖 active-active 与双代轮换的最坏连接占用；
 - Bootstrap Capability 只接受固定 SYSTEM caller `platform-control-bootstrap/primary`，目标 logical service 和 routing domain 也由宿主固定；
 - 宿主用 `RemoteBootstrapper/RemoteStore` 把跨进程 Capability 重新适配为原有 `sharedstate.Store`，业务插件看不到传输差异；
 - Deployment/Assignment 增加 `startup_tier=bootstrap|full`，默认 `full`。Node Agent 可以完成 Full 单元的下载、验签和安装，但在 Shared State Ready 前拒绝激活；

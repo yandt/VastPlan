@@ -30,6 +30,32 @@ var (
 	decimalPattern    = regexp.MustCompile(`^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$`)
 )
 
+// ValidationIssue is a safe, value-free field diagnosis that may cross a
+// process boundary. Provider errors and candidate values never belong here.
+type ValidationIssue struct {
+	Field  string
+	Reason string
+}
+
+func (e *ValidationIssue) Error() string {
+	if e == nil {
+		return "数据库连接配置无效"
+	}
+	return fmt.Sprintf("数据库连接字段 %s 无效（%s）", e.Field, e.Reason)
+}
+
+func ValidationIssueFrom(err error) (ValidationIssue, bool) {
+	var issue *ValidationIssue
+	if !errors.As(err, &issue) || issue == nil {
+		return ValidationIssue{}, false
+	}
+	return *issue, true
+}
+
+func invalidCandidate(field, reason string) error {
+	return &ValidationIssue{Field: field, Reason: reason}
+}
+
 var requestDefinition = map[string]string{
 	OperationProviders: "providerListRequest",
 	OperationMetrics:   "metricsRequest",
@@ -56,21 +82,12 @@ var errorCodes = map[string]struct{}{
 
 func compileSchemas() {
 	compiler := jsonschema.NewCompiler()
-	if err := commonv1.AddResources(compiler); err != nil {
-		schemaErr = err
-		return
-	}
-	document, err := jsonschema.UnmarshalJSON(bytes.NewReader(schemaJSON))
-	if err != nil {
-		schemaErr = fmt.Errorf("解析 Database Runtime Schema: %w", err)
-		return
-	}
-	if err := compiler.AddResource(SchemaURL, document); err != nil {
+	if err := AddResources(compiler); err != nil {
 		schemaErr = fmt.Errorf("登记 Database Runtime Schema: %w", err)
 		return
 	}
 	definitions := []string{
-		"providerDescriptor", "connectionRef", "connectionSpec", "statement", "queryResult",
+		"providerDescriptor", "connectionRef", "connectionCandidate", "connectionSpec", "statement", "queryResult",
 		"providerListRequest", "metricsRequest", "runtimeMetricsResult", "probeRequest", "activateRequest", "retireRequest",
 		"queryRequest", "executeRequest", "beginRequest", "endTransactionRequest",
 	}
@@ -234,20 +251,44 @@ func ValidateConnectionSpec(spec ConnectionSpec) error {
 	if err := validateDefinition("connectionSpec", raw); err != nil {
 		return err
 	}
-	if spec.Pool.MinIdle > spec.Pool.MaxIdle || spec.Pool.MaxIdle > spec.Pool.MaxOpen {
-		return errors.New("连接池必须满足 minIdle <= maxIdle <= maxOpen")
+	return ValidateConnectionCandidate(spec.Candidate())
+}
+
+func ValidateConnectionCandidate(candidate ConnectionCandidate) error {
+	raw, err := json.Marshal(candidate)
+	if err != nil {
+		return err
 	}
-	if strings.IndexFunc(spec.Endpoint, unicode.IsSpace) >= 0 || strings.ContainsAny(spec.Endpoint, "@?;#") || strings.Contains(spec.Endpoint, "://") {
-		return errors.New("endpoint 只能是非敏感主机/端口或 socket 标识，不能使用 DSN/URL")
+	if err := validateDefinition("connectionCandidate", raw); err != nil {
+		return invalidCandidate("connection", "schema_invalid")
+	}
+	if candidate.Pool.MinIdle > candidate.Pool.MaxIdle || candidate.Pool.MaxIdle > candidate.Pool.MaxOpen {
+		return invalidCandidate("connection.pool", "order_invalid")
+	}
+	if strings.IndexFunc(candidate.Endpoint, unicode.IsSpace) >= 0 || strings.ContainsAny(candidate.Endpoint, "@?;#") || strings.Contains(candidate.Endpoint, "://") {
+		return invalidCandidate("connection.endpoint", "endpoint_required")
 	}
 	var options map[string]any
-	if err := json.Unmarshal(spec.Options, &options); err != nil || options == nil {
-		return errors.New("Provider options 必须是 JSON 对象")
+	if err := json.Unmarshal(candidate.Options, &options); err != nil || options == nil {
+		return invalidCandidate("connection.options", "object_required")
 	}
 	if key := secretOptionKey(options); key != "" {
-		return fmt.Errorf("Provider options 不得包含疑似秘密字段 %q；请使用 CredentialRef", key)
+		return invalidCandidate("connection.options", "secret_forbidden")
 	}
 	return nil
+}
+
+// AddResources makes the canonical Database contract reusable from composed
+// schemas without copying its definitions.
+func AddResources(compiler *jsonschema.Compiler) error {
+	if err := commonv1.AddResources(compiler); err != nil {
+		return err
+	}
+	document, err := jsonschema.UnmarshalJSON(bytes.NewReader(schemaJSON))
+	if err != nil {
+		return err
+	}
+	return compiler.AddResource(SchemaURL, document)
 }
 
 func ValidateConnectionRef(ref ConnectionRef) error {

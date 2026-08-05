@@ -79,13 +79,6 @@ func callRuntime(ctx context.Context, host sdk.Host, call *contractv1.CallContex
 	return nil
 }
 
-func defaultPoolPolicy() databasev1.PoolPolicy {
-	return databasev1.PoolPolicy{
-		MinIdle: 0, MaxIdle: 8, MaxOpen: 32, MaxLifetimeMS: 30 * 60_000,
-		MaxIdleTimeMS: 5 * 60_000, AcquireTimeoutMS: 5_000, IdlePoolTTLMS: 15 * 60_000,
-	}
-}
-
 func connectionResourceID(tenantID, name string) string {
 	digest := sha256.Sum256([]byte(tenantID + "\x00" + name))
 	return fmt.Sprintf("connection-%x", digest[:12])

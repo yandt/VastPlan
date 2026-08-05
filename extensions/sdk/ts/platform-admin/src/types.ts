@@ -138,12 +138,17 @@ export interface DatabasePoolPolicy {
   maxIdleTimeMs: number; acquireTimeoutMs: number; idlePoolTtlMs: number;
 }
 
-export interface PutDatabaseConnectionRequest {
+export interface DatabaseConnectionCandidate {
   providerId: string;
   endpoint: string;
   database?: string;
   options: Record<string, unknown>;
-  pool?: DatabasePoolPolicy;
+  pool: DatabasePoolPolicy;
+}
+
+export interface PutDatabaseConnectionRequest {
+
+  connection: DatabaseConnectionCandidate;
   credentialValue?: string;
 }
 
@@ -154,11 +159,10 @@ export interface DatabaseProbe {
   latencyMs: number;
   message?: string;
 }
-export interface PlatformControlTLS { mode: "disable" | "verify-ca" | "verify-full"; serverName?: string; }
 export type PlatformControlSecretRef = { kind: "systemd-credential"; name: string } | { kind: "owner-file"; path: string };
 export interface PlatformControlProfile {
-  schemaVersion: 1; generation: number; providerId: "postgresql" | "mysql"; endpoint: string;
-  database: string; schema: string; tls: PlatformControlTLS; username: string;
+  schemaVersion: 1; generation: number; connection: DatabaseConnectionCandidate;
+  schema: string;
   secretRef: PlatformControlSecretRef; contractRange: string;
 }
 export interface PlatformControlStatus { phase: "unconfigured" | "testing" | "initializing" | "ready" | "recovery"; generation?: number; code?: string; profile?: PlatformControlProfile; }

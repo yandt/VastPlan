@@ -7,6 +7,7 @@ import (
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
@@ -36,7 +37,16 @@ func callPlatformControl(ctx context.Context, host sdk.Host, call *contractv1.Ca
 	}
 	if operation != operationPlatformControlStatus {
 		var request platformcontrolv1.ChangeRequest
-		if err := json.Unmarshal(payload, &request); err != nil || platformcontrolv1.ValidateChangeRequest(request) != nil {
+		if err := json.Unmarshal(payload, &request); err != nil {
+			return domainError("platform.database.platform_control_invalid", errors.New("Platform Control 配置无效"))
+		}
+		if err := platformcontrolv1.ValidateChangeRequest(request); err != nil {
+			if issue, ok := platformcontrolv1.ValidationIssueFrom(err); ok {
+				return domainErrorDetails("platform.database.platform_control_invalid", err, validationDetails(issue.Field, issue.Reason))
+			}
+			if issue, ok := databasev1.ValidationIssueFrom(err); ok {
+				return domainErrorDetails("platform.database.platform_control_invalid", err, validationDetails(issue.Field, issue.Reason))
+			}
 			return domainError("platform.database.platform_control_invalid", errors.New("Platform Control 配置无效"))
 		}
 	}

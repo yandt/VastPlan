@@ -52,7 +52,7 @@ func (h *platformControlHost) Call(_ context.Context, target *contractv1.CallTar
 
 func TestPlatformControlOperationsForwardOnlyValidatedRequestsToKernelServices(t *testing.T) {
 	host := &platformControlHost{}
-	request := []byte(`{"profile":{"schemaVersion":1,"generation":1,"providerId":"postgresql","endpoint":"db:5432","database":"vastplan","schema":"platform","tls":{"mode":"verify-full","serverName":"db"},"username":"app","contractRange":"^1.0.0"},"expectedGeneration":0,"secretMaterial":"one-time-password"}`)
+	request := []byte(`{"profile":{"schemaVersion":1,"generation":1,"connection":{"providerId":"postgresql","endpoint":"db:5432","database":"vastplan","options":{"user":"app","tlsMode":"verify-full","serverName":"db"},"pool":{"maxIdle":8,"maxOpen":32,"maxLifetimeMs":1800000,"maxIdleTimeMs":300000,"acquireTimeoutMs":5000,"idlePoolTtlMs":900000}},"schema":"platform","contractRange":"^1.0.0"},"expectedGeneration":0,"secretMaterial":"one-time-password"}`)
 	result, _, err := callPlatformControl(context.Background(), host, dbContext(), operationPlatformControlTest, request)
 	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK || host.target.GetExtensionPoint() != extpoint.KernelService || host.target.GetCapability() != platformcontrolv1.KernelTestService || host.target.GetOperation() != "test" {
 		t.Fatalf("Platform Control 测试未通过受限内核端口转发: target=%+v result=%+v err=%v", host.target, result, err)
@@ -120,7 +120,7 @@ func sharedStateEntryResult(value []byte, revision uint64) (*contractv1.CallResu
 func TestSharedStateProtocolPersistsTenantSagaAcrossPluginRestart(t *testing.T) {
 	host := newSharedStateProbeHost()
 	service := newSharedStateService()
-	payload := []byte(`{"name":"primary","providerId":"postgresql","endpoint":"db.internal:5432","options":{"user":"app"},"credentialValue":"one-time-password"}`)
+	payload := databaseInput("primary", "", map[string]any{"user": "app"}, "one-time-password")
 	result, raw, err := service.handle(context.Background(), host, dbContext(), payload, "define")
 	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK || !strings.Contains(string(raw), `"name":"primary"`) {
 		t.Fatalf("Shared State 定义连接失败: result=%+v raw=%s err=%v", result, raw, err)
@@ -208,7 +208,7 @@ func TestCurrentFormConnectionTestMapsRuntimeFailureWithoutLeakingProviderDetail
 		t.Fatal(err)
 	}
 	host := &probeHost{runtimeErrorCode: databasev1.ErrorConnectionUnavailable}
-	result, raw, err := service.handle(context.Background(), host, dbContext(), []byte(`{"name":"draft","providerId":"postgresql","endpoint":"db.internal:5432","options":{"user":"app"},"credentialValue":"one-time-password"}`), "test")
+	result, raw, err := service.handle(context.Background(), host, dbContext(), databaseInput("draft", "", map[string]any{"user": "app"}, "one-time-password"), "test")
 	if err != nil || result.GetError().GetCode() != "platform.database.connection_unavailable" || result.GetError().GetMessage() != "数据库连接暂时不可用" || len(raw) != 0 {
 		t.Fatalf("Runtime 故障必须转换成安全平台错误: result=%+v raw=%s err=%v", result, raw, err)
 	}
@@ -239,7 +239,7 @@ func TestCurrentFormConnectionTestPreservesSafeRuntimeDiagnosis(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			result, raw, err := service.handle(context.Background(), &probeHost{runtimeErrorCode: test.runtimeCode}, dbContext(), []byte(`{"name":"draft","providerId":"postgresql","endpoint":"db.internal:5432","options":{"user":"app"},"credentialValue":"one-time-password"}`), "test")
+			result, raw, err := service.handle(context.Background(), &probeHost{runtimeErrorCode: test.runtimeCode}, dbContext(), databaseInput("draft", "", map[string]any{"user": "app"}, "one-time-password"), "test")
 			if err != nil || len(raw) != 0 || result.GetError().GetCode() != test.platformCode || result.GetError().GetMessage() != test.message {
 				t.Fatalf("诊断映射错误: result=%+v raw=%s err=%v", result, raw, err)
 			}
@@ -256,7 +256,7 @@ func TestSavedConnectionProbeUsesTheSameCredentialDiagnosis(t *testing.T) {
 		t.Fatal(err)
 	}
 	host := &probeHost{}
-	if _, _, err := service.handle(context.Background(), host, dbContext(), []byte(`{"name":"saved","providerId":"postgresql","endpoint":"db.internal:5432","options":{"user":"app"},"credentialValue":"one-time-password"}`), "define"); err != nil {
+	if _, _, err := service.handle(context.Background(), host, dbContext(), databaseInput("saved", "", map[string]any{"user": "app"}, "one-time-password"), "define"); err != nil {
 		t.Fatal(err)
 	}
 	host.runtimeErrorCode = databasev1.ErrorCredentialUnavailable
@@ -273,7 +273,7 @@ func TestInterruptedConnectionTestRecoversTemporaryCredentialRetirement(t *testi
 		t.Fatal(err)
 	}
 	host := &probeHost{failRetire: 2}
-	payload := []byte(`{"name":"draft","providerId":"postgresql","endpoint":"db.internal:5432","options":{"user":"app"},"credentialValue":"one-time-password"}`)
+	payload := databaseInput("draft", "", map[string]any{"user": "app"}, "one-time-password")
 	if _, _, err := s.handle(context.Background(), host, dbContext(), payload, "test"); err == nil {
 		t.Fatal("临时凭证无法退役时测试必须失败并保留回收任务")
 	}
@@ -299,7 +299,7 @@ func TestCurrentFormConnectionTestUsesTemporaryCredentialWithoutSavingDefinition
 		t.Fatal(err)
 	}
 	host := &probeHost{}
-	payload := []byte(`{"name":"draft","providerId":"postgresql","endpoint":"db.internal:5432","database":"app","options":{"user":"app","tlsMode":"verify-full"},"credentialValue":"one-time-password"}`)
+	payload := databaseInput("draft", "app", map[string]any{"user": "app", "tlsMode": "verify-full"}, "one-time-password")
 	_, raw, err := s.handle(context.Background(), host, dbContext(), payload, "test")
 	if err != nil || !strings.Contains(string(raw), `"ready":true`) || !strings.Contains(string(raw), `"latencyMs":1`) {
 		t.Fatalf("当前表单连接测试失败: raw=%s err=%v", raw, err)
@@ -326,7 +326,7 @@ func TestRuntimePublicationOutboxRecoversWithoutLosingDefinition(t *testing.T) {
 		t.Fatal(err)
 	}
 	host := &probeHost{failRuntime: 1}
-	_, raw, err := service.handle(context.Background(), host, dbContext(), []byte(`{"name":"primary","providerId":"postgresql","endpoint":"db.internal:5432","options":{"user":"app"},"credentialValue":"correct-horse"}`), "define")
+	_, raw, err := service.handle(context.Background(), host, dbContext(), databaseInput("primary", "", map[string]any{"user": "app"}, "correct-horse"), "define")
 	if err != nil || !strings.Contains(string(raw), `"runtime":"pending"`) {
 		t.Fatalf("Runtime 暂不可用时应保存期望定义并报告 pending: raw=%s err=%v", raw, err)
 	}
@@ -346,7 +346,7 @@ func TestDeleteAndRecreateKeepsConnectionRevisionMonotonic(t *testing.T) {
 		t.Fatal(err)
 	}
 	host := &probeHost{}
-	define := []byte(`{"name":"primary","providerId":"postgresql","endpoint":"db.internal:5432","options":{"user":"app"},"credentialValue":"correct-horse"}`)
+	define := databaseInput("primary", "", map[string]any{"user": "app"}, "correct-horse")
 	if _, raw, err := service.handle(context.Background(), host, dbContext(), define, "define"); err != nil || !strings.Contains(string(raw), `"revision":1`) {
 		t.Fatalf("首次定义失败: raw=%s err=%v", raw, err)
 	}
@@ -365,7 +365,7 @@ func TestPendingCredentialActivationRecoversAfterRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	host := &probeHost{failActivations: 1}
-	if _, _, err := service.handle(context.Background(), host, dbContext(), []byte(`{"name":"primary","providerId":"postgresql","endpoint":"db.internal:5432","options":{"user":"app"},"credentialValue":"correct-horse"}`), "define"); err == nil {
+	if _, _, err := service.handle(context.Background(), host, dbContext(), databaseInput("primary", "", map[string]any{"user": "app"}, "correct-horse"), "define"); err == nil {
 		t.Fatal("第一次激活失败应返回错误并保留 pending")
 	}
 	reopened, err := newService(path)
@@ -380,6 +380,24 @@ func TestPendingCredentialActivationRecoversAfterRestart(t *testing.T) {
 func dbContext() *contractv1.CallContext {
 	return &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_USER, Id: "admin"}}
 }
+
+func databaseInput(name, database string, options map[string]any, credential string) []byte {
+	raw, _ := json.Marshal(defineInput{
+		Name: name,
+		Connection: databasev1.ConnectionCandidate{
+			ProviderID: "postgresql", Endpoint: "db.internal:5432", Database: database,
+			Options: mustJSON(options), Pool: databasev1.DefaultPoolPolicy(),
+		},
+		CredentialValue: credential,
+	})
+	return raw
+}
+
+func mustJSON(value any) json.RawMessage {
+	raw, _ := json.Marshal(value)
+	return raw
+}
+
 func TestConnectionDefinitionPersistsAndProbeHasNoSecret(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "connections.json")
 	s, err := newService(path)
@@ -387,7 +405,7 @@ func TestConnectionDefinitionPersistsAndProbeHasNoSecret(t *testing.T) {
 		t.Fatal(err)
 	}
 	host := &probeHost{}
-	_, response, err := s.handle(context.Background(), host, dbContext(), []byte(`{"name":"primary","providerId":"postgresql","endpoint":"db.internal:5432","database":"app","options":{"user":"app"},"credentialValue":"correct-horse"}`), "define")
+	_, response, err := s.handle(context.Background(), host, dbContext(), databaseInput("primary", "app", map[string]any{"user": "app"}, "correct-horse"), "define")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -54,13 +54,9 @@ func view(value definition, runtime string) definitionView {
 }
 
 type defineInput struct {
-	Name            string                 `json:"name"`
-	ProviderID      string                 `json:"providerId"`
-	Endpoint        string                 `json:"endpoint"`
-	Database        string                 `json:"database,omitempty"`
-	Options         json.RawMessage        `json:"options"`
-	Pool            *databasev1.PoolPolicy `json:"pool,omitempty"`
-	CredentialValue string                 `json:"credentialValue,omitempty"`
+	Name            string                         `json:"name"`
+	Connection      databasev1.ConnectionCandidate `json:"connection"`
+	CredentialValue string                         `json:"credentialValue,omitempty"`
 }
 
 type pendingDefinition struct {
@@ -196,8 +192,12 @@ func tenant(call *contractv1.CallContext) (string, error) {
 }
 
 func domainError(code string, err error) (*contractv1.CallResult, []byte, error) {
+	return domainErrorDetails(code, err, nil)
+}
+
+func domainErrorDetails(code string, err error, details map[string]string) (*contractv1.CallResult, []byte, error) {
 	return &contractv1.CallResult{
 		Status: contractv1.CallResult_STATUS_ERROR,
-		Error:  &contractv1.Error{Code: code, Message: err.Error()},
+		Error:  &contractv1.Error{Code: code, Message: err.Error(), Details: details},
 	}, nil, nil
 }

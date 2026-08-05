@@ -2,11 +2,13 @@ package platformcontrol
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
+	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
 )
 
@@ -42,8 +44,11 @@ func TestFileProfileStoreRejectsBroadPermissions(t *testing.T) {
 
 func testProfile(secretPath string, generation uint64) platformcontrolv1.Profile {
 	return platformcontrolv1.Profile{
-		SchemaVersion: 1, Generation: generation, ProviderID: "postgresql", Endpoint: "db.internal:5432",
-		Database: "vastplan_control", Schema: "platform", TLS: platformcontrolv1.TLS{Mode: "verify-full", ServerName: "db.internal"},
-		Username: "vastplan", SecretRef: platformcontrolv1.SecretRef{Kind: "owner-file", Path: secretPath + ".secret"}, ContractRange: "^1.0.0",
+		SchemaVersion: 1, Generation: generation,
+		Connection: databasev1.ConnectionCandidate{
+			ProviderID: "postgresql", Endpoint: "db.internal:5432", Database: "vastplan_control",
+			Options: json.RawMessage(`{"user":"vastplan","tlsMode":"verify-full","serverName":"db.internal"}`), Pool: databasev1.DefaultPoolPolicy(),
+		},
+		Schema: "platform", SecretRef: platformcontrolv1.SecretRef{Kind: "owner-file", Path: secretPath + ".secret"}, ContractRange: "^1.0.0",
 	}
 }

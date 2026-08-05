@@ -35,8 +35,8 @@ func (s *service) testConnection(ctx context.Context, host sdk.Host, call *contr
 	}
 	candidate := definition{
 		Name: input.Name, ResourceID: connectionResourceID(tenantID, input.Name), Revision: 1,
-		ProviderID: input.ProviderID, Endpoint: input.Endpoint, Database: input.Database,
-		Options: append(json.RawMessage(nil), input.Options...), Pool: pool, CredentialRef: ref,
+		ProviderID: input.Connection.ProviderID, Endpoint: input.Connection.Endpoint, Database: input.Connection.Database,
+		Options: append(json.RawMessage(nil), input.Connection.Options...), Pool: pool, CredentialRef: ref,
 	}
 	if err := databasev1.ValidateConnectionSpec(connectionSpec(candidate)); err != nil {
 		return databasev1.ProbeResult{}, err

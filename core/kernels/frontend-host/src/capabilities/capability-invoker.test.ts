@@ -18,10 +18,10 @@ describe("AddressingCapabilityInvoker", () => {
     expect(observed?.context).toMatchObject({ caller: { kind: 1, id: "alice" }, tenant_id: "acme", principal: { user_id: "alice", tenant_id: "acme", system_roles: ["portal.compose"] } });
   });
 
-  it("preserves only stable application error codes", async () => {
-    const addressing = { async invoke() { return { result: { status: 2, error: { code: "permission.denied", message: "denied", retryable: false } }, payload: new Uint8Array() }; } } satisfies Pick<NodeAddressingClient, "invoke">;
+  it("preserves stable application error codes and structured details", async () => {
+    const addressing = { async invoke() { return { result: { status: 2, error: { code: "permission.denied", message: "denied", retryable: false, details: { validationField: "profile.schema" } } }, payload: new Uint8Array() }; } } satisfies Pick<NodeAddressingClient, "invoke">;
     const invoker = new AddressingCapabilityInvoker(addressing);
-    await expect(invoker.invoke({ id: "alice", tenantId: "acme", roles: [] }, { capability: "demo", routingDomain: "platform" }, "read", new Uint8Array())).rejects.toEqual(expect.objectContaining<Partial<CapabilityApplicationError>>({ code: "permission.denied" }));
+    await expect(invoker.invoke({ id: "alice", tenantId: "acme", roles: [] }, { capability: "demo", routingDomain: "platform" }, "read", new Uint8Array())).rejects.toEqual(expect.objectContaining<Partial<CapabilityApplicationError>>({ code: "permission.denied", details: { validationField: "profile.schema" } }));
   });
 
   it("binds trusted Portal Activation and Generation metadata", async () => {

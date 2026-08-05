@@ -69,7 +69,7 @@ func TestPlatformControlKernelServicesRequireExactConnectionManager(t *testing.T
 	if result, raw, err := services[platformcontrolv1.KernelStatusService](context.Background(), trusted, []byte(`{}`)); err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK || !strings.Contains(string(raw), `"phase":"unconfigured"`) {
 		t.Fatalf("可信连接管理插件读取状态失败: result=%+v raw=%s err=%v", result, raw, err)
 	}
-	request := []byte(`{"profile":{"schemaVersion":1,"generation":1,"providerId":"postgresql","endpoint":"db:5432","database":"vastplan","schema":"platform","tls":{"mode":"verify-full","serverName":"db"},"username":"app","secretRef":{"kind":"systemd-credential","name":"platform-db"},"contractRange":"^1.0.0"},"expectedGeneration":0}`)
+	request := []byte(`{"profile":{"schemaVersion":1,"generation":1,"connection":{"providerId":"postgresql","endpoint":"db:5432","database":"vastplan","options":{"user":"app","tlsMode":"verify-full","serverName":"db"},"pool":{"maxIdle":8,"maxOpen":32,"maxLifetimeMs":1800000,"maxIdleTimeMs":300000,"acquireTimeoutMs":5000,"idlePoolTtlMs":900000}},"schema":"platform","secretRef":{"kind":"systemd-credential","name":"platform-db"},"contractRange":"^1.0.0"},"expectedGeneration":0}`)
 	if result, _, err := services[platformcontrolv1.KernelTestService](context.Background(), trusted, request); err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK || admin.tested != 1 {
 		t.Fatalf("可信连接管理插件测试候选失败: result=%+v admin=%+v err=%v", result, admin, err)
 	}

@@ -23,11 +23,24 @@ describe("database connections Workbench page", () => {
     if (action === undefined) throw new Error("平台控制数据库测试动作未注册");
     await page.form.runAction?.({ action, value, selected: [] }, new AbortController().signal);
     await page.form.submit({ value, selected: [] }, new AbortController().signal);
-    const expected = expect.objectContaining({ expectedGeneration: 0, secretMaterial: "one-time-password", profile: expect.objectContaining({ schemaVersion: 1, generation: 1, endpoint: "db.internal:5432" }) });
+    const expected = expect.objectContaining({ expectedGeneration: 0, secretMaterial: "one-time-password", profile: expect.objectContaining({ schemaVersion: 1, generation: 1, connection: expect.objectContaining({ endpoint: "db.internal:5432" }) }) });
     expect(testPlatformControl).toHaveBeenCalledWith(expected);
     expect(configurePlatformControl).toHaveBeenCalledWith(expected);
     expect(testPlatformControl).toHaveBeenCalledWith(expect.objectContaining({ profile: expect.not.objectContaining({ secretRef: expect.anything() }) }));
     expect(page.form.presentation?.fields).toContainEqual(expect.objectContaining({ pointer: "/password", widget: "secretMaterial" }));
+  });
+
+  it("maps trusted Platform Control validation details onto the form field", async () => {
+    const client = {
+      platformControlStatus: vi.fn(async () => ({ phase: "unconfigured" as const })),
+      testPlatformControl: vi.fn(async () => { throw new PlatformAdminError(422, "platform_control_invalid", { field: "profile.connection.endpoint", reason: "host_port_required" }); }),
+    } as unknown as PlatformAdminClient;
+    const page = createPlatformControlPage(client, "database", "/settings/databases/platform-control");
+    const loaded = await page.form.load?.([], new AbortController().signal);
+    const action = page.form.workflow.actions?.[0];
+    if (action === undefined) throw new Error("平台控制数据库测试动作未注册");
+    const result = await page.form.runAction?.({ action, value: { ...loaded, host: "db", username: "app", serverName: "db", password: "secret" }, selected: [] }, new AbortController().signal);
+    expect(result?.fieldErrors).toMatchObject({ "/host": expect.objectContaining({ key: "platformControl.validation.profile.connection.endpoint.host_port_required" }) });
   });
 
   it("requires one-time material on create but never loads it for edit", async () => {
@@ -76,9 +89,9 @@ describe("database connections Workbench page", () => {
     expect(loaded?.options).not.toHaveProperty("password");
     expect(loaded).toMatchObject({ host: "db", port: 5432 });
     await create?.submit({ value: { name: "main", providerId: "postgresql", host: "db", port: 5432, options: { user: "app", password: "one-time", network: "tcp", readTimeoutMs: 500 } }, selected: [] }, new AbortController().signal);
-    expect(putDatabaseConnection).toHaveBeenCalledWith("main", expect.objectContaining({ endpoint: "db:5432", options: { user: "app" }, credentialValue: "one-time" }));
+    expect(putDatabaseConnection).toHaveBeenCalledWith("main", expect.objectContaining({ connection: expect.objectContaining({ endpoint: "db:5432", options: { user: "app" } }), credentialValue: "one-time" }));
     const outcome = await create?.runAction?.({ action: testAction, value: { name: "main", providerId: "postgresql", host: "db", port: 5432, options: { user: "app", password: "one-time" } }, selected: [] }, new AbortController().signal);
-    expect(testDatabaseConnection).toHaveBeenCalledWith("main", expect.objectContaining({ endpoint: "db:5432", options: { user: "app" }, credentialValue: "one-time" }));
+    expect(testDatabaseConnection).toHaveBeenCalledWith("main", expect.objectContaining({ connection: expect.objectContaining({ endpoint: "db:5432", options: { user: "app" } }), credentialValue: "one-time" }));
     expect(outcome?.notify).toMatchObject({ kind: "success", title: expect.objectContaining({ key: "test.success" }), content: expect.objectContaining({ values: { provider: "PostgreSQL", latency: 12 } }) });
   });
 
@@ -128,6 +141,6 @@ describe("database connections Workbench page", () => {
     const page = createDatabaseConnectionsPage(client, "database", "/settings/databases", message("test", "title", "Databases"));
     const create = page.forms?.find((form) => form.id === "create");
     await create?.submit({ value: { name: "local", providerId: "mysql", socketPath: "/var/run/mysql.sock", options: { user: "app", password: "one-time", network: "unix" } }, selected: [] }, new AbortController().signal);
-    expect(putDatabaseConnection).toHaveBeenCalledWith("local", expect.objectContaining({ endpoint: "/var/run/mysql.sock" }));
+    expect(putDatabaseConnection).toHaveBeenCalledWith("local", expect.objectContaining({ connection: expect.objectContaining({ endpoint: "/var/run/mysql.sock" }) }));
   });
 });

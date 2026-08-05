@@ -1,7 +1,7 @@
 import {
   type PlatformAdminClient,
+  PlatformAdminError,
   type PlatformControlChangeRequest,
-  type PlatformControlProfile,
   type PlatformControlStatus,
 } from "@vastplan/platform-admin";
 import {
@@ -123,11 +123,21 @@ export function createPlatformControlPage(client: PlatformAdminClient, serviceID
       },
       async runAction({ action, value }) {
         if (action.id !== "test") return;
-        await client.testPlatformControl(toChangeRequest(value as PlatformControlForm));
+        try {
+          await client.testPlatformControl(toChangeRequest(value as PlatformControlForm));
+        } catch (error) {
+          if (error instanceof PlatformAdminError && error.validation !== undefined) return { fieldErrors: platformControlValidationErrors(error.validation) };
+          throw error;
+        }
         return { notify: { title: message(namespace, "platformControl.notice.testSucceeded", "平台控制数据库连接测试成功"), kind: "success" } };
       },
       async submit({ value }) {
-        await client.configurePlatformControl(toChangeRequest(value as PlatformControlForm));
+        try {
+          await client.configurePlatformControl(toChangeRequest(value as PlatformControlForm));
+        } catch (error) {
+          if (error instanceof PlatformAdminError && error.validation !== undefined) return { fieldErrors: platformControlValidationErrors(error.validation) };
+          throw error;
+        }
       },
     },
   });
@@ -148,18 +158,19 @@ function statusToForm(status: PlatformControlStatus): PlatformControlForm {
       contractRange: "^1.0.0",
     };
   }
-  const endpoint = connectionEndpointFields(profile.endpoint, profile.providerId);
+  const endpoint = connectionEndpointFields(profile.connection.endpoint, profile.connection.providerId);
+  const options = profile.connection.options;
   return {
     phase: status.phase,
     currentGeneration: status.generation ?? profile.generation,
-    providerId: profile.providerId,
+    providerId: profile.connection.providerId,
     host: endpoint.host,
     port: endpoint.port,
-    database: profile.database,
+    database: profile.connection.database,
     schema: profile.schema,
-    username: profile.username,
-    tlsMode: profile.tls.mode,
-    serverName: profile.tls.serverName,
+    username: text(options.user),
+    tlsMode: text(options.tlsMode),
+    serverName: text(options.serverName),
     secretMode: "external",
     externalKind: profile.secretRef.kind,
     externalName: profile.secretRef.kind === "systemd-credential" ? profile.secretRef.name : undefined,
@@ -176,11 +187,11 @@ function toChangeRequest(value: PlatformControlForm): PlatformControlChangeReque
   const database = text(value.database);
   const schemaName = text(value.schema);
   const username = text(value.username);
-  const tlsMode = text(value.tlsMode) as PlatformControlProfile["tls"]["mode"] | undefined;
+  const tlsMode = text(value.tlsMode) as "disable" | "verify-ca" | "verify-full" | undefined;
   const contractRange = text(value.contractRange);
   const secretMode = text(value.secretMode);
   if ((providerValue !== "postgresql" && providerValue !== "mysql") || database === undefined || schemaName === undefined || username === undefined || tlsMode === undefined || contractRange === undefined) throw new Error("平台控制数据库配置不完整");
-  const providerId: PlatformControlProfile["providerId"] = providerValue;
+  const providerId = providerValue;
   const externalKind = text(value.externalKind);
   const secretRef = externalKind === "systemd-credential"
     ? { kind: "systemd-credential" as const, name: text(value.externalName) ?? "" }
@@ -190,12 +201,19 @@ function toChangeRequest(value: PlatformControlForm): PlatformControlChangeReque
     profile: {
       schemaVersion: 1,
       generation: expectedGeneration + 1,
-      providerId,
-      endpoint,
-      database,
+      connection: {
+        providerId,
+        endpoint,
+        database,
+        options: {
+          user: username,
+          tlsMode,
+          connectTimeoutMs: 10000,
+          ...(tlsMode === "verify-full" ? { serverName: text(value.serverName) ?? "" } : {}),
+        },
+        pool: { minIdle: 1, maxIdle: 4, maxOpen: 16, maxLifetimeMs: 1800000, maxIdleTimeMs: 300000, acquireTimeoutMs: 10000, idlePoolTtlMs: 600000 },
+      },
       schema: schemaName,
-      tls: { mode: tlsMode, ...(tlsMode === "verify-full" ? { serverName: text(value.serverName) ?? "" } : {}) },
-      username,
       ...(secretMode === "external" ? { secretRef } : {}),
       contractRange,
     },
@@ -218,6 +236,38 @@ function validatePlatformControlForm(value: PlatformControlForm): WorkbenchFormF
     ...(secretMode === "external" && externalKind === "systemd-credential" && text(value.externalName) === undefined ? { "/externalName": message(namespace, "platformControl.error.secretNameRequired", "请输入 systemd Credential 名称") } : {}),
     ...(secretMode === "external" && externalKind === "owner-file" && (text(value.externalPath)?.startsWith("/") !== true) ? { "/externalPath": message(namespace, "platformControl.error.secretPathRequired", "请输入受保护密码文件的绝对路径") } : {}),
   };
+}
+
+function platformControlValidationErrors(validation: Readonly<{ field: string; reason: string }>): WorkbenchFormFieldErrors {
+  const pointer = ({
+    connection: "/providerId",
+    "connection.pool": "/providerId",
+    "connection.options": "/providerId",
+    "connection.endpoint": "/host",
+    "profile.connection.endpoint": "/host",
+    "profile.connection.database": "/database",
+    "profile.connection.options.user": "/username",
+    "profile.connection.options.tlsMode": "/tlsMode",
+    "profile.connection.options.serverName": "/serverName",
+    "profile.schema": "/schema",
+    "profile.contractRange": "/contractRange",
+    "profile.secretRef.kind": "/secretMode",
+    "profile.secretRef.name": "/externalName",
+    "profile.secretRef.path": "/externalPath",
+    secretMaterial: "/password",
+  } as Record<string, string>)[validation.field];
+  if (pointer === undefined) return {};
+  return { [pointer]: message(namespace, `platformControl.validation.${validation.field}.${validation.reason}`, platformControlValidationMessage(validation)) };
+}
+
+function platformControlValidationMessage(validation: Readonly<{ field: string; reason: string }>): string {
+  if (validation.field.endsWith("endpoint")) return "数据库地址必须包含有效主机和端口";
+  if (validation.field.endsWith("database")) return "请输入有效数据库名称";
+  if (validation.field.endsWith("user")) return "请输入有效数据库用户名";
+  if (validation.field.endsWith("serverName")) return "完整校验模式必须填写证书校验服务器名称";
+  if (validation.field === "profile.schema") return "请输入有效的专用 Schema 名称";
+  if (validation.field === "secretMaterial") return "密码格式无效，请重新输入";
+  return "此字段配置无效，请检查后重试";
 }
 
 function text(value: unknown): string | undefined { return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined; }

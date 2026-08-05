@@ -352,7 +352,8 @@ export class PlatformAdminClient {
     const value = await response.json();
     if (!response.ok) {
       const code = typeof value === "object" && value !== null && "error" in value && typeof value.error === "string" ? value.error : "request_rejected";
-      throw new PlatformAdminError(response.status, code);
+      const validation = parseValidation(value);
+      throw new PlatformAdminError(response.status, code, validation);
     }
     return value as T;
   }
@@ -378,10 +379,18 @@ export function createBrowserPlatformAdminClient(portalID: string, serviceID: st
 }
 
 export class PlatformAdminError extends Error {
-  public constructor(public readonly status: number, public readonly code: string) {
+  public constructor(public readonly status: number, public readonly code: string, public readonly validation?: Readonly<{ field: string; reason: string }>) {
     super(platformAdminErrorMessage(code));
     this.name = "PlatformAdminError";
   }
+}
+
+function parseValidation(value: unknown): Readonly<{ field: string; reason: string }> | undefined {
+  if (typeof value !== "object" || value === null || !("validation" in value)) return undefined;
+  const validation = (value as { validation?: unknown }).validation;
+  if (typeof validation !== "object" || validation === null) return undefined;
+  const record = validation as Record<string, unknown>;
+  return typeof record.field === "string" && typeof record.reason === "string" ? { field: record.field, reason: record.reason } : undefined;
 }
 
 function platformAdminErrorMessage(code: string): string {

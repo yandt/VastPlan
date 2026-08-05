@@ -2,11 +2,13 @@
 // bounded state projected to the Seed recovery/configuration UI.
 package platformcontrolv1
 
+import databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
+
 const (
 	SchemaURL                 = "https://schemas.cdsoft.com.cn/vastplan/platformcontrol/v1/vastplan.platform-control.schema.json"
 	Version                   = 1
 	BootstrapCapability       = "foundation.state.shared.sql.bootstrap"
-	BootstrapContractVersion  = "1.0.0"
+	BootstrapContractVersion  = "2.0.0"
 	RuntimeLogicalService     = "foundation.data.relational.runtime"
 	RuntimeRoutingDomain      = "platform"
 	OperationTest             = "test"
@@ -29,22 +31,13 @@ type SecretRef struct {
 	Path string `json:"path,omitempty"`
 }
 
-type TLS struct {
-	Mode       string `json:"mode"`
-	ServerName string `json:"serverName,omitempty"`
-}
-
 type Profile struct {
-	SchemaVersion int       `json:"schemaVersion"`
-	Generation    uint64    `json:"generation"`
-	ProviderID    string    `json:"providerId"`
-	Endpoint      string    `json:"endpoint"`
-	Database      string    `json:"database"`
-	Schema        string    `json:"schema"`
-	TLS           TLS       `json:"tls"`
-	Username      string    `json:"username"`
-	SecretRef     SecretRef `json:"secretRef"`
-	ContractRange string    `json:"contractRange"`
+	SchemaVersion int                            `json:"schemaVersion"`
+	Generation    uint64                         `json:"generation"`
+	Connection    databasev1.ConnectionCandidate `json:"connection"`
+	Schema        string                         `json:"schema"`
+	SecretRef     SecretRef                      `json:"secretRef"`
+	ContractRange string                         `json:"contractRange"`
 }
 
 type Phase string

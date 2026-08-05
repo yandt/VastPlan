@@ -6,9 +6,11 @@
 
 当前制品版本：`0.15.0`
 
-当前公开 Capability 契约：`foundation.data.relational.runtime@1.2.0`
+当前公开 Capability 契约：`foundation.data.relational.runtime@1.3.0`
 
-宿主内部 Capability：`foundation.state.shared.sql.bootstrap@1.0.0`、`foundation.state.shared.sql@1.0.0`。两者只服务 Platform Control 两阶段启动，不作为普通插件可选择的数据库连接暴露。
+宿主内部 Capability：`foundation.state.shared.sql.bootstrap@2.0.0`、`foundation.state.shared.sql@1.0.0`。两者只服务 Platform Control 两阶段启动，不作为普通插件可选择的数据库连接暴露。
+
+1.3.0 新增唯一的非敏感 `DatabaseConnectionCandidate`。普通托管连接与 Platform Control Bootstrap 都以该对象传递 Provider、endpoint、database、options 和池策略；`ConnectionSpec` 只在进入 Runtime 数据面时再附加可信 `ConnectionRef` 与 `ManagedCredentialRef`。候选不拥有密码、名称、generation 或持久化语义，避免 Bootstrap 与普通 Connection Manager 互相形成启动依赖。
 
 ## 职责边界
 

@@ -30,8 +30,8 @@ func (s *service) define(ctx context.Context, host sdk.Host, call *contractv1.Ca
 	}
 	makeDesired := func(ref pluginconfig.ManagedCredentialRef) (definition, error) {
 		desired := definition{
-			Name: input.Name, ResourceID: resourceID, Revision: revision, ProviderID: input.ProviderID,
-			Endpoint: input.Endpoint, Database: input.Database, Options: append(json.RawMessage(nil), input.Options...),
+			Name: input.Name, ResourceID: resourceID, Revision: revision, ProviderID: input.Connection.ProviderID,
+			Endpoint: input.Connection.Endpoint, Database: input.Connection.Database, Options: append(json.RawMessage(nil), input.Connection.Options...),
 			Pool: pool, CredentialRef: ref,
 		}
 		if err := databasev1.ValidateConnectionSpec(connectionSpec(desired)); err != nil {
@@ -140,12 +140,11 @@ func (s *service) define(ctx context.Context, host sdk.Host, call *contractv1.Ca
 }
 
 func validateDefinitionInput(input defineInput) (databasev1.PoolPolicy, error) {
-	if strings.TrimSpace(input.Name) == "" || len(input.Name) > 160 || strings.TrimSpace(input.ProviderID) == "" || len(input.ProviderID) > 80 || strings.TrimSpace(input.Endpoint) == "" || len(input.Endpoint) > 2048 || len(input.Database) > 256 || len(input.CredentialValue) > 4<<20 || len(input.Options) == 0 {
+	if strings.TrimSpace(input.Name) == "" || len(input.Name) > 160 || len(input.CredentialValue) > 4<<20 {
 		return databasev1.PoolPolicy{}, errors.New("数据库连接字段为空或超过长度上限")
 	}
-	pool := defaultPoolPolicy()
-	if input.Pool != nil {
-		pool = *input.Pool
+	if err := databasev1.ValidateConnectionCandidate(input.Connection); err != nil {
+		return databasev1.PoolPolicy{}, err
 	}
-	return pool, nil
+	return input.Connection.Pool, nil
 }

@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.data.relational.connection-manager",
   "name": "VastPlan 数据库连接服务",
-  "version": "0.15.2",
+  "version": "0.16.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -174,13 +174,23 @@
         "failurePolicy": "degrade",
         "logicalService": "platform.credentials",
         "routingDomain": "platform"
+      },
+      {
+        "capability": "foundation.data.relational.runtime",
+        "contractRange": "^1.3.0",
+        "scope": "remote",
+        "kind": "lazy",
+        "ready": "readiness",
+        "failurePolicy": "degrade",
+        "logicalService": "foundation.data.relational.runtime",
+        "routingDomain": "platform"
       }
     ],
     "provides": [
       {
         "extensionPoint": "tool.package",
         "capability": "platform.database",
-        "contractVersion": "1.1.0",
+        "contractVersion": "1.2.0",
         "visibility": "cluster",
         "routing": "leader",
         "routingDomain": "platform"
@@ -233,19 +243,7 @@
                   "name": {
                     "type": "string"
                   },
-                  "providerId": {
-                    "type": "string"
-                  },
-                  "endpoint": {
-                    "type": "string"
-                  },
-                  "database": {
-                    "type": "string"
-                  },
-                  "options": {
-                    "type": "object"
-                  },
-                  "pool": {
+                  "connection": {
                     "type": "object"
                   },
                   "credentialValue": {
@@ -254,9 +252,7 @@
                 },
                 "required": [
                   "name",
-                  "providerId",
-                  "endpoint",
-                  "options"
+                  "connection"
                 ]
               }
             },
@@ -323,19 +319,7 @@
                   "name": {
                     "type": "string"
                   },
-                  "providerId": {
-                    "type": "string"
-                  },
-                  "endpoint": {
-                    "type": "string"
-                  },
-                  "database": {
-                    "type": "string"
-                  },
-                  "options": {
-                    "type": "object"
-                  },
-                  "pool": {
+                  "connection": {
                     "type": "object"
                   },
                   "credentialValue": {
@@ -344,9 +328,7 @@
                 },
                 "required": [
                   "name",
-                  "providerId",
-                  "endpoint",
-                  "options"
+                  "connection"
                 ]
               }
             },

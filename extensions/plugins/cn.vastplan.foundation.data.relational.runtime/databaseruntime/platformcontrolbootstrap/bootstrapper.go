@@ -75,29 +75,29 @@ func (b *Bootstrapper) openPool(ctx context.Context, profile platformcontrolv1.P
 	if err := platformcontrolv1.ValidateProfile(profile); err != nil || secret == nil {
 		return nil, nil, errors.New("Platform Control Bootstrap 输入无效")
 	}
-	if profile.ProviderID == "mysql" && profile.Schema != profile.Database {
+	if profile.Connection.ProviderID == "mysql" && profile.Schema != profile.Connection.Database {
 		return nil, nil, errors.New("MySQL Platform Control schema 必须等于连接 database")
 	}
-	options := map[string]any{
-		"user": profile.Username, "tlsMode": profile.TLS.Mode, "serverName": profile.TLS.ServerName,
-		"connectTimeoutMs": 10_000,
+	var options map[string]any
+	if err := json.Unmarshal(profile.Connection.Options, &options); err != nil || options == nil {
+		return nil, nil, errors.New("Platform Control Provider options 无效")
 	}
-	if profile.ProviderID == "postgresql" {
+	if profile.Connection.ProviderID == "postgresql" {
 		options["applicationName"] = "vastplan-platform-control"
 		options["searchPath"] = profile.Schema
 	}
 	raw, _ := json.Marshal(options)
 	spec := databasev1.ConnectionSpec{
 		Ref:        databasev1.ConnectionRef{ResourceID: "platform.control", Revision: profile.Generation},
-		ProviderID: profile.ProviderID, Endpoint: profile.Endpoint, Database: profile.Database, Options: raw,
+		ProviderID: profile.Connection.ProviderID, Endpoint: profile.Connection.Endpoint, Database: profile.Connection.Database, Options: raw,
 		Credentials: commonv1.ManagedCredentialRef{Handle: "credential://managed/platform-control-bootstrap", Scope: "service", Owner: databaseruntime.PluginID, Purpose: databasev1.CredentialPurpose, Version: int64(profile.Generation)},
-		Pool:        databasev1.PoolPolicy{MinIdle: 1, MaxIdle: 4, MaxOpen: 16, MaxLifetimeMS: 30 * 60_000, MaxIdleTimeMS: 5 * 60_000, AcquireTimeoutMS: 10_000, IdlePoolTTLMS: 10 * 60_000},
+		Pool:        profile.Connection.Pool,
 	}
 	pool, err := b.registry.OpenPool(ctx, spec, secretMaterialSource{source: secret})
 	if err != nil {
 		return nil, nil, err
 	}
-	dialect, err := recordstore.DialectFor(profile.ProviderID)
+	dialect, err := recordstore.DialectFor(profile.Connection.ProviderID)
 	if err != nil {
 		_ = pool.Close()
 		return nil, nil, err

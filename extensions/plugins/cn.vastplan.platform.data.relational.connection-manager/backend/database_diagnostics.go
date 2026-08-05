@@ -35,6 +35,9 @@ var databaseDiagnostics = map[string]databaseDiagnostic{
 // provider message. That message can contain endpoint, account or TLS details
 // and remains available only as a sanitized Runtime log event.
 func databaseTestError(err error) (*contractv1.CallResult, []byte, error) {
+	if issue, ok := databasev1.ValidationIssueFrom(err); ok {
+		return domainErrorDetails("platform.database.invalid", err, validationDetails(issue.Field, issue.Reason))
+	}
 	var runtimeErr *runtimeCallError
 	if !errors.As(err, &runtimeErr) {
 		// Credential lifecycle and local persistence failures are not database

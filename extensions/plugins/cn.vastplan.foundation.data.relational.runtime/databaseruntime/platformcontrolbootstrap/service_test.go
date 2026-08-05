@@ -34,11 +34,7 @@ func TestServiceAllowsOnlyTrustedHostAndSwitchesGeneration(t *testing.T) {
 	if err := os.WriteFile(secretPath, []byte("secret"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	profile := platformcontrolv1.Profile{
-		SchemaVersion: 1, Generation: 1, ProviderID: "mysql", Endpoint: "db.internal:3306", Database: "platform", Schema: "platform",
-		TLS: platformcontrolv1.TLS{Mode: "verify-ca"}, Username: "vastplan",
-		SecretRef: platformcontrolv1.SecretRef{Kind: "owner-file", Path: secretPath}, ContractRange: "^1.0.0",
-	}
+	profile := bootstrapProfile("mysql", "db.internal:3306", "platform", "platform", "vastplan", "verify-ca", secretPath)
 	payload, _ := json.Marshal(profile)
 	handler := service.Contribution().Handlers[platformcontrolv1.OperationInitialize]
 	untrusted := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "example"}}
@@ -90,7 +86,7 @@ func TestServiceTestDoesNotBindStore(t *testing.T) {
 	service, _ := NewService(bootstrapper, binding, recordBinding, func(context.Context, databaseruntime.PlatformRecordStore) error { return nil }, "")
 	secretPath := filepath.Join(t.TempDir(), "password")
 	_ = os.WriteFile(secretPath, []byte("secret"), 0o600)
-	profile := platformcontrolv1.Profile{SchemaVersion: 1, Generation: 1, ProviderID: "mysql", Endpoint: "db.internal:3306", Database: "platform", Schema: "platform", TLS: platformcontrolv1.TLS{Mode: "verify-ca"}, Username: "vastplan", SecretRef: platformcontrolv1.SecretRef{Kind: "owner-file", Path: secretPath}, ContractRange: "^1.0.0"}
+	profile := bootstrapProfile("mysql", "db.internal:3306", "platform", "platform", "vastplan", "verify-ca", secretPath)
 	payload, _ := json.Marshal(profile)
 	trusted := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: platformcontrolv1.TrustedBootstrapSystemID}}
 	result, _, err := service.Contribution().Handlers[platformcontrolv1.OperationTest](context.Background(), nil, trusted, payload)
@@ -120,7 +116,7 @@ func TestServiceDoesNotBindCandidateWhenPlatformModelPreparationFails(t *testing
 	}, "")
 	secretPath := filepath.Join(t.TempDir(), "password")
 	_ = os.WriteFile(secretPath, []byte("secret"), 0o600)
-	profile := platformcontrolv1.Profile{SchemaVersion: 1, Generation: 1, ProviderID: "mysql", Endpoint: "db.internal:3306", Database: "platform", Schema: "platform", TLS: platformcontrolv1.TLS{Mode: "verify-ca"}, Username: "vastplan", SecretRef: platformcontrolv1.SecretRef{Kind: "owner-file", Path: secretPath}, ContractRange: "^1.0.0"}
+	profile := bootstrapProfile("mysql", "db.internal:3306", "platform", "platform", "vastplan", "verify-ca", secretPath)
 	payload, _ := json.Marshal(profile)
 	trusted := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: platformcontrolv1.TrustedBootstrapSystemID}}
 	result, _, err := service.Contribution().Handlers[platformcontrolv1.OperationInitialize](context.Background(), nil, trusted, payload)

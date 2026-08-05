@@ -17,19 +17,12 @@
     },
     "profile": {
       "type": "object", "additionalProperties": false,
-      "required": ["schemaVersion", "generation", "providerId", "endpoint", "database", "schema", "tls", "username", "secretRef", "contractRange"],
+      "required": ["schemaVersion", "generation", "connection", "schema", "secretRef", "contractRange"],
       "properties": {
         "schemaVersion": { "const": 1 },
         "generation": { "type": "integer", "minimum": 1 },
-        "providerId": { "enum": ["postgresql", "mysql"] },
-        "endpoint": { "type": "string", "minLength": 3, "maxLength": 320 },
-        "database": { "$ref": "#/$defs/text" },
+        "connection": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/database/v1/vastplan.database-runtime.schema.json#/$defs/connectionCandidate" },
         "schema": { "$ref": "#/$defs/text" },
-        "tls": {
-          "type": "object", "additionalProperties": false, "required": ["mode"],
-          "properties": { "mode": { "enum": ["disable", "verify-ca", "verify-full"] }, "serverName": { "type": "string", "maxLength": 253 } }
-        },
-        "username": { "$ref": "#/$defs/text" },
         "secretRef": { "$ref": "#/$defs/secretRef" },
         "contractRange": { "type": "string", "minLength": 1, "maxLength": 120 }
       }

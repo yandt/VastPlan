@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
 	platformcontrol "cdsoft.com.cn/VastPlan/extensions/libraries/go/platformcontrol"
@@ -59,12 +60,18 @@ func authenticatedPlatformControlManager(call *contractv1.CallContext) bool {
 		call.GetCaller().GetId() == databaseConnectionManagerID
 }
 
-func platformControlFailure(status platformcontrolv1.Status, _ error) (*contractv1.CallResult, []byte, error) {
+func platformControlFailure(status platformcontrolv1.Status, err error) (*contractv1.CallResult, []byte, error) {
 	code := status.Code
 	if code == "" {
 		code = platformcontrolv1.ErrorUnavailable
 	}
+	details := map[string]string(nil)
+	if issue, ok := platformcontrolv1.ValidationIssueFrom(err); ok {
+		details = map[string]string{"validationField": issue.Field, "validationReason": issue.Reason}
+	} else if issue, ok := databasev1.ValidationIssueFrom(err); ok {
+		details = map[string]string{"validationField": issue.Field, "validationReason": issue.Reason}
+	}
 	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{
-		Code: code, Message: "Platform Control 请求失败", Retryable: code == platformcontrolv1.ErrorUnavailable,
+		Code: code, Message: "Platform Control 请求失败", Retryable: code == platformcontrolv1.ErrorUnavailable, Details: details,
 	}}, nil, nil
 }

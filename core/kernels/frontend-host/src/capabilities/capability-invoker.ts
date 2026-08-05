@@ -14,7 +14,7 @@ export interface TrustedCapabilityInvoker {
 }
 
 export class CapabilityApplicationError extends Error {
-  public constructor(public readonly code: string, message: string) {
+  public constructor(public readonly code: string, message: string, public readonly details: Readonly<Record<string, string>> = {}) {
     super(message);
     this.name = "CapabilityApplicationError";
   }
@@ -37,7 +37,7 @@ export class AddressingCapabilityInvoker implements TrustedCapabilityInvoker {
       } }),
       trace: { trace_id: randomBytes(16).toString("hex"), span_id: randomBytes(8).toString("hex") },
     }, payload, signal);
-    if (response.result.status !== 1) throw new CapabilityApplicationError(response.result.error?.code ?? "capability.failed", response.result.error?.message ?? "Capability 调用失败");
+    if (response.result.status !== 1) throw new CapabilityApplicationError(response.result.error?.code ?? "capability.failed", response.result.error?.message ?? "Capability 调用失败", response.result.error?.details ?? {});
     return response.payload;
   }
 }

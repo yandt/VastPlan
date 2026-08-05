@@ -73,6 +73,18 @@
       },
       "required": ["maxIdle", "maxOpen", "maxLifetimeMs", "maxIdleTimeMs", "acquireTimeoutMs", "idlePoolTtlMs"]
     },
+    "connectionCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "providerId": { "$ref": "#/$defs/providerId" },
+        "endpoint": { "type": "string", "minLength": 1, "maxLength": 2048 },
+        "database": { "type": "string", "maxLength": 256 },
+        "options": { "type": "object", "maxProperties": 128 },
+        "pool": { "$ref": "#/$defs/poolPolicy" }
+      },
+      "required": ["providerId", "endpoint", "options", "pool"]
+    },
     "connectionSpec": {
       "type": "object",
       "additionalProperties": false,

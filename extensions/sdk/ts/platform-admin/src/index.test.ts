@@ -1,6 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import { ManagementAPIClient, PlatformAdminClient, PlatformAdminError, type PlatformControlChangeRequest, type PlatformFetch } from "./index";
 
+const connectionRequest = (credentialValue?: string) => ({
+  connection: {
+    providerId: "postgresql", endpoint: "db:5432", database: "vastplan", options: { user: "app", tlsMode: "verify-full", serverName: "db" },
+    pool: { minIdle: 0, maxIdle: 8, maxOpen: 32, maxLifetimeMs: 1800000, maxIdleTimeMs: 300000, acquireTimeoutMs: 5000, idlePoolTtlMs: 900000 },
+  },
+  ...(credentialValue === undefined ? {} : { credentialValue }),
+});
+
 describe("PlatformAdminClient", () => {
   it("obtains CSRF before a write and never places credential plaintext in the URL", async () => {
     const calls: Array<{ path: string; body?: string }> = [];
@@ -72,10 +80,10 @@ describe("PlatformAdminClient", () => {
       calls.push({ path, method: init?.method, body: init?.body });
       return { ok: true, status: 200, json: async () => path === "/v1/csrf" ? { token: "safe" } : { ready: true, providerId: "postgresql", latencyMs: 8 } };
     }, "operations", "database");
-    await client.testDatabaseConnection("main", { providerId: "postgresql", endpoint: "db:5432", options: { user: "app" }, credentialValue: "one-time" });
+    await client.testDatabaseConnection("main", connectionRequest("one-time"));
     expect(calls).toEqual([
       { path: "/v1/csrf", method: "GET", body: undefined },
-      { path: "/v1/portals/operations/platform/services/database/database-connections/main/test", method: "POST", body: JSON.stringify({ providerId: "postgresql", endpoint: "db:5432", options: { user: "app" }, credentialValue: "one-time" }) },
+      { path: "/v1/portals/operations/platform/services/database/database-connections/main/test", method: "POST", body: JSON.stringify(connectionRequest("one-time")) },
     ]);
     expect(calls[1]!.path).not.toContain("one-time");
   });
@@ -86,7 +94,7 @@ describe("PlatformAdminClient", () => {
       calls.push({ path, method: init?.method, body: init?.body });
       return { ok: true, status: 200, json: async () => path === "/v1/csrf" ? { token: "safe" } : { phase: "unconfigured" } };
     }, "operations", "database");
-    const request: PlatformControlChangeRequest = { profile: { schemaVersion: 1, generation: 1, providerId: "postgresql", endpoint: "db:5432", database: "vastplan", schema: "platform", tls: { mode: "verify-full", serverName: "db" }, username: "app", contractRange: "^1.0.0" }, expectedGeneration: 0, secretMaterial: "one-time-password" };
+    const request: PlatformControlChangeRequest = { profile: { schemaVersion: 1, generation: 1, connection: connectionRequest().connection, schema: "platform", contractRange: "^1.0.0" }, expectedGeneration: 0, secretMaterial: "one-time-password" };
     await client.platformControlStatus();
     await client.testPlatformControl(request);
     await client.configurePlatformControl(request);
@@ -102,15 +110,23 @@ describe("PlatformAdminClient", () => {
     const client = new PlatformAdminClient(async (path) => path === "/v1/csrf"
       ? { ok: true, status: 200, json: async () => ({ token: "safe" }) }
       : { ok: false, status: 422, json: async () => ({ error: "database_connection_invalid" }) }, "operations", "database");
-    await expect(client.testDatabaseConnection("main", { providerId: "postgresql", endpoint: "db:5432", options: { user: "app" }, credentialValue: "one-time" }))
+    await expect(client.testDatabaseConnection("main", connectionRequest("one-time")))
       .rejects.toMatchObject({ code: "database_connection_invalid", message: "数据库连接配置无效，请检查地址、端口、用户名和传输加密设置。" });
+  });
+
+  it("preserves safe field-level validation without exposing server detail", async () => {
+    const client = new PlatformAdminClient(async (path) => path === "/v1/csrf"
+      ? { ok: true, status: 200, json: async () => ({ token: "safe" }) }
+      : { ok: false, status: 422, json: async () => ({ error: "platform_control_invalid", validation: { field: "profile.connection.endpoint", reason: "host_port_required" }, internalPath: "/secret" }) }, "operations", "database");
+    await expect(client.testPlatformControl({ profile: { schemaVersion: 1, generation: 1, connection: connectionRequest().connection, schema: "platform", contractRange: "^1.0.0" }, expectedGeneration: 0, secretMaterial: "one-time" }))
+      .rejects.toMatchObject({ code: "platform_control_invalid", validation: { field: "profile.connection.endpoint", reason: "host_port_required" } });
   });
 
   it("gives safe database diagnoses a specific client message", async () => {
     const client = new PlatformAdminClient(async (path) => path === "/v1/csrf"
       ? { ok: true, status: 200, json: async () => ({ token: "safe" }) }
       : { ok: false, status: 422, json: async () => ({ error: "database_authentication_failed" }) }, "operations", "database");
-    await expect(client.testDatabaseConnection("main", { providerId: "postgresql", endpoint: "db:5432", options: { user: "app" }, credentialValue: "one-time" }))
+    await expect(client.testDatabaseConnection("main", connectionRequest("one-time")))
       .rejects.toMatchObject({ code: "database_authentication_failed", message: "数据库用户名或密码验证失败。" });
   });
 
