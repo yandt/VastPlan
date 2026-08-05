@@ -25,6 +25,7 @@ type providerOptions struct {
 	ServerName       string `json:"serverName,omitempty"`
 	ConnectTimeoutMS int64  `json:"connectTimeoutMs,omitempty"`
 	ApplicationName  string `json:"applicationName,omitempty"`
+	SearchPath       string `json:"searchPath,omitempty"`
 	Network          string `json:"network,omitempty"`
 	ReadTimeoutMS    int64  `json:"readTimeoutMs,omitempty"`
 	WriteTimeoutMS   int64  `json:"writeTimeoutMs,omitempty"`
@@ -46,7 +47,7 @@ func decodeProviderOptions(raw json.RawMessage, target *providerOptions) error {
 	}
 	if target.User != strings.TrimSpace(target.User) || target.TLSMode != strings.TrimSpace(target.TLSMode) ||
 		target.ServerName != strings.TrimSpace(target.ServerName) || target.ApplicationName != strings.TrimSpace(target.ApplicationName) ||
-		target.Network != strings.TrimSpace(target.Network) {
+		target.SearchPath != strings.TrimSpace(target.SearchPath) || target.Network != strings.TrimSpace(target.Network) {
 		return errors.New("Provider options 字符串不得包含首尾空白")
 	}
 	if target.User == "" || len(target.User) > 128 || strings.IndexFunc(target.User, invalidControlRune) >= 0 {
@@ -76,6 +77,10 @@ func decodeProviderOptions(raw json.RawMessage, target *providerOptions) error {
 	}
 	if len(target.ApplicationName) > 128 || strings.IndexFunc(target.ApplicationName, invalidControlRune) >= 0 {
 		return errors.New("applicationName 无效")
+	}
+	if len(target.SearchPath) > 128 || strings.IndexFunc(target.SearchPath, invalidControlRune) >= 0 ||
+		strings.IndexFunc(target.SearchPath, unicode.IsSpace) >= 0 || strings.ContainsAny(target.SearchPath, `,;"'`) {
+		return errors.New("searchPath 无效")
 	}
 	return nil
 }

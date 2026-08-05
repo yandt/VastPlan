@@ -4,7 +4,7 @@
 
 能力：`tool.package/foundation.data.relational.runtime`
 
-当前制品版本：`0.8.1`
+当前制品版本：`0.14.0`
 
 当前公开 Capability 契约：`foundation.data.relational.runtime@1.2.0`
 
@@ -79,4 +79,4 @@ connection-manager 以持久化 outbox 发布完整的非敏感 `ConnectionSpec`
 
 P3c 已补齐破坏性迁移：`data.migration.v1` 文件由签名 Manifest 固定摘要，并在同步目录时继续绑定已验证 Plugin Inventory 与 Artifact SHA；Schema Controller 需要 leader、备份和审批三类宿主 evidence，只执行声明可安全重试的受限 SQL，成功账本同时记录 migration ID。
 
-这些模块尚未加入公开 Manifest 和进程主入口。原因不是实现缺失，而是生命周期尚未闭合：P4 需要由 Bootstrap 可信绑定保留控制库会话，P6 需要保证 active-active 副本持有同一 generation 的模型/迁移目录并实现本地优先/故障转移。在此之前，运行时不能对外宣称 Record Store 或 SQL Shared State Ready。单元、全仓 Go 与前端门禁已通过；真实 PostgreSQL/MySQL 矩阵需在本机 Docker daemon 恢复后补跑。
+这些模块已经进入同一 Database Runtime Manifest 和进程主入口。Bootstrap 候选池不会作为普通 ConnectionRef 发布，而是同时绑定 Shared State 与平台 Record Store 的窄会话端口；`storage.kind=platform-control` 只有在已验证 Inventory 中、调用插件与模型 owner 一致时才可执行。PostgreSQL 由可信 Bootstrap Profile 把限定 schema 注入连接 `search_path`，MySQL 继续要求 schema 等于 database，因此 DataModel 表、迁移账本、幂等表和 Outbox 都落在保留平台命名空间。平台库 generation 切换会关闭旧池并使旧事务稳定进入 `transaction_lost`，不会回退本机 JSON。真实 PostgreSQL/MySQL 矩阵仍需在本机 Docker daemon 恢复后补跑。

@@ -36,11 +36,21 @@ type transactionClaims struct {
 type activeTransaction struct {
 	claims      transactionClaims
 	transaction Transaction
-	lease       *PoolLease
+	resource    TransactionResource
 	timer       *time.Timer
 	done        chan struct{}
 	doneOnce    sync.Once
 	mu          sync.Mutex
+}
+
+// TransactionResource is the narrow ownership boundary required by the
+// instance-affine transaction manager. PoolLease and the trusted Platform
+// Control session adapter both implement it without exposing their pools.
+type TransactionResource interface {
+	ProviderID() string
+	Begin(context.Context, databasev1.TransactionOptions) (Transaction, error)
+	Closed() <-chan struct{}
+	Release()
 }
 
 type TransactionManager struct {
@@ -177,8 +187,8 @@ func claimsFor(call *contractv1.CallContext, ref databasev1.ConnectionRef, expir
 }
 
 func (m *TransactionManager) Begin(ctx context.Context, call *contractv1.CallContext, ref databasev1.ConnectionRef,
-	options databasev1.TransactionOptions, lease *PoolLease) (databasev1.BeginResult, error) {
-	if m == nil || lease == nil {
+	options databasev1.TransactionOptions, resource TransactionResource) (databasev1.BeginResult, error) {
+	if m == nil || resource == nil || resource.ProviderID() == "" {
 		return databasev1.BeginResult{}, NewRuntimeError(databasev1.ErrorInvalidRequest, false, errors.New("begin transaction 参数无效"))
 	}
 	m.mu.Lock()
@@ -193,11 +203,11 @@ func (m *TransactionManager) Begin(ctx context.Context, call *contractv1.CallCon
 	if err != nil {
 		return databasev1.BeginResult{}, NewRuntimeError(databasev1.ErrorInvalidRequest, false, err)
 	}
-	transaction, err := lease.Begin(ctx, options)
+	transaction, err := resource.Begin(ctx, options)
 	if err != nil {
 		return databasev1.BeginResult{}, err
 	}
-	entry := &activeTransaction{claims: claims, transaction: transaction, lease: lease, done: make(chan struct{})}
+	entry := &activeTransaction{claims: claims, transaction: transaction, resource: resource, done: make(chan struct{})}
 	handle, err := m.seal(claims)
 	if err != nil {
 		_ = transaction.Rollback(context.Background())
@@ -216,7 +226,7 @@ func (m *TransactionManager) Begin(ctx context.Context, call *contractv1.CallCon
 	m.mu.Unlock()
 	go func() {
 		select {
-		case <-lease.Closed():
+		case <-resource.Closed():
 			m.lose(claims.ID)
 		case <-entry.done:
 		}
@@ -273,7 +283,7 @@ func (m *TransactionManager) ProviderID(handle string, call *contractv1.CallCont
 	if err != nil {
 		return "", err
 	}
-	return entry.lease.ProviderID(), nil
+	return entry.resource.ProviderID(), nil
 }
 
 func (m *TransactionManager) Query(ctx context.Context, call *contractv1.CallContext, request *databasev1.QueryRequest) (databasev1.QueryResult, error) {
@@ -338,7 +348,7 @@ func (m *TransactionManager) End(ctx context.Context, call *contractv1.CallConte
 	entry.doneOnce.Do(func() { close(entry.done) })
 	entry.mu.Lock()
 	defer entry.mu.Unlock()
-	defer entry.lease.Release()
+	defer entry.resource.Release()
 	if commit {
 		err := entry.transaction.Commit(ctx)
 		if err == nil {
@@ -379,7 +389,7 @@ func (m *TransactionManager) removeAndRollback(id string) bool {
 	entry.doneOnce.Do(func() { close(entry.done) })
 	entry.mu.Lock()
 	_ = entry.transaction.Rollback(context.Background())
-	entry.lease.Release()
+	entry.resource.Release()
 	entry.mu.Unlock()
 	return true
 }

@@ -77,8 +77,8 @@ func (p *mysqlProvider) connectionConfig(spec databasev1.ConnectionSpec) (*mysql
 	if err := decodeProviderOptions(spec.Options, &options); err != nil {
 		return nil, err
 	}
-	if options.ApplicationName != "" {
-		return nil, errors.New("MySQL options 包含不支持的 applicationName")
+	if options.ApplicationName != "" || options.SearchPath != "" {
+		return nil, errors.New("MySQL options 包含不支持的 applicationName 或 searchPath")
 	}
 	if err := enforceTLSMode(options, p.policy); err != nil {
 		return nil, err

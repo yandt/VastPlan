@@ -84,6 +84,7 @@ func (b *Bootstrapper) openPool(ctx context.Context, profile platformcontrolv1.P
 	}
 	if profile.ProviderID == "postgresql" {
 		options["applicationName"] = "vastplan-platform-control"
+		options["searchPath"] = profile.Schema
 	}
 	raw, _ := json.Marshal(options)
 	spec := databasev1.ConnectionSpec{
@@ -186,9 +187,11 @@ func (p poolSessions) Write(ctx context.Context, work func(recordstore.Session) 
 
 type managedStore struct {
 	*sqlsharedstate.Store
-	pool databaseruntime.Pool
-	once sync.Once
-	err  error
+	pool       databaseruntime.Pool
+	providerID string
+	closed     chan struct{}
+	once       sync.Once
+	err        error
 }
 
 func newManagedStore(pool databaseruntime.Pool, dialect recordstore.Dialect, schema string) (*managedStore, error) {
@@ -197,16 +200,39 @@ func newManagedStore(pool databaseruntime.Pool, dialect recordstore.Dialect, sch
 		_ = pool.Close()
 		return nil, err
 	}
-	return &managedStore{Store: store, pool: pool}, nil
+	return &managedStore{Store: store, pool: pool, providerID: dialect.ProviderID(), closed: make(chan struct{})}, nil
 }
+
+func (s *managedStore) ProviderID() string { return s.providerID }
+func (s *managedStore) Read(ctx context.Context, work func(recordstore.Session) error) error {
+	return poolSessions{pool: s.pool}.Read(ctx, work)
+}
+func (s *managedStore) Write(ctx context.Context, work func(recordstore.Session) error) error {
+	return poolSessions{pool: s.pool}.Write(ctx, work)
+}
+func (s *managedStore) Begin(ctx context.Context, options databasev1.TransactionOptions) (databaseruntime.Transaction, error) {
+	return s.pool.Begin(ctx, options)
+}
+func (s *managedStore) WithPinned(ctx context.Context, work func(databaseruntime.PinnedSession) error) error {
+	pinned, ok := s.pool.(databaseruntime.PinnedPool)
+	if !ok {
+		return errors.New("Platform Control Provider 不支持 pinned session")
+	}
+	return pinned.WithPinned(ctx, work)
+}
+func (s *managedStore) Closed() <-chan struct{} { return s.closed }
 
 func (s *managedStore) Close() error {
 	if s == nil {
 		return nil
 	}
-	s.once.Do(func() { s.err = s.pool.Close() })
+	s.once.Do(func() {
+		close(s.closed)
+		s.err = s.pool.Close()
+	})
 	return s.err
 }
 
 var _ platformcontrol.Bootstrapper = (*Bootstrapper)(nil)
 var _ platformcontrol.ManagedStore = (*managedStore)(nil)
+var _ databaseruntime.PlatformRecordStore = (*managedStore)(nil)

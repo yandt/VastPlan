@@ -27,15 +27,16 @@ type MaterialSourceFactory func(sdk.Host, string, commonv1.ManagedCredentialRef)
 // Service owns the public Database Runtime data plane, including short-lived
 // instance-affine transactions.
 type Service struct {
-	registry     *Registry
-	manager      *PoolManager
-	material     MaterialSourceFactory
-	transactions *TransactionManager
-	instanceID   string
-	validationMu sync.Mutex
-	validations  map[string]*definitionValidation
-	recordModels *recordstore.Catalog
-	recordEngine *recordstore.Engine
+	registry        *Registry
+	manager         *PoolManager
+	material        MaterialSourceFactory
+	transactions    *TransactionManager
+	instanceID      string
+	validationMu    sync.Mutex
+	validations     map[string]*definitionValidation
+	recordModels    *recordstore.Catalog
+	recordEngine    *recordstore.Engine
+	platformRecords *PlatformRecordBinding
 }
 
 type definitionValidation struct {
@@ -49,6 +50,7 @@ type ServiceOptions struct {
 	InstanceID      string
 	MaxTransactions int
 	ManagerPolicy   ManagerPolicy
+	PlatformRecords *PlatformRecordBinding
 }
 
 func NewService(registry *Registry, options ServiceOptions) (*Service, error) {
@@ -71,7 +73,7 @@ func NewServiceWithManager(registry *Registry, manager *PoolManager, material Ma
 	}
 	return &Service{registry: registry, manager: manager, material: material, transactions: transactions,
 		instanceID: options.InstanceID, validations: map[string]*definitionValidation{},
-		recordModels: recordstore.NewCatalog(), recordEngine: recordstore.NewEngine()}, nil
+		recordModels: recordstore.NewCatalog(), recordEngine: recordstore.NewEngine(), platformRecords: options.PlatformRecords}, nil
 }
 
 func (s *Service) Close() error {

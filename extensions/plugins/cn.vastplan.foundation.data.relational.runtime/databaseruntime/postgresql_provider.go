@@ -26,7 +26,8 @@ const postgresqlOptionsSchema = `{
     "tlsMode":{"type":"string","enum":["verify-full","verify-ca","disable"],"default":"verify-full"},
     "serverName":{"type":"string","maxLength":253},
     "connectTimeoutMs":{"type":"integer","minimum":100,"maximum":300000,"default":10000},
-    "applicationName":{"type":"string","maxLength":128}
+    "applicationName":{"type":"string","maxLength":128},
+    "searchPath":{"type":"string","maxLength":128}
   },
   "required":["user"]
 }`
@@ -124,6 +125,9 @@ func (p *postgresqlProvider) connectionConfig(spec databasev1.ConnectionSpec) (*
 	config.RuntimeParams = map[string]string{}
 	if options.ApplicationName != "" {
 		config.RuntimeParams["application_name"] = options.ApplicationName
+	}
+	if options.SearchPath != "" {
+		config.RuntimeParams["search_path"] = options.SearchPath
 	}
 	config.TLSConfig = databaseTLSConfig(options.TLSMode, options.ServerName, host)
 	return config, nil

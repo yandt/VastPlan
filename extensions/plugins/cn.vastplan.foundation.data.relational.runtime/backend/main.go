@@ -37,11 +37,12 @@ func main() {
 		log.Fatalf("注册 Database Provider: %v", err)
 	}
 	binding := sharedstate.NewBindingStore()
+	recordBinding := runtime.NewPlatformRecordBinding()
 	bootstrapper, err := platformcontrolbootstrap.New(registry)
 	if err != nil {
 		log.Fatalf("初始化 Platform Control Bootstrapper: %v", err)
 	}
-	bootstrapService, err := platformcontrolbootstrap.NewService(bootstrapper, binding, os.Getenv("CREDENTIALS_DIRECTORY"))
+	bootstrapService, err := platformcontrolbootstrap.NewService(bootstrapper, binding, recordBinding, os.Getenv("CREDENTIALS_DIRECTORY"))
 	if err != nil {
 		log.Fatalf("初始化 Platform Control Runtime Service: %v", err)
 	}
@@ -56,6 +57,7 @@ func main() {
 	}
 	service, err := runtime.NewService(registry, runtime.ServiceOptions{
 		InstanceID: os.Getenv(protocol.RuntimeAudienceEnvKey), MaxTransactions: startup.MaxTransactions, ManagerPolicy: policy,
+		PlatformRecords: recordBinding,
 	})
 	if err != nil {
 		log.Fatalf("初始化 Database Runtime: %v", err)

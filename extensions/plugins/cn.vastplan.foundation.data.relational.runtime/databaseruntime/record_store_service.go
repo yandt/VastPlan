@@ -80,6 +80,9 @@ func (s *Service) executeRecord(ctx context.Context, host sdk.Host, call *contra
 	if err := requireModelOwner(call, entry); err != nil {
 		return recordResult(nil, NewRuntimeError(databasev1.ErrorInvalidRequest, false, err))
 	}
+	if entry.Model.Storage.Kind == "platform-control" {
+		return s.executePlatformRecord(ctx, call, operation, entry, request)
+	}
 	ref, err := recordConnection(entry, storage)
 	if err != nil {
 		return recordResult(nil, NewRuntimeError(databasev1.ErrorInvalidRequest, false, err))
@@ -104,6 +107,69 @@ func (s *Service) executeRecord(ctx context.Context, host sdk.Host, call *contra
 		return s.executeRecordTransaction(ctx, call, handle, ref, entry, operation, request, trusted, identity)
 	}
 	return s.executeRecordPool(ctx, host, call, ref, entry, operation, request, trusted, identity)
+}
+
+func (s *Service) executePlatformRecord(ctx context.Context, call *contractv1.CallContext, operation string,
+	entry recordstore.ModelEntry, request any) (*contractv1.CallResult, []byte, error) {
+	if s.platformRecords == nil {
+		return recordResult(nil, NewRuntimeError(databasev1.ErrorConnectionUnavailable, true, recordstore.ErrStorageUnavailable))
+	}
+	snapshot, err := s.platformRecords.current()
+	if err != nil {
+		return recordResult(nil, NewRuntimeError(databasev1.ErrorConnectionUnavailable, true, err))
+	}
+	ref := snapshot.connection()
+	scope, err := requestScope(call, true)
+	if err != nil {
+		return recordResult(nil, NewRuntimeError(databasev1.ErrorInvalidRequest, false, err))
+	}
+	trusted := recordstore.TrustedScope{TenantID: scope.TenantID, ServiceID: call.GetCaller().GetId(), ActorID: call.GetCaller().GetId()}
+	identity := recordstore.ExecutionIdentity{OwnerPluginID: entry.OwnerPluginID, ModelID: entry.Model.ID, TenantID: scope.TenantID, ServiceID: trusted.ServiceID, CallerID: scope.CallerID}
+	if operation == recordstorev1.OperationSchemaPlan || operation == recordstorev1.OperationSchemaApply || operation == recordstorev1.OperationSchemaStatus {
+		return s.executePlatformSchemaController(ctx, call, operation, ref, snapshot, entry, request.(*recordstorev1.SchemaRequest))
+	}
+	if operation == recordstorev1.OperationBegin {
+		return s.beginPlatformRecordTransaction(ctx, call, snapshot, entry, request.(*recordstorev1.BeginRequest))
+	}
+	handle := recordTransactionHandle(request)
+	if handle != "" {
+		return s.executeRecordTransaction(ctx, call, handle, ref, entry, operation, request, trusted, identity)
+	}
+	dialect, err := recordstore.DialectFor(snapshot.store.ProviderID())
+	if err != nil {
+		return recordResult(nil, err)
+	}
+	compiler, err := recordstore.NewCompiler(dialect, entry.Model)
+	if err != nil {
+		return recordResult(nil, err)
+	}
+	var value any
+	run := func(session recordstore.Session) error {
+		var runErr error
+		value, runErr = s.runRecord(ctx, session, compiler, dialect, entry, operation, request, trusted, identity)
+		return runErr
+	}
+	if recordWriteOperation(operation) {
+		err = snapshot.store.Write(ctx, run)
+	} else {
+		err = snapshot.store.Read(ctx, run)
+	}
+	return recordResult(value, err)
+}
+
+func (s *Service) beginPlatformRecordTransaction(ctx context.Context, call *contractv1.CallContext,
+	snapshot platformRecordSnapshot, entry recordstore.ModelEntry, request *recordstorev1.BeginRequest) (*contractv1.CallResult, []byte, error) {
+	dialect, err := recordstore.DialectFor(snapshot.store.ProviderID())
+	if err == nil {
+		err = snapshot.store.Read(ctx, func(session recordstore.Session) error {
+			return s.recordEngine.CheckSchema(ctx, session, dialect, entry)
+		})
+	}
+	if err != nil {
+		return recordResult(nil, err)
+	}
+	value, err := s.transactions.Begin(ctx, call, snapshot.connection(), request.Options, platformTransactionResource{snapshot: snapshot})
+	return recordResult(value, err)
 }
 
 func (s *Service) beginRecordTransaction(ctx context.Context, host sdk.Host, call *contractv1.CallContext,
@@ -137,8 +203,10 @@ func (s *Service) endRecordTransaction(ctx context.Context, call *contractv1.Cal
 		if err != nil {
 			return recordResult(nil, err)
 		}
-		if err := requireExecutor(call, ref); err != nil {
-			return recordResult(nil, NewRuntimeError(databasev1.ErrorInvalidRequest, false, err))
+		if ref.ResourceID != platformControlConnectionID {
+			if err := requireExecutor(call, ref); err != nil {
+				return recordResult(nil, NewRuntimeError(databasev1.ErrorInvalidRequest, false, err))
+			}
 		}
 	}
 	err := s.transactions.End(ctx, call, request.TransactionHandle, operation == recordstorev1.OperationCommit)
@@ -251,7 +319,7 @@ func requireModelOwner(call *contractv1.CallContext, entry recordstore.ModelEntr
 
 func recordConnection(entry recordstore.ModelEntry, storage recordstorev1.StorageTarget) (databasev1.ConnectionRef, error) {
 	if entry.Model.Storage.Kind == "platform-control" {
-		return databasev1.ConnectionRef{}, recordstore.ErrStorageDenied
+		return databasev1.ConnectionRef{}, errors.New("platform-control DataModel 必须使用可信平台存储绑定")
 	}
 	if storage.Connection == nil || databasev1.ValidateConnectionRef(*storage.Connection) != nil {
 		return databasev1.ConnectionRef{}, errors.New("connection-ref DataModel 必须指定有效连接")

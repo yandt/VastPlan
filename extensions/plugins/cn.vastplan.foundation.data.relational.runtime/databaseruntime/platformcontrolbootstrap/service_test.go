@@ -21,7 +21,8 @@ func TestServiceAllowsOnlyTrustedHostAndSwitchesGeneration(t *testing.T) {
 	}
 	bootstrapper, _ := New(registry)
 	binding := sharedstate.NewBindingStore()
-	service, _ := NewService(bootstrapper, binding, "")
+	recordBinding := databaseruntime.NewPlatformRecordBinding()
+	service, _ := NewService(bootstrapper, binding, recordBinding, "")
 	defer service.Close()
 
 	secretPath := filepath.Join(t.TempDir(), "password")
@@ -53,6 +54,9 @@ func TestServiceAllowsOnlyTrustedHostAndSwitchesGeneration(t *testing.T) {
 	if generation, _, ready := binding.Snapshot(); generation != 1 || !ready {
 		t.Fatalf("SQL Shared State 未绑定: generation=%d ready=%v", generation, ready)
 	}
+	if generation, _, ready := recordBinding.Snapshot(); generation != 1 || !ready {
+		t.Fatalf("Platform Record Store 未绑定: generation=%d ready=%v", generation, ready)
+	}
 	poolCount := len(provider.pools)
 	if _, _, err := handler(context.Background(), nil, trusted, payload); err != nil || len(provider.pools) != poolCount {
 		t.Fatal("同 generation 初始化必须幂等且不得重复开池")
@@ -74,7 +78,8 @@ func TestServiceTestDoesNotBindStore(t *testing.T) {
 	_ = registry.Register(provider)
 	bootstrapper, _ := New(registry)
 	binding := sharedstate.NewBindingStore()
-	service, _ := NewService(bootstrapper, binding, "")
+	recordBinding := databaseruntime.NewPlatformRecordBinding()
+	service, _ := NewService(bootstrapper, binding, recordBinding, "")
 	secretPath := filepath.Join(t.TempDir(), "password")
 	_ = os.WriteFile(secretPath, []byte("secret"), 0o600)
 	profile := platformcontrolv1.Profile{SchemaVersion: 1, Generation: 1, ProviderID: "mysql", Endpoint: "db.internal:3306", Database: "platform", Schema: "platform", TLS: platformcontrolv1.TLS{Mode: "verify-ca"}, Username: "vastplan", SecretRef: platformcontrolv1.SecretRef{Kind: "owner-file", Path: secretPath}, ContractRange: "^1.0.0"}
@@ -86,6 +91,9 @@ func TestServiceTestDoesNotBindStore(t *testing.T) {
 	}
 	if _, _, ready := binding.Snapshot(); ready {
 		t.Fatal("连接测试不得绑定 Shared State")
+	}
+	if _, _, ready := recordBinding.Snapshot(); ready {
+		t.Fatal("连接测试不得绑定 Platform Record Store")
 	}
 	if len(provider.pools) != 1 || !provider.pools[0].closed {
 		t.Fatal("连接测试必须关闭候选池")

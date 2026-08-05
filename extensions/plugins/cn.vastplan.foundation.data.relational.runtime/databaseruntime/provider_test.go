@@ -128,6 +128,23 @@ func testQueryResult() databasev1.QueryResult {
 	}
 }
 
+func TestPostgreSQLSearchPathIsStructuredRuntimeParameter(t *testing.T) {
+	spec := testConnectionSpec("postgresql")
+	spec.Options = json.RawMessage(`{"user":"vastplan","tlsMode":"verify-full","searchPath":"platform_control"}`)
+	provider := NewPostgreSQLProvider(ProviderSecurityPolicy{}).(*postgresqlProvider)
+	config, err := provider.connectionConfig(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.RuntimeParams["search_path"] != "platform_control" {
+		t.Fatalf("PostgreSQL search_path 未进入结构化 RuntimeParams: %+v", config.RuntimeParams)
+	}
+	spec.Options = json.RawMessage(`{"user":"vastplan","tlsMode":"verify-full","searchPath":"public,pg_catalog"}`)
+	if _, err := provider.connectionConfig(spec); err == nil {
+		t.Fatal("searchPath 不得注入多个 schema")
+	}
+}
+
 func TestRegistryAndFakeProviderExerciseCompleteSPI(t *testing.T) {
 	registry := NewRegistry()
 	var typedNil *fakeProvider

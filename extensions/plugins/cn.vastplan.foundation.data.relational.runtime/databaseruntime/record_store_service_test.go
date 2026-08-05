@@ -3,6 +3,7 @@ package databaseruntime
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
@@ -10,6 +11,50 @@ import (
 	recordstorev1 "cdsoft.com.cn/VastPlan/contracts/schemas/recordstore/v1"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.foundation.data.relational.runtime/databaseruntime/recordstore"
 )
+
+type platformRecordTestStore struct {
+	modelSHA string
+	closed   chan struct{}
+}
+
+func (s *platformRecordTestStore) ProviderID() string { return "postgresql" }
+func (s *platformRecordTestStore) Read(ctx context.Context, work func(recordstore.Session) error) error {
+	return work(s)
+}
+func (s *platformRecordTestStore) Write(ctx context.Context, work func(recordstore.Session) error) error {
+	return work(s)
+}
+func (s *platformRecordTestStore) Begin(context.Context, databasev1.TransactionOptions) (Transaction, error) {
+	return s, nil
+}
+func (s *platformRecordTestStore) WithPinned(ctx context.Context, work func(PinnedSession) error) error {
+	return work(s)
+}
+func (s *platformRecordTestStore) Closed() <-chan struct{} { return s.closed }
+func (s *platformRecordTestStore) Query(_ context.Context, statement databasev1.Statement, _ int) (databasev1.QueryResult, error) {
+	if strings.Contains(statement.SQL, "vastplan_schema_migrations") {
+		return databasev1.QueryResult{Rows: [][]databasev1.Value{{
+			{Type: "int64", Value: json.RawMessage(`"1"`)},
+			{Type: "string", Value: mustTestJSON(s.modelSHA)},
+		}}}, nil
+	}
+	if strings.Contains(statement.SQL, `FROM "platform_records"`) {
+		return databasev1.QueryResult{Rows: [][]databasev1.Value{{
+			{Type: "string", Value: json.RawMessage(`"f119df99-6c60-4e21-9c44-47766593c8e2"`)},
+		}}}, nil
+	}
+	return databasev1.QueryResult{}, nil
+}
+func (*platformRecordTestStore) Execute(context.Context, databasev1.Statement) (databasev1.ExecuteResult, error) {
+	return databasev1.ExecuteResult{RowsAffected: 1}, nil
+}
+func (*platformRecordTestStore) Commit(context.Context) error   { return nil }
+func (*platformRecordTestStore) Rollback(context.Context) error { return nil }
+
+func mustTestJSON(value string) json.RawMessage {
+	raw, _ := json.Marshal(value)
+	return raw
+}
 
 func TestRecordStoreSynchronizesModelsOnlyFromTrustedSystem(t *testing.T) {
 	service, _ := newExecutionService(t)
@@ -60,6 +105,67 @@ func TestRecordStoreRejectsCrossPluginModelUseBeforeDatabaseAccess(t *testing.T)
 	if result.GetStatus() != contractv1.CallResult_STATUS_ERROR || result.GetError().GetCode() != recordstorev1.ErrorStorageDenied {
 		t.Fatalf("跨插件不得直接读取其他模型: %+v", result)
 	}
+}
+
+func TestRecordStoreUsesTrustedPlatformBindingWithoutConnectionGrant(t *testing.T) {
+	service, ref, _ := newPlatformRecordService(t)
+	call := executorCall(databasev1.ConnectionRef{}, false)
+	request := recordstorev1.GetRequest{Model: ref, Key: recordstorev1.Key{"id": json.RawMessage(`"f119df99-6c60-4e21-9c44-47766593c8e2"`)}}
+	result, raw := invokeRecord(t, service, &runtimeServiceHost{}, recordstorev1.OperationGet, call, request)
+	if result.GetStatus() != contractv1.CallResult_STATUS_OK {
+		t.Fatalf("平台控制 Record Store 读取失败: %+v", result)
+	}
+	var record recordstorev1.RecordResult
+	if json.Unmarshal(raw, &record) != nil || string(record.Record["id"]) != `"f119df99-6c60-4e21-9c44-47766593c8e2"` {
+		t.Fatalf("平台控制 Record Store 响应无效: %s", raw)
+	}
+}
+
+func TestPlatformRecordStoreUnitOfWorkUsesInstanceAffineTransaction(t *testing.T) {
+	service, ref, _ := newPlatformRecordService(t)
+	call := executorCall(databasev1.ConnectionRef{}, false)
+	result, raw := invokeRecord(t, service, &runtimeServiceHost{}, recordstorev1.OperationBegin, call,
+		recordstorev1.BeginRequest{Model: ref, Options: databasev1.TransactionOptions{Isolation: "serializable", TimeoutMS: 5_000}})
+	if result.GetStatus() != contractv1.CallResult_STATUS_OK {
+		t.Fatalf("平台控制 UnitOfWork 开始失败: %+v", result)
+	}
+	var begin recordstorev1.BeginResult
+	if json.Unmarshal(raw, &begin) != nil || begin.TransactionHandle == "" {
+		t.Fatalf("平台控制 UnitOfWork 句柄无效: %s", raw)
+	}
+	get := recordstorev1.GetRequest{Model: ref, Key: recordstorev1.Key{"id": json.RawMessage(`"f119df99-6c60-4e21-9c44-47766593c8e2"`)}, TransactionHandle: begin.TransactionHandle}
+	if result, _ = invokeRecord(t, service, &runtimeServiceHost{}, recordstorev1.OperationGet, call, get); result.GetStatus() != contractv1.CallResult_STATUS_OK {
+		t.Fatalf("平台控制 UnitOfWork 读取失败: %+v", result)
+	}
+	if result, _ = invokeRecord(t, service, &runtimeServiceHost{}, recordstorev1.OperationCommit, call,
+		recordstorev1.EndRequest{TransactionHandle: begin.TransactionHandle}); result.GetStatus() != contractv1.CallResult_STATUS_OK {
+		t.Fatalf("平台控制 UnitOfWork 提交失败: %+v", result)
+	}
+}
+
+func newPlatformRecordService(t *testing.T) (*Service, recordstorev1.ModelRef, *platformRecordTestStore) {
+	t.Helper()
+	service, _ := newExecutionService(t)
+	binding := NewPlatformRecordBinding()
+	service.platformRecords = binding
+	document := []byte(`{"contract":"data.model.v1","id":"example.platform-record","schemaVersion":1,"storage":{"kind":"platform-control","table":"platform_records"},"fields":[{"id":"id","column":"id","type":"uuid","nullable":false,"sensitivity":"internal"}],"primaryKey":["id"],"indexes":[],"uniqueConstraints":[],"scope":{"tenant":"none","service":"none"},"deletion":{"mode":"hard"}}`)
+	ref, err := recordstore.ModelRef(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = service.recordModels.Replace(recordstorev1.SyncModelsRequest{Generation: 1,
+		InventoryDigest: "1111111111111111111111111111111111111111111111111111111111111111",
+		Models: []recordstorev1.SignedModel{recordstore.EncodeSignedModel("cn.vastplan.application.orders",
+			"2222222222222222222222222222222222222222222222222222222222222222", ref, document)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := &platformRecordTestStore{modelSHA: ref.SHA256, closed: make(chan struct{})}
+	if err := binding.Bind(7, "sha256:platform", store); err != nil {
+		t.Fatal(err)
+	}
+	return service, ref, store
 }
 
 func invokeRecord(t *testing.T, service *Service, host *runtimeServiceHost, operation string, call *contractv1.CallContext, request any) (*contractv1.CallResult, []byte) {

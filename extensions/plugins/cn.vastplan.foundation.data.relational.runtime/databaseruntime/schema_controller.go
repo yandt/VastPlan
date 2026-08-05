@@ -29,8 +29,30 @@ func (s *Service) executeSchemaController(ctx context.Context, host sdk.Host, ca
 	if err != nil {
 		return recordResult(nil, err)
 	}
+	return s.executeSchemaWithPinned(ctx, call, operation, ref, entry, request, dialect, lease.WithPinned)
+}
+
+func (s *Service) executePlatformSchemaController(ctx context.Context, call *contractv1.CallContext,
+	operation string, ref databasev1.ConnectionRef, snapshot platformRecordSnapshot, entry recordstore.ModelEntry,
+	request *recordstorev1.SchemaRequest) (*contractv1.CallResult, []byte, error) {
+	dialect, err := recordstore.DialectFor(snapshot.store.ProviderID())
+	if err != nil {
+		return recordResult(nil, err)
+	}
+	return s.executeSchemaWithPinned(ctx, call, operation, ref, entry, request, dialect, snapshot.store.WithPinned)
+}
+
+func (s *Service) executeSchemaWithPinned(ctx context.Context, call *contractv1.CallContext,
+	operation string, ref databasev1.ConnectionRef, entry recordstore.ModelEntry, request *recordstorev1.SchemaRequest,
+	dialect recordstore.Dialect, withPinned func(context.Context, func(PinnedSession) error) error) (*contractv1.CallResult, []byte, error) {
+	if call.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_SYSTEM {
+		return recordResult(nil, NewRuntimeError(databasev1.ErrorInvalidRequest, false, errors.New("Schema Controller 只允许可信系统调用")))
+	}
+	if operation == recordstorev1.OperationSchemaApply && !hasSchemaControllerEvidence(call, ref) {
+		return recordResult(nil, NewRuntimeError(databasev1.ErrorInvalidRequest, false, errors.New("Schema Controller 缺少当前 leader evidence")))
+	}
 	var value any
-	err = lease.WithPinned(ctx, func(pinned PinnedSession) error {
+	err := withPinned(ctx, func(pinned PinnedSession) error {
 		switch operation {
 		case recordstorev1.OperationSchemaPlan:
 			state, readErr := recordstore.ReadSchemaState(ctx, pinned, dialect, entry.Model.ID)

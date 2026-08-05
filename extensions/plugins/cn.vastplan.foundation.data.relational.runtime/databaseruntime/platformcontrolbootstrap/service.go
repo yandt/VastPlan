@@ -11,6 +11,7 @@ import (
 	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
 	platformcontrol "cdsoft.com.cn/VastPlan/extensions/libraries/go/platformcontrol"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
+	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.foundation.data.relational.runtime/databaseruntime"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
@@ -20,6 +21,7 @@ import (
 type Service struct {
 	bootstrapper         *Bootstrapper
 	binding              *sharedstate.BindingStore
+	recordBinding        *databaseruntime.PlatformRecordBinding
 	credentialsDirectory string
 
 	mu      sync.Mutex
@@ -27,11 +29,11 @@ type Service struct {
 	status  platformcontrolv1.Status
 }
 
-func NewService(bootstrapper *Bootstrapper, binding *sharedstate.BindingStore, credentialsDirectory string) (*Service, error) {
-	if bootstrapper == nil || binding == nil {
+func NewService(bootstrapper *Bootstrapper, binding *sharedstate.BindingStore, recordBinding *databaseruntime.PlatformRecordBinding, credentialsDirectory string) (*Service, error) {
+	if bootstrapper == nil || binding == nil || recordBinding == nil {
 		return nil, errors.New("Platform Control Runtime Service 依赖不能为空")
 	}
-	return &Service{bootstrapper: bootstrapper, binding: binding, credentialsDirectory: credentialsDirectory,
+	return &Service{bootstrapper: bootstrapper, binding: binding, recordBinding: recordBinding, credentialsDirectory: credentialsDirectory,
 		status: platformcontrolv1.Status{Phase: platformcontrolv1.PhaseUnconfigured}}, nil
 }
 
@@ -111,11 +113,12 @@ func (s *Service) execute(ctx context.Context, operation string, profile platfor
 func (s *Service) activate(ctx context.Context, operation string, profile platformcontrolv1.Profile, source platformcontrol.SecretSource) (*contractv1.CallResult, []byte, error) {
 	identity := platformcontrol.ProfileIdentity(profile)
 	currentGeneration, currentIdentity, ready := s.binding.Snapshot()
-	if ready && currentGeneration == profile.Generation && currentIdentity == identity {
+	recordGeneration, recordIdentity, recordReady := s.recordBinding.Snapshot()
+	if ready && recordReady && currentGeneration == profile.Generation && recordGeneration == profile.Generation && currentIdentity == identity && recordIdentity == identity {
 		s.status = platformcontrolv1.Status{Phase: platformcontrolv1.PhaseReady, Generation: currentGeneration}
 		return bootstrapResult(s.status, "", false)
 	}
-	if currentGeneration >= profile.Generation {
+	if currentGeneration >= profile.Generation || recordGeneration >= profile.Generation {
 		return bootstrapResult(s.status, platformcontrolv1.ErrorConflict, false)
 	}
 
@@ -132,6 +135,15 @@ func (s *Service) activate(ctx context.Context, operation string, profile platfo
 		return bootstrapResult(s.status, platformcontrolv1.ErrorInitializationFailed, true)
 	}
 	if err := s.binding.Bind(profile.Generation, identity, candidate); err != nil {
+		_ = candidate.Close()
+		return bootstrapResult(s.status, platformcontrolv1.ErrorConflict, false)
+	}
+	recordStore, ok := candidate.(databaseruntime.PlatformRecordStore)
+	if !ok {
+		_ = candidate.Close()
+		return bootstrapResult(s.status, platformcontrolv1.ErrorInitializationFailed, false)
+	}
+	if err := s.recordBinding.Bind(profile.Generation, identity, recordStore); err != nil {
 		_ = candidate.Close()
 		return bootstrapResult(s.status, platformcontrolv1.ErrorConflict, false)
 	}
