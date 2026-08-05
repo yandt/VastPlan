@@ -50,7 +50,37 @@
           "type": "object",
           "propertyNames": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
           "additionalProperties": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{0,127}$" }
+        },
+        "schema_activation": { "$ref": "#/$defs/schemaActivation" }
+      }
+    },
+    "schemaActivation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidateId", "planDigest", "mode", "models"],
+      "properties": {
+        "candidateId": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "planDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "mode": { "enum": ["approved", "automatic"] },
+        "approvedBy": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "models": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/schemaMigrationAuthorization" }
         }
+      }
+    },
+    "schemaMigrationAuthorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "storage", "kind"],
+      "properties": {
+        "model": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/recordstore/v1/vastplan.record-store.schema.json#/$defs/modelRef" },
+        "storage": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/recordstore/v1/vastplan.record-store.schema.json#/$defs/storage" },
+        "kind": { "enum": ["create", "additive", "signed"] },
+        "migrationId": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "allowSafe": { "type": "boolean" },
+        "allowSigned": { "type": "boolean" },
+        "backupRef": { "type": "string", "minLength": 1, "maxLength": 512 }
       }
     },
     "appProfileRef": {

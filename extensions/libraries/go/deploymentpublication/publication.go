@@ -12,8 +12,10 @@ import (
 
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
+	datamodelv1 "cdsoft.com.cn/VastPlan/contracts/schemas/datamodel/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	recordstorev1 "cdsoft.com.cn/VastPlan/contracts/schemas/recordstore/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfiguration"
 )
 
@@ -40,6 +42,7 @@ type PublishRequest struct {
 	Composition        backendcompositionv1.ApplicationComposition `json:"composition"`
 	DeploymentRevision uint64                                      `json:"deploymentRevision"`
 	ExpectedDigest     string                                      `json:"expectedDigest"`
+	SchemaActivation   *recordstorev1.SchemaActivation             `json:"schemaActivation,omitempty"`
 }
 
 type Result struct {
@@ -50,6 +53,30 @@ type Result struct {
 	KVRevision            uint64                       `json:"kvRevision,omitempty"`
 	ArtifactReferences    []pluginv1.ArtifactReference `json:"artifactReferences"`
 	ConfigurationCatalog  pluginconfiguration.Catalog  `json:"configurationCatalog"`
+	DataModelCatalog      DataModelCatalog             `json:"dataModelCatalog"`
+}
+
+// DataModelCatalog is a trusted, SQL-free projection of the exact artifacts
+// used by a deployment preview. It lets governance compare schema impact
+// before publication without exposing provider DDL or accepting plugin input.
+type DataModelCatalog struct {
+	Digest     string                    `json:"digest"`
+	Models     []DataModelDescriptor     `json:"models"`
+	Migrations []DataMigrationDescriptor `json:"migrations,omitempty"`
+}
+
+type DataModelDescriptor struct {
+	OwnerPluginID  string                      `json:"ownerPluginId"`
+	ArtifactSHA256 string                      `json:"artifactSha256"`
+	Ref            recordstorev1.ModelRef      `json:"ref"`
+	Model          datamodelv1.Model           `json:"model"`
+	Storage        recordstorev1.StorageTarget `json:"storage"`
+}
+
+type DataMigrationDescriptor struct {
+	OwnerPluginID  string                     `json:"ownerPluginId"`
+	ArtifactSHA256 string                     `json:"artifactSha256"`
+	Ref            recordstorev1.MigrationRef `json:"ref"`
 }
 
 type ReadinessStatus string
@@ -111,4 +138,9 @@ type Controller interface {
 	Targets(context.Context, string) ([]Target, error)
 	Preview(context.Context, string, backendcompositionv1.ApplicationComposition, uint64) (Result, error)
 	Publish(context.Context, string, backendcompositionv1.ApplicationComposition, uint64, string) (Result, error)
+}
+
+type SchemaAuthorizedController interface {
+	Controller
+	PublishWithSchemaActivation(context.Context, string, backendcompositionv1.ApplicationComposition, uint64, string, *recordstorev1.SchemaActivation) (Result, error)
 }

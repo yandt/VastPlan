@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	approvalv2 "cdsoft.com.cn/VastPlan/contracts/schemas/approval/v2"
@@ -50,6 +51,10 @@ func (h *intentWorkflowHost) Call(_ context.Context, target *contractv1.CallTarg
 		result := h.publicationResult(request.Composition, request.DeploymentRevision, "publish")
 		result.Digest, result.KVRevision = request.ExpectedDigest, 17
 		return okJSON(result)
+	case deploymentpublication.KernelReadinessService:
+		var request deploymentpublication.ReadinessRequest
+		_ = json.Unmarshal(payload, &request)
+		return okJSON(deploymentpublication.ReadinessObservation{SchemaVersion: 1, Tenant: "tenant-a", Deployment: request.DeploymentName, Revision: request.DeploymentRevision, Generation: request.DeploymentRevision, Status: deploymentpublication.ReadinessReady, UpdatedAt: time.Now().UTC()})
 	case platformadminapi.ArtifactsCapability:
 		return okJSON(map[string]any{"revision": 1})
 	case approvalv2.Capability:

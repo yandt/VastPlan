@@ -66,6 +66,7 @@ func (s *Service) CreatePluginInstallationCandidate(ctx context.Context, host sd
 		ID: id, Source: source, Request: planned.request, Preview: installationPreviewSummary(planned.preview),
 		ServiceRevisionID: revision.ID, PreviousServiceRevisionID: active.ID,
 		RequestedBy: requestedBy, CreatedAt: now, UpdatedAt: now,
+		Migration: initialMigrationState(planned.preview.Impact.Schema, now),
 	}
 
 	oldNextRevision, oldRevisionLength := state.NextRevision, len(state.Revisions)
@@ -174,6 +175,26 @@ func (s *Service) SubmitSelfServicePluginInstallationCandidate(ctx context.Conte
 }
 
 func (s *Service) ApprovePluginInstallationCandidate(ctx context.Context, host sdk.Host, call *contractv1.CallContext, id string) (plugininstallation.Candidate, error) {
+	return s.ApprovePluginInstallationCandidateWithEvidence(ctx, host, call, id, nil)
+}
+
+func (s *Service) ApprovePluginInstallationCandidateWithEvidence(ctx context.Context, host sdk.Host, call *contractv1.CallContext, id string, evidence map[string]json.RawMessage) (plugininstallation.Candidate, error) {
+	candidate, err := s.GetPluginInstallationCandidate(call, id)
+	if err != nil {
+		return plugininstallation.Candidate{}, err
+	}
+	if s.approvalBinding != nil {
+		decision, evaluateErr := s.evaluateInstallationApproval(ctx, host, call, candidate.Preview, candidate.SubmittedBy, evidence)
+		if evaluateErr != nil {
+			return plugininstallation.Candidate{}, evaluateErr
+		}
+		if decision == nil || decision.Status != approvalv2.DecisionAllowed {
+			return plugininstallation.Candidate{}, errInstallationApprovalRequired
+		}
+	}
+	if err := s.attachInstallationBackupEvidence(call, id, candidate.Preview.Impact.Schema, evidence); err != nil {
+		return plugininstallation.Candidate{}, err
+	}
 	revisionID, err := s.installationCandidateRevision(call, id)
 	if err != nil {
 		return plugininstallation.Candidate{}, err
@@ -181,24 +202,15 @@ func (s *Service) ApprovePluginInstallationCandidate(ctx context.Context, host s
 	if _, err := s.approveServiceRevisionForOwner(ctx, host, call, revisionID, revisionOwnerInstallation); err != nil {
 		return plugininstallation.Candidate{}, err
 	}
+	s.recordInstallationMigrationResult(call, revisionID, "Confirmed", "")
 	return s.GetPluginInstallationCandidate(call, id)
 }
 
 func (s *Service) ApproveSelfServicePluginInstallationCandidate(ctx context.Context, host sdk.Host, call *contractv1.CallContext, id string, target plugininstallation.Target, evidence map[string]json.RawMessage) (plugininstallation.Candidate, error) {
-	candidate, err := s.GetSelfServicePluginInstallationCandidate(call, id, target)
-	if err != nil {
+	if _, err := s.GetSelfServicePluginInstallationCandidate(call, id, target); err != nil {
 		return plugininstallation.Candidate{}, err
 	}
-	if s.approvalBinding != nil {
-		decision, err := s.evaluateInstallationApproval(ctx, host, call, candidate.Preview, candidate.SubmittedBy, evidence)
-		if err != nil {
-			return plugininstallation.Candidate{}, err
-		}
-		if decision == nil || decision.Status != approvalv2.DecisionAllowed {
-			return plugininstallation.Candidate{}, errInstallationApprovalRequired
-		}
-	}
-	return s.ApprovePluginInstallationCandidate(ctx, host, call, id)
+	return s.ApprovePluginInstallationCandidateWithEvidence(ctx, host, call, id, evidence)
 }
 
 func (s *Service) ActivatePluginInstallationCandidate(ctx context.Context, host sdk.Host, call *contractv1.CallContext, id string) (plugininstallation.Candidate, error) {
@@ -226,6 +238,21 @@ func (s *Service) ActivatePluginInstallationCandidate(ctx context.Context, host 
 		}
 		backendPublished = true
 	}
+	waitCtx := ctx
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		waitCtx, cancel = context.WithTimeout(ctx, s.releaseTimeout)
+		defer cancel()
+	}
+	if err := s.waitForServiceReadiness(waitCtx, host, call, candidate.Preview.Target.Deployment, candidate.ServiceRevisionID); err != nil {
+		abortInstallationPortals(ctx, host, call, candidate.ID, prepared)
+		rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.releaseTimeout)
+		_, rollbackErr := s.RollbackServiceRevision(rollbackCtx, host, call, candidate.PreviousServiceRevisionID)
+		cancel()
+		s.recordInstallationMigrationResult(call, candidate.ServiceRevisionID, "Failed", err.Error())
+		return plugininstallation.Candidate{}, errors.Join(err, rollbackErr)
+	}
+	s.recordInstallationMigrationResult(call, candidate.ServiceRevisionID, "Ready", "")
 	committed, err := commitInstallationPortals(ctx, host, call, candidate.ID, prepared)
 	if err != nil {
 		rollbackErr := rollbackInstallationPortals(ctx, host, call, candidate.ID, committed)
@@ -237,6 +264,18 @@ func (s *Service) ActivatePluginInstallationCandidate(ctx context.Context, host 
 		return plugininstallation.Candidate{}, errors.Join(err, rollbackErr)
 	}
 	return s.GetPluginInstallationCandidate(call, id)
+}
+
+func (s *Service) recordInstallationMigrationResult(call *contractv1.CallContext, revisionID uint64, phase, message string) {
+	tenant, err := callTenant(call)
+	if err != nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	state := s.tenantLocked(tenant)
+	markInstallationMigration(state, revisionID, phase, message, s.now().Format(time.RFC3339Nano))
+	_ = s.saveLocked()
 }
 
 func (s *Service) ActivateSelfServicePluginInstallationCandidate(ctx context.Context, host sdk.Host, call *contractv1.CallContext, id string, target plugininstallation.Target) (plugininstallation.Candidate, error) {

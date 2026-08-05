@@ -246,7 +246,7 @@ export class PlatformAdminClient {
     return this.mutate(`${this.basePath}/deployment/plugin-installations`, "POST", request);
   }
   public submitPluginInstallationCandidate(id: string): Promise<PluginInstallationCandidate> { return this.pluginInstallationAction(id, "submit"); }
-  public approvePluginInstallationCandidate(id: string): Promise<PluginInstallationCandidate> { return this.pluginInstallationAction(id, "approve"); }
+  public approvePluginInstallationCandidate(id: string, evidence: Readonly<Record<string, unknown>> = {}): Promise<PluginInstallationCandidate> { return this.pluginInstallationAction(id, "approve", { evidence }); }
   public activatePluginInstallationCandidate(id: string): Promise<PluginInstallationCandidate> { return this.pluginInstallationAction(id, "activate"); }
   public cancelPluginInstallationCandidate(id: string): Promise<PluginInstallationCandidate> { return this.pluginInstallationAction(id, "cancel"); }
   public rollbackPluginInstallationCandidate(id: string): Promise<PluginInstallationCandidate> { return this.pluginInstallationAction(id, "rollback"); }
@@ -314,8 +314,8 @@ export class PlatformAdminClient {
     return this.mutate(`${this.basePath}/deployment/service-revisions/${revision(id)}/${action}`, "POST", {});
   }
 
-  private pluginInstallationAction(id: string, action: "submit" | "approve" | "activate" | "cancel" | "rollback"): Promise<PluginInstallationCandidate> {
-    return this.mutate(`${this.basePath}/deployment/plugin-installations/${segment(id)}/${action}`, "POST", {});
+  private pluginInstallationAction(id: string, action: "submit" | "approve" | "activate" | "cancel" | "rollback", body: Readonly<Record<string, unknown>> = {}): Promise<PluginInstallationCandidate> {
+    return this.mutate(`${this.basePath}/deployment/plugin-installations/${segment(id)}/${action}`, "POST", body);
   }
   private selfServicePluginInstallationAction(id: string, action: "submit" | "approve" | "activate" | "cancel" | "rollback", body: Readonly<Record<string, unknown>> = {}): Promise<PluginInstallationCandidate> {
     return this.mutate(`${this.basePath}/deployment/service-plugin-installations/${segment(id)}/${action}`, "POST", body);

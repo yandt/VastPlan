@@ -19,6 +19,7 @@ import (
 	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
+	recordstorev1 "cdsoft.com.cn/VastPlan/contracts/schemas/recordstore/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/configfile"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/servicemodel"
@@ -52,11 +53,12 @@ const (
 // Resolution 锁定生成 Deployment 的两份配置输入及每个插件的管理来源。
 // Controller 依赖该信息再次执行服务端授权校验，不能接受缺失来源的插件。
 type Resolution struct {
-	PlatformProfile        CompositionRef    `json:"platform_profile"`
-	ApplicationComposition CompositionRef    `json:"application_composition"`
-	DevelopmentMode        bool              `json:"development_mode"`
-	PluginOrigins          map[string]string `json:"plugin_origins"`
-	PluginBaselines        map[string]string `json:"plugin_baselines,omitempty"`
+	PlatformProfile        CompositionRef                  `json:"platform_profile"`
+	ApplicationComposition CompositionRef                  `json:"application_composition"`
+	DevelopmentMode        bool                            `json:"development_mode"`
+	PluginOrigins          map[string]string               `json:"plugin_origins"`
+	PluginBaselines        map[string]string               `json:"plugin_baselines,omitempty"`
+	SchemaActivation       *recordstorev1.SchemaActivation `json:"schema_activation,omitempty"`
 }
 
 // CompositionRef is the cross-kernel resolution reference contract.
@@ -148,6 +150,9 @@ func AddResources(compiler *jsonschema.Compiler) error {
 	if err := compositioncommonv1.AddResources(compiler); err != nil {
 		return err
 	}
+	if err := recordstorev1.AddResources(compiler); err != nil {
+		return err
+	}
 	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(deploymentSchemaJSON))
 	if err != nil {
 		return fmt.Errorf("解析集群部署 Schema: %w", err)
@@ -206,6 +211,9 @@ func Parse(raw []byte) (Deployment, error) {
 		if _, ok := plugins[pluginID]; !ok || deployment.Resolution.PluginOrigins[pluginID] != OriginPlatformProfile || baselineID == "" {
 			return Deployment{}, fmt.Errorf("resolution.plugin_baselines 包含无效公共基线插件 %q", pluginID)
 		}
+	}
+	if err := recordstorev1.ValidateSchemaActivation(deployment.Resolution.SchemaActivation); err != nil {
+		return Deployment{}, fmt.Errorf("集群部署 Schema Activation 无效: %w", err)
 	}
 	return deployment, nil
 }

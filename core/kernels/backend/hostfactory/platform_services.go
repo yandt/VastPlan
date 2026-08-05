@@ -172,7 +172,17 @@ func kernelDeploymentPublish(controller deploymentpublication.Controller) protoc
 		if _, err := deploymentManagerFence(ctx, callCtx, fmt.Sprintf("deployment/%s/revision/%d", request.Composition.Metadata.Name, request.DeploymentRevision)); err != nil {
 			return nil, nil, err
 		}
-		result, err := controller.Publish(ctx, callCtx.GetTenantId(), request.Composition, request.DeploymentRevision, request.ExpectedDigest)
+		var result deploymentpublication.Result
+		var err error
+		if request.SchemaActivation != nil {
+			authorized, ok := controller.(deploymentpublication.SchemaAuthorizedController)
+			if !ok {
+				return nil, nil, errors.New("部署发布器不支持 Schema Activation")
+			}
+			result, err = authorized.PublishWithSchemaActivation(ctx, callCtx.GetTenantId(), request.Composition, request.DeploymentRevision, request.ExpectedDigest, request.SchemaActivation)
+		} else {
+			result, err = controller.Publish(ctx, callCtx.GetTenantId(), request.Composition, request.DeploymentRevision, request.ExpectedDigest)
+		}
 		if err != nil {
 			return nil, nil, err
 		}

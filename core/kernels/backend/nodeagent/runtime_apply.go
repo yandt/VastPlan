@@ -48,6 +48,9 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 	if err := transaction.syncTrustedDataModelInventory(ctx); err != nil {
 		return err
 	}
+	if err := transaction.applyTrustedSchemaActivation(ctx); err != nil {
+		return err
+	}
 	if err := transaction.commitMigrations(ctx); err != nil {
 		return err
 	}

@@ -6,6 +6,7 @@ import (
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/deploymentpublication"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/nodebootstrap"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfiguration"
 )
@@ -82,6 +83,7 @@ type ServiceRevision struct {
 	PreviewDigest            string                                              `json:"previewDigest"`
 	ArtifactReferences       []pluginv1.ArtifactReference                        `json:"artifactReferences"`
 	ConfigurationCatalog     pluginconfiguration.Catalog                         `json:"configurationCatalog"`
+	DataModelCatalog         deploymentpublication.DataModelCatalog              `json:"dataModelCatalog"`
 	ConfigurationCandidateID string                                              `json:"configurationCandidateId,omitempty"`
 	ConfigurationID          string                                              `json:"configurationId,omitempty"`
 	PreviousServiceRevision  uint64                                              `json:"previousServiceRevision,omitempty"`

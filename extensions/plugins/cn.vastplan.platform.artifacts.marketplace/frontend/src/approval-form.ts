@@ -10,7 +10,10 @@ export function installationApprovalForm(deployment: PlatformAdminClient, messag
     workflow: { title: message("action.approve", "批准"), description: "审批要求由当前 Approval Policy Profile 动态生成；提交时服务端会按冻结计划重新求值。", submitLabel: message("action.approve", "批准"), success: { notify: message("action.approve", "批准"), refreshCollection: true, close: true } },
     async prepare(selected) {
       const row = selected[0]; if (row === undefined) throw new Error("请选择一个安装候选");
-      const requirements = row.candidate.preview.approval?.requirements ?? [];
+      const requirements = [...(row.candidate.preview.approval?.requirements ?? [])];
+      if (row.candidate.preview.impact.schema.requiresBackup && !requirements.some((item) => item.field === "database.backup-ref")) {
+        requirements.push({ id: "database.schema-backup", field: "database.backup-ref", kind: "text-length", minLength: 8, maxLength: 512, title: "数据库备份证据引用", audit: true });
+      }
       const bindings: EvidenceBinding[] = requirements.map((requirement, index) => ({ property: `evidence${index + 1}`, field: requirement.field }));
       const initialValue: Record<string, unknown> = {};
       requirements.forEach((requirement, index) => {

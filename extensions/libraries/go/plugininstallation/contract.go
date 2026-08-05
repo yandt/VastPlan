@@ -9,6 +9,7 @@ import (
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	recordstorev1 "cdsoft.com.cn/VastPlan/contracts/schemas/recordstore/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/deploymentpublication"
 )
 
@@ -132,6 +133,30 @@ type Impact struct {
 	KernelRestartRequired bool          `json:"kernelRestartRequired"`
 	RootChanged           bool          `json:"rootChanged"`
 	Noop                  bool          `json:"noop"`
+	Schema                SchemaImpact  `json:"schema"`
+}
+
+type SchemaImpact struct {
+	Digest               string         `json:"digest"`
+	CurrentCatalogDigest string         `json:"currentCatalogDigest,omitempty"`
+	TargetCatalogDigest  string         `json:"targetCatalogDigest,omitempty"`
+	RequiresMigration    bool           `json:"requiresMigration"`
+	RequiresConfirmation bool           `json:"requiresConfirmation"`
+	RequiresBackup       bool           `json:"requiresBackup"`
+	RollbackMode         string         `json:"rollbackMode"`
+	Changes              []SchemaChange `json:"changes"`
+}
+
+type SchemaChange struct {
+	OwnerPluginID string                      `json:"ownerPluginId"`
+	ModelID       string                      `json:"modelId"`
+	StorageKind   string                      `json:"storageKind"`
+	Storage       recordstorev1.StorageTarget `json:"storage"`
+	FromVersion   uint64                      `json:"fromVersion,omitempty"`
+	To            recordstorev1.ModelRef      `json:"to"`
+	Kind          string                      `json:"kind"`
+	MigrationID   string                      `json:"migrationId,omitempty"`
+	Reasons       []string                    `json:"reasons,omitempty"`
 }
 
 // Preview is side-effect free. PlanDigest, repository revision, Platform
@@ -179,6 +204,15 @@ type Candidate struct {
 	CancelledBy               string                                      `json:"cancelledBy,omitempty"`
 	CreatedAt                 string                                      `json:"createdAt"`
 	UpdatedAt                 string                                      `json:"updatedAt"`
+	Migration                 MigrationState                              `json:"migration"`
+}
+
+type MigrationState struct {
+	Phase      string `json:"phase"`
+	PlanDigest string `json:"planDigest,omitempty"`
+	BackupRef  string `json:"backupRef,omitempty"`
+	Error      string `json:"error,omitempty"`
+	UpdatedAt  string `json:"updatedAt,omitempty"`
 }
 
 type CandidateLookup struct {

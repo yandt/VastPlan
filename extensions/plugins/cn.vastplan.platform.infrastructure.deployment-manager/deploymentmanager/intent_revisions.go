@@ -7,6 +7,7 @@ import (
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/deploymentpublication"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfiguration"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
@@ -223,10 +224,12 @@ func applyIntentPlan(revision *platformadminapi.ServiceRevision, plan intentPlan
 		revision.PreviewDigest = plan.preview.Digest
 		revision.ArtifactReferences = append(revision.ArtifactReferences[:0], plan.preview.ArtifactReferences...)
 		revision.ConfigurationCatalog = cloneJSON(plan.preview.ConfigurationCatalog)
+		revision.DataModelCatalog = cloneJSON(plan.preview.DataModelCatalog)
 	} else {
 		revision.Preview = deploymentv2.Deployment{}
 		revision.ArtifactReferences = nil
 		revision.ConfigurationCatalog = pluginconfiguration.Catalog{}
+		revision.DataModelCatalog = deploymentpublication.DataModelCatalog{}
 	}
 }
 

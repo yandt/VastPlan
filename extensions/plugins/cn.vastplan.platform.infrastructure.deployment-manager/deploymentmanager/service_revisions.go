@@ -13,6 +13,7 @@ import (
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	recordstorev1 "cdsoft.com.cn/VastPlan/contracts/schemas/recordstore/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/deploymentpublication"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
@@ -279,6 +280,12 @@ func (s *Service) publishServiceRevision(ctx context.Context, host sdk.Host, cal
 	if revision.Status != platformadminapi.ServiceApproved && revision.Status != platformadminapi.ServicePublishing {
 		return platformadminapi.ServiceRevision{}, errServiceState
 	}
+	schemaActivation, err := schemaActivationForRevision(state, revision)
+	if err != nil {
+		markInstallationMigration(state, revision.ID, "Blocked", err.Error(), s.now().Format(time.RFC3339Nano))
+		_ = s.saveLocked()
+		return platformadminapi.ServiceRevision{}, err
+	}
 	if isIntentRevision(revision) {
 		if revision.Intent == nil || revision.ResolutionReport == nil || revision.ApprovedPlanDigest == "" || revision.ApprovedPlanDigest != revision.ResolutionReport.PlanDigest {
 			return platformadminapi.ServiceRevision{}, errServiceState
@@ -290,6 +297,9 @@ func (s *Service) publishServiceRevision(ctx context.Context, host sdk.Host, cal
 	}
 	if revision.Status == platformadminapi.ServiceApproved {
 		revision.Status, revision.UpdatedAt = platformadminapi.ServicePublishing, s.now().Format(time.RFC3339Nano)
+		if schemaActivation != nil {
+			markInstallationMigration(state, revision.ID, "Scheduled", "", revision.UpdatedAt)
+		}
 		state.Revisions[index] = revision
 		if err := s.saveLocked(); err != nil {
 			return platformadminapi.ServiceRevision{}, err
@@ -308,12 +318,13 @@ func (s *Service) publishServiceRevision(ctx context.Context, host sdk.Host, cal
 		_ = s.saveLocked()
 		return platformadminapi.ServiceRevision{}, errServicePublish
 	}
-	result, err := publishService(ctx, host, call, revision.Composition, revision.ID, revision.PreviewDigest)
+	result, err := publishServiceWithSchemaActivation(ctx, host, call, revision.Composition, revision.ID, revision.PreviewDigest, schemaActivation)
 	if err != nil {
 		publishing := revision
 		revision.Status = platformadminapi.ServiceApproved
 		revision.UpdatedAt = s.now().Format(time.RFC3339Nano)
 		state.Revisions[index] = revision
+		markInstallationMigration(state, revision.ID, "Failed", err.Error(), revision.UpdatedAt)
 		if saveErr := s.saveLocked(); saveErr != nil {
 			state.Revisions[index] = publishing
 		}
@@ -323,7 +334,7 @@ func (s *Service) publishServiceRevision(ctx context.Context, host sdk.Host, cal
 	oldAuditLength, oldNextAudit := len(state.ServiceAudit), state.NextAudit
 	revision.Status, revision.Active, revision.PublishedBy = platformadminapi.ServicePublished, true, publisher
 	revision.ReferencePending = true
-	revision.Preview, revision.PreviewDigest, revision.KVRevision, revision.ArtifactReferences, revision.ConfigurationCatalog = result.Deployment, result.Digest, result.KVRevision, result.ArtifactReferences, result.ConfigurationCatalog
+	revision.Preview, revision.PreviewDigest, revision.KVRevision, revision.ArtifactReferences, revision.ConfigurationCatalog, revision.DataModelCatalog = result.Deployment, result.Digest, result.KVRevision, result.ArtifactReferences, result.ConfigurationCatalog, result.DataModelCatalog
 	revision.UpdatedAt = s.now().Format(time.RFC3339Nano)
 	for i := range state.Revisions {
 		if i != index && state.Revisions[i].Deployment == revision.Deployment {
@@ -472,7 +483,7 @@ func (s *Service) transitionService(ctx context.Context, host sdk.Host, call *co
 		if err != nil {
 			return platformadminapi.ServiceRevision{}, err
 		}
-		revision.Preview, revision.PreviewDigest, revision.ArtifactReferences, revision.ConfigurationCatalog = preview.Deployment, preview.Digest, preview.ArtifactReferences, preview.ConfigurationCatalog
+		revision.Preview, revision.PreviewDigest, revision.ArtifactReferences, revision.ConfigurationCatalog, revision.DataModelCatalog = preview.Deployment, preview.Digest, preview.ArtifactReferences, preview.ConfigurationCatalog, preview.DataModelCatalog
 	}
 	old := state.Revisions[index]
 	revision.Status, revision.UpdatedAt = to, s.now().Format(time.RFC3339Nano)
@@ -506,8 +517,12 @@ func previewService(ctx context.Context, host sdk.Host, call *contractv1.CallCon
 }
 
 func publishService(ctx context.Context, host sdk.Host, call *contractv1.CallContext, composition backendcompositionv1.ApplicationComposition, revision uint64, digest string) (deploymentpublication.Result, error) {
+	return publishServiceWithSchemaActivation(ctx, host, call, composition, revision, digest, nil)
+}
+
+func publishServiceWithSchemaActivation(ctx context.Context, host sdk.Host, call *contractv1.CallContext, composition backendcompositionv1.ApplicationComposition, revision uint64, digest string, activation *recordstorev1.SchemaActivation) (deploymentpublication.Result, error) {
 	var result deploymentpublication.Result
-	err := callKernelDeployment(ctx, host, call, deploymentpublication.KernelPublishService, deploymentpublication.PublishRequest{Composition: composition, DeploymentRevision: revision, ExpectedDigest: digest}, &result)
+	err := callKernelDeployment(ctx, host, call, deploymentpublication.KernelPublishService, deploymentpublication.PublishRequest{Composition: composition, DeploymentRevision: revision, ExpectedDigest: digest, SchemaActivation: activation}, &result)
 	return result, err
 }
 

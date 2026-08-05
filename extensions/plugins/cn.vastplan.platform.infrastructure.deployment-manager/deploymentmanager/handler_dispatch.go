@@ -96,7 +96,7 @@ func (s *Service) dispatchOperation(ctx context.Context, host sdk.Host, call *co
 	case plugininstallation.SubmitOperation:
 		out, err = s.SubmitPluginInstallationCandidate(ctx, host, call, request.CandidateID)
 	case plugininstallation.ApproveOperation:
-		out, err = s.ApprovePluginInstallationCandidate(ctx, host, call, request.CandidateID)
+		out, err = s.ApprovePluginInstallationCandidateWithEvidence(ctx, host, call, request.CandidateID, request.ApprovalEvidence)
 	case plugininstallation.ActivateOperation:
 		out, err = s.ActivatePluginInstallationCandidate(ctx, host, call, request.CandidateID)
 	case plugininstallation.CancelOperation:

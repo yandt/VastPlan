@@ -115,6 +115,10 @@ func errorCode(err error) string {
 		return "platform.plugin_installation.approval_denied"
 	case errors.Is(err, errInstallationApprovalRequired):
 		return "platform.plugin_installation.approval_required"
+	case errors.Is(err, errInstallationMigrationStale):
+		return "platform.plugin_installation.schema_plan_stale"
+	case errors.Is(err, errInstallationBackupRequired):
+		return "platform.plugin_installation.schema_backup_required"
 	case isSharedStateError(err):
 		return "platform.deployment.unavailable"
 	default:
@@ -166,7 +170,7 @@ func Descriptor() []byte {
 		,{"name":"listSelfServicePluginInstallationCandidates","description":"只列出 ManagementTarget 绑定服务的自助安装候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"installationTarget":{"type":"object"}},"required":["installationTarget"]}}
 		,{"name":"getSelfServicePluginInstallationCandidate","description":"读取 ManagementTarget 绑定服务的一个自助安装候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"candidateId":{"type":"string"},"installationTarget":{"type":"object"}},"required":["candidateId","installationTarget"]}}
 		,{"name":"submitPluginInstallationCandidate","description":"重新规划并提交插件安装候选审批","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"candidateId":{"type":"string"}},"required":["candidateId"]}}
-		,{"name":"approvePluginInstallationCandidate","description":"由不同主体批准插件安装候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"candidateId":{"type":"string"}},"required":["candidateId"]}}
+		,{"name":"approvePluginInstallationCandidate","description":"由不同主体确认插件与数据库迁移计划，可附加备份证据","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"candidateId":{"type":"string"},"approvalEvidence":{"type":"object","maxProperties":32}},"required":["candidateId"]}}
 		,{"name":"activatePluginInstallationCandidate","description":"通过既有可信发布链激活插件安装候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"candidateId":{"type":"string"}},"required":["candidateId"]}}
 		,{"name":"cancelPluginInstallationCandidate","description":"取消尚未提交的插件安装候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"candidateId":{"type":"string"}},"required":["candidateId"]}}
 		,{"name":"rollbackPluginInstallationCandidate","description":"以新的服务修订回滚已激活安装候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"candidateId":{"type":"string"}},"required":["candidateId"]}}

@@ -143,6 +143,10 @@ func (r *Reconciler) reconcileTarget(ctx context.Context, revision uint64, unit 
 }
 
 func runtimeFailureStage(err error) string {
+	var schemaErr *SchemaActivationError
+	if errors.As(err, &schemaErr) {
+		return "schema_" + schemaErr.Phase
+	}
 	var migrationErr *StateMigrationError
 	if errors.As(err, &migrationErr) {
 		return "migration_" + migrationErr.Phase

@@ -12,11 +12,12 @@ import (
 const (
 	SchemaURL       = "https://schemas.cdsoft.com.cn/vastplan/recordstore/v1/vastplan.record-store.schema.json"
 	Capability      = "foundation.data.record-store"
-	ContractVersion = "1.1.0"
+	ContractVersion = "1.2.0"
 	// TrustedInventoryConfigKey is reserved for the controller-projected,
 	// content-bound model inventory. It is injected after user configuration
 	// validation and must never be accepted from a plugin Profile.
 	TrustedInventoryConfigKey = "_hostDataModelInventory"
+	StorageBindingsConfigKey  = "recordStoreBindings"
 
 	OperationSyncModels   = "syncModels"
 	OperationCreate       = "create"
@@ -75,10 +76,11 @@ type SignedMigration struct {
 }
 
 type SyncModelsRequest struct {
-	Generation      uint64            `json:"generation"`
-	InventoryDigest string            `json:"inventoryDigest"`
-	Models          []SignedModel     `json:"models"`
-	Migrations      []SignedMigration `json:"migrations,omitempty"`
+	Generation       uint64            `json:"generation"`
+	InventoryDigest  string            `json:"inventoryDigest"`
+	Models           []SignedModel     `json:"models"`
+	Migrations       []SignedMigration `json:"migrations,omitempty"`
+	SchemaActivation *SchemaActivation `json:"schemaActivation,omitempty"`
 }
 
 type SyncModelsResult struct {
@@ -91,6 +93,32 @@ type SyncModelsResult struct {
 // connection-ref model must carry an exact active connection revision.
 type StorageTarget struct {
 	Connection *databasev1.ConnectionRef `json:"connection,omitempty"`
+}
+
+const (
+	SchemaActivationApproved  = "approved"
+	SchemaActivationAutomatic = "automatic"
+)
+
+// SchemaActivation is host-issued publication evidence. Plugins cannot place
+// it in ordinary configuration; the deployment publisher binds it to the
+// candidate inventory and Node Agent consumes it before publishing routes.
+type SchemaActivation struct {
+	CandidateID string                         `json:"candidateId"`
+	PlanDigest  string                         `json:"planDigest"`
+	Mode        string                         `json:"mode"`
+	ApprovedBy  string                         `json:"approvedBy,omitempty"`
+	Models      []SchemaMigrationAuthorization `json:"models"`
+}
+
+type SchemaMigrationAuthorization struct {
+	Model       ModelRef      `json:"model"`
+	Storage     StorageTarget `json:"storage"`
+	Kind        string        `json:"kind"`
+	MigrationID string        `json:"migrationId,omitempty"`
+	AllowSafe   bool          `json:"allowSafe,omitempty"`
+	AllowSigned bool          `json:"allowSigned,omitempty"`
+	BackupRef   string        `json:"backupRef,omitempty"`
 }
 
 type Record map[string]json.RawMessage

@@ -350,7 +350,7 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.4.1", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.data.relational.runtime", "version": "0.14.4", "channel": "stable" }
+        { "id": "cn.vastplan.foundation.data.relational.runtime", "version": "0.15.0", "channel": "stable" }
       ]
     },
     {
@@ -383,7 +383,7 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.4.1", "channel": "stable" },
-        { "id": "cn.vastplan.platform.artifacts.marketplace", "version": "0.3.2", "channel": "stable" }
+        { "id": "cn.vastplan.platform.artifacts.marketplace", "version": "0.3.3", "channel": "stable" }
       ]
     },
     {
@@ -420,7 +420,7 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.4.1", "channel": "stable" },
-        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.27.2", "channel": "stable" }
+        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.28.0", "channel": "stable" }
       ]
     },
     {

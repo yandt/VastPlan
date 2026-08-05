@@ -54,6 +54,10 @@ go run ./engineering/tools/datamodelgen \
 - 迁移由单一 Schema Controller 在备份检查、数据库迁移锁和持久账本保护下执行；
 - 普通 Repository 或 Workflow 无权自行运行 DDL。
 
+插件安装或升级时，可信内核从活动与候选 Artifact Lock 分别投影 `DataModelCatalog`，在用户批准前生成稳定 Schema Impact。生产流程固定为 `预览差异 -> 确认/审批 -> 备份证据（签名迁移） -> 发布候选 -> Node Agent 运行时复核 -> Schema Controller 执行 -> schemaStatus 验证 -> 路由提交`。开发态只可自动执行 `create/additive`；删除、改类型、收窄和数据重写即使在开发态也必须使用签名迁移，不能通过关闭插件版本校验绕过数据安全。
+
+`connection-ref` 模型在插件配置中使用宿主标准字段 `recordStoreBindings` 按模型 ID 绑定精确活动连接 revision，例如 `{"example.order":{"connection":{"resourceId":"orders.primary","revision":3}}}`。这只是非敏感引用；实际密码、驱动和池仍归 Connection Manager 与 Database Runtime。`platform-control` 模型不声明该配置，也不能把保留连接导出给插件。
+
 签名迁移的真源是插件制品而不是单独的临时密钥：插件在 `data-migrations/*.json` 交付 `data.migration.v1`，Manifest `backend.dataMigrations[]` 固定其路径、版本边和 SHA-256，整个 Manifest 再由制品供应链验签。可信组合器只能携带已验证 Plugin Inventory digest 和 Artifact SHA 同步目录；Runtime 要求目标模型与迁移属于同一插件、同一 Artifact，并按 generation 原子切换。
 
 破坏性迁移必须显式声明 `requiresBackup=true`、`requiresApproval=true` 和 `retrySafe=true`。Schema Controller 只接受受限单条 SQL 列表，禁止注释、多语句、事务控制和 `vastplan_*` 内部表；执行前必须同时验证当前连接 leader、备份完成与审批完成的宿主 evidence。账本成功记录模型版本、摘要和 migration ID；失败不会推进目标版本，调用方只能在恢复检查后重试同一已签名、声明可重放的迁移或从备份恢复。
@@ -69,6 +73,8 @@ go run ./engineering/tools/datamodelgen \
 - 已建立摘要、路径、模型身份和生成物零漂移门禁。
 
 P3b 已在 Database Runtime 内部实现 `record.store.v1` 的 CRUD、受限分页、Batch、实例亲和 UnitOfWork、幂等账本、事务内 Outbox，以及 PostgreSQL/MySQL Schema Controller 和 SQL Shared State。Schema Controller 只自动执行建表、增加可空字段和非唯一索引，并同时要求可信 SYSTEM 调用、Schema Controller credential evidence、数据库迁移锁和持久账本；其他变化保持 manual。SQL Shared State 延续既有 `sharedstate.Store` 的 1 MiB、CAS revision、游标分页、tenant/service 隔离和 fail-closed 语义。
+
+插件升级迁移编排已按 ADR-0195 接入统一 Installation Candidate。管理页面展示迁移阶段和完整预览，审批表单按策略动态收集证据；Backend readiness 成功前不会提交 Portal Activation。数据库不提供通用自动 downgrade：安全 expand 变化允许旧代继续读取，签名破坏性变化失败后进入 forward-fix 或从已验证备份恢复。
 
 这些模块已经进入 Database Runtime 主入口和公开 Manifest。Controller 从同一 Deployment 的精确制品生成宿主保留 Inventory，Node Agent 在候选路由发布前同步模型目录；Platform Control Bootstrap 在双 binding 切换前完成安全 Schema 准备。普通插件只使用 `extensions/sdk/go/recordstore` 等协议客户端，具体 Repository Adapter 仍归插件所有，SDK 不拥有 Provider、Engine 或业务 Repository 实现。
 

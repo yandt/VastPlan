@@ -5,6 +5,7 @@ import type { Principal } from "../identity/identity-provider";
 import { authorizeDeployment, callDeployment, rejectDeploymentRoute } from "./platform-deployment-route-support";
 import { requireEmptyJSONObject, withRequestJSON } from "./request-json";
 import { controllerInstallationRequest } from "./platform-deployment-installation-request";
+import { installationApprovalEvidence } from "./platform-deployment-installation-evidence";
 
 const candidateActions = Object.freeze({
   submit: { operation: "submitPluginInstallationCandidate", role: "platform.deployment.plugin.request" },
@@ -58,8 +59,8 @@ export class PlatformDeploymentInstallationRoutes {
     if (!authorizeDeployment(this.client, target, action.operation, true, principal, action.role, response)) return true;
     if (method !== "POST") return rejectDeploymentRoute(response, 405, "method_not_allowed", method);
     await withRequestJSON(request, response, async (body) => {
-      requireEmptyJSONObject(body);
-      await callDeployment({ client: this.client, principal, target, operation: action.operation, write: true, payload: { candidateId }, response, signal });
+      const approvalEvidence = parts[2] === "approve" ? installationApprovalEvidence(body) : (requireEmptyJSONObject(body), undefined);
+      await callDeployment({ client: this.client, principal, target, operation: action.operation, write: true, payload: { candidateId, ...(approvalEvidence === undefined || Object.keys(approvalEvidence).length === 0 ? {} : { approvalEvidence }) }, response, signal });
     });
     return true;
   }

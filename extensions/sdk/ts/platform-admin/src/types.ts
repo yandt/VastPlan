@@ -485,6 +485,22 @@ export interface PluginInstallationPreview {
     kernelRestartRequired: boolean;
     rootChanged: boolean;
     noop: boolean;
+    schema: {
+      digest: string;
+      currentCatalogDigest?: string;
+      targetCatalogDigest?: string;
+      requiresMigration: boolean;
+      requiresConfirmation: boolean;
+      requiresBackup: boolean;
+      rollbackMode: "generation" | "forward-fix";
+      changes: Array<{
+        ownerPluginId: string; modelId: string; storageKind: "platform-control" | "connection-ref";
+        storage: { connection?: { resourceId: string; revision: number } };
+        fromVersion?: number; to: { id: string; schemaVersion: number; sha256: string };
+        kind: "none" | "create" | "additive" | "signed" | "manual" | "retained";
+        migrationId?: string; reasons?: string[];
+      }>;
+    };
   };
   approval?: {
     status: "allowed" | "review-required" | "denied";
@@ -530,6 +546,7 @@ export interface PluginInstallationCandidate {
   cancelledBy?: string;
   createdAt: string;
   updatedAt: string;
+  migration: { phase: "NotRequired" | "Planned" | "Confirmed" | "Scheduled" | "Ready" | "Blocked" | "Failed"; planDigest?: string; backupRef?: string; error?: string; updatedAt?: string };
 }
 export interface BackendPluginRef { id: string; version: string; channel?: string; }
 export interface BackendServiceUnit {

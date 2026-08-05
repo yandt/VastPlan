@@ -107,10 +107,11 @@ describe("deployment-manager controller installation frontend", () => {
     const candidate = {
       id: "installation-a", status: "Ready", source: "controller", serviceRevisionId: 8, previousServiceRevisionId: 7,
       requestedBy: "alice", createdAt: "now", updatedAt: "now",
-      preview: { target: { kernel: "backend", deployment: "agents", unitId: "api" }, pluginId: "cn.example.agent", action: "upgrade", artifactLock: { roots: [{ pluginId: "cn.example.agent", constraint: "^2.0.0" }] } },
+      migration: { phase: "Ready" },
+      preview: { target: { kernel: "backend", deployment: "agents", unitId: "api" }, pluginId: "cn.example.agent", action: "upgrade", artifactLock: { roots: [{ pluginId: "cn.example.agent", constraint: "^2.0.0" }] }, impact: { schema: { requiresMigration: true } } },
       rollout: { status: "Pending", units: [{ id: "api", desired_replicas: 3, replicas: 2, ready_replicas: 1 }] },
     } as unknown as PluginInstallationCandidate;
-    expect(installationRow(candidate)).toMatchObject({ status: "Ready", rolloutStatus: "Pending", rolloutReplicas: "1/3", version: "^2.0.0", hasRollout: true });
+    expect(installationRow(candidate)).toMatchObject({ status: "Ready", rolloutStatus: "Pending", rolloutReplicas: "1/3", version: "^2.0.0", hasRollout: true, migrationPhase: "Ready", requiresMigration: true });
   });
 
   it("keeps every mutation data-driven and protected by its dedicated permission", () => {

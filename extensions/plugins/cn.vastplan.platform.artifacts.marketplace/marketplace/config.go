@@ -17,7 +17,7 @@ import (
 
 const (
 	PluginID       = "cn.vastplan.platform.artifacts.marketplace"
-	PluginVersion  = "0.3.2"
+	PluginVersion  = "0.3.3"
 	TokenPurpose   = "artifact.marketplace.read-token"
 	defaultTimeout = 8 * time.Second
 )

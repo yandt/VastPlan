@@ -4,7 +4,7 @@
 
 能力：`tool.package/foundation.data.relational.runtime`
 
-当前制品版本：`0.14.4`
+当前制品版本：`0.15.0`
 
 当前公开 Capability 契约：`foundation.data.relational.runtime@1.2.0`
 
@@ -84,3 +84,5 @@ Platform Control SQL Shared State 采用逐实例打开而不是 queue 随机路
 这些模块已经进入同一 Database Runtime Manifest 和进程主入口。Bootstrap 候选池不会作为普通 ConnectionRef 发布，而是同时绑定 Shared State 与平台 Record Store 的窄会话端口；`storage.kind=platform-control` 只有在已验证 Inventory 中、调用插件与模型 owner 一致时才可执行。PostgreSQL 由可信 Bootstrap Profile 把限定 schema 注入连接 `search_path`，MySQL 继续要求 schema 等于 database，因此 DataModel 表、迁移账本、幂等表和 Outbox 都落在保留平台命名空间。平台库 generation 切换会关闭旧池并使旧事务稳定进入 `transaction_lost`，不会回退本机 JSON。
 
 0.14.4 使用定长 SHA-256 `identity_hash` 作为幂等账本主键和 Outbox 唯一键，原始 owner/model/tenant/service/caller/key 字段仍完整保存并参与读取条件，避免摘要碰撞被当成同一身份，也避免 MySQL `utf8mb4` 宽复合索引超过 InnoDB 上限。2026-08-05 的真实 PostgreSQL/MySQL 四阶段矩阵已经通过 Provider/Record Store、故障恢复、并发 Bootstrap、完整重开及事务一致备份恢复。
+
+0.15.0 将 Record Store 契约提升至 1.2.0，接收仅由可信 Deployment Publisher 生成的 Schema Activation。Node Agent 在候选路由发布前逐模型执行 `schemaPlan/schemaApply/schemaStatus`；安全计划需明确授权，签名计划还需审批和备份 evidence，运行时计划与审批计划漂移时拒绝候选并保留旧 Generation。

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
@@ -64,71 +63,32 @@ func PlanMigration(dialect Dialect, previous *datamodelv1.Model, next datamodelv
 	if previous.ID != next.ID || previous.Storage != next.Storage || next.SchemaVersion <= previous.SchemaVersion {
 		return MigrationPlan{Kind: MigrationManual, Reasons: []string{"模型身份、存储绑定或 schemaVersion 不是安全前进变化"}}, nil
 	}
-	previousFields := map[string]datamodelv1.Field{}
-	for _, field := range previous.Fields {
-		previousFields[field.ID] = field
+	evolution := datamodelv1.ClassifyEvolution(previous, next)
+	if evolution.Kind == datamodelv1.EvolutionNone {
+		return MigrationPlan{Kind: MigrationNone}, nil
+	}
+	if evolution.Kind == datamodelv1.EvolutionManual {
+		return MigrationPlan{Kind: MigrationManual, Reasons: evolution.Reasons}, nil
 	}
 	var statements []databasev1.Statement
 	var mysqlClauses []string
-	var reasons []string
-	for _, field := range next.Fields {
-		old, exists := previousFields[field.ID]
-		if !exists {
-			if !field.Nullable {
-				reasons = append(reasons, "新增非空字段 "+field.ID)
-				continue
-			}
-			if dialect.ProviderID() == "mysql" {
-				mysqlClauses = append(mysqlClauses, fmt.Sprintf("ADD COLUMN %s %s NULL", dialect.Quote(field.Column), sqlType(dialect.ProviderID(), field)))
-			} else {
-				statements = append(statements, databasev1.Statement{SQL: fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s NULL", dialect.Quote(next.Storage.Table), dialect.Quote(field.Column), sqlType(dialect.ProviderID(), field)), Parameters: []databasev1.Value{}})
-			}
-			continue
-		}
-		delete(previousFields, field.ID)
-		if old != field {
-			reasons = append(reasons, "字段定义变化 "+field.ID)
+	for _, field := range evolution.AddedFields {
+		if dialect.ProviderID() == "mysql" {
+			mysqlClauses = append(mysqlClauses, fmt.Sprintf("ADD COLUMN %s %s NULL", dialect.Quote(field.Column), sqlType(dialect.ProviderID(), field)))
+		} else {
+			statements = append(statements, databasev1.Statement{SQL: fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s NULL", dialect.Quote(next.Storage.Table), dialect.Quote(field.Column), sqlType(dialect.ProviderID(), field)), Parameters: []databasev1.Value{}})
 		}
 	}
-	for fieldID := range previousFields {
-		reasons = append(reasons, "删除字段 "+fieldID)
-	}
-	if !equalStrings(previous.PrimaryKey, next.PrimaryKey) || !equalUnique(previous.UniqueConstraints, next.UniqueConstraints) || previous.Scope != next.Scope || !equalLock(previous.OptimisticLock, next.OptimisticLock) || !equalAudit(previous.Audit, next.Audit) || previous.Deletion != next.Deletion {
-		reasons = append(reasons, "主键、唯一约束、作用域、乐观锁、审计或删除策略变化")
-	}
-	oldIndexes := map[string]datamodelv1.Index{}
-	for _, index := range previous.Indexes {
-		oldIndexes[index.ID] = index
-	}
-	for _, index := range next.Indexes {
-		old, exists := oldIndexes[index.ID]
-		if !exists {
-			if index.Unique {
-				reasons = append(reasons, "新增唯一索引 "+index.ID)
-				continue
+	for _, index := range evolution.AddedIndexes {
+		if dialect.ProviderID() == "mysql" {
+			fields := map[string]datamodelv1.Field{}
+			for _, field := range next.Fields {
+				fields[field.ID] = field
 			}
-			if dialect.ProviderID() == "mysql" {
-				fields := map[string]datamodelv1.Field{}
-				for _, field := range next.Fields {
-					fields[field.ID] = field
-				}
-				mysqlClauses = append(mysqlClauses, fmt.Sprintf("ADD INDEX %s (%s)", dialect.Quote(constraintName(next.Storage.Table, index.ID)), joinColumns(dialect, fields, index.Fields)))
-			} else {
-				statements = append(statements, createIndexStatement(dialect, next, index))
-			}
-			continue
+			mysqlClauses = append(mysqlClauses, fmt.Sprintf("ADD INDEX %s (%s)", dialect.Quote(constraintName(next.Storage.Table, index.ID)), joinColumns(dialect, fields, index.Fields)))
+		} else {
+			statements = append(statements, createIndexStatement(dialect, next, index))
 		}
-		delete(oldIndexes, index.ID)
-		if !equalIndex(old, index) {
-			reasons = append(reasons, "索引定义变化 "+index.ID)
-		}
-	}
-	for indexID := range oldIndexes {
-		reasons = append(reasons, "删除索引 "+indexID)
-	}
-	if len(reasons) != 0 {
-		sort.Strings(reasons)
-		return MigrationPlan{Kind: MigrationManual, Reasons: reasons}, nil
 	}
 	if len(mysqlClauses) != 0 {
 		statements = []databasev1.Statement{ddl(fmt.Sprintf("ALTER TABLE %s %s", dialect.Quote(next.Storage.Table), strings.Join(mysqlClauses, ", ")))}

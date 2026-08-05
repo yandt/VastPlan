@@ -1,6 +1,7 @@
 import type { PlatformAdminClient, PluginInstallationCandidate } from "@vastplan/platform-admin";
 import { defineCollectionPage, type CollectionPageDefinition, type CollectionQuery, type JSONValue, type LocalizedText } from "@vastplan/workbench-sdk";
 import { installationForm } from "./installation-form.js";
+import { installationApprovalForm } from "./installation-approval-form.js";
 import { message } from "./localization.js";
 
 export interface InstallationRow extends Record<string, unknown> {
@@ -9,6 +10,8 @@ export interface InstallationRow extends Record<string, unknown> {
   rolloutStatus: string;
   rolloutReplicas: string;
   hasRollout: boolean;
+  migrationPhase: string;
+  requiresMigration: boolean;
   deployment: string;
   unitId: string;
   pluginId: string;
@@ -36,7 +39,6 @@ export function createPluginInstallationPage(deployment: PlatformAdminClient, re
   };
   const handlers: Record<string, (id: string) => Promise<unknown>> = {
     submit: (id) => deployment.submitPluginInstallationCandidate(id),
-    approve: (id) => deployment.approvePluginInstallationCandidate(id),
     activate: (id) => deployment.activatePluginInstallationCandidate(id),
     cancel: (id) => deployment.cancelPluginInstallationCandidate(id),
     rollback: (id) => deployment.rollbackPluginInstallationCandidate(id),
@@ -63,6 +65,7 @@ export function createPluginInstallationPage(deployment: PlatformAdminClient, re
         { key: "status", label: message("column.status", "候选状态"), format: "status", valueLabels: statusLabels, statusTones: { Planned: "info", PendingApproval: "warning", Approved: "info", Activating: "warning", Ready: "success", Stale: "error", Cancelled: "neutral", RolledBack: "neutral", Superseded: "neutral" }, defaultVisible: true, minWidth: 110 },
         { key: "rolloutStatus", label: message("installation.column.rollout", "滚动状态"), format: "status", valueLabels: rolloutLabels, statusTones: { Pending: "warning", Blocked: "warning", Ready: "success", Degraded: "warning", DependencyLost: "error", Failed: "error", Stopped: "neutral", Unknown: "neutral" }, defaultVisible: true, minWidth: 110 },
         { key: "rolloutReplicas", label: message("installation.column.replicas", "就绪副本"), defaultVisible: true, minWidth: 100 },
+        { key: "migrationPhase", label: message("installation.column.migration", "数据迁移"), format: "status", defaultVisible: true, minWidth: 110 },
         { key: "serviceRevisionId", label: "Revision", format: "number", defaultVisible: false, minWidth: 90 },
         { key: "requestedBy", label: message("installation.column.requestedBy", "申请人"), defaultVisible: false, minWidth: 120 },
         { key: "updatedAt", label: message("column.updated", "更新时间"), format: "datetime", defaultVisible: true, minWidth: 180 },
@@ -70,7 +73,7 @@ export function createPluginInstallationPage(deployment: PlatformAdminClient, re
       selection: "single",
       actions: installationActions(),
     },
-    forms: [installationForm(deployment, portalID, repository)],
+    forms: [installationForm(deployment, portalID, repository), installationApprovalForm(deployment)],
     overlays: [
       { id: "preview", surface: "drawer", width: "lg", title: message("installation.overlay.preview", "插件变更与配置预览"), async load(selected) {
         return { kind: "json", documents: [{ title: message("installation.document.preview", "候选预览"), value: (selected[0]?.candidate.preview ?? {}) as unknown as JSONValue }] };
@@ -114,6 +117,7 @@ export function installationRow(candidate: PluginInstallationCandidate): Install
   return {
     id: candidate.id, status: candidate.status, rolloutStatus: candidate.rollout?.status ?? "Unknown", hasRollout: candidate.rollout !== undefined,
     rolloutReplicas: units.length === 0 ? "—" : `${ready}/${desired}`,
+    migrationPhase: candidate.migration.phase, requiresMigration: candidate.preview.impact.schema.requiresMigration,
     deployment: candidate.preview.target.deployment, unitId: candidate.preview.target.unitId,
     pluginId: candidate.preview.pluginId, action: candidate.preview.action,
     version: candidate.preview.artifactLock?.roots.find((root) => root.pluginId === candidate.preview.pluginId)?.constraint ?? "—",
@@ -124,7 +128,7 @@ export function installationRow(candidate: PluginInstallationCandidate): Install
 function installationActions() {
   return [
     { id: "submit", label: message("action.submit", "提交审批"), icon: "upload", placement: "record.row", requiredPermissions: ["platform.deployment.plugin.request"], visibleWhen: { pointer: "/status", equals: "Planned" }, confirm: message("installation.confirm.submit", "提交前会重新解析 Planner；Catalog、计划或活动修订漂移会使候选失效。") },
-    { id: "approve", label: message("action.approve", "批准"), icon: "success", placement: "record.row", tone: "primary", requiredPermissions: ["platform.deployment.plugin.approve"], visibleWhen: { pointer: "/status", equals: "PendingApproval" }, confirm: message("installation.confirm.approve", "审批人必须与提交人不同。") },
+    { id: "approve", label: message("action.approve", "批准"), icon: "success", placement: "record.row", tone: "primary", requiredPermissions: ["platform.deployment.plugin.approve"], visibleWhen: { pointer: "/status", equals: "PendingApproval" }, form: "approve-plugin-installation" },
     { id: "activate", label: message("installation.action.activate", "激活"), icon: "publish", placement: "record.row", tone: "primary", requiredPermissions: ["platform.deployment.plugin.activate"], visibleWhen: { pointer: "/status", equals: "Approved" }, confirm: message("installation.confirm.activate", "激活将创建新的服务 Generation，由 Scheduler 滚动到目标节点。") },
     { id: "cancel", label: message("installation.action.cancel", "取消候选"), icon: "remove", placement: "record.row", tone: "danger", requiredPermissions: ["platform.deployment.plugin.request"], visibleWhen: { pointer: "/status", equals: "Planned" }, confirm: message("installation.confirm.cancel", "取消会移除尚未提交的服务草稿，但保留候选审计记录。") },
     { id: "rollback", label: message("action.rollback", "回滚"), icon: "refresh", placement: "record.row", tone: "danger", requiredPermissions: ["platform.deployment.plugin.activate"], visibleWhen: { pointer: "/status", equals: "Ready" }, confirm: message("installation.confirm.rollback", "回滚会创建更高的单调服务修订，不会覆盖历史版本。") },

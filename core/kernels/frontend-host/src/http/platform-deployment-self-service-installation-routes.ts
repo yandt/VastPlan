@@ -4,7 +4,8 @@ import type { PlatformManagementTarget } from "../capabilities/platform-manageme
 import type { Principal } from "../identity/identity-provider";
 import { authorizeDeployment, callDeployment, rejectDeploymentRoute } from "./platform-deployment-route-support";
 import { selfServiceInstallationRequest } from "./platform-deployment-installation-request";
-import { RequestJSONError, requireEmptyJSONObject, requireJSONObject, withRequestJSON } from "./request-json";
+import { requireEmptyJSONObject, withRequestJSON } from "./request-json";
+import { installationApprovalEvidence } from "./platform-deployment-installation-evidence";
 
 const actions = Object.freeze({
   submit: { operation: "submitSelfServicePluginInstallationCandidate", role: "platform.deployment.plugin.request" },
@@ -50,7 +51,7 @@ export class PlatformDeploymentSelfServiceInstallationRoutes {
     if (method !== "POST") return rejectDeploymentRoute(response, 405, "method_not_allowed", method);
     if (!authorizeDeployment(this.client, target, action.operation, true, principal, action.role, response)) return true;
     await withRequestJSON(request, response, async (body) => {
-      const approvalEvidence = parts[2] === "approve" ? evidenceRequest(body) : (requireEmptyJSONObject(body), undefined);
+      const approvalEvidence = parts[2] === "approve" ? installationApprovalEvidence(body) : (requireEmptyJSONObject(body), undefined);
       await callDeployment({ client: this.client, principal, target, operation: action.operation, write: true, payload: { candidateId, installationTarget, ...(approvalEvidence === undefined ? {} : { approvalEvidence }) }, response, signal });
     });
     return true;
@@ -65,14 +66,6 @@ export class PlatformDeploymentSelfServiceInstallationRoutes {
   }
 }
 
-function evidenceRequest(value: unknown): Readonly<Record<string, unknown>> {
-  const request = requireJSONObject(value);
-  if (Object.keys(request).some((key) => key !== "evidence")) throw new RequestJSONError("审批请求字段无效");
-  if (request.evidence === undefined) return Object.freeze({});
-  const evidence = requireJSONObject(request.evidence);
-  if (Object.keys(evidence).length > 32 || Object.keys(evidence).some((key) => !/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$/.test(key))) throw new RequestJSONError("审批证据字段无效");
-  return evidence;
-}
 
 function candidateID(value: string | undefined): string | undefined {
   if (value === undefined) return undefined;

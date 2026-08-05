@@ -12,6 +12,7 @@
 - 列出平台预授权的 Backend 部署目标；
 - 管理 Application Intent、Resolution Report、异人审批、发布审计和单调 revision 回滚；
 - 通过统一 `PluginInstallationIntent` 协议为平台控制器、服务自助和开发自动化生成无副作用的应用插件安装、升级、卸载预览；
+- 在插件升级审批前展示 DataModel 迁移影响，绑定备份证据，并在 Backend readiness 成功后才提交 Portal；
 - 提供跨服务“服务插件”页面，把批量目标拆成独立候选，并在用户刷新时聚合内核 readiness 副本进度；
 - 为 plugin-settings 创建 candidate 绑定的 Application 配置修订，禁止普通发布入口绕过候选凭证准备，并在 readiness 失败时自动发布回滚 revision；
 - 为 Platform Profile restart 配置持久化独立 Saga：调用窄内核端口准备候选、执行异人审批、激活 Catalog、发布 Deployment、等待精确 readiness，并在失败时依次生成单调 Catalog/Deployment 回滚修订；

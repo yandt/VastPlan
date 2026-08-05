@@ -51,7 +51,7 @@ func TestTrustedDataModelProjectionBindsVerifiedDeploymentAndReservedConfig(t *t
 	runtimeManifest := []byte(`{
   "id":"com.example.record-runtime","name":"runtime","description":"runtime","version":"1.0.0","publisher":"example",
   "engines":{"backend":"^1.0"},
-  "runtime":{"instancePolicy":"active-active","stateModel":"external-shared","visibility":"cluster","routing":"queue","provides":[{"extensionPoint":"tool.package","capability":"foundation.data.record-store","contractVersion":"1.1.0","visibility":"cluster","routing":"queue"}]},
+  "runtime":{"instancePolicy":"active-active","stateModel":"external-shared","visibility":"cluster","routing":"queue","provides":[{"extensionPoint":"tool.package","capability":"foundation.data.record-store","contractVersion":"1.2.0","visibility":"cluster","routing":"queue"}]},
   "activation":["onStartup"],"entry":{"backend":"backend/main"},
   "contributes":{"backend":{"tools":[{"id":"foundation.data.record-store","service_role":"backend","title":"records","subcommands":[]}]}}
 }`)
@@ -79,7 +79,7 @@ func TestTrustedDataModelProjectionBindsVerifiedDeploymentAndReservedConfig(t *t
 		Version: 2, Revision: 7, Metadata: deploymentv1.Metadata{Name: "test", Tenant: "tenant-a"},
 		Units: []deploymentv2.ServiceUnit{
 			{ID: "runtime", Enabled: true, Plugins: []deploymentv1.PluginRef{{ID: "com.example.record-runtime", Version: "1.0.0", Channel: "stable", SHA256: artifactSHA}}},
-			{ID: "orders", Enabled: true, Plugins: []deploymentv1.PluginRef{{ID: "com.example.orders", Version: "1.0.0", Channel: "stable", SHA256: artifactSHA}}},
+			{ID: "orders", Enabled: true, Plugins: []deploymentv1.PluginRef{{ID: "com.example.orders", Version: "1.0.0", Channel: "stable", SHA256: artifactSHA}}, Config: map[string]any{"plugins": map[string]any{"com.example.orders": map[string]any{recordstorev1.StorageBindingsConfigKey: map[string]any{"example.orders": map[string]any{"connection": map[string]any{"resourceId": "orders.primary", "revision": 1}}}}}}},
 		},
 	}
 	projection, err := projectTrustedDataModels(deployment, reader)

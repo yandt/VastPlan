@@ -16,8 +16,10 @@ import (
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	recordstorev1 "cdsoft.com.cn/VastPlan/contracts/schemas/recordstore/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/compositioncore"
 	sharedcontrolplane "cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
+	"cdsoft.com.cn/VastPlan/core/shared/go/datamodelinventory"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/deploymentpublication"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfiguration"
 )
@@ -246,9 +248,13 @@ func (p *Publisher) previewWithCatalog(tenantID string, application backendcompo
 	if err != nil {
 		return deploymentpublication.Result{}, fmt.Errorf("生成可信插件配置目录: %w", err)
 	}
+	dataModels, err := datamodelinventory.Project(resolved, p.artifacts)
+	if err != nil {
+		return deploymentpublication.Result{}, fmt.Errorf("生成可信 DataModel 目录: %w", err)
+	}
 	return deploymentpublication.Result{
 		Deployment: resolved, Digest: resolved.Digest(), PlatformCatalogDigest: catalog.Digest(), PlatformProfile: profileRef,
-		ArtifactReferences: references, ConfigurationCatalog: configurationCatalog,
+		ArtifactReferences: references, ConfigurationCatalog: configurationCatalog, DataModelCatalog: dataModels.Catalog,
 	}, nil
 }
 
@@ -281,6 +287,10 @@ func resolvedArtifactReferences(deployment deploymentv2.Deployment, artifacts ma
 }
 
 func (p *Publisher) Publish(ctx context.Context, tenantID string, application backendcompositionv1.ApplicationComposition, deploymentRevision uint64, expectedDigest string) (deploymentpublication.Result, error) {
+	return p.PublishWithSchemaActivation(ctx, tenantID, application, deploymentRevision, expectedDigest, nil)
+}
+
+func (p *Publisher) PublishWithSchemaActivation(ctx context.Context, tenantID string, application backendcompositionv1.ApplicationComposition, deploymentRevision uint64, expectedDigest string, schemaActivation *recordstorev1.SchemaActivation) (deploymentpublication.Result, error) {
 	preview, err := p.Preview(ctx, tenantID, application, deploymentRevision)
 	if err != nil {
 		return deploymentpublication.Result{}, err
@@ -296,6 +306,8 @@ func (p *Publisher) Publish(ctx context.Context, tenantID string, application ba
 	if err != nil || currentCatalog.Digest() != preview.PlatformCatalogDigest || currentProfile != preview.PlatformProfile {
 		return deploymentpublication.Result{}, errors.New("发布期间 Backend Platform Catalog 已变化，必须重新预览和审批")
 	}
+	preview.Deployment.Resolution.SchemaActivation = cloneSchemaActivation(schemaActivation)
+	preview.Digest = preview.Deployment.Digest()
 	return p.apply(ctx, tenantID, preview)
 }
 
@@ -331,6 +343,15 @@ func (p *Publisher) PublishCandidate(ctx context.Context, tenantID string, appli
 		return deploymentpublication.Result{}, errors.New("候选发布期间 Backend Platform Catalog 已变化")
 	}
 	return p.apply(ctx, tenantID, preview)
+}
+
+func cloneSchemaActivation(source *recordstorev1.SchemaActivation) *recordstorev1.SchemaActivation {
+	if source == nil {
+		return nil
+	}
+	cloned := *source
+	cloned.Models = append([]recordstorev1.SchemaMigrationAuthorization(nil), source.Models...)
+	return &cloned
 }
 
 func (p *Publisher) apply(ctx context.Context, tenantID string, preview deploymentpublication.Result) (deploymentpublication.Result, error) {

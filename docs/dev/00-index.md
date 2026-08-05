@@ -275,6 +275,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [ADR-0192 插件最小升级与兼容影响解析](decisions/ADR-0192-插件最小升级与兼容影响解析.md)
 - [ADR-0193 第一方插件边界与 Capability 契约版本](decisions/ADR-0193-第一方插件边界与Capability契约版本.md)
 - [ADR-0194 平台控制数据库与声明式数据分层](decisions/ADR-0194-平台控制数据库与声明式数据分层.md)
+- [ADR-0195 插件升级前 DataModel 迁移门禁](decisions/ADR-0195-插件升级前DataModel迁移门禁.md)
 
 ### 通用版本账本
 

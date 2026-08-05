@@ -67,6 +67,11 @@ func ParseRequest(operation string, raw []byte) (any, error) {
 	if err := decoder.Decode(target); err != nil {
 		return nil, err
 	}
+	if request, ok := target.(*SyncModelsRequest); ok {
+		if err := ValidateSchemaActivation(request.SchemaActivation); err != nil {
+			return nil, err
+		}
+	}
 	var trailing any
 	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
 		return nil, errors.New("Record Store 请求只能包含一个 JSON 文档")
@@ -104,6 +109,19 @@ func validateDefinition(definition string, raw []byte) error {
 	}
 	if err := schemaState.definitions[definition].Validate(instance); err != nil {
 		return fmt.Errorf("Record Store %s 不符合 Schema: %w", definition, err)
+	}
+	return nil
+}
+
+// AddResources registers the canonical Record Store schema for contracts that
+// embed host-owned schema activation evidence.
+func AddResources(compiler *jsonschema.Compiler) error {
+	document, err := jsonschema.UnmarshalJSON(bytes.NewReader(schemaJSON))
+	if err != nil {
+		return fmt.Errorf("解析 Record Store Schema: %w", err)
+	}
+	if err := compiler.AddResource(SchemaURL, document); err != nil {
+		return fmt.Errorf("登记 Record Store Schema: %w", err)
 	}
 	return nil
 }

@@ -73,13 +73,38 @@
         "documentBase64": { "type": "string", "minLength": 16, "maxLength": 4194304, "contentEncoding": "base64" }
       }
     },
+    "schemaMigrationAuthorization": {
+      "type": "object", "additionalProperties": false,
+      "required": ["model", "storage", "kind"],
+      "properties": {
+        "model": { "$ref": "#/$defs/modelRef" },
+        "storage": { "$ref": "#/$defs/storage" },
+        "kind": { "enum": ["create", "additive", "signed"] },
+        "migrationId": { "$ref": "#/$defs/id" },
+        "allowSafe": { "type": "boolean" },
+        "allowSigned": { "type": "boolean" },
+        "backupRef": { "type": "string", "minLength": 1, "maxLength": 512 }
+      }
+    },
+    "schemaActivation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["candidateId", "planDigest", "mode", "models"],
+      "properties": {
+        "candidateId": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "planDigest": { "$ref": "#/$defs/sha256" },
+        "mode": { "enum": ["approved", "automatic"] },
+        "approvedBy": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "models": { "type": "array", "maxItems": 512, "items": { "$ref": "#/$defs/schemaMigrationAuthorization" } }
+      }
+    },
     "syncModelsRequest": {
       "type": "object", "additionalProperties": false, "required": ["generation", "inventoryDigest", "models"],
       "properties": {
         "generation": { "type": "integer", "minimum": 1 },
         "inventoryDigest": { "$ref": "#/$defs/sha256" },
         "models": { "type": "array", "maxItems": 512, "items": { "$ref": "#/$defs/signedModel" } },
-        "migrations": { "type": "array", "maxItems": 1024, "items": { "$ref": "#/$defs/signedMigration" } }
+        "migrations": { "type": "array", "maxItems": 1024, "items": { "$ref": "#/$defs/signedMigration" } },
+        "schemaActivation": { "$ref": "#/$defs/schemaActivation" }
       }
     },
     "base": {

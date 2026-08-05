@@ -22,6 +22,7 @@ type installationCandidateRecord struct {
 	CancelledAt               string                            `json:"cancelledAt,omitempty"`
 	CreatedAt                 string                            `json:"createdAt"`
 	UpdatedAt                 string                            `json:"updatedAt"`
+	Migration                 plugininstallation.MigrationState `json:"migration"`
 }
 
 type serviceRevisionWorkflowOwner string
@@ -87,6 +88,7 @@ func projectInstallationCandidate(state *tenantState, record installationCandida
 		ServiceRevisionID: record.ServiceRevisionID, PreviousServiceRevisionID: record.PreviousServiceRevisionID,
 		RequestedBy: record.RequestedBy, CancelledBy: record.CancelledBy,
 		CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt,
+		Migration: record.Migration,
 	}
 	if record.CancelledAt != "" {
 		result.Status = plugininstallation.CandidateCancelled

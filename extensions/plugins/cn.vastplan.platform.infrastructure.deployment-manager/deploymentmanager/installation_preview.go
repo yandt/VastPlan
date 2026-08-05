@@ -96,6 +96,13 @@ func (s *Service) planPluginInstallation(ctx context.Context, host sdk.Host, cal
 		return plannedInstallation{}, err
 	}
 	if decision != nil {
+		if preview.Impact.Schema.RequiresBackup {
+			decision.Status = approvalv2.DecisionReviewRequired
+			decision.Requirements = append(decision.Requirements, approvalv2.EvidenceRequirement{
+				ID: "database.schema-backup", Field: "database.backup-ref", Kind: approvalv2.EvidenceTextLength,
+				MinLength: 8, MaxLength: 512, Title: "数据库备份证据引用", Audit: true,
+			})
+		}
 		preview.Approval = decision
 		preview.Impact.RequiresApproval = decision.Status != approvalv2.DecisionAllowed
 	}
@@ -129,6 +136,17 @@ func buildInstallationPreview(source plugininstallation.Source, request pluginin
 			ApplyStrategy: plugininstallation.ApplyServiceGeneration, RequiresApproval: source != plugininstallation.SourceDevelopment,
 			KernelRestartRequired: false, RootChanged: rootChanged, Noop: !rootChanged && len(changes) == 0,
 		},
+	}
+	if plan.preview != nil {
+		result.Impact.Schema = plugininstallation.BuildSchemaImpact(active.DataModelCatalog, plan.preview.DataModelCatalog)
+		if result.Impact.Schema.RequiresMigration && source != plugininstallation.SourceDevelopment {
+			result.Impact.RequiresApproval = true
+		}
+		for _, change := range result.Impact.Schema.Changes {
+			if change.Kind == "manual" {
+				return plugininstallation.Preview{}, errors.New("DataModel 变化缺少可执行的签名迁移: " + change.ModelID)
+			}
+		}
 	}
 	if plan.report.ArtifactLock != nil {
 		result.RepositoryRevision = plan.report.ArtifactLock.RepositoryRevision

@@ -57,7 +57,7 @@ P4b 已完成 Database Runtime 进程内 Bootstrap 适配：PostgreSQL/MySQL 初
 
 P4c 已把进程边界接通：
 
-- Database Runtime `0.13.0` 同时贡献公开数据面、`foundation.data.record-store@1.1.0`，以及仅宿主可调用的 `foundation.state.shared.sql.bootstrap@1.0.0` 和 `foundation.state.shared.sql@1.0.0`；Controller 从 Deployment 锁定的已验证制品投影 DataModel Inventory，只向该 Runtime 注入宿主保留配置，Node Agent 在候选能力进入公开路由前使用 Host 固定的 SYSTEM 身份同步并从普通插件配置中摘除目录；其用户配置 `clusterMaxOpen` 与 Scheduler 可信派生的 `clusterMaxReplicas` 在组合根生成每实例连接硬预算，覆盖 active-active 与双代轮换的最坏连接占用；
+- Database Runtime `0.15.0` 同时贡献公开数据面、`foundation.data.record-store@1.2.0`，以及仅宿主可调用的 `foundation.state.shared.sql.bootstrap@1.0.0` 和 `foundation.state.shared.sql@1.0.0`；Controller 从 Deployment 锁定的已验证制品投影 DataModel Inventory，只向该 Runtime 注入宿主保留配置，Node Agent 在候选能力进入公开路由前使用 Host 固定的 SYSTEM 身份同步，并在收到与候选目录精确绑定的 Schema Activation 授权后执行迁移，再从普通插件配置中摘除目录；其用户配置 `clusterMaxOpen` 与 Scheduler 可信派生的 `clusterMaxReplicas` 在组合根生成每实例连接硬预算，覆盖 active-active 与双代轮换的最坏连接占用；
 - Bootstrap Capability 只接受固定 SYSTEM caller `platform-control-bootstrap/primary`，目标 logical service 和 routing domain 也由宿主固定；
 - 宿主用 `RemoteBootstrapper/RemoteStore` 把跨进程 Capability 重新适配为原有 `sharedstate.Store`，业务插件看不到传输差异；
 - Deployment/Assignment 增加 `startup_tier=bootstrap|full`，默认 `full`。Node Agent 可以完成 Full 单元的下载、验签和安装，但在 Shared State Ready 前拒绝激活；
