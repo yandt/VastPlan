@@ -40,6 +40,9 @@ describe("Platform Control bootstrap surface", () => {
       expect(pageHTML).toContain("配置平台控制数据库");
       expect(pageHTML).toContain("ensureCurrentPage");
       expect(pageHTML).toContain("配置页面已更新，正在重新加载");
+      expect(pageHTML).toContain("const request=payload();busy(true)");
+      expect(pageHTML).toContain("mutate('/v1/bootstrap/platform-control/test','POST',request)");
+      expect(pageHTML).not.toContain("body:JSON.stringify(payload())");
       const pageHead = await fetch(`${origin}/bootstrap/platform-control`, { method: "HEAD", headers: { Cookie: cookie } });
       expect(pageHead.status).toBe(200);
       expect(pageHead.headers.get(bootstrapPlatformControlPageContractHeader)).toBe(bootstrapPlatformControlPageContract);
