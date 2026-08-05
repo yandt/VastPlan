@@ -39,8 +39,8 @@ func (s *engineSession) Query(_ context.Context, statement databasev1.Statement,
 
 func (s *engineSession) Execute(_ context.Context, statement databasev1.Statement) (databasev1.ExecuteResult, error) {
 	if strings.Contains(statement.SQL, "vastplan_record_idempotency") {
-		key := valueString(statement.Parameters[5])
-		s.idempotency[key] = [2]databasev1.Value{statement.Parameters[6], statement.Parameters[7]}
+		key := valueString(statement.Parameters[6])
+		s.idempotency[key] = [2]databasev1.Value{statement.Parameters[7], statement.Parameters[8]}
 		return databasev1.ExecuteResult{RowsAffected: 1}, nil
 	}
 	s.mutations++

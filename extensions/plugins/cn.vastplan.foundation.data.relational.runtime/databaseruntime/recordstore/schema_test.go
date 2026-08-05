@@ -45,8 +45,20 @@ func TestDDLUsesProviderDialectAndInternalLedgers(t *testing.T) {
 		t.Fatal(created.Statements[0].SQL)
 	}
 	mysql, _ := DialectFor("mysql")
-	if statements := InternalSchemaStatements(mysql); len(statements) != 3 || !strings.Contains(statements[0].SQL, "`vastplan_schema_migrations`") {
+	statements := InternalSchemaStatements(mysql)
+	if len(statements) != 3 || !strings.Contains(statements[0].SQL, "`vastplan_schema_migrations`") {
 		t.Fatalf("MySQL internal schema: %+v", statements)
+	}
+	if !strings.Contains(statements[1].SQL, "PRIMARY KEY (`identity_hash`)") ||
+		!strings.Contains(statements[2].SQL, "UNIQUE KEY `vastplan_outbox_idempotency` (`identity_hash`)") {
+		t.Fatalf("MySQL 内部幂等键必须使用定长身份摘要，不能产生超宽复合索引: %+v", statements)
+	}
+}
+
+func TestIdentityDigestIsUnambiguousAndStable(t *testing.T) {
+	first := identityDigest("ab", "c")
+	if first == identityDigest("a", "bc") || first != identityDigest("ab", "c") || len(first) != 64 {
+		t.Fatalf("幂等身份摘要必须按字段边界稳定生成: %q", first)
 	}
 }
 

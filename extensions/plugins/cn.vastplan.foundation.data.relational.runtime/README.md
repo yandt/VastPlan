@@ -8,7 +8,7 @@
 
 ## 当前阶段
 
-0.14.3 已完成 Database Runtime v1 wire 契约、Provider SPI、可信运行实例 identity、加密 Material Lease 中继、统一 Pool Manager、PostgreSQL/MySQL Provider、connection-manager 发布闭环、active-active 无状态执行、实例亲和事务、SQL Shared State、公开 `foundation.data.record-store@1.1.0`、Schema Controller 以及标准指标出口。Controller 会从同一 Deployment 锁定的已验证制品投影 DataModel 与签名迁移目录，只向 Record Store Runtime 注入宿主保留的同代 Inventory；Node Agent 从普通插件配置中摘除该目录，并在候选实例进入公开路由前用 Host 固定的 SYSTEM 身份原子同步，用户配置和插件进程均不能伪造该证据。平台控制数据库初始化成功后，同一候选池同时绑定 Shared State 与平台 Record Store 的窄会话端口；普通插件看不到保留连接、驱动、口令或连接 grant，只有已签名且 owner 匹配的 `storage.kind=platform-control` DataModel 可经 Record Store 使用该通道。候选绑定前会先按 DataModel 稳定 ID 顺序执行安全 Schema 计划，任何人工迁移或建表失败都会关闭候选并保留旧 generation。两个 Provider 共用 `database/sql` 执行适配层、无损 wire 值转换、稳定错误分类、结果行数上限和池指标；Pool Manager 继续负责节点/租户/连接三级预算、调用方并发和等待队列上限、revision/generation 原子切换、旧池有界排空与关闭失败保守占额。0.14.3 同时补齐 SQL Bootstrap 与 SQL Shared State 两条宿主专用贡献的签名工具目录，并让运行时 Descriptor 与 Manifest 精确一致。
+0.14.4 已完成 Database Runtime v1 wire 契约、Provider SPI、可信运行实例 identity、加密 Material Lease 中继、统一 Pool Manager、PostgreSQL/MySQL Provider、connection-manager 发布闭环、active-active 无状态执行、实例亲和事务、SQL Shared State、公开 `foundation.data.record-store@1.1.0`、Schema Controller 以及标准指标出口。Controller 会从同一 Deployment 锁定的已验证制品投影 DataModel 与签名迁移目录，只向 Record Store Runtime 注入宿主保留的同代 Inventory；Node Agent 从普通插件配置中摘除该目录，并在候选实例进入公开路由前用 Host 固定的 SYSTEM 身份原子同步，用户配置和插件进程均不能伪造该证据。平台控制数据库初始化成功后，同一候选池同时绑定 Shared State 与平台 Record Store 的窄会话端口；普通插件看不到保留连接、驱动、口令或连接 grant，只有已签名且 owner 匹配的 `storage.kind=platform-control` DataModel 可经 Record Store 使用该通道。候选绑定前会先按 DataModel 稳定 ID 顺序执行安全 Schema 计划，任何人工迁移或建表失败都会关闭候选并保留旧 generation。两个 Provider 共用 `database/sql` 执行适配层、无损 wire 值转换、稳定错误分类、结果行数上限和池指标；Pool Manager 继续负责节点/租户/连接三级预算、调用方并发和等待队列上限、revision/generation 原子切换、旧池有界排空与关闭失败保守占额。0.14.4 把幂等账本与 Outbox 的宽复合唯一键收敛为 SHA-256 身份键，同时保留原始身份字段参与碰撞复核，避免 MySQL InnoDB 索引宽度上限影响长插件、模型或租户标识。
 
 当前制品开放 `providers/metrics/probe/activate/retire/query/execute`。只有 connection-manager 能发布、探测和退役连接；`metrics` 仅允许 connection-manager 或 SYSTEM 监控采集器读取；`query/execute` 拒绝用户直调，普通插件、Agent 或 Runner 还必须取得宿主投影的 `database.connection/<resourceId>` grant。管理面主动发布会命中一个 queue 副本，其他 active-active 副本首次收到该 revision 请求时，通过只允许 Runtime 调用的 `resolveRuntime` 内部操作惰性取得定义并幂等建池，因此扩容和重启不依赖伪广播。每个副本最多缓存 1 秒管理面确认；过期后同一连接的并发请求合并验证，删除会在该有界 lease 内排空本副本所有 project 池，避免未命中主动 retire 的副本无限继续服务。
 
@@ -58,7 +58,7 @@ Provider options 强制使用结构化 JSON，不接受 DSN。两者都要求 `u
 
 - 真实 Provider、Record Store 与 SQL Shared State；
 - 死锁冲突、调用方/连接池预算耗尽和旧 generation 强制 drain；
-- 网络冻结、数据库停止及恢复；
+- 网络冻结、数据库停止及恢复；恢复必须由全新连接池重新探测成功，不能复用旧池的偶然健康状态；
 - Platform Control 两个 Runtime 副本并发初始化；
 - 关闭全部内存池并重建 Registry 后，Profile 仍能重新打开且 Shared State 数据不丢失；
 - 使用 PostgreSQL `pg_dump/pg_restore` 和 MySQL `mysqldump/mysql` 完成事务一致备份、删除原命名空间、隔离恢复，并重新打开 Store 验证 CAS revision 与内容。

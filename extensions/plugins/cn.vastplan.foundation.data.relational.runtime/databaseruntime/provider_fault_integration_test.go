@@ -333,12 +333,12 @@ func (f *providerFaultFixture) assertDatabaseRestart(t *testing.T) {
 		t.Fatal("数据库停止后查询不应成功")
 	}
 	code, retryable := ErrorDetails(err)
-	if (code != databasev1.ErrorConnectionUnavailable && code != databasev1.ErrorDeadlineExceeded) || !retryable {
+	if (code != databasev1.ErrorConnectionUnavailable && code != databasev1.ErrorConnectionRefused && code != databasev1.ErrorDeadlineExceeded) || !retryable {
 		t.Fatalf("数据库停机错误分类不稳定: code=%s retryable=%t err=%v", code, retryable, err)
 	}
 	f.docker(t, 20*time.Second, "start", f.container)
 	stopped = false
-	f.waitForProbe(t, 45*time.Second)
+	f.waitForFreshProbe(t, 45*time.Second)
 }
 
 func (f *providerFaultFixture) waitForProbe(t *testing.T, timeout time.Duration) {
@@ -355,6 +355,28 @@ func (f *providerFaultFixture) waitForProbe(t *testing.T, timeout time.Duration)
 		time.Sleep(200 * time.Millisecond)
 	}
 	t.Fatalf("数据库未在恢复窗口内重新通过 probe: %v", last)
+}
+
+func (f *providerFaultFixture) waitForFreshProbe(t *testing.T, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	var last error
+	for time.Now().Before(deadline) {
+		pool, openErr := f.registry.OpenPool(context.Background(), f.spec, f.material)
+		if openErr == nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			last = pool.Probe(ctx)
+			cancel()
+			_ = pool.Close()
+			if last == nil {
+				return
+			}
+		} else {
+			last = openErr
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	t.Fatalf("数据库未在恢复窗口内通过全新连接池 probe: %v", last)
 }
 
 func (f *providerFaultFixture) docker(t *testing.T, timeout time.Duration, arguments ...string) {

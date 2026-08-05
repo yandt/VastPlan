@@ -18,6 +18,8 @@ reserve_port() {
 
 POSTGRES_PORT=""
 MYSQL_PORT=""
+POSTGRES_START_ERROR=""
+MYSQL_START_ERROR=""
 
 cleanup() {
   docker rm -f "$POSTGRES_CONTAINER" "$MYSQL_CONTAINER" >/dev/null 2>&1 || true
@@ -47,19 +49,20 @@ sys.exit(result.returncode)'; then
   exit 1
 fi
 
+echo "准备临时 PostgreSQL 与 MySQL 容器"
 for _ in $(seq 1 5); do
   POSTGRES_PORT="$(reserve_port)"
-  if docker run -d --name "$POSTGRES_CONTAINER" \
+  if POSTGRES_START_ERROR="$(docker run -d --name "$POSTGRES_CONTAINER" \
     --label cn.vastplan.test=a5-database-fault-matrix \
     -e POSTGRES_USER=vastplan -e POSTGRES_PASSWORD="$PASSWORD" -e POSTGRES_DB=vastplan \
-    -p "127.0.0.1:${POSTGRES_PORT}:5432" "$POSTGRES_IMAGE" >/dev/null 2>&1; then
+    -p "127.0.0.1:${POSTGRES_PORT}:5432" "$POSTGRES_IMAGE" 2>&1)"; then
     break
   fi
   docker rm -f "$POSTGRES_CONTAINER" >/dev/null 2>&1 || true
   POSTGRES_PORT=""
 done
 if [[ -z "$POSTGRES_PORT" ]]; then
-  echo "无法为临时 PostgreSQL 分配本机端口" >&2
+  echo "无法启动临时 PostgreSQL: ${POSTGRES_START_ERROR}" >&2
   exit 1
 fi
 
@@ -69,18 +72,18 @@ for _ in $(seq 1 5); do
     MYSQL_PORT=""
     continue
   fi
-  if docker run -d --name "$MYSQL_CONTAINER" \
+  if MYSQL_START_ERROR="$(docker run -d --name "$MYSQL_CONTAINER" \
     --label cn.vastplan.test=a5-database-fault-matrix \
     -e MYSQL_USER=vastplan -e MYSQL_PASSWORD="$PASSWORD" -e MYSQL_DATABASE=vastplan \
     -e MYSQL_ROOT_PASSWORD="$PASSWORD" \
-    -p "127.0.0.1:${MYSQL_PORT}:3306" "$MYSQL_IMAGE" >/dev/null 2>&1; then
+    -p "127.0.0.1:${MYSQL_PORT}:3306" "$MYSQL_IMAGE" 2>&1)"; then
     break
   fi
   docker rm -f "$MYSQL_CONTAINER" >/dev/null 2>&1 || true
   MYSQL_PORT=""
 done
 if [[ -z "$MYSQL_PORT" ]]; then
-  echo "无法为临时 MySQL 分配本机端口" >&2
+  echo "无法启动临时 MySQL: ${MYSQL_START_ERROR}" >&2
   exit 1
 fi
 
@@ -91,8 +94,16 @@ for _ in $(seq 1 90); do
   fi
   sleep 1
 done
-docker exec "$POSTGRES_CONTAINER" pg_isready -U vastplan -d vastplan >/dev/null
-docker exec -e MYSQL_PWD="$PASSWORD" "$MYSQL_CONTAINER" mysqladmin ping -uvastplan --silent >/dev/null
+if ! docker exec "$POSTGRES_CONTAINER" pg_isready -U vastplan -d vastplan >/dev/null 2>&1; then
+  echo "临时 PostgreSQL 未在 90 秒内就绪" >&2
+  docker logs --tail 80 "$POSTGRES_CONTAINER" >&2
+  exit 1
+fi
+if ! docker exec -e MYSQL_PWD="$PASSWORD" "$MYSQL_CONTAINER" mysqladmin ping -uvastplan --silent >/dev/null 2>&1; then
+  echo "临时 MySQL 未在 90 秒内就绪" >&2
+  docker logs --tail 80 "$MYSQL_CONTAINER" >&2
+  exit 1
+fi
 
 cd "$ROOT"
 export GOCACHE="${GOCACHE:-/tmp/vastplan-go-cache}"
@@ -110,8 +121,11 @@ export VASTPLAN_TEST_MYSQL_TLS_MODE=disable
 export VASTPLAN_TEST_MYSQL_FAULT_CONTAINER="$MYSQL_CONTAINER"
 
 echo "[1/4] 验证 Provider、Record Store、连接池与故障恢复矩阵"
+go test -count=1 -timeout=3m \
+  -run 'Test(PostgreSQL|MySQL)ProviderIntegration$' \
+  ./extensions/plugins/cn.vastplan.foundation.data.relational.runtime/databaseruntime
 go test -count=1 -timeout=8m \
-  -run 'Test(PostgreSQL|MySQL)Provider(Integration|FaultMatrix)$' \
+  -run 'Test(PostgreSQL|MySQL)ProviderFaultMatrix$' \
   ./extensions/plugins/cn.vastplan.foundation.data.relational.runtime/databaseruntime
 
 echo "[2/4] 验证 Platform Control 并发初始化与完整重启恢复"

@@ -58,10 +58,11 @@ type idempotencyRecord struct {
 func readIdempotency(ctx context.Context, session Session, dialect Dialect, identity ExecutionIdentity, key string) (*idempotencyRecord, error) {
 	fields := []string{"owner_plugin_id", "model_id", "tenant_id", "service_id", "caller_id", "idempotency_key"}
 	values := []string{identity.OwnerPluginID, identity.ModelID, identity.TenantID, identity.ServiceID, identity.CallerID, key}
-	where, parameters := make([]string, 0, len(fields)), make([]databasev1.Value, 0, len(fields))
+	where := []string{fmt.Sprintf("%s = %s", dialect.Quote("identity_hash"), dialect.Placeholder(1))}
+	parameters := []databasev1.Value{stringValue(identityDigest(values...))}
 	for index, field := range fields {
 		parameters = append(parameters, stringValue(values[index]))
-		where = append(where, fmt.Sprintf("%s = %s", dialect.Quote(field), dialect.Placeholder(index+1)))
+		where = append(where, fmt.Sprintf("%s = %s", dialect.Quote(field), dialect.Placeholder(index+2)))
 	}
 	statement := databasev1.Statement{SQL: fmt.Sprintf("SELECT %s, %s FROM %s WHERE %s", dialect.Quote("operation_digest"), dialect.Quote("response"), dialect.Quote("vastplan_record_idempotency"), joinAnd(where)), Parameters: parameters}
 	result, err := session.Query(ctx, statement, 2)
@@ -86,12 +87,19 @@ func readIdempotency(ctx context.Context, session Session, dialect Dialect, iden
 }
 
 func idempotencyInsert(dialect Dialect, identity ExecutionIdentity, key, digest string, response json.RawMessage) databasev1.Statement {
-	columns := []string{"owner_plugin_id", "model_id", "tenant_id", "service_id", "caller_id", "idempotency_key", "operation_digest", "response", "created_at"}
+	identityValues := []string{identity.OwnerPluginID, identity.ModelID, identity.TenantID, identity.ServiceID, identity.CallerID, key}
+	columns := []string{"identity_hash", "owner_plugin_id", "model_id", "tenant_id", "service_id", "caller_id", "idempotency_key", "operation_digest", "response", "created_at"}
 	parameters := []databasev1.Value{
+		stringValue(identityDigest(identityValues...)),
 		stringValue(identity.OwnerPluginID), stringValue(identity.ModelID), stringValue(identity.TenantID), stringValue(identity.ServiceID),
 		stringValue(identity.CallerID), stringValue(key), stringValue(digest), jsonValue(response), timestampValue(nowUTC()),
 	}
 	return databasev1.Statement{SQL: fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", dialect.Quote("vastplan_record_idempotency"), quoteAll(dialect, columns), placeholders(dialect, len(columns))), Parameters: parameters}
+}
+
+func identityDigest(values ...string) string {
+	raw, _ := json.Marshal(values)
+	return fmt.Sprintf("%x", sha256.Sum256(raw))
 }
 
 func stringValue(value string) databasev1.Value {

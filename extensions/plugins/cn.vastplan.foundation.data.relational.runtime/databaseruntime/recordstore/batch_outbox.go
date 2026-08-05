@@ -56,9 +56,10 @@ func (e *Engine) AppendOutbox(ctx context.Context, session Session, dialect Dial
 			return err
 		}
 		result.ID = id
-		columns := []string{"id", "owner_plugin_id", "model_id", "tenant_id", "service_id", "topic", "payload", "idempotency_key", "created_at"}
+		outboxIdentity := identityDigest(identity.OwnerPluginID, identity.ModelID, identity.TenantID, identity.ServiceID, request.IdempotencyKey)
+		columns := []string{"id", "identity_hash", "owner_plugin_id", "model_id", "tenant_id", "service_id", "topic", "payload", "idempotency_key", "created_at"}
 		parameters := []databasev1.Value{
-			stringValue(id), stringValue(identity.OwnerPluginID), stringValue(identity.ModelID), stringValue(identity.TenantID),
+			stringValue(id), stringValue(outboxIdentity), stringValue(identity.OwnerPluginID), stringValue(identity.ModelID), stringValue(identity.TenantID),
 			stringValue(identity.ServiceID), stringValue(request.Topic), jsonValue(request.Payload), stringValue(request.IdempotencyKey), timestampValue(nowUTC()),
 		}
 		statement := databasev1.Statement{SQL: fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", dialect.Quote("vastplan_record_outbox"), quoteAll(dialect, columns), placeholders(dialect, len(columns))), Parameters: parameters}

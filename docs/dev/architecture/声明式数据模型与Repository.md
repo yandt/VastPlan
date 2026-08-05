@@ -72,4 +72,4 @@ P3b 已在 Database Runtime 内部实现 `record.store.v1` 的 CRUD、受限分�
 
 这些模块已经进入 Database Runtime 主入口和公开 Manifest。Controller 从同一 Deployment 的精确制品生成宿主保留 Inventory，Node Agent 在候选路由发布前同步模型目录；Platform Control Bootstrap 在双 binding 切换前完成安全 Schema 准备。普通插件只使用 `extensions/sdk/go/recordstore` 等协议客户端，具体 Repository Adapter 仍归插件所有，SDK 不拥有 Provider、Engine 或业务 Repository 实现。
 
-`engineering/tools/database-fault-matrix.sh` 是 PostgreSQL/MySQL 真实验收的唯一入口。除 Provider、Record Store、故障注入外，它还验证两个 Runtime 副本并发初始化，以及全部连接池关闭、Registry 重建后的 Platform Control 状态恢复。Docker daemon 未在五秒内响应时脚本立即失败，不把“测试未执行”误报成通过。
+`engineering/tools/database-fault-matrix.sh` 是 PostgreSQL/MySQL 真实验收的唯一入口。除 Provider、Record Store、故障注入外，它还验证两个 Runtime 副本并发初始化，以及全部连接池关闭、Registry 重建后的 Platform Control 状态恢复。Docker daemon 未在五秒内响应时脚本立即失败，不把“测试未执行”误报成通过。2026-08-05 的四阶段矩阵已全部通过，并据此发现、修复了 MySQL 内部幂等/Outbox 复合索引超宽问题。
