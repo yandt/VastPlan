@@ -43,10 +43,23 @@ var (
 
 type PlatformProfile struct {
 	compositioncommonv1.Document
-	Target           compositioncommonv1.Target `json:"target"`
-	ServiceClasses   []string                   `json:"serviceClasses"`
-	ServiceBaselines []ServiceBaseline          `json:"serviceBaselines"`
-	Services         []deploymentv2.ServiceUnit `json:"services"`
+	Target              compositioncommonv1.Target `json:"target"`
+	ServiceClasses      []string                   `json:"serviceClasses"`
+	ProductCapabilities []ProductCapability        `json:"productCapabilities"`
+	ServiceBaselines    []ServiceBaseline          `json:"serviceBaselines"`
+	Services            []deploymentv2.ServiceUnit `json:"services"`
+}
+
+// ProductCapability is a catalog projection, not another deployable plugin.
+// EntryArtifact is the single product-facing management artifact; Artifacts
+// contains the exact supporting delivery boundaries already present in the
+// profile's services or baselines.
+type ProductCapability struct {
+	ID            string   `json:"id"`
+	Title         string   `json:"title"`
+	Category      string   `json:"category"`
+	EntryArtifact string   `json:"entryArtifact"`
+	Artifacts     []string `json:"artifacts"`
 }
 
 // ServiceBaseline 是按服务类别注入在线服务的平台所有策略与配置。
@@ -180,6 +193,42 @@ func ParsePlatformProfile(raw []byte) (PlatformProfile, error) {
 	if err != nil {
 		return PlatformProfile{}, fmt.Errorf("Backend Platform Profile services 无效: %w", err)
 	}
+	availableArtifacts := map[string]struct{}{}
+	for _, baseline := range profile.ServiceBaselines {
+		for _, plugin := range baseline.Plugins {
+			availableArtifacts[plugin.ID] = struct{}{}
+		}
+	}
+	for _, service := range profile.Services {
+		for _, plugin := range service.Plugins {
+			availableArtifacts[plugin.ID] = struct{}{}
+		}
+	}
+	capabilityIDs, ownedArtifacts := map[string]struct{}{}, map[string]string{}
+	for _, capability := range profile.ProductCapabilities {
+		if _, duplicate := capabilityIDs[capability.ID]; duplicate {
+			return PlatformProfile{}, fmt.Errorf("Backend Platform Profile product capability id 重复: %q", capability.ID)
+		}
+		capabilityIDs[capability.ID] = struct{}{}
+		members, entryFound := map[string]struct{}{}, false
+		for _, artifact := range capability.Artifacts {
+			if _, duplicate := members[artifact]; duplicate {
+				return PlatformProfile{}, fmt.Errorf("Product Capability %q 的 artifact 重复: %q", capability.ID, artifact)
+			}
+			members[artifact] = struct{}{}
+			if _, exists := availableArtifacts[artifact]; !exists {
+				return PlatformProfile{}, fmt.Errorf("Product Capability %q 引用未装配 artifact: %q", capability.ID, artifact)
+			}
+			if previous := ownedArtifacts[artifact]; previous != "" {
+				return PlatformProfile{}, fmt.Errorf("artifact %q 同时属于 Product Capability %q 和 %q", artifact, previous, capability.ID)
+			}
+			ownedArtifacts[artifact] = capability.ID
+			entryFound = entryFound || artifact == capability.EntryArtifact
+		}
+		if !entryFound {
+			return PlatformProfile{}, fmt.Errorf("Product Capability %q 的 entryArtifact 不属于该能力包", capability.ID)
+		}
+	}
 	return profile, nil
 }
 
@@ -213,6 +262,9 @@ func ParseApplicationComposition(raw []byte) (ApplicationComposition, error) {
 }
 
 func ValidatePlatformProfile(profile PlatformProfile) (PlatformProfile, error) {
+	if profile.ProductCapabilities == nil {
+		profile.ProductCapabilities = []ProductCapability{}
+	}
 	raw, err := json.Marshal(profile)
 	if err != nil {
 		return PlatformProfile{}, fmt.Errorf("编码 Backend Platform Profile: %w", err)
@@ -269,6 +321,11 @@ func ParseBackendPlatformCatalog(raw []byte) (BackendPlatformCatalog, error) {
 }
 
 func ValidateBackendPlatformCatalog(catalog BackendPlatformCatalog) (BackendPlatformCatalog, error) {
+	for index := range catalog.Profiles {
+		if catalog.Profiles[index].ProductCapabilities == nil {
+			catalog.Profiles[index].ProductCapabilities = []ProductCapability{}
+		}
+	}
 	raw, err := json.Marshal(catalog)
 	if err != nil {
 		return BackendPlatformCatalog{}, fmt.Errorf("编码 Backend Platform Catalog: %w", err)
@@ -340,7 +397,12 @@ func ParseApplicationCompositionFile(filename string) (ApplicationComposition, e
 	return ParseApplicationComposition(raw)
 }
 
-func (p PlatformProfile) Digest() string { return compositioncommonv1.Digest(p) }
+func (p PlatformProfile) Digest() string {
+	if p.ProductCapabilities == nil {
+		p.ProductCapabilities = []ProductCapability{}
+	}
+	return compositioncommonv1.Digest(p)
+}
 
 func (c ApplicationComposition) Digest() string { return compositioncommonv1.Digest(c) }
 func (c BackendPlatformCatalog) Digest() string { return compositioncommonv1.Digest(c) }

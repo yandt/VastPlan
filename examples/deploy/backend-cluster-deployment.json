@@ -9,7 +9,7 @@
     "platform_profile": {
       "id": "local-backend",
       "revision": 1,
-      "digest": "cc2deb4d2bf8efd4e447786663860c70feee5ef253702d1cbaf502479f3a3801"
+      "digest": "7bd9d983f34d1225d004970fddcf5ae49a476c94161c46c1dbe847b7834190ce"
     },
     "application_composition": {
       "id": "cluster-demo",

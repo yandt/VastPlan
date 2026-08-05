@@ -5,12 +5,15 @@ import (
 	"testing"
 
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
+	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
+	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 )
 
 func TestParsePlatformProfileAndApplicationComposition(t *testing.T) {
 	profile, err := ParsePlatformProfile([]byte(`{
 		"version":1,"revision":2,"id":"backend-default","target":{"kernel":"backend"},
 		"serviceClasses":["application.backend"],
+		"productCapabilities":[],
 		"serviceBaselines":[{"id":"application-security","serviceClass":"application.backend","plugins":[{"id":"cn.vastplan.test.host-local-guard","version":"1.0.0"}],"config":{"security":{"mode":"enforced"}}}],
 		"services":[]
 	}`))
@@ -36,7 +39,7 @@ func TestParsePlatformProfileAndApplicationComposition(t *testing.T) {
 func TestBackendPlatformCatalogAuthorizesExactDeployment(t *testing.T) {
 	profile, err := ParsePlatformProfile([]byte(`{
 		"version":1,"revision":2,"id":"backend-default","target":{"kernel":"backend"},
-		"serviceClasses":["application.backend"],"serviceBaselines":[],"services":[]
+		"serviceClasses":["application.backend"],"productCapabilities":[],"serviceBaselines":[],"services":[]
 	}`))
 	if err != nil {
 		t.Fatal(err)
@@ -87,5 +90,42 @@ func TestCompositionSchemasRejectCrossBoundaryFields(t *testing.T) {
 	legacyApplication := `{"version":1,"revision":1,"id":"app","kernel":"backend","metadata":{"name":"app"},"units":[]}`
 	if _, err := ParseApplicationComposition([]byte(legacyApplication)); err == nil {
 		t.Fatal("旧 kernel 字段不得绕过统一 target 契约")
+	}
+}
+
+func TestProductCapabilityMustOwnKnownProfileArtifactsAndEntry(t *testing.T) {
+	profile := PlatformProfile{
+		Document:       compositioncommonv1.Document{Version: 1, Revision: 1, ID: "product-profile"},
+		Target:         compositioncommonv1.Target{Kernel: compositioncommonv1.KernelBackend},
+		ServiceClasses: []string{"application.backend"},
+		ProductCapabilities: []ProductCapability{{
+			ID: "platform.database", Title: "数据库", Category: "data", EntryArtifact: "cn.vastplan.database.manager",
+			Artifacts: []string{"cn.vastplan.database.manager", "cn.vastplan.database.runtime"},
+		}},
+		ServiceBaselines: []ServiceBaseline{{
+			ID: "database", ServiceClass: "application.backend", Plugins: []deploymentv1.PluginRef{
+				{ID: "cn.vastplan.database.manager", Version: "1.0.0"},
+				{ID: "cn.vastplan.database.runtime", Version: "1.0.0"},
+			},
+		}},
+		Services: []deploymentv2.ServiceUnit{},
+	}
+	if _, err := ValidatePlatformProfile(profile); err != nil {
+		t.Fatalf("合法 Product Capability 被拒绝: %v", err)
+	}
+
+	unknown := profile
+	unknown.ProductCapabilities = append([]ProductCapability(nil), profile.ProductCapabilities...)
+	unknown.ProductCapabilities[0].Artifacts = append([]string(nil), profile.ProductCapabilities[0].Artifacts...)
+	unknown.ProductCapabilities[0].Artifacts[1] = "cn.vastplan.database.unknown"
+	if _, err := ValidatePlatformProfile(unknown); err == nil {
+		t.Fatal("Product Capability 不得引用 Profile 未装配制品")
+	}
+
+	invalidEntry := profile
+	invalidEntry.ProductCapabilities = append([]ProductCapability(nil), profile.ProductCapabilities...)
+	invalidEntry.ProductCapabilities[0].EntryArtifact = "cn.vastplan.database.unknown"
+	if _, err := ValidatePlatformProfile(invalidEntry); err == nil {
+		t.Fatal("Product Capability entryArtifact 必须属于自身成员")
 	}
 }

@@ -1,9 +1,21 @@
 {
   "version": 1,
-  "revision": 78,
+  "revision": 79,
   "id": "local-platform-management",
   "target": { "kernel": "backend" },
   "serviceClasses": ["application.backend"],
+  "productCapabilities": [
+    {
+      "id": "platform.database",
+      "title": "数据库",
+      "category": "data",
+      "entryArtifact": "cn.vastplan.platform.data.relational.connection-manager",
+      "artifacts": [
+        "cn.vastplan.platform.data.relational.connection-manager",
+        "cn.vastplan.foundation.data.relational.runtime"
+      ]
+    }
+  ],
   "serviceBaselines": [],
   "services": [
     {

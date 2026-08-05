@@ -4,6 +4,7 @@
   "id": "managed-services-default",
   "target": { "kernel": "backend" },
   "serviceClasses": ["application.backend"],
+  "productCapabilities": [],
   "serviceBaselines": [
     {
       "id": "application-authorization",

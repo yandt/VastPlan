@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"sort"
 	"testing"
+
+	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 )
 
 type firstPartyBoundaryInventory struct {
@@ -101,6 +103,37 @@ func TestDatabaseCapabilityPackKeepsProvidersAsInternalModules(t *testing.T) {
 		return
 	}
 	t.Fatal("缺少 platform.database 产品能力包")
+}
+
+func TestDatabaseCapabilityPackIsProjectedAsOneProductEntry(t *testing.T) {
+	root := repoRoot(t)
+	profile, err := backendcompositionv1.ParsePlatformProfileFile(filepath.Join(root, "engineering", "deploy", "platform-management-profile.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, capability := range profile.ProductCapabilities {
+		if capability.ID != "platform.database" {
+			continue
+		}
+		artifacts := append([]string(nil), capability.Artifacts...)
+		sort.Strings(artifacts)
+		want := []string{
+			"cn.vastplan.foundation.data.relational.runtime",
+			"cn.vastplan.platform.data.relational.connection-manager",
+		}
+		if capability.EntryArtifact != "cn.vastplan.platform.data.relational.connection-manager" || !equalStrings(artifacts, want) {
+			t.Fatalf("Database Capability Pack 产品投影漂移: entry=%s artifacts=%v", capability.EntryArtifact, artifacts)
+		}
+		for _, forbidden := range []string{"postgresql", "mysql", "record-store", "sql-shared-state"} {
+			for _, artifact := range capability.Artifacts {
+				if artifact == forbidden {
+					t.Fatalf("内部模块不得成为产品可选制品: %s", forbidden)
+				}
+			}
+		}
+		return
+	}
+	t.Fatal("Platform Profile 缺少 platform.database 产品投影")
 }
 
 func equalStrings(left, right []string) bool {

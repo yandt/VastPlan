@@ -8,6 +8,7 @@
   "serviceClasses": [
     "application.backend"
   ],
+  "productCapabilities": [],
   "serviceBaselines": [
     {
       "id": "application-permission-demo",

@@ -26,3 +26,6 @@
 - 用户管理产品能力，平台管理签名制品和运行拓扑；
 - 本次先物理收敛数据库与种子链，其他第一方领域只建立全量审计和持续门禁。
 
+## 实施记录
+
+- 2026-08-05：Backend Platform Profile 新增强类型 `productCapabilities` 投影。`platform.database` 只暴露 Connection Manager 作为产品入口，同时绑定 Connection Manager 与 Database Runtime 两个既有签名制品；PostgreSQL、MySQL、Record Store 和 SQL Shared State 不进入产品可选列表。Profile 校验拒绝未知制品、重复归属、重复成员和不属于能力包的入口，架构门禁持续对照第一方边界清单。
