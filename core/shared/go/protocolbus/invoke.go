@@ -9,13 +9,13 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	pluginhostv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/pluginhost/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/errorcode"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
-	pluginhostv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/pluginhost/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocol"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocollimit"
+	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
 )
 
 func (h *Host) Invoke(ctx context.Context, target *contractv1.CallTarget,
@@ -107,6 +107,43 @@ func (h *Host) Invoke(ctx context.Context, target *contractv1.CallTarget,
 	// 4) after 钩子：计量/审计等只观察，不改变结论
 	h.runAfterHooks(ctx, extpoint.PointInvoke, callCtx, target, resp.Result)
 	return resp, nil
+}
+
+// InvokeTrustedSystem dispatches a host-owned control-plane call without the
+// pluggable user authorization stage. The Host creates the SYSTEM identity and
+// service-scoped evidence itself; callers cannot provide a Principal or forge
+// another caller. This seam is reserved for candidate preparation operations
+// that must finish before a capability is published to ordinary routing.
+func (h *Host) InvokeTrustedSystem(ctx context.Context, target *contractv1.CallTarget, evidenceNames []string, payload []byte) (*pluginhostv1.InvokeResponse, error) {
+	if target == nil || target.ExtensionPoint == "" || target.Capability == "" {
+		return errorResponse(errorcode.WireInvalidRequest, "可信系统调用目标不能为空", false), nil
+	}
+	limits := h.limits()
+	if !limits.PayloadAllowed(payload) {
+		return errorResponse(errorcode.PayloadTooLarge, fmt.Sprintf("payload 为 %d bytes，超过上限 %d bytes", len(payload), limits.MaxPayloadBytes), false), nil
+	}
+	if _, local := h.Registry.Lookup(target.ExtensionPoint, target.Capability); !local {
+		return errorResponse(errorcode.CapabilityNotFound, fmt.Sprintf("可信候选准备能力未在本地注册: %s/%s", target.ExtensionPoint, target.Capability), false), nil
+	}
+	scope := "service"
+	callCtx := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: h.KernelName}}
+	for _, name := range evidenceNames {
+		if strings.TrimSpace(name) == "" {
+			return errorResponse(errorcode.WireInvalidRequest, "可信系统调用证据名称不能为空", false), nil
+		}
+		callCtx.Credentials = append(callCtx.Credentials, &contractv1.CredentialRef{Name: name, Scope: &scope})
+	}
+	ctx, callCtx, cancel := boundedCallContext(ctx, callCtx, limits)
+	defer cancel()
+	if code, message := appendCallTarget(callCtx, target, limits.MaxCallDepth); code != "" {
+		return errorResponse(code, message, false), nil
+	}
+	if err := h.enterCall(); err != nil {
+		return errorResponse(errorcode.PluginInactive, err.Error(), true), nil
+	}
+	defer h.leaveCall()
+	ctx = context.WithValue(ctx, currentDispatchTargetKey{}, callTargetKey(target))
+	return h.invoke(ctx, target, callCtx, payload)
 }
 
 // appendCallTarget 在公开调用入口维护能力调用链。CallContext 已由

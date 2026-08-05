@@ -157,6 +157,33 @@ func TestHostInvoke_RejectsOversizedPayloadWithStableCode(t *testing.T) {
 	}
 }
 
+func TestHostInvokeTrustedSystemStampsIdentityAndEvidence(t *testing.T) {
+	reg := registry.New()
+	reg.DefinePoint(registry.ExtensionPoint{Name: extpoint.KernelService, Dispatch: registry.DispatchSingle})
+	host := NewHost("backend-kernel", "0.1.0", reg, nil)
+	if err := host.RegisterHostService(extpoint.KernelService, "kernel.test.trusted-prepare", func(_ context.Context, call *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+		if call.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_SYSTEM || call.GetCaller().GetId() != "backend-kernel" {
+			t.Fatalf("可信调用必须由 Host 固定 SYSTEM 身份: %+v", call.GetCaller())
+		}
+		if len(call.GetCredentials()) != 1 || call.GetCredentials()[0].GetName() != "inventory/evidence" || call.GetCredentials()[0].GetScope() != "service" {
+			t.Fatalf("可信调用证据投影错误: %+v", call.GetCredentials())
+		}
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, payload, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := host.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer host.Stop()
+	response, err := host.InvokeTrustedSystem(context.Background(), &contractv1.CallTarget{
+		ExtensionPoint: extpoint.KernelService, Capability: "kernel.test.trusted-prepare",
+	}, []string{"inventory/evidence"}, []byte("ready"))
+	if err != nil || response.Result.GetStatus() != contractv1.CallResult_STATUS_OK || string(response.Payload) != "ready" {
+		t.Fatalf("可信候选准备调用失败: response=%+v err=%v", response, err)
+	}
+}
+
 func TestHostInvokeRejectsCapabilityCycleWithoutMutatingInput(t *testing.T) {
 	target := &contractv1.CallTarget{ExtensionPoint: "test.point", Capability: "echo"}
 	original := &contractv1.CallContext{CallPath: []string{"test.point/echo"}}

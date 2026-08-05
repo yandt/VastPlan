@@ -13,6 +13,10 @@ const (
 	SchemaURL       = "https://schemas.cdsoft.com.cn/vastplan/recordstore/v1/vastplan.record-store.schema.json"
 	Capability      = "foundation.data.record-store"
 	ContractVersion = "1.1.0"
+	// TrustedInventoryConfigKey is reserved for the controller-projected,
+	// content-bound model inventory. It is injected after user configuration
+	// validation and must never be accepted from a plugin Profile.
+	TrustedInventoryConfigKey = "_hostDataModelInventory"
 
 	OperationSyncModels   = "syncModels"
 	OperationCreate       = "create"

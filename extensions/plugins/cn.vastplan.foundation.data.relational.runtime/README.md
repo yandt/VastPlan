@@ -8,7 +8,7 @@
 
 ## 当前阶段
 
-0.12.0 已完成 Database Runtime v1 wire 契约、Provider SPI、可信运行实例 identity、加密 Material Lease 中继、统一 Pool Manager、PostgreSQL/MySQL Provider、connection-manager 发布闭环、active-active 无状态执行、实例亲和事务、SQL Shared State、公开 `foundation.data.record-store@1.0.0`、Schema Controller 以及标准指标出口。两个 Provider 共用 `database/sql` 执行适配层、无损 wire 值转换、稳定错误分类、结果行数上限和池指标；Pool Manager 继续负责节点/租户/连接三级预算、调用方并发和等待队列上限、revision/generation 原子切换、旧池有界排空与关闭失败保守占额。
+0.13.0 已完成 Database Runtime v1 wire 契约、Provider SPI、可信运行实例 identity、加密 Material Lease 中继、统一 Pool Manager、PostgreSQL/MySQL Provider、connection-manager 发布闭环、active-active 无状态执行、实例亲和事务、SQL Shared State、公开 `foundation.data.record-store@1.1.0`、Schema Controller 以及标准指标出口。Controller 会从同一 Deployment 锁定的已验证制品投影 DataModel 与签名迁移目录，只向 Record Store Runtime 注入宿主保留的同代 Inventory；Node Agent 从普通插件配置中摘除该目录，并在候选实例进入公开路由前用 Host 固定的 SYSTEM 身份原子同步，用户配置和插件进程均不能伪造该证据。两个 Provider 共用 `database/sql` 执行适配层、无损 wire 值转换、稳定错误分类、结果行数上限和池指标；Pool Manager 继续负责节点/租户/连接三级预算、调用方并发和等待队列上限、revision/generation 原子切换、旧池有界排空与关闭失败保守占额。
 
 当前制品开放 `providers/metrics/probe/activate/retire/query/execute`。只有 connection-manager 能发布、探测和退役连接；`metrics` 仅允许 connection-manager 或 SYSTEM 监控采集器读取；`query/execute` 拒绝用户直调，普通插件、Agent 或 Runner 还必须取得宿主投影的 `database.connection/<resourceId>` grant。管理面主动发布会命中一个 queue 副本，其他 active-active 副本首次收到该 revision 请求时，通过只允许 Runtime 调用的 `resolveRuntime` 内部操作惰性取得定义并幂等建池，因此扩容和重启不依赖伪广播。每个副本最多缓存 1 秒管理面确认；过期后同一连接的并发请求合并验证，删除会在该有界 lease 内排空本副本所有 project 池，避免未命中主动 retire 的副本无限继续服务。
 

@@ -41,6 +41,17 @@ func newScheduleBuilder(ctx context.Context, scheduler Scheduler, deployment dep
 		if err := scheduler.ContractCache.validate(deployment, graph, scheduler.Artifacts); err != nil {
 			return nil, err
 		}
+		projection, err := scheduler.ContractCache.projectDataModels(deployment, scheduler.Artifacts)
+		if err != nil {
+			return nil, err
+		}
+		for unitID, providerPluginIDs := range projection.providers {
+			unit, injectErr := injectTrustedDataModels(units[unitID], projection.request, providerPluginIDs)
+			if injectErr != nil {
+				return nil, injectErr
+			}
+			units[unitID] = unit
+		}
 	}
 	order, err := servicemodel.TopologicalOrder(graph)
 	if err != nil {

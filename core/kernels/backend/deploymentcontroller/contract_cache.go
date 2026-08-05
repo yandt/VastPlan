@@ -10,9 +10,11 @@ import (
 // Node/ActualState 事件可以重复调度同一部署，但不应重复读取并解析全部制品；
 // Deployment 摘要变化后必须重新校验。
 type ContractValidationCache struct {
-	mu     sync.RWMutex
-	digest string
-	graph  map[string][]string
+	mu                  sync.RWMutex
+	digest              string
+	graph               map[string][]string
+	dataModelDigest     string
+	dataModelProjection trustedDataModelProjection
 }
 
 func (c *ContractValidationCache) validate(deployment deploymentv2.Deployment, graph map[string][]string, artifacts ArtifactReader) error {

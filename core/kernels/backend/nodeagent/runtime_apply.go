@@ -8,6 +8,7 @@ import (
 	"time"
 
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
+	recordstorev1 "cdsoft.com.cn/VastPlan/contracts/schemas/recordstore/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/hostfactory"
 	"cdsoft.com.cn/VastPlan/core/shared/go/addressing"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
@@ -18,17 +19,18 @@ import (
 )
 
 type applyTransaction struct {
-	runtime       *ProtocolRuntime
-	unit          RuntimeUnit
-	policy        servicemodel.Policy
-	envelope      pluginconfig.Envelope
-	candidate     *protocolbus.Host
-	instances     []*protocolbus.PluginInstance
-	prepared      []preparedMigration
-	leaderships   []*controlplane.Leadership
-	registrations []*addressing.Registration
-	handoffOld    *runningUnit
-	committed     bool
+	runtime        *ProtocolRuntime
+	unit           RuntimeUnit
+	policy         servicemodel.Policy
+	envelope       pluginconfig.Envelope
+	candidate      *protocolbus.Host
+	instances      []*protocolbus.PluginInstance
+	prepared       []preparedMigration
+	leaderships    []*controlplane.Leadership
+	registrations  []*addressing.Registration
+	handoffOld     *runningUnit
+	modelInventory *recordstorev1.SyncModelsRequest
+	committed      bool
 }
 
 func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr error) {
@@ -41,6 +43,9 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 	}
 	defer transaction.rollback(&applyErr)
 	if err := transaction.startPlugins(ctx); err != nil {
+		return err
+	}
+	if err := transaction.syncTrustedDataModelInventory(ctx); err != nil {
 		return err
 	}
 	if err := transaction.commitMigrations(ctx); err != nil {
@@ -86,6 +91,10 @@ func newApplyTransaction(ctx context.Context, runtime *ProtocolRuntime, unit Run
 	if err != nil {
 		return nil, fmt.Errorf("解析 unit 配置信封: %w", err)
 	}
+	modelInventory, err := extractTrustedDataModelInventory(unit.Plugins, envelope.Plugins)
+	if err != nil {
+		return nil, err
+	}
 	configProvider, err := kernelspi.NewPluginMapConfig(envelope.Plugins)
 	if err != nil {
 		return nil, fmt.Errorf("冻结 unit 配置: %w", err)
@@ -109,7 +118,7 @@ func newApplyTransaction(ctx context.Context, runtime *ProtocolRuntime, unit Run
 	if err := candidate.Start(); err != nil {
 		return nil, err
 	}
-	return &applyTransaction{runtime: runtime, unit: unit, policy: policy, envelope: envelope, candidate: candidate}, nil
+	return &applyTransaction{runtime: runtime, unit: unit, policy: policy, envelope: envelope, candidate: candidate, modelInventory: modelInventory}, nil
 }
 
 func (transaction *applyTransaction) startPlugins(ctx context.Context) error {
