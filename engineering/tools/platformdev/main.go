@@ -234,7 +234,7 @@ func (r *runtime) prepare(ctx context.Context) error {
 			if r.seedSnapshotMigration || r.seedHostRefresh {
 				source := "development-host-refresh"
 				if r.seedSnapshotMigration {
-					source = "recovery-capsule-v1-migration"
+					source = "seed-runtime-schema-migration"
 				}
 				return r.stageSeedRuntimeSnapshot(r.runDir, source)
 			}

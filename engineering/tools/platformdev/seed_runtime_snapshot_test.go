@@ -123,6 +123,105 @@ func TestSeedRuntimeSnapshotRestoresVerifiedV1ForCapsuleMigration(t *testing.T) 
 	}
 }
 
+func TestSeedRuntimeSnapshotMigratesV2CatalogWithoutMutatingLKG(t *testing.T) {
+	root := platformDevTestProjectRoot(t)
+	stateRoot := filepath.Join(t.TempDir(), "state-root")
+	source := writeSeedRuntimeSnapshotTestSource(t, root, "legacy-v2")
+
+	currentCatalog, err := backendcompositionv1.ParseBackendPlatformCatalogFile(filepath.Join(source, "backend-platform-catalog.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyCatalog := seedRuntimeLegacyBackendCatalog{
+		Document: currentCatalog.Document,
+		Profiles: make([]seedRuntimeLegacyPlatformProfile, 0, len(currentCatalog.Profiles)),
+		Bindings: append([]backendcompositionv1.BackendPlatformBinding(nil), currentCatalog.Bindings...),
+	}
+	for _, profile := range currentCatalog.Profiles {
+		legacy := seedRuntimeLegacyPlatformProfile{
+			Document: profile.Document, Target: profile.Target, ServiceClasses: profile.ServiceClasses,
+			ServiceBaselines: profile.ServiceBaselines, Services: profile.Services,
+		}
+		legacyCatalog.Profiles = append(legacyCatalog.Profiles, legacy)
+		for index := range legacyCatalog.Bindings {
+			ref := &legacyCatalog.Bindings[index].PlatformProfile
+			if ref.ID == legacy.ID && ref.Revision == legacy.Revision {
+				ref.Digest = compositioncommonv1.Digest(legacy)
+			}
+		}
+	}
+	if err := writeAtomicOwnerJSON(filepath.Join(source, "backend-platform-catalog.json"), legacyCatalog); err != nil {
+		t.Fatal(err)
+	}
+	digest, err := seedRuntimeTreeDigest(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeAtomicOwnerJSON(filepath.Join(source, ".complete.json"), seedRuntimeSnapshotMarker{
+		Schema: 2, Digest: digest, Source: "legacy-v2-test", CreatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(stateRoot, "state", "seed-runtime-snapshots", digest)
+	if err := materializeMutableCachedDirectory(source, target); err != nil {
+		t.Fatal(err)
+	}
+	if err := copySnapshotFile(filepath.Join(source, ".complete.json"), filepath.Join(target, ".complete.json")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeAtomicOwnerJSON(filepath.Join(stateRoot, "state", "seed-runtime-active.json"), seedRuntimeSnapshotPointer{Schema: 2, Digest: digest}); err != nil {
+		t.Fatal(err)
+	}
+
+	runDir := filepath.Join(stateRoot, "runs", "current")
+	if err := os.MkdirAll(runDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	r := &runtime{options: options{root: root, stateRoot: stateRoot}, runDir: runDir}
+	refs, restored, err := r.restoreSeedRuntimeSnapshot()
+	if err != nil || !restored || len(refs) != 1 || !r.seedSnapshotMigration {
+		t.Fatalf("v2 快照应迁移 Catalog 后恢复: refs=%v restored=%v migration=%v err=%v", refs, restored, r.seedSnapshotMigration, err)
+	}
+	oldRaw, err := os.ReadFile(filepath.Join(target, "backend-platform-catalog.json"))
+	if err != nil || strings.Contains(string(oldRaw), "productCapabilities") {
+		t.Fatalf("内容寻址旧快照不得被原地修改: err=%v raw=%s", err, oldRaw)
+	}
+	var drifted seedRuntimeLegacyBackendCatalog
+	if err := json.Unmarshal(oldRaw, &drifted); err != nil {
+		t.Fatal(err)
+	}
+	drifted.Bindings[0].PlatformProfile.Digest = strings.Repeat("0", 64)
+	driftedRaw, err := json.Marshal(drifted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := migrateLegacySeedRuntimeCatalog(driftedRaw); err == nil || !strings.Contains(err.Error(), "未精确引用") {
+		t.Fatalf("旧 binding digest 漂移必须失败关闭: %v", err)
+	}
+	var unknown map[string]any
+	if err := json.Unmarshal(oldRaw, &unknown); err != nil {
+		t.Fatal(err)
+	}
+	unknown["unexpected"] = true
+	unknownRaw, err := json.Marshal(unknown)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := migrateLegacySeedRuntimeCatalog(unknownRaw); err == nil || !strings.Contains(err.Error(), "unknown field") {
+		t.Fatalf("旧 Catalog 未知字段必须失败关闭: %v", err)
+	}
+	migrated, err := backendcompositionv1.ParseBackendPlatformCatalogFile(filepath.Join(runDir, "backend-platform-catalog.json"))
+	if err != nil {
+		t.Fatalf("运行目录应获得当前 Schema Catalog: %v", err)
+	}
+	if len(migrated.Profiles) != 1 || migrated.Profiles[0].ProductCapabilities == nil {
+		t.Fatalf("迁移必须显式补齐空 Product Capability: %+v", migrated.Profiles)
+	}
+	if _, _, err := migrated.Resolve("local", "managed-services"); err != nil {
+		t.Fatalf("迁移必须同步精确 Profile digest: %v", err)
+	}
+}
+
 func TestDevelopmentHostRefreshReplacesOnlyBackendKernel(t *testing.T) {
 	root := platformDevTestProjectRoot(t)
 	stateRoot := filepath.Join(t.TempDir(), "state-root")

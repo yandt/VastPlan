@@ -12,7 +12,7 @@ import (
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
 
-const seedRuntimeSnapshotSchema = 2
+const seedRuntimeSnapshotSchema = 3
 
 type seedRuntimeSnapshotMarker struct {
 	Schema    int       `json:"schema"`
@@ -111,6 +111,9 @@ func (r *runtime) restoreSeedRuntimeSnapshot() ([]artifactrepository.Ref, bool, 
 	case 1:
 		refs, err = validateLegacySeedRuntimeSnapshot(filepath.Join(r.seedRuntimeSnapshotRoot(), pointer.Digest))
 		r.seedSnapshotMigration = err == nil
+	case 2:
+		refs, err = validateSeedRuntimeSnapshotV2(filepath.Join(r.seedRuntimeSnapshotRoot(), pointer.Digest))
+		r.seedSnapshotMigration = err == nil
 	case seedRuntimeSnapshotSchema:
 		refs, err = validateSeedRuntimeSnapshot(filepath.Join(r.seedRuntimeSnapshotRoot(), pointer.Digest))
 	default:
@@ -118,13 +121,21 @@ func (r *runtime) restoreSeedRuntimeSnapshot() ([]artifactrepository.Ref, bool, 
 	}
 	snapshot := filepath.Join(r.seedRuntimeSnapshotRoot(), pointer.Digest)
 	if err != nil {
+		if errors.Is(err, errSeedRuntimeSnapshotContractIncompatible) {
+			return nil, false, fmt.Errorf("活动 Seed Runtime v%d 与当前不可变制品契约不兼容；请显式执行 platform-dev.sh bootstrap --rebuild-seed: %w", pointer.Schema, err)
+		}
 		return nil, false, fmt.Errorf("活动 Seed Runtime 快照损坏: %w", err)
 	}
 	if err := materializeSeedRuntimeSnapshot(snapshot, r.runDir, !r.options.applyPlatform); err != nil {
 		return nil, false, err
 	}
+	if r.seedSnapshotMigration && !r.options.applyPlatform {
+		if err := materializeMigratedSeedRuntimeCatalog(snapshot, r.runDir); err != nil {
+			return nil, false, err
+		}
+	}
 	if r.seedSnapshotMigration {
-		log.Printf("复用已验证的 v1 Seed Runtime，并在本次健康启动后迁移 Recovery Capsule v2 digest=%s", pointer.Digest[:12])
+		log.Printf("复用已验证的 Seed Runtime v%d，并在本次健康启动后迁移快照 v%d digest=%s", pointer.Schema, seedRuntimeSnapshotSchema, pointer.Digest[:12])
 	} else {
 		log.Printf("普通启动复用 Last-Known-Good Seed Runtime 快照 digest=%s", pointer.Digest[:12])
 	}

@@ -21,6 +21,8 @@ import (
 
 var seedRuntimeSnapshotFiles = []string{"access-profile-catalog.json", "backend-platform-catalog.json", "seed-inventory.json", recoveryCapsuleFilename}
 
+var errSeedRuntimeSnapshotContractIncompatible = errors.New("Seed Runtime 快照契约不兼容")
+
 func copySeedRuntimeSnapshotPayload(source, target string) error {
 	for _, directory := range []string{"dynamic", "portal-assets"} {
 		if err := materializeCachedDirectory(filepath.Join(source, directory), filepath.Join(target, directory)); err != nil {
@@ -62,14 +64,18 @@ func materializeSeedRuntimeSnapshot(snapshot, runDir string, restoreCatalogs boo
 }
 
 func validateSeedRuntimeSnapshot(root string) ([]artifactrepository.Ref, error) {
-	return validateSeedRuntimeSnapshotVersion(root, seedRuntimeSnapshotSchema, true)
+	return validateSeedRuntimeSnapshotVersion(root, seedRuntimeSnapshotSchema, true, false)
+}
+
+func validateSeedRuntimeSnapshotV2(root string) ([]artifactrepository.Ref, error) {
+	return validateSeedRuntimeSnapshotVersion(root, 2, true, true)
 }
 
 func validateLegacySeedRuntimeSnapshot(root string) ([]artifactrepository.Ref, error) {
-	return validateSeedRuntimeSnapshotVersion(root, 1, false)
+	return validateSeedRuntimeSnapshotVersion(root, 1, false, true)
 }
 
-func validateSeedRuntimeSnapshotVersion(root string, schema int, requireCapsule bool) ([]artifactrepository.Ref, error) {
+func validateSeedRuntimeSnapshotVersion(root string, schema int, requireCapsule, allowLegacyContracts bool) ([]artifactrepository.Ref, error) {
 	marker, err := readSeedRuntimeSnapshotMarkerForSchema(root, schema)
 	if err != nil {
 		return nil, err
@@ -83,7 +89,12 @@ func validateSeedRuntimeSnapshotVersion(root string, schema int, requireCapsule 
 			return nil, err
 		}
 	}
-	if _, err := backendcompositionv1.ParseBackendPlatformCatalogFile(filepath.Join(root, "backend-platform-catalog.json")); err != nil {
+	catalogPath := filepath.Join(root, "backend-platform-catalog.json")
+	if allowLegacyContracts {
+		if _, err := migrateLegacySeedRuntimeCatalogFile(catalogPath); err != nil {
+			return nil, err
+		}
+	} else if _, err := backendcompositionv1.ParseBackendPlatformCatalogFile(catalogPath); err != nil {
 		return nil, err
 	}
 	accessRaw, err := os.ReadFile(filepath.Join(root, "access-profile-catalog.json"))
@@ -116,6 +127,9 @@ func validateSeedRuntimeSnapshotVersion(root string, schema int, requireCapsule 
 		ref := artifactrepository.Ref{PluginID: item.Ref.PluginID, Version: item.Ref.Version, Channel: item.Ref.Channel}
 		artifact, _, err := repository.Read(ref)
 		if err != nil {
+			if allowLegacyContracts {
+				return nil, fmt.Errorf("%w: 复验制品 %s@%s/%s: %v", errSeedRuntimeSnapshotContractIncompatible, ref.PluginID, ref.Version, ref.Channel, err)
+			}
 			return nil, fmt.Errorf("复验 Seed Runtime 快照制品 %s@%s/%s: %w", ref.PluginID, ref.Version, ref.Channel, err)
 		}
 		if artifact.SHA256 != item.SHA256 {

@@ -25,6 +25,10 @@ Bootstrap Inventory 中的 LKG 是托管仓库自举引用的业务契约，不�
 
 [ADR-0169](ADR-0169-Seed-Recovery-Capsule与分阶段可用性.md) 将 `recovery-capsule.json` 纳入 Seed Runtime Snapshot v2 的内容摘要与恢复校验。Capsule 精确绑定本次 Bootstrap Inventory generation 和 LKG 制品摘要；v2 快照缺失 Capsule、Capsule 与 Inventory 漂移或恢复计划未覆盖全部启用 Seed unit 时均 fail-closed。旧 v1 活动快照仍先按其原始摘要和内容白名单完整复验，随后只在新的 Inventory/Capsule、Kernel 和 Portal 健康启动后提交为独立 v2 内容寻址快照；不修改旧目录，也不从未被 ActualState 引用的历史运行冒充恢复。每次启动重新签署 Seed 后仍重新生成 Inventory 与 Capsule，不直接复制旧运行目录中的短时身份绑定。
 
+## 2026-08-05 补充：配置契约升级迁移
+
+Backend Platform Profile v1 增加 `productCapabilities` 后，既有 v2 快照的 Catalog 仍是合法的历史 LKG，但不能直接通过当前严格 Schema。Seed Runtime Snapshot 因此提升为 v3：恢复 v1/v2 时必须先按原 schema、完成标记和整棵目录摘要复验，再仅对已登记的兼容迁移补齐空 `productCapabilities`，同时从旧版强类型 Profile 重新验证原 binding digest 并派生新版精确 digest。迁移结果只写入本次运行目录；旧内容寻址快照不得原地修改。未知字段、非精确 binding、其他 Schema 错误或摘要漂移继续失败关闭。只有迁移后的完整平台健康后，才把运行目录暂存并晋级为新的 v3 LKG。
+
 ## 影响
 
 普通启动恢复的是最近一次已证明可启动的完整 Seed Runtime，不再受工作区中未完成的下一版插件影响；源码构建、SemVer 校验与进程恢复成为两个可独立诊断的阶段。修改 Seed 插件源码后通过 workspace Test Release 调试；只有准备晋级新的 stable 版本时才更新 Profile 并由 `bootstrap` 重建 Seed。`clean/--fresh` 删除开发运行状态后，首次启动需要重新建立快照，但 stable 身份账本仍按 ADR-0146 保留。
