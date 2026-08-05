@@ -52,10 +52,13 @@ func (h *platformControlHost) Call(_ context.Context, target *contractv1.CallTar
 
 func TestPlatformControlOperationsForwardOnlyValidatedRequestsToKernelServices(t *testing.T) {
 	host := &platformControlHost{}
-	request := []byte(`{"profile":{"schemaVersion":1,"generation":1,"providerId":"postgresql","endpoint":"db:5432","database":"vastplan","schema":"platform","tls":{"mode":"verify-full","serverName":"db"},"username":"app","secretRef":{"kind":"systemd-credential","name":"platform-db"},"contractRange":"^1.0.0"},"expectedGeneration":0}`)
+	request := []byte(`{"profile":{"schemaVersion":1,"generation":1,"providerId":"postgresql","endpoint":"db:5432","database":"vastplan","schema":"platform","tls":{"mode":"verify-full","serverName":"db"},"username":"app","contractRange":"^1.0.0"},"expectedGeneration":0,"secretMaterial":"one-time-password"}`)
 	result, _, err := callPlatformControl(context.Background(), host, dbContext(), operationPlatformControlTest, request)
 	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK || host.target.GetExtensionPoint() != extpoint.KernelService || host.target.GetCapability() != platformcontrolv1.KernelTestService || host.target.GetOperation() != "test" {
 		t.Fatalf("Platform Control 测试未通过受限内核端口转发: target=%+v result=%+v err=%v", host.target, result, err)
+	}
+	if string(host.payload) != string(request) {
+		t.Fatal("Connection Manager 必须通过固定内核端口转发完整一次性材料")
 	}
 	result, _, err = callPlatformControl(context.Background(), host, dbContext(), operationPlatformControlConfigure, []byte(`{"profile":{"schemaVersion":1,"generation":8},"expectedGeneration":0}`))
 	if err != nil || result.GetError().GetCode() != "platform.database.platform_control_invalid" {

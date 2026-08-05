@@ -20,6 +20,7 @@ const (
 	KernelStatusService       = "kernel.platform-control.status"
 	KernelTestService         = "kernel.platform-control.test"
 	KernelConfigureService    = "kernel.platform-control.configure"
+	MaxSecretMaterialBytes    = 64 << 10
 )
 
 type SecretRef struct {
@@ -66,4 +67,5 @@ type Status struct {
 type ChangeRequest struct {
 	Profile            Profile `json:"profile"`
 	ExpectedGeneration uint64  `json:"expectedGeneration"`
+	SecretMaterial     string  `json:"secretMaterial,omitempty"`
 }

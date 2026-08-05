@@ -80,13 +80,13 @@ describe("PlatformAdminClient", () => {
     expect(calls[1]!.path).not.toContain("one-time");
   });
 
-  it("uses fixed Platform Control bootstrap routes without placing secret material in the request", async () => {
+  it("uses fixed Platform Control bootstrap routes for one-time secret material", async () => {
     const calls: Array<{ path: string; method?: string; body?: string }> = [];
     const client = new PlatformAdminClient(async (path, init) => {
       calls.push({ path, method: init?.method, body: init?.body });
       return { ok: true, status: 200, json: async () => path === "/v1/csrf" ? { token: "safe" } : { phase: "unconfigured" } };
     }, "operations", "database");
-    const request: PlatformControlChangeRequest = { profile: { schemaVersion: 1, generation: 1, providerId: "postgresql", endpoint: "db:5432", database: "vastplan", schema: "platform", tls: { mode: "verify-full", serverName: "db" }, username: "app", secretRef: { kind: "systemd-credential", name: "platform-db" }, contractRange: "^1.0.0" }, expectedGeneration: 0 };
+    const request: PlatformControlChangeRequest = { profile: { schemaVersion: 1, generation: 1, providerId: "postgresql", endpoint: "db:5432", database: "vastplan", schema: "platform", tls: { mode: "verify-full", serverName: "db" }, username: "app", contractRange: "^1.0.0" }, expectedGeneration: 0, secretMaterial: "one-time-password" };
     await client.platformControlStatus();
     await client.testPlatformControl(request);
     await client.configurePlatformControl(request);
@@ -95,7 +95,7 @@ describe("PlatformAdminClient", () => {
       { path: "/v1/portals/operations/platform/services/database/platform-control/test", method: "POST", body: JSON.stringify(request) },
       { path: "/v1/portals/operations/platform/services/database/platform-control", method: "PUT", body: JSON.stringify(request) },
     ]);
-    expect(JSON.stringify(calls)).not.toContain("password");
+    expect(JSON.parse(calls[2]!.body ?? "{}")).toMatchObject({ secretMaterial: "one-time-password" });
   });
 
   it("gives database configuration rejections a usable client message", async () => {

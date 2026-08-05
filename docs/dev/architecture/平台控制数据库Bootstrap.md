@@ -16,11 +16,15 @@ Profile 文件必须使用规范绝对路径、普通文件和 owner-only 权限
 - 开发使用 `owner-file`，要求规范绝对路径、普通文件和无 group/world 权限；
 - Vault/KMS 后续通过同一 `SecretSource` 接口增加，不复制 Bootstrap 流程。
 
+首次配置还允许浏览器提交一次性的 `secretMaterial`。它属于 `ChangeRequest` 而不是 Profile：固定 BFF 完成会话、角色、CSRF、同源和请求体上限校验，共享 `platformcontrol/v1` 校验器在插件与可信宿主两级执行精确字段、互斥秘密输入和 64 KiB 材料上限校验；第一方 Connection Manager 只经固定 Kernel Service 转发。Go 可信宿主把材料写入自身受控 `managed-secrets` 目录中的随机命名 `0600` 普通文件，再把标准 `owner-file` 引用写入 Profile。测试请求只创建候选文件并在结束后删除；配置请求只有数据库 Test/Initialize 成功后才原子提交文件，Profile CAS 失败会回滚文件。启动时会按当前 Profile 清理未引用候选和孤儿文件。
+
+运行中的服务不能反写 systemd 创建的 `$CREDENTIALS_DIRECTORY`。`systemd-credential` 始终表示部署环境已注入的外部引用；未来若支持页面安装 systemd Credential，必须由部署控制器生成 `LoadCredentialEncrypted` 制品、修改 unit 并受控重启，不能伪装成本地文件写入。
+
 秘密最大 64 KiB，只借给同步回调，回调结束立即清零缓冲区。Profile、状态、日志和错误码不包含秘密或原始数据库错误。
 
 ## 3. 两阶段状态机
 
-可信 Controller 只依赖 `ProfileStore`、`SecretResolver`、`Bootstrapper` 和 `BindingStore` 四个端口。`Bootstrapper`、`ManagedStore` 与 `SecretSource` 放在中立 `extensions/libraries/go/platformcontrol`，避免 Database Runtime 插件反向链接内核实现：
+可信 Controller 只依赖 `ProfileStore`、`SecretResolver`、`SecretMaterialStore`、`Bootstrapper` 和 `BindingStore` 五个端口。`Bootstrapper`、`ManagedStore` 与 `SecretSource` 放在中立 `extensions/libraries/go/platformcontrol`，文件材料 Store 由核心可信宿主拥有，避免 Database Runtime 插件反向链接内核实现：
 
 ```text
 Start
@@ -73,7 +77,7 @@ P4d 已完成受限管理闭环：
 - Controller 实现统一 `Administration` 端口，`Status / TestCandidate / Configure` 均沿同一 Profile、SecretResolver 和 Bootstrapper 调用链执行；测试候选不会初始化数据库、提交 Profile 或绑定 Store；
 - Backend Kernel 只向精确的 Connection Manager 插件开放三个 `kernel.platform-control.*` 服务，插件策略与 Seed Profile 的 kernel service grant 同时收紧；
 - Connection Manager 公开 `platformControlStatus / platformControlTest / platformControlConfigure`，但自身不解释数据库驱动和秘密；其 Bootstrap 依赖于 Credentials 的部分降级为 soft，普通连接管理工作流在 Credentials 未就绪时仍然 fail-closed；
-- Portal BFF 使用固定、CSRF 保护且受 Management Binding 和角色权限约束的 `/platform-control` 路由。授权页面只接收 systemd credential name 或 owner-only 文件绝对路径，不接收密码明文；
+- Portal BFF 使用固定、CSRF 保护且受 Management Binding 和角色权限约束的 `/platform-control` 路由。页面默认接收一次性密码材料，也可选择已有 systemd credential 或 owner-only 文件引用；密码不进入 Profile、响应、日志、错误详情、浏览器持久存储或热更新胶囊；
 - 同一数据库全栈插件增加 Workbench Form Page，覆盖未配置、测试、初始化、Ready 和 Recovery 状态。当前非敏感 Profile 可在授权页面回填，语言切换仍由插件目录驱动。
 
 P4e 已完成开发编排器与最小 Portal 的两阶段闭环：

@@ -44,6 +44,6 @@ type Bootstrapper interface {
 // configuration surface. It never exposes the selected Store or secret bytes.
 type Administration interface {
 	Status() platformcontrolv1.Status
-	TestCandidate(context.Context, platformcontrolv1.Profile, uint64) error
-	Configure(context.Context, platformcontrolv1.Profile, uint64) error
+	TestCandidate(context.Context, platformcontrolv1.ChangeRequest) error
+	Configure(context.Context, platformcontrolv1.ChangeRequest) error
 }

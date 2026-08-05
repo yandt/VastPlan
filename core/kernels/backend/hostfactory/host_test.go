@@ -49,14 +49,14 @@ type platformControlAdministration struct {
 }
 
 func (a *platformControlAdministration) Status() platformcontrolv1.Status { return a.status }
-func (a *platformControlAdministration) TestCandidate(_ context.Context, _ platformcontrolv1.Profile, expected uint64) error {
+func (a *platformControlAdministration) TestCandidate(_ context.Context, request platformcontrolv1.ChangeRequest) error {
 	a.tested++
-	a.status = platformcontrolv1.Status{Phase: platformcontrolv1.PhaseUnconfigured, Generation: expected}
+	a.status = platformcontrolv1.Status{Phase: platformcontrolv1.PhaseUnconfigured, Generation: request.ExpectedGeneration}
 	return nil
 }
-func (a *platformControlAdministration) Configure(_ context.Context, profile platformcontrolv1.Profile, _ uint64) error {
+func (a *platformControlAdministration) Configure(_ context.Context, request platformcontrolv1.ChangeRequest) error {
 	a.configured++
-	a.status = platformcontrolv1.Status{Phase: platformcontrolv1.PhaseReady, Generation: profile.Generation}
+	a.status = platformcontrolv1.Status{Phase: platformcontrolv1.PhaseReady, Generation: request.Profile.Generation}
 	return nil
 }
 

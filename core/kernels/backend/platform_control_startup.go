@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 
 	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
@@ -73,6 +74,7 @@ func newPlatformControlCoordinator(options reconcileOptions, plane *nodeControlP
 		},
 		remote,
 		binding,
+		&kernelplatformcontrol.FileSecretMaterialStore{Root: filepath.Join(filepath.Dir(options.platformControlProfile), "managed-secrets")},
 	)
 	if err != nil {
 		return nil, err

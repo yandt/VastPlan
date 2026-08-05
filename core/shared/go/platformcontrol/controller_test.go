@@ -3,7 +3,9 @@ package platformcontrol
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
@@ -55,6 +57,16 @@ type managedTestStore struct{ sharedstate.Store }
 
 func (managedTestStore) Close() error { return nil }
 
+type rejectingProfileStore struct{}
+
+func (rejectingProfileStore) Load(context.Context) (*platformcontrolv1.Profile, error) {
+	return nil, nil
+}
+
+func (rejectingProfileStore) Commit(context.Context, platformcontrolv1.Profile, uint64) error {
+	return ErrGenerationConflict
+}
+
 func TestControllerConfiguresThenBindsSQLSharedStateAtomically(t *testing.T) {
 	root := t.TempDir()
 	profileStore := &FileProfileStore{Path: filepath.Join(root, "platform-control.json")}
@@ -63,7 +75,7 @@ func TestControllerConfiguresThenBindsSQLSharedStateAtomically(t *testing.T) {
 	binding := sharedstate.NewBindingStore()
 	controller, err := NewController(profileStore, func(platformcontrolv1.SecretRef) (SecretSource, error) {
 		return staticSecretSource{value: []byte("secret")}, nil
-	}, bootstrapper, binding)
+	}, bootstrapper, binding, &FileSecretMaterialStore{Root: filepath.Join(root, "managed-secrets")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +86,7 @@ func TestControllerConfiguresThenBindsSQLSharedStateAtomically(t *testing.T) {
 		t.Fatalf("未提交 Profile 时 Shared State 必须保持未配置语义: %v", err)
 	}
 	profile := testProfile(filepath.Join(root, "password"), 1)
-	if err := controller.Configure(context.Background(), profile, 0); err != nil {
+	if err := controller.Configure(context.Background(), platformcontrolv1.ChangeRequest{Profile: profile}); err != nil {
 		t.Fatal(err)
 	}
 	if status := controller.Status(); status.Phase != platformcontrolv1.PhaseReady || status.Generation != 1 {
@@ -84,7 +96,7 @@ func TestControllerConfiguresThenBindsSQLSharedStateAtomically(t *testing.T) {
 		t.Fatalf("初始化调用链错误: generation=%d ready=%v bootstrapper=%+v", generation, ready, bootstrapper)
 	}
 	bootstrapper.testErr = errors.New("candidate database unavailable")
-	if err := controller.Configure(context.Background(), testProfile(filepath.Join(root, "password-next"), 2), 1); err == nil {
+	if err := controller.Configure(context.Background(), platformcontrolv1.ChangeRequest{Profile: testProfile(filepath.Join(root, "password-next"), 2), ExpectedGeneration: 1}); err == nil {
 		t.Fatal("失败候选必须返回错误")
 	}
 	if status := controller.Status(); status.Phase != platformcontrolv1.PhaseReady || status.Generation != 1 || status.Code != CodeDatabaseUnavailable {
@@ -102,8 +114,8 @@ func TestControllerFailsClosedWithoutCommittingOrFallback(t *testing.T) {
 	bootstrapper := &fakeBootstrapper{testErr: errors.New("database unavailable")}
 	controller, _ := NewController(profiles, func(platformcontrolv1.SecretRef) (SecretSource, error) {
 		return staticSecretSource{value: []byte("secret")}, nil
-	}, bootstrapper, binding)
-	if err := controller.Configure(context.Background(), testProfile(filepath.Join(root, "password"), 1), 0); err == nil {
+	}, bootstrapper, binding, &FileSecretMaterialStore{Root: filepath.Join(root, "managed-secrets")})
+	if err := controller.Configure(context.Background(), platformcontrolv1.ChangeRequest{Profile: testProfile(filepath.Join(root, "password"), 1)}); err == nil {
 		t.Fatal("连接测试失败必须阻断配置")
 	}
 	if status := controller.Status(); status.Phase != platformcontrolv1.PhaseRecovery || status.Code != CodeDatabaseUnavailable {
@@ -131,7 +143,7 @@ func TestControllerExistingProfileFailureRequiresProviderAndFailsClosed(t *testi
 	bootstrapper := &fakeBootstrapper{openErr: errors.New("database unavailable")}
 	controller, _ := NewController(profiles, func(platformcontrolv1.SecretRef) (SecretSource, error) {
 		return staticSecretSource{value: []byte("secret")}, nil
-	}, bootstrapper, binding)
+	}, bootstrapper, binding, &FileSecretMaterialStore{Root: filepath.Join(root, "managed-secrets")})
 	if err := controller.Start(context.Background()); err == nil {
 		t.Fatal("已配置数据库打开失败必须返回错误")
 	}
@@ -147,11 +159,11 @@ func TestControllerTestsCandidateWithoutInitializingOrCommitting(t *testing.T) {
 	bootstrapper := &fakeBootstrapper{}
 	controller, err := NewController(profiles, func(platformcontrolv1.SecretRef) (SecretSource, error) {
 		return staticSecretSource{value: []byte("secret")}, nil
-	}, bootstrapper, binding)
+	}, bootstrapper, binding, &FileSecretMaterialStore{Root: filepath.Join(root, "managed-secrets")})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := controller.TestCandidate(context.Background(), testProfile(filepath.Join(root, "password"), 1), 0); err != nil {
+	if err := controller.TestCandidate(context.Background(), platformcontrolv1.ChangeRequest{Profile: testProfile(filepath.Join(root, "password"), 1)}); err != nil {
 		t.Fatal(err)
 	}
 	if bootstrapper.tested != 1 || bootstrapper.initialized != 0 || bootstrapper.opened != 0 {
@@ -165,5 +177,109 @@ func TestControllerTestsCandidateWithoutInitializingOrCommitting(t *testing.T) {
 	}
 	if status := controller.Status(); status.Phase != platformcontrolv1.PhaseUnconfigured || status.Generation != 0 {
 		t.Fatalf("空环境测试成功后应恢复未配置状态: %+v", status)
+	}
+}
+
+func TestControllerStagesDirectPasswordAsManagedReference(t *testing.T) {
+	root := t.TempDir()
+	profiles := &FileProfileStore{Path: filepath.Join(root, "platform-control.json")}
+	stateStore, _ := sharedstate.OpenFileStore(filepath.Join(root, "provider-state.json"))
+	bootstrapper := &fakeBootstrapper{store: managedTestStore{Store: stateStore}}
+	binding := sharedstate.NewBindingStore()
+	materials := &FileSecretMaterialStore{Root: filepath.Join(root, "managed-secrets")}
+	controller, err := NewController(profiles, func(platformcontrolv1.SecretRef) (SecretSource, error) {
+		return nil, errors.New("direct password must not use external resolver")
+	}, bootstrapper, binding, materials)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := testProfile(filepath.Join(root, "unused-password-file"), 1)
+	profile.SecretRef = platformcontrolv1.SecretRef{}
+	request := platformcontrolv1.ChangeRequest{Profile: profile, SecretMaterial: "direct-password"}
+	if err := controller.Configure(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := profiles.Load(context.Background())
+	if err != nil || stored == nil || stored.SecretRef.Kind != "owner-file" || filepath.Dir(stored.SecretRef.Path) != materials.Root {
+		t.Fatalf("Profile 必须只保存托管引用: profile=%+v err=%v", stored, err)
+	}
+	raw, err := os.ReadFile(profiles.Path)
+	if err != nil || strings.Contains(string(raw), "direct-password") {
+		t.Fatalf("Profile 不得包含密码明文: err=%v", err)
+	}
+	source, err := ResolveSecretSource(stored.SecretRef, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := source.WithSecret(context.Background(), func(value []byte) error {
+		if string(value) != "direct-password" {
+			t.Fatal("托管密码内容错误")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestControllerRollsBackManagedPasswordWhenProfileCommitFails(t *testing.T) {
+	root := t.TempDir()
+	managedRoot := filepath.Join(root, "managed-secrets")
+	stateStore, _ := sharedstate.OpenFileStore(filepath.Join(root, "provider-state.json"))
+	controller, err := NewController(
+		rejectingProfileStore{},
+		func(platformcontrolv1.SecretRef) (SecretSource, error) {
+			return nil, errors.New("direct password must not use external resolver")
+		},
+		&fakeBootstrapper{store: managedTestStore{Store: stateStore}},
+		sharedstate.NewBindingStore(),
+		&FileSecretMaterialStore{Root: managedRoot},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := testProfile(filepath.Join(root, "unused-password-file"), 1)
+	profile.SecretRef = platformcontrolv1.SecretRef{}
+	if err := controller.Configure(context.Background(), platformcontrolv1.ChangeRequest{
+		Profile: profile, SecretMaterial: "direct-password",
+	}); !errors.Is(err, ErrGenerationConflict) {
+		t.Fatalf("Profile CAS 失败应原样返回: %v", err)
+	}
+	entries, err := os.ReadDir(managedRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("Profile 提交失败后不得保留托管密码: %+v", entries)
+	}
+}
+
+func TestControllerDirectPasswordTestDoesNotPersistMaterial(t *testing.T) {
+	root := t.TempDir()
+	managedRoot := filepath.Join(root, "managed-secrets")
+	profile := testProfile(filepath.Join(root, "unused-password-file"), 1)
+	profile.SecretRef = platformcontrolv1.SecretRef{}
+	controller, err := NewController(
+		&FileProfileStore{Path: filepath.Join(root, "platform-control.json")},
+		func(platformcontrolv1.SecretRef) (SecretSource, error) {
+			return nil, errors.New("direct password must not use external resolver")
+		},
+		&fakeBootstrapper{},
+		sharedstate.NewBindingStore(),
+		&FileSecretMaterialStore{Root: managedRoot},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := controller.TestCandidate(context.Background(), platformcontrolv1.ChangeRequest{
+		Profile: profile, SecretMaterial: "direct-password",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(managedRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("仅测试连接不得持久化密码: %+v", entries)
 	}
 }

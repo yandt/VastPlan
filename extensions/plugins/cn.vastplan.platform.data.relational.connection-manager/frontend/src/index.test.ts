@@ -5,7 +5,7 @@ import databaseConnectionsPlugin, { createDatabaseConnectionsPage } from "./inde
 import { createPlatformControlPage } from "./platform-control-page.js";
 
 describe("database connections Workbench page", () => {
-  it("keeps Platform Control bootstrap configuration data-driven and secret-reference only", async () => {
+  it("keeps Platform Control bootstrap configuration data-driven with one-time password material", async () => {
     const testPlatformControl = vi.fn(async () => ({ phase: "unconfigured" as const }));
     const configurePlatformControl = vi.fn(async () => ({ phase: "ready" as const, generation: 1 }));
     const client = {
@@ -17,16 +17,17 @@ describe("database connections Workbench page", () => {
     expect(page.form.workflow).toMatchObject({ surface: "page", submitLabel: expect.objectContaining({ key: "platformControl.action.initialize" }) });
     expect(page.form.workflow.actions).toContainEqual(expect.objectContaining({ id: "test", placement: "footer.start", requiresValid: true }));
     const loaded = await page.form.load?.([], new AbortController().signal);
-    expect(loaded).toMatchObject({ phase: "unconfigured", currentGeneration: 0, providerId: "postgresql", secretKind: "systemd-credential", contractRange: "^1.0.0" });
-    const value = { ...loaded, host: "db.internal", username: "vastplan", serverName: "db.internal", secretName: "platform-control-db" };
+    expect(loaded).toMatchObject({ phase: "unconfigured", currentGeneration: 0, providerId: "postgresql", secretMode: "direct", contractRange: "^1.0.0" });
+    const value = { ...loaded, host: "db.internal", username: "vastplan", serverName: "db.internal", password: "one-time-password" };
     const action = page.form.workflow.actions?.[0];
     if (action === undefined) throw new Error("平台控制数据库测试动作未注册");
     await page.form.runAction?.({ action, value, selected: [] }, new AbortController().signal);
     await page.form.submit({ value, selected: [] }, new AbortController().signal);
-    const expected = expect.objectContaining({ expectedGeneration: 0, profile: expect.objectContaining({ schemaVersion: 1, generation: 1, endpoint: "db.internal:5432", secretRef: { kind: "systemd-credential", name: "platform-control-db" } }) });
+    const expected = expect.objectContaining({ expectedGeneration: 0, secretMaterial: "one-time-password", profile: expect.objectContaining({ schemaVersion: 1, generation: 1, endpoint: "db.internal:5432" }) });
     expect(testPlatformControl).toHaveBeenCalledWith(expected);
     expect(configurePlatformControl).toHaveBeenCalledWith(expected);
-    expect(JSON.stringify(testPlatformControl.mock.calls)).not.toContain("password");
+    expect(testPlatformControl).toHaveBeenCalledWith(expect.objectContaining({ profile: expect.not.objectContaining({ secretRef: expect.anything() }) }));
+    expect(page.form.presentation?.fields).toContainEqual(expect.objectContaining({ pointer: "/password", widget: "secretMaterial" }));
   });
 
   it("requires one-time material on create but never loads it for edit", async () => {

@@ -9,8 +9,6 @@ import (
 	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
 )
 
-const maxSecretBytes = 64 << 10
-
 type SecretResolver func(platformcontrolv1.SecretRef) (SecretSource, error)
 
 // ResolveSecretSource selects one trusted bootstrap secret implementation at
@@ -53,7 +51,7 @@ func (s *fileSecretSource) WithSecret(ctx context.Context, use func([]byte) erro
 		return err
 	}
 	defer clear(raw)
-	if len(raw) == 0 || len(raw) > maxSecretBytes || use == nil {
+	if len(raw) == 0 || len(raw) > platformcontrolv1.MaxSecretMaterialBytes || use == nil {
 		return errors.New("Bootstrap secret 内容无效")
 	}
 	return use(raw)

@@ -12,9 +12,11 @@ import { createPortalHandler } from "./portal-handler";
 describe("Platform Control bootstrap surface", () => {
   it("redirects the seed root to an authenticated minimal page and keeps mutations CSRF protected", async () => {
     const calls: string[] = [];
+    const payloads: unknown[] = [];
     let phase = "unconfigured";
-    const client: PlatformControlBootstrapPort = { logicalService: "platform.database", async call(_principal, operation) {
+    const client: PlatformControlBootstrapPort = { logicalService: "platform.database", async call(_principal, operation, payload) {
       calls.push(operation);
+      payloads.push(JSON.parse(new TextDecoder().decode(payload)) as unknown);
       return new TextEncoder().encode(JSON.stringify({ phase, generation: phase === "ready" ? 1 : 0 }));
     } };
     const root = await createPortalFixture();
@@ -37,12 +39,15 @@ describe("Platform Control bootstrap surface", () => {
       const csrfResponse = await fetch(`${origin}/v1/csrf`, { headers: { Cookie: cookie } });
       const token = (await csrfResponse.json() as { token: string }).token;
       const writeHeaders = { Cookie: `${cookie}; vastplan_csrf=${token}`, "X-VastPlan-CSRF": token, "Content-Type": "application/json" };
-      const testResponse = await fetch(`${origin}/v1/bootstrap/platform-control/test`, { method: "POST", headers: writeHeaders, body: JSON.stringify({ profile: {}, expectedGeneration: 0 }) });
+      const change = { profile: {}, expectedGeneration: 0, secretMaterial: "one-time-password" };
+      const testResponse = await fetch(`${origin}/v1/bootstrap/platform-control/test`, { method: "POST", headers: writeHeaders, body: JSON.stringify(change) });
       expect(testResponse.status).toBe(200);
       expect(calls).toContain("platformControlTest");
+      expect(payloads).toContainEqual(change);
+      expect(await testResponse.text()).not.toContain("one-time-password");
 
       phase = "ready";
-      const configure = await fetch(`${origin}/v1/bootstrap/platform-control`, { method: "PUT", headers: writeHeaders, body: JSON.stringify({ profile: {}, expectedGeneration: 0 }) });
+      const configure = await fetch(`${origin}/v1/bootstrap/platform-control`, { method: "PUT", headers: writeHeaders, body: JSON.stringify(change) });
       expect(configure.status).toBe(409);
       expect(await configure.json()).toEqual({ error: "platform_control_ready" });
       expect(calls).not.toContain("platformControlConfigure");

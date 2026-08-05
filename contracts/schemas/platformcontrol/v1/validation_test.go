@@ -27,3 +27,25 @@ func TestPlatformControlProfileRejectsDSNAndRelativeSecretFile(t *testing.T) {
 		}
 	}
 }
+
+func TestChangeRequestAcceptsExactlyOneSecretInput(t *testing.T) {
+	profile := Profile{
+		SchemaVersion: 1, Generation: 1, ProviderID: "postgresql", Endpoint: "db.internal:5432",
+		Database: "vastplan", Schema: "platform", TLS: TLS{Mode: "verify-full", ServerName: "db.internal"},
+		Username: "vastplan", ContractRange: "^1.0.0",
+	}
+	if err := ValidateChangeRequest(ChangeRequest{Profile: profile, SecretMaterial: "direct-password"}); err != nil {
+		t.Fatalf("一次性密码材料应有效: %v", err)
+	}
+	profile.SecretRef = SecretRef{Kind: "systemd-credential", Name: "platform-db"}
+	if err := ValidateChangeRequest(ChangeRequest{Profile: profile}); err != nil {
+		t.Fatalf("外部引用应有效: %v", err)
+	}
+	if err := ValidateChangeRequest(ChangeRequest{Profile: profile, SecretMaterial: "ambiguous"}); err == nil {
+		t.Fatal("密码材料与外部引用不得同时提交")
+	}
+	profile.SecretRef = SecretRef{}
+	if err := ValidateChangeRequest(ChangeRequest{Profile: profile, ExpectedGeneration: 1, SecretMaterial: "stale"}); err == nil {
+		t.Fatal("候选 generation 必须紧随 expectedGeneration")
+	}
+}

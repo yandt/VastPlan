@@ -36,7 +36,7 @@ func callPlatformControl(ctx context.Context, host sdk.Host, call *contractv1.Ca
 	}
 	if operation != operationPlatformControlStatus {
 		var request platformcontrolv1.ChangeRequest
-		if err := json.Unmarshal(payload, &request); err != nil || platformcontrolv1.ValidateProfile(request.Profile) != nil || request.Profile.Generation != request.ExpectedGeneration+1 {
+		if err := json.Unmarshal(payload, &request); err != nil || platformcontrolv1.ValidateChangeRequest(request) != nil {
 			return domainError("platform.database.platform_control_invalid", errors.New("Platform Control 配置无效"))
 		}
 	}

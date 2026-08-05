@@ -65,6 +65,13 @@ func ParseProfile(raw []byte) (Profile, error) {
 }
 
 func ValidateProfile(profile Profile) error {
+	if err := validateProfileCore(profile); err != nil {
+		return err
+	}
+	return ValidateSecretRef(profile.SecretRef)
+}
+
+func validateProfileCore(profile Profile) error {
 	if profile.SchemaVersion != Version || profile.Generation == 0 {
 		return errors.New("Platform Control Profile 版本或 generation 无效")
 	}
@@ -85,7 +92,26 @@ func ValidateProfile(profile Profile) error {
 	if _, err := semver.NewConstraint(profile.ContractRange); err != nil {
 		return fmt.Errorf("Platform Control contractRange 无效: %w", err)
 	}
-	return ValidateSecretRef(profile.SecretRef)
+	return nil
+}
+
+// ValidateChangeRequest keeps plaintext material outside the durable Profile.
+// Exactly one secret input is accepted: inline material for trusted staging or
+// an already provisioned external reference.
+func ValidateChangeRequest(request ChangeRequest) error {
+	if request.Profile.Generation != request.ExpectedGeneration+1 {
+		return errors.New("Platform Control candidate generation 无效")
+	}
+	if err := validateProfileCore(request.Profile); err != nil {
+		return err
+	}
+	if request.SecretMaterial != "" {
+		if request.Profile.SecretRef != (SecretRef{}) || len([]byte(request.SecretMaterial)) > MaxSecretMaterialBytes || strings.ContainsRune(request.SecretMaterial, '\x00') {
+			return errors.New("Platform Control 一次性密码材料无效")
+		}
+		return nil
+	}
+	return ValidateSecretRef(request.Profile.SecretRef)
 }
 
 func ValidateSecretRef(ref SecretRef) error {

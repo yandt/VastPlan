@@ -36,9 +36,9 @@ func kernelPlatformControl(admin platformcontrol.Administration) map[string]prot
 			}
 			var err error
 			if configure {
-				err = admin.Configure(ctx, request.Profile, request.ExpectedGeneration)
+				err = admin.Configure(ctx, request)
 			} else {
-				err = admin.TestCandidate(ctx, request.Profile, request.ExpectedGeneration)
+				err = admin.TestCandidate(ctx, request)
 			}
 			if err != nil {
 				return platformControlFailure(admin.Status(), err)
