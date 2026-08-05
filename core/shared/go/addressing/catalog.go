@@ -112,6 +112,15 @@ func (r *Router) Instances(capability string) []Announcement {
 	return r.InstancesFor(capability, "", "")
 }
 
+// LocalNodeID exposes only the stable scheduler node identity needed by
+// trusted transport adapters to order otherwise equivalent instances locally.
+func (r *Router) LocalNodeID() string {
+	if r == nil {
+		return ""
+	}
+	return r.NodeID
+}
+
 // SubscribeTopologyChanges 广播本地注册和已验证的远端目录变化。消费者只响应事件和
 // 精确租约到期时间，不再以亚秒级周期扫描能力图。
 func (r *Router) SubscribeTopologyChanges() (<-chan struct{}, func()) {

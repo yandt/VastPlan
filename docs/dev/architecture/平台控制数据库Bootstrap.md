@@ -62,7 +62,9 @@ P4c 已把进程边界接通：
 - 宿主用 `RemoteBootstrapper/RemoteStore` 把跨进程 Capability 重新适配为原有 `sharedstate.Store`，业务插件看不到传输差异；
 - Deployment/Assignment 增加 `startup_tier=bootstrap|full`，默认 `full`。Node Agent 可以完成 Full 单元的下载、验签和安装，但在 Shared State Ready 前拒绝激活；
 - 恢复由已验证能力目录的 topology change 触发，没有定时兜底轮询；Runtime 重建并重新登记 Capability 后，Controller 按已提交 Profile 幂等执行 Open；
-- P6 完成多副本逐实例初始化和事务亲和前，种子 Database Runtime 固定为单副本，禁止把 queue 路由误当成多副本 Shared State 已就绪。
+- P6 已完成多副本逐实例初始化：可信宿主从已验证能力目录枚举精确 Runtime Instance，按同节点优先、稳定 Instance ID 的顺序选择首个副本执行一次 `Initialize`，其余副本只执行幂等 `Open`。全部副本打开成功后才原子替换可调用集合；任一新副本失败时保留上一组已打开副本，绝不把半初始化实例暴露给 Shared State。
+- `RemoteStore` 对每次调用重新结合当前可信目录与已打开集合，并固定 `CallTarget.instance_id`。只有传输失败才依次切换远端副本；CAS 冲突、权限、参数和其他应用错误不会跨副本重放。目录 topology change 会更新共享副本集合，既有 Store 无需 Kernel 重新绑定即可看到新增、移除和本地优先顺序。
+- 普通 Record Store 调用沿同一能力目录本地优先；事务仍使用加密 Transaction Handle 固定 owner Runtime，非 owner 通过受限 relay 精确路由，owner 丢失稳定返回 `transaction_lost`。副本各自维护本地连接池，不共享 socket。
 
 P4d 已完成受限管理闭环：
 
@@ -81,6 +83,6 @@ P4e 已完成开发编排器与最小 Portal 的两阶段闭环：
 - Shared State 绑定成功会发出一次有界组合触发，Node Agent 复用同一 Planner/Activation 数据链继续激活 Full 单元，不增加状态轮询；
 - Go 能力目录 `schema_version=2` 的 ArtifactIdentity、ContractIdentity 与 fingerprint 已同步到 Node Addressing SDK，Portal 不再静默丢弃新目录记录。
 
-真实进程空环境验收已覆盖 Recovery `4/4 Ready`、完整 Tier 保持 Pending、最小页面可达和固定 Bootstrap API 可路由。PostgreSQL/MySQL 的真实初始化、重启保留和多节点竞争仍由后续集成矩阵完成，不能仅凭空环境验收宣称 P4/P6 全部封板。
+真实进程空环境验收已覆盖 Recovery `4/4 Ready`、完整 Tier 保持 Pending、最小页面可达和固定 Bootstrap API 可路由；三副本契约测试覆盖同节点优先、两级传输故障转移、应用错误不重放、拓扑增删及新副本打开失败保留旧集合。PostgreSQL/MySQL 的真实初始化、重启保留和多节点迁移锁竞争仍由集成矩阵完成，不能仅凭内存协议测试宣称数据库故障矩阵已经封板。
 
 P5 第一批迁移已删除 Connection Manager 的直接 JSON 状态文件。普通数据库管理请求通过统一 Workflow 进入按租户、Leader-fenced 的 Shared State CAS 聚合；连接定义、凭证候选、Runtime publication outbox 和回收队列保持原有原子边界。Platform Control 配置操作在 Shared State 尚未绑定时仍走独立受限内核端口，因此不会形成“为了配置数据库而先依赖数据库”的循环。

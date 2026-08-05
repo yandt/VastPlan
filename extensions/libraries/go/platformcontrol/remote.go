@@ -17,39 +17,62 @@ import (
 // through the global capability directory.
 type Invoker interface {
 	Invoke(context.Context, string, string, []byte) (*contractv1.CallResult, []byte, error)
+	InvokeInstance(context.Context, string, string, string, []byte) (*contractv1.CallResult, []byte, error)
+	Instances(string) []RuntimeInstance
 }
 
 // RemoteBootstrapper adapts the Database Runtime bootstrap capability to the
 // transport-neutral Bootstrapper port.
-type RemoteBootstrapper struct{ invoke Invoker }
+type RemoteBootstrapper struct {
+	invoke   Invoker
+	replicas *runtimeReplicaSet
+}
 
 func NewRemoteBootstrapper(invoke Invoker) (*RemoteBootstrapper, error) {
 	if invoke == nil {
 		return nil, errors.New("Platform Control Remote Bootstrapper 缺少 Invoker")
 	}
-	return &RemoteBootstrapper{invoke: invoke}, nil
+	return &RemoteBootstrapper{invoke: invoke, replicas: newRuntimeReplicaSet()}, nil
 }
 
 func (b *RemoteBootstrapper) Test(ctx context.Context, profile platformcontrolv1.Profile, secret SecretSource) error {
-	_, err := b.call(ctx, platformcontrolv1.OperationTest, profile, secret)
+	instances := b.invoke.Instances(platformcontrolv1.BootstrapCapability)
+	if len(instances) == 0 {
+		return sharedstate.ErrUnavailable
+	}
+	_, err := b.callInstance(ctx, platformcontrolv1.OperationTest, instances[0].ID, profile, secret)
 	return err
 }
 
 func (b *RemoteBootstrapper) Initialize(ctx context.Context, profile platformcontrolv1.Profile, secret SecretSource) (ManagedStore, error) {
-	if _, err := b.call(ctx, platformcontrolv1.OperationInitialize, profile, secret); err != nil {
-		return nil, err
-	}
-	return &RemoteStore{invoke: b.invoke}, nil
+	return b.openReplicas(ctx, platformcontrolv1.OperationInitialize, profile, secret)
 }
 
 func (b *RemoteBootstrapper) Open(ctx context.Context, profile platformcontrolv1.Profile, secret SecretSource) (ManagedStore, error) {
-	if _, err := b.call(ctx, platformcontrolv1.OperationOpen, profile, secret); err != nil {
-		return nil, err
-	}
-	return &RemoteStore{invoke: b.invoke}, nil
+	return b.openReplicas(ctx, platformcontrolv1.OperationOpen, profile, secret)
 }
 
-func (b *RemoteBootstrapper) call(ctx context.Context, operation string, profile platformcontrolv1.Profile, secret SecretSource) (platformcontrolv1.Status, error) {
+func (b *RemoteBootstrapper) openReplicas(ctx context.Context, firstOperation string, profile platformcontrolv1.Profile, secret SecretSource) (ManagedStore, error) {
+	instances := b.invoke.Instances(platformcontrolv1.BootstrapCapability)
+	if len(instances) == 0 {
+		return nil, sharedstate.ErrUnavailable
+	}
+	opened := make([]string, 0, len(instances))
+	for index, instance := range instances {
+		operation := platformcontrolv1.OperationOpen
+		if index == 0 {
+			operation = firstOperation
+		}
+		if _, err := b.callInstance(ctx, operation, instance.ID, profile, secret); err != nil {
+			return nil, err
+		}
+		opened = append(opened, instance.ID)
+	}
+	b.replicas.Replace(opened)
+	return &RemoteStore{invoke: b.invoke, replicas: b.replicas}, nil
+}
+
+func (b *RemoteBootstrapper) callInstance(ctx context.Context, operation, instanceID string, profile platformcontrolv1.Profile, secret SecretSource) (platformcontrolv1.Status, error) {
 	if secret == nil {
 		return platformcontrolv1.Status{}, sharedstate.ErrUnavailable
 	}
@@ -65,7 +88,7 @@ func (b *RemoteBootstrapper) call(ctx context.Context, operation string, profile
 	if err != nil {
 		return platformcontrolv1.Status{}, err
 	}
-	result, raw, err := b.invoke.Invoke(ctx, platformcontrolv1.BootstrapCapability, operation, payload)
+	result, raw, err := b.invoke.InvokeInstance(ctx, platformcontrolv1.BootstrapCapability, operation, instanceID, payload)
 	if err != nil {
 		return platformcontrolv1.Status{}, err
 	}
@@ -82,7 +105,10 @@ func (b *RemoteBootstrapper) call(ctx context.Context, operation string, profile
 // RemoteStore keeps the kernel Store SPI independent of the physical Database
 // Runtime process. Close is intentionally local: Runtime generation lifecycle
 // owns the physical pool.
-type RemoteStore struct{ invoke Invoker }
+type RemoteStore struct {
+	invoke   Invoker
+	replicas *runtimeReplicaSet
+}
 
 func (s *RemoteStore) Close() error { return nil }
 
@@ -148,14 +174,21 @@ func (s *RemoteStore) call(ctx context.Context, operation string, request any) (
 	if err != nil {
 		return nil, err
 	}
-	result, raw, err := s.invoke.Invoke(ctx, sharedstatesqlv1.Capability, operation, payload)
-	if err != nil {
-		return nil, err
+	if s.replicas == nil {
+		return nil, sharedstate.ErrUnavailable
 	}
-	if err := resultError(result); err != nil {
-		return nil, err
+	instances := s.replicas.Preferred(s.invoke.Instances(sharedstatesqlv1.Capability))
+	for _, instanceID := range instances {
+		result, raw, err := s.invoke.InvokeInstance(ctx, sharedstatesqlv1.Capability, operation, instanceID, payload)
+		if err != nil {
+			continue
+		}
+		if err := resultError(result); err != nil {
+			return nil, err
+		}
+		return raw, nil
 	}
-	return raw, nil
+	return nil, sharedstate.ErrUnavailable
 }
 
 func resultError(result *contractv1.CallResult) error {
