@@ -73,15 +73,23 @@ func TestStoreReadsAndCASUpgradesValidatedSchemaV1Seed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	legacyRaw, err := json.Marshal(persistedSnapshot{SchemaVersion: 1, Catalog: seed, Digest: seed.Digest()})
-	if err != nil {
+	legacyRaw := legacyCatalogSnapshotRaw(t, seed, 1)
+	var legacyWire persistedSnapshot
+	if err := json.Unmarshal(legacyRaw, &legacyWire); err != nil {
 		t.Fatal(err)
+	}
+	contractUpgrade, legacyDigest, err := backendcompositionv1.UpgradeLegacyBackendPlatformCatalog(legacyWire.Catalog)
+	if err != nil || legacyDigest != legacyWire.Digest || contractUpgrade.Digest() != seed.Digest() {
+		t.Fatalf("契约迁移器未保持新旧 Catalog 身份: old=%s stored=%s new=%s want=%s err=%v", legacyDigest, legacyWire.Digest, contractUpgrade.Digest(), seed.Digest(), err)
+	}
+	if parsed, err := parseSnapshot(legacyRaw); err != nil || parsed.Digest != seed.Digest() {
+		t.Fatalf("持久快照解析器未采用契约迁移结果: parsed=%+v err=%v", parsed, err)
 	}
 	if _, err := buckets.BackendPlatformCatalogs.Create(ctx, store.key, legacyRaw); err != nil {
 		t.Fatal(err)
 	}
 	if snapshot, err := store.Snapshot(ctx); err != nil || snapshot.Digest() != seed.Digest() {
-		t.Fatalf("已验证 v1 Seed 应可只读迁移: snapshot=%+v err=%v", snapshot, err)
+		t.Fatalf("缺少 productCapabilities 的已验证 v1 Seed 应可只读迁移: snapshot=%+v err=%v", snapshot, err)
 	}
 	if _, err := store.Seed(ctx); err != nil {
 		t.Fatalf("Bootstrap 应以 CAS 持久升级 v1 Seed: %v", err)
@@ -94,6 +102,21 @@ func TestStoreReadsAndCASUpgradesValidatedSchemaV1Seed(t *testing.T) {
 	if err := json.Unmarshal(entry.Value(), &upgraded); err != nil || upgraded.SchemaVersion != schemaVersion {
 		t.Fatalf("v1 Seed 未升级为当前 schema: state=%+v err=%v", upgraded, err)
 	}
+	if len(upgraded.Catalog.Profiles) != 1 || upgraded.Catalog.Profiles[0].ProductCapabilities == nil || upgraded.Digest != upgraded.Catalog.Digest() {
+		t.Fatalf("v1 Seed 未补齐当前 Catalog 与摘要: state=%+v", upgraded)
+	}
+	var drifted map[string]any
+	if err := json.Unmarshal(legacyRaw, &drifted); err != nil {
+		t.Fatal(err)
+	}
+	drifted["digest"] = strings.Repeat("0", 64)
+	driftedRaw, err := json.Marshal(drifted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := parseSnapshot(driftedRaw); err == nil {
+		t.Fatal("旧版 Catalog 的历史摘要漂移不得迁移")
+	}
 
 	tampered := persistedSnapshot{SchemaVersion: 1, Catalog: seed, Digest: strings.Repeat("f", 64), Candidate: &Candidate{}}
 	tamperedRaw, _ := json.Marshal(tampered)
@@ -103,6 +126,83 @@ func TestStoreReadsAndCASUpgradesValidatedSchemaV1Seed(t *testing.T) {
 	if _, err := store.Snapshot(ctx); err == nil {
 		t.Fatal("带未知候选或错误摘要的 v1 快照不得迁移")
 	}
+}
+
+func TestStoreCASUpgradesLegacyCatalogInsideSchemaV3(t *testing.T) {
+	ctx := context.Background()
+	serverInstance, buckets := startCatalogNATS(t)
+	defer serverInstance.Shutdown()
+	seed := testCatalog(1)
+	store, err := NewStore(buckets.BackendPlatformCatalogs, seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyRaw := legacyCatalogSnapshotRaw(t, seed, schemaVersion)
+	if _, err := buckets.BackendPlatformCatalogs.Create(ctx, store.key, legacyRaw); err != nil {
+		t.Fatal(err)
+	}
+	if snapshot, err := store.Snapshot(ctx); err != nil || snapshot.Digest() != seed.Digest() {
+		t.Fatalf("v3 外壳中的历史 Catalog 应可只读迁移: snapshot=%+v err=%v", snapshot, err)
+	}
+	if _, err := store.Seed(ctx); err != nil {
+		t.Fatalf("Bootstrap 应以 CAS 持久升级 v3 外壳中的历史 Catalog: %v", err)
+	}
+	entry, err := buckets.BackendPlatformCatalogs.Get(ctx, store.key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var upgraded persistedSnapshot
+	if err := json.Unmarshal(entry.Value(), &upgraded); err != nil || upgraded.SchemaVersion != schemaVersion || upgraded.Digest != upgraded.Catalog.Digest() {
+		t.Fatalf("历史 Catalog 未规范升级: state=%+v err=%v", upgraded, err)
+	}
+	if len(upgraded.Catalog.Profiles) != 1 || upgraded.Catalog.Profiles[0].ProductCapabilities == nil {
+		t.Fatalf("历史 Catalog 未显式补齐 Product Capability: %+v", upgraded.Catalog.Profiles)
+	}
+}
+
+type testLegacyPlatformProfile struct {
+	compositioncommonv1.Document
+	Target           compositioncommonv1.Target             `json:"target"`
+	ServiceClasses   []string                               `json:"serviceClasses"`
+	ServiceBaselines []backendcompositionv1.ServiceBaseline `json:"serviceBaselines"`
+	Services         []deploymentv2.ServiceUnit             `json:"services"`
+}
+
+type testLegacyBackendPlatformCatalog struct {
+	compositioncommonv1.Document
+	Profiles []testLegacyPlatformProfile                   `json:"profiles"`
+	Bindings []backendcompositionv1.BackendPlatformBinding `json:"bindings"`
+}
+
+func legacyCatalogSnapshotRaw(t *testing.T, catalog backendcompositionv1.BackendPlatformCatalog, version int) []byte {
+	t.Helper()
+	legacy := testLegacyBackendPlatformCatalog{
+		Document: catalog.Document,
+		Profiles: make([]testLegacyPlatformProfile, 0, len(catalog.Profiles)),
+		Bindings: append([]backendcompositionv1.BackendPlatformBinding(nil), catalog.Bindings...),
+	}
+	for _, profile := range catalog.Profiles {
+		legacyProfile := testLegacyPlatformProfile{
+			Document: profile.Document, Target: profile.Target, ServiceClasses: profile.ServiceClasses,
+			ServiceBaselines: profile.ServiceBaselines, Services: profile.Services,
+		}
+		legacy.Profiles = append(legacy.Profiles, legacyProfile)
+		for index := range legacy.Bindings {
+			ref := &legacy.Bindings[index].PlatformProfile
+			if ref.ID == legacyProfile.ID && ref.Revision == legacyProfile.Revision {
+				ref.Digest = compositioncommonv1.Digest(legacyProfile)
+			}
+		}
+	}
+	raw, err := json.Marshal(struct {
+		SchemaVersion int                              `json:"schemaVersion"`
+		Catalog       testLegacyBackendPlatformCatalog `json:"catalog"`
+		Digest        string                           `json:"digest"`
+	}{SchemaVersion: version, Catalog: legacy, Digest: compositioncommonv1.Digest(legacy)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
 }
 
 func testCatalog(revision uint64) backendcompositionv1.BackendPlatformCatalog {

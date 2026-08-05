@@ -264,19 +264,27 @@ func parseSnapshot(raw []byte) (persistedSnapshot, error) {
 }
 
 func validateSnapshot(snapshot persistedSnapshot) (persistedSnapshot, error) {
-	if snapshot.SchemaVersion == 1 || snapshot.SchemaVersion == 2 {
-		if snapshot.Candidate != nil {
-			return persistedSnapshot{}, errors.New("旧版 Backend Platform Catalog 快照不得包含候选")
-		}
-		snapshot.SchemaVersion = schemaVersion
-	} else if snapshot.SchemaVersion != schemaVersion {
+	if snapshot.SchemaVersion != 1 && snapshot.SchemaVersion != 2 && snapshot.SchemaVersion != schemaVersion {
 		return persistedSnapshot{}, errors.New("Backend Platform Catalog 快照版本无效")
 	}
-	validated, err := backendcompositionv1.ValidateBackendPlatformCatalog(snapshot.Catalog)
-	if err != nil || snapshot.Digest != validated.Digest() {
-		return persistedSnapshot{}, errors.New("Backend Platform Catalog 快照摘要无效")
+	if snapshot.SchemaVersion != schemaVersion && snapshot.Candidate != nil {
+		return persistedSnapshot{}, errors.New("旧版 Backend Platform Catalog 快照不得包含候选")
 	}
-	snapshot.Catalog = validated
+	validated, currentErr := backendcompositionv1.ValidateBackendPlatformCatalog(snapshot.Catalog)
+	if currentErr == nil && snapshot.Digest == validated.Digest() {
+		snapshot.Catalog = validated
+	} else {
+		if snapshot.Candidate != nil {
+			return persistedSnapshot{}, errors.New("缺少 productCapabilities 的历史 Catalog 不得携带候选")
+		}
+		upgraded, legacyDigest, legacyErr := backendcompositionv1.UpgradeLegacyBackendPlatformCatalog(snapshot.Catalog)
+		if legacyErr != nil || snapshot.Digest != legacyDigest {
+			return persistedSnapshot{}, errors.New("Backend Platform Catalog 快照摘要无效")
+		}
+		snapshot.Catalog = upgraded
+		snapshot.Digest = upgraded.Digest()
+	}
+	snapshot.SchemaVersion = schemaVersion
 	if err := validateCandidateAgainstSnapshot(snapshot); err != nil {
 		return persistedSnapshot{}, err
 	}

@@ -7,6 +7,15 @@ import (
 	recordstorev1 "cdsoft.com.cn/VastPlan/contracts/schemas/recordstore/v1"
 )
 
+func TestSchemaActivationIsSkippedWithoutExplicitAuthorization(t *testing.T) {
+	transaction := applyTransaction{modelInventory: &recordstorev1.SyncModelsRequest{
+		Models: []recordstorev1.SignedModel{{Model: recordstorev1.ModelRef{ID: "platform.database.connection"}}},
+	}}
+	if err := transaction.applyTrustedSchemaActivation(t.Context()); err != nil {
+		t.Fatalf("仅同步 Inventory 时不得在平台数据库配置前执行 Schema Plan: %v", err)
+	}
+}
+
 func TestSchemaEvidenceSeparatesSafeAndSignedAuthorization(t *testing.T) {
 	model := recordstorev1.ModelRef{ID: "example.order", SchemaVersion: 2, SHA256: strings.Repeat("a", 64)}
 	safe, err := schemaEvidence(recordstorev1.SchemaMigrationAuthorization{Model: model, Kind: "additive", AllowSafe: true})

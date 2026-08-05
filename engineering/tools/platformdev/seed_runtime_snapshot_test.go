@@ -10,10 +10,25 @@ import (
 
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
+	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	recoveryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/recovery/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/bootstrapinventory"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
+
+type seedRuntimeLegacyPlatformProfile struct {
+	compositioncommonv1.Document
+	Target           compositioncommonv1.Target             `json:"target"`
+	ServiceClasses   []string                               `json:"serviceClasses"`
+	ServiceBaselines []backendcompositionv1.ServiceBaseline `json:"serviceBaselines"`
+	Services         []deploymentv2.ServiceUnit             `json:"services"`
+}
+
+type seedRuntimeLegacyBackendCatalog struct {
+	compositioncommonv1.Document
+	Profiles []seedRuntimeLegacyPlatformProfile            `json:"profiles"`
+	Bindings []backendcompositionv1.BackendPlatformBinding `json:"bindings"`
+}
 
 func TestSeedRuntimeSnapshotCommitsOnlyWhenExplicitlyPromotedAndRestores(t *testing.T) {
 	root := platformDevTestProjectRoot(t)

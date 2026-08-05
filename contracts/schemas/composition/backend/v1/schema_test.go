@@ -129,3 +129,29 @@ func TestProductCapabilityMustOwnKnownProfileArtifactsAndEntry(t *testing.T) {
 		t.Fatal("Product Capability entryArtifact 必须属于自身成员")
 	}
 }
+
+func TestValidateBackendPlatformCatalogDoesNotMutateInputProfiles(t *testing.T) {
+	profile := PlatformProfile{
+		Document:       compositioncommonv1.Document{Version: 1, Revision: 1, ID: "legacy-profile"},
+		Target:         compositioncommonv1.Target{Kernel: compositioncommonv1.KernelBackend},
+		ServiceClasses: []string{"application.backend"}, ServiceBaselines: []ServiceBaseline{}, Services: []deploymentv2.ServiceUnit{},
+	}
+	catalog := BackendPlatformCatalog{
+		Document: compositioncommonv1.Document{Version: 1, Revision: 1, ID: "legacy-catalog"},
+		Profiles: []PlatformProfile{profile},
+		Bindings: []BackendPlatformBinding{{TenantID: "local", DeploymentName: "services", PlatformProfile: compositioncommonv1.Ref{ID: profile.ID, Revision: profile.Revision, Digest: profile.Digest()}}},
+	}
+	validated, err := ValidateBackendPlatformCatalog(catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if catalog.Profiles[0].ProductCapabilities != nil {
+		t.Fatal("Catalog 校验不得通过共享切片原地修改调用方 Profile")
+	}
+	if validated.Profiles[0].ProductCapabilities == nil {
+		t.Fatal("规范输出必须显式包含空 Product Capability")
+	}
+	if catalog.Digest() != validated.Digest() {
+		t.Fatal("Catalog digest 必须使用与规范校验相同的无副作用归一化")
+	}
+}

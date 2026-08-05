@@ -32,20 +32,26 @@ func (transaction *applyTransaction) applyTrustedSchemaActivation(ctx context.Co
 	}
 	authorizations := map[string]recordstorev1.SchemaMigrationAuthorization{}
 	activation := transaction.modelInventory.SchemaActivation
-	if activation != nil {
-		if activation.CandidateID == "" || activation.PlanDigest == "" ||
-			(activation.Mode != recordstorev1.SchemaActivationApproved && activation.Mode != recordstorev1.SchemaActivationAutomatic) {
-			return errors.New("可信 Schema Activation 身份无效")
+	// Inventory synchronization and schema activation are separate protocols.
+	// A bootstrap Runtime must be able to accept the signed model directory
+	// before the Platform Control Store exists; actual DDL is prepared by the
+	// Bootstrap Controller when that store is configured. Plugin upgrades carry
+	// an explicit SchemaActivation and continue through the fail-closed path below.
+	if activation == nil {
+		return nil
+	}
+	if activation.CandidateID == "" || activation.PlanDigest == "" ||
+		(activation.Mode != recordstorev1.SchemaActivationApproved && activation.Mode != recordstorev1.SchemaActivationAutomatic) {
+		return errors.New("可信 Schema Activation 身份无效")
+	}
+	if activation.Mode == recordstorev1.SchemaActivationApproved && activation.ApprovedBy == "" {
+		return errors.New("生产 Schema Activation 缺少审批主体")
+	}
+	for _, item := range activation.Models {
+		if _, duplicate := authorizations[item.Model.ID]; duplicate {
+			return fmt.Errorf("Schema Activation 重复授权模型 %s", item.Model.ID)
 		}
-		if activation.Mode == recordstorev1.SchemaActivationApproved && activation.ApprovedBy == "" {
-			return errors.New("生产 Schema Activation 缺少审批主体")
-		}
-		for _, item := range activation.Models {
-			if _, duplicate := authorizations[item.Model.ID]; duplicate {
-				return fmt.Errorf("Schema Activation 重复授权模型 %s", item.Model.ID)
-			}
-			authorizations[item.Model.ID] = item
-		}
+		authorizations[item.Model.ID] = item
 	}
 	for _, signed := range transaction.modelInventory.Models {
 		model, err := decodeInventoryModel(signed)

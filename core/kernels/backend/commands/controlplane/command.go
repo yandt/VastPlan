@@ -15,13 +15,11 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/compositionresolver"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/configurationcatalog"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/deploymentcontroller"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/deploymentpublisher"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/platformcatalog"
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 	sharedcontrolplane "cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
 )
 
@@ -111,8 +109,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("创建 JetStream 客户端: %w", err)
 	}
-	openCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
+	openCtx, cancelOpen := context.WithTimeout(ctx, 15*time.Second)
 	var buckets sharedcontrolplane.Buckets
 	if *options.bootstrap {
 		buckets, err = sharedcontrolplane.EnsureBucketsWithOptions(openCtx, js, sharedcontrolplane.EnsureBucketsOptions{
@@ -121,6 +118,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	} else {
 		buckets, err = sharedcontrolplane.OpenBuckets(openCtx, js)
 	}
+	cancelOpen()
 	if err != nil {
 		return err
 	}
@@ -129,35 +127,15 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		if err != nil {
 			return err
 		}
-		if _, err := catalogStore.Seed(openCtx); err != nil {
-			return fmt.Errorf("持久 Backend Platform Catalog Seed: %w", err)
+		catalogCtx, cancelCatalog := context.WithTimeout(ctx, 15*time.Second)
+		_, seedErr := catalogStore.Seed(catalogCtx)
+		cancelCatalog()
+		if seedErr != nil {
+			return fmt.Errorf("持久 Backend Platform Catalog Seed: %w", seedErr)
 		}
 	}
 	if publish {
-		derivedKey := sharedcontrolplane.DeploymentKey(publicationApplication.Metadata.Tenant, publicationApplication.Metadata.Name)
-		if *options.key != "" && *options.key != derivedKey {
-			return fmt.Errorf("种子配置目标与显式 Deployment options.key 不一致: expected=%s actual=%s", derivedKey, *options.key)
-		}
-		publisher, err := deploymentpublisher.New(
-			publicationCatalog,
-			controllerArtifacts,
-			deploymentpublisher.KVApplier{KV: buckets.Deployments},
-			configurationcatalog.Store{KV: buckets.Deployments},
-			compositionresolver.Options{AllowDevelopmentPlugins: *options.allowDevelopmentPlugins},
-			compositionresolver.Resolve,
-		)
-		if err != nil {
-			return fmt.Errorf("创建统一服务发布器: %w", err)
-		}
-		preview, err := publisher.Preview(openCtx, publicationApplication.Metadata.Tenant, publicationApplication, *options.deploymentRevision)
-		if err != nil {
-			return fmt.Errorf("预览种子服务配置: %w", err)
-		}
-		result, err := publisher.Publish(openCtx, publicationApplication.Metadata.Tenant, publicationApplication, *options.deploymentRevision, preview.Digest)
-		if err != nil {
-			return fmt.Errorf("发布种子服务配置: %w", err)
-		}
-		if _, err := fmt.Fprintf(stdout, "已通过统一服务发布器发布 Deployment %s revision=%d kv-revision=%d source=seed-file options.key=%s\n", result.Deployment.Metadata.Name, result.Deployment.Revision, result.KVRevision, derivedKey); err != nil {
+		if err := publishSeedDeployment(ctx, options, publicationCatalog, publicationApplication, controllerArtifacts, buckets, stdout); err != nil {
 			return err
 		}
 	}

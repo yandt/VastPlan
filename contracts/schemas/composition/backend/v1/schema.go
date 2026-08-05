@@ -321,6 +321,7 @@ func ParseBackendPlatformCatalog(raw []byte) (BackendPlatformCatalog, error) {
 }
 
 func ValidateBackendPlatformCatalog(catalog BackendPlatformCatalog) (BackendPlatformCatalog, error) {
+	catalog.Profiles = append([]PlatformProfile(nil), catalog.Profiles...)
 	for index := range catalog.Profiles {
 		if catalog.Profiles[index].ProductCapabilities == nil {
 			catalog.Profiles[index].ProductCapabilities = []ProductCapability{}
@@ -405,4 +406,12 @@ func (p PlatformProfile) Digest() string {
 }
 
 func (c ApplicationComposition) Digest() string { return compositioncommonv1.Digest(c) }
-func (c BackendPlatformCatalog) Digest() string { return compositioncommonv1.Digest(c) }
+func (c BackendPlatformCatalog) Digest() string {
+	c.Profiles = append([]PlatformProfile(nil), c.Profiles...)
+	for index := range c.Profiles {
+		if c.Profiles[index].ProductCapabilities == nil {
+			c.Profiles[index].ProductCapabilities = []ProductCapability{}
+		}
+	}
+	return compositioncommonv1.Digest(c)
+}
