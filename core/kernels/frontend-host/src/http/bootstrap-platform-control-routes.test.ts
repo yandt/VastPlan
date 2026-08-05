@@ -7,6 +7,7 @@ import type { PlatformControlBootstrapPort } from "../capabilities/platform-cont
 import { FileIdentityProvider } from "../identity/file-identity-provider";
 import { createPortalFixture } from "../testing/portal-fixture";
 import { writeSessionFixture } from "../testing/session-fixture";
+import { bootstrapPlatformControlPageContract, bootstrapPlatformControlPageContractHeader } from "./bootstrap-platform-control-page";
 import { createPortalHandler } from "./portal-handler";
 
 describe("Platform Control bootstrap surface", () => {
@@ -34,7 +35,14 @@ describe("Platform Control bootstrap surface", () => {
       expect(rootResponse.headers.get("location")).toBe("/bootstrap/platform-control");
       const page = await fetch(`${origin}/bootstrap/platform-control`, { headers: { Cookie: cookie } });
       expect(page.status).toBe(200);
-      expect(await page.text()).toContain("配置平台控制数据库");
+      expect(page.headers.get(bootstrapPlatformControlPageContractHeader)).toBe(bootstrapPlatformControlPageContract);
+      const pageHTML = await page.text();
+      expect(pageHTML).toContain("配置平台控制数据库");
+      expect(pageHTML).toContain("ensureCurrentPage");
+      expect(pageHTML).toContain("配置页面已更新，正在重新加载");
+      const pageHead = await fetch(`${origin}/bootstrap/platform-control`, { method: "HEAD", headers: { Cookie: cookie } });
+      expect(pageHead.status).toBe(200);
+      expect(pageHead.headers.get(bootstrapPlatformControlPageContractHeader)).toBe(bootstrapPlatformControlPageContract);
 
       const csrfResponse = await fetch(`${origin}/v1/csrf`, { headers: { Cookie: cookie } });
       const token = (await csrfResponse.json() as { token: string }).token;

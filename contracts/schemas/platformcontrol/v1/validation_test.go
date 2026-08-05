@@ -61,6 +61,27 @@ func TestChangeRequestReturnsSafeStructuredValidationIssue(t *testing.T) {
 	}
 }
 
+func TestBootstrapPageCandidateMatchesCanonicalSchema(t *testing.T) {
+	profile := Profile{
+		SchemaVersion: 1,
+		Generation:    1,
+		Connection: databasev1.ConnectionCandidate{
+			ProviderID: "postgresql",
+			Endpoint:   "127.0.0.1:5432",
+			Database:   "vastplan",
+			Options:    json.RawMessage(`{"user":"postgres","tlsMode":"disable","connectTimeoutMs":10000}`),
+			Pool: databasev1.PoolPolicy{
+				MinIdle: 1, MaxIdle: 4, MaxOpen: 16, MaxLifetimeMS: 1_800_000,
+				MaxIdleTimeMS: 300_000, AcquireTimeoutMS: 10_000, IdlePoolTTLMS: 600_000,
+			},
+		},
+		Schema: "vastplan_platform", ContractRange: "^1.0.0",
+	}
+	if err := ValidateChangeRequest(ChangeRequest{Profile: profile, SecretMaterial: "one-time-password"}); err != nil {
+		t.Fatalf("Bootstrap 页面生成的候选必须符合统一 Schema: %v", err)
+	}
+}
+
 func testProfile(endpoint string) Profile {
 	return Profile{
 		SchemaVersion: 1, Generation: 1,

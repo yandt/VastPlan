@@ -3,10 +3,13 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { setIndexSecurityHeaders } from "./security-headers";
 
 export const bootstrapPlatformControlPath = "/bootstrap/platform-control";
+export const bootstrapPlatformControlPageContract = "2";
+export const bootstrapPlatformControlPageContractHeader = "X-VastPlan-Bootstrap-Page-Contract";
 
 export function serveBootstrapPlatformControlPage(request: IncomingMessage, response: ServerResponse, head: boolean): void {
   const nonce = randomBytes(18).toString("base64url");
   setIndexSecurityHeaders(response, nonce);
+  response.setHeader(bootstrapPlatformControlPageContractHeader, bootstrapPlatformControlPageContract);
   response.statusCode = 200;
   if (head) {
     response.end();
@@ -55,21 +58,22 @@ input,select{width:100%;min-width:0;height:38px;border:1px solid #d1d5db;border-
 <div class="actions"><button id="test" type="button">测试连接</button><button id="commit" class="primary" type="submit">初始化并启用</button></div>
 </form></main>
 <script nonce="${nonce}">
-const form=document.querySelector('#form'),state=document.querySelector('#state'),test=document.querySelector('#test'),commit=document.querySelector('#commit');let status={phase:'unconfigured',generation:0},csrf='';
+const form=document.querySelector('#form'),state=document.querySelector('#state'),test=document.querySelector('#test'),commit=document.querySelector('#commit'),pageContract='${bootstrapPlatformControlPageContract}';let status={phase:'unconfigured',generation:0},csrf='';
 const message=(text,error=false)=>{state.textContent=text;state.className='state'+(error?' error':'');state.style.display=text?'block':'none'};
 const busy=value=>{for(const element of form.elements)element.disabled=value};
 const json=async(url,options={})=>{const response=await fetch(url,{credentials:'same-origin',...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});let body={};try{body=await response.json()}catch{}if(response.status===401){location.href='/auth/login?returnTo='+encodeURIComponent(location.pathname);throw new Error('会话已失效，请重新登录')}if(!response.ok)throw new Error(friendlyValidation(body.validation)||friendly(body.error||'request_failed'));return body};
 const friendly=code=>({platform_control_invalid:'配置格式无效，请检查各字段',platform_control_secret_unavailable:'无法读取密码来源，请检查文件权限或 Credential 名称',platform_control_database_unavailable:'数据库不可连接，请检查地址、TLS、账号和密码',platform_control_initialization_failed:'数据库初始化失败，请检查 Schema 权限',platform_control_conflict:'配置已被其他节点更新，请刷新后重试',csrf_rejected:'安全令牌已失效，请重试',platform_control_ready:'平台控制数据库已经启用，请进入平台管理中心',platform_service_unavailable:'数据库 Bootstrap 服务暂时不可用'})[code]||code;
-const friendlyValidation=value=>{if(!value||typeof value.field!=='string')return'';const field=value.field;return field.endsWith('endpoint')?'数据库地址必须包含有效主机和端口':field.endsWith('database')?'请输入有效数据库名称':field.endsWith('user')?'请输入有效数据库用户名':field.endsWith('serverName')?'完整校验模式必须填写证书校验服务器名称':field==='profile.schema'?'请输入有效的专用 Schema 名称':field==='secretMaterial'?'密码格式无效，请重新输入':'配置字段无效，请检查后重试'};
+const friendlyValidation=value=>{if(!value||typeof value.field!=='string')return'';const field=value.field;return field==='connection'&&value.reason==='schema_invalid'?'配置页面版本已过期，请刷新页面后重试':field.endsWith('endpoint')?'数据库地址必须包含有效主机和端口':field.endsWith('database')?'请输入有效数据库名称':field.endsWith('user')?'请输入有效数据库用户名':field.endsWith('serverName')?'完整校验模式必须填写证书校验服务器名称':field==='profile.schema'?'请输入有效的专用 Schema 名称':field==='secretMaterial'?'密码格式无效，请重新输入':'配置字段无效，请检查后重试'};
 const token=async()=>{if(csrf)return csrf;csrf=(await json('/v1/csrf')).token;return csrf};
+const ensureCurrentPage=async()=>{const response=await fetch(location.pathname,{method:'HEAD',credentials:'same-origin',cache:'no-store'});if(response.status===401){location.href='/auth/login?returnTo='+encodeURIComponent(location.pathname);return false}if(response.headers.get('${bootstrapPlatformControlPageContractHeader}')!==pageContract){message('配置页面已更新，正在重新加载…');location.reload();return false}return true};
 const payload=()=>{const data=new FormData(form),mode=data.get('secretMode'),kind=data.get('externalKind'),tls=data.get('tlsMode');return{profile:{schemaVersion:1,generation:Number(status.generation||0)+1,connection:{providerId:data.get('providerId'),endpoint:String(data.get('endpoint')||'').trim(),database:String(data.get('database')||'').trim(),options:{user:String(data.get('username')||'').trim(),tlsMode:tls,connectTimeoutMs:10000,...(tls==='disable'||!String(data.get('serverName')||'').trim()?{}:{serverName:String(data.get('serverName')).trim()})},pool:{minIdle:1,maxIdle:4,maxOpen:16,maxLifetimeMs:1800000,maxIdleTimeMs:300000,acquireTimeoutMs:10000,idlePoolTtlMs:600000}},schema:String(data.get('schema')||'').trim(),...(mode==='external'?{secretRef:kind==='systemd-credential'?{kind,name:String(data.get('externalName')||'').trim()}:{kind,path:String(data.get('externalPath')||'').trim()}}:{}),contractRange:'^1.0.0'},expectedGeneration:Number(status.generation||0),...(mode==='direct'?{secretMaterial:String(data.get('password')||'')}:{})}};
 const mutate=async(url,method)=>json(url,{method,headers:{'X-VastPlan-CSRF':await token()},body:JSON.stringify(payload())});
 const refresh=async()=>{try{status=await json('/v1/bootstrap/platform-control');if(status.phase==='ready'){message('平台控制数据库已就绪，正在进入平台管理中心…');setTimeout(()=>location.replace('/operations'),400);return}if(status.phase==='testing')message('正在测试数据库连接…');else if(status.phase==='initializing')message('正在初始化平台 Schema…');else if(status.phase==='recovery')message('当前配置不可用，可以修正后重新初始化。'+(status.code?' '+friendly(status.code):''),true);else message('平台控制数据库尚未配置。')}catch(error){message(error.message,true)}};
 form.tlsMode.addEventListener('change',()=>document.querySelector('#serverNameRow').classList.toggle('hidden',form.tlsMode.value==='disable'));
 const secretVisibility=()=>{const external=form.secretMode.value==='external',systemd=form.externalKind.value==='systemd-credential';document.querySelector('.secret-direct').classList.toggle('hidden',external);document.querySelector('.secret-external').classList.toggle('hidden',!external);document.querySelector('.secret-file').classList.toggle('hidden',!external||systemd);document.querySelector('.secret-systemd').classList.toggle('hidden',!external||!systemd);form.password.required=!external;form.externalName.required=external&&systemd;form.externalPath.required=external&&!systemd};
 form.secretMode.addEventListener('change',secretVisibility);form.externalKind.addEventListener('change',secretVisibility);secretVisibility();
-test.addEventListener('click',async()=>{if(!form.reportValidity())return;busy(true);message('正在测试数据库连接…');try{await mutate('/v1/bootstrap/platform-control/test','POST');message('连接测试成功，尚未写入配置。')}catch(error){csrf='';message(error.message,true)}finally{busy(false)}});
-form.addEventListener('submit',async event=>{event.preventDefault();if(!form.reportValidity())return;busy(true);message('正在初始化 Schema 并提交配置，请勿关闭页面…');try{status=await mutate('/v1/bootstrap/platform-control','PUT');message('配置已提交，正在启动完整平台服务…');setTimeout(refresh,600)}catch(error){csrf='';message(error.message,true);busy(false)}});
+test.addEventListener('click',async()=>{if(!form.reportValidity()||!await ensureCurrentPage())return;busy(true);message('正在测试数据库连接…');try{await mutate('/v1/bootstrap/platform-control/test','POST');message('连接测试成功，尚未写入配置。')}catch(error){csrf='';message(error.message,true)}finally{busy(false)}});
+form.addEventListener('submit',async event=>{event.preventDefault();if(!form.reportValidity()||!await ensureCurrentPage())return;busy(true);message('正在初始化 Schema 并提交配置，请勿关闭页面…');try{status=await mutate('/v1/bootstrap/platform-control','PUT');message('配置已提交，正在启动完整平台服务…');setTimeout(refresh,600)}catch(error){csrf='';message(error.message,true);busy(false)}});
 refresh();
 </script></body></html>`;
 }

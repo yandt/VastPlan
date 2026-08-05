@@ -18,6 +18,8 @@ Profile 文件必须使用规范绝对路径、普通文件和 owner-only 权限
 
 首次配置还允许浏览器提交一次性的 `secretMaterial`。它属于 `ChangeRequest` 而不是 Profile：固定 BFF 完成会话、角色、CSRF、同源和请求体上限校验，共享 `platformcontrol/v1` 校验器在插件与可信宿主两级执行精确字段、互斥秘密输入和 64 KiB 材料上限校验；第一方 Connection Manager 只经固定 Kernel Service 转发。Go 可信宿主把材料写入自身受控 `managed-secrets` 目录中的随机命名 `0600` 普通文件，再把标准 `owner-file` 引用写入 Profile。测试请求只创建候选文件并在结束后删除；配置请求只有数据库 Test/Initialize 成功后才原子提交文件，Profile CAS 失败会回滚文件。启动时会按当前 Profile 清理未引用候选和孤儿文件。
 
+最小 Bootstrap 页面与 Portal Edge 通过 `X-VastPlan-Bootstrap-Page-Contract` 执行轻量契约握手。测试或初始化前发现已打开页面落后于当前宿主时，页面必须自动刷新，禁止把旧表单结构送入新后端后再显示泛化 Schema 错误。响应继续使用 `Cache-Control: no-store`，但不能依赖缓存策略替换已经运行在浏览器中的旧 JavaScript。
+
 运行中的服务不能反写 systemd 创建的 `$CREDENTIALS_DIRECTORY`。`systemd-credential` 始终表示部署环境已注入的外部引用；未来若支持页面安装 systemd Credential，必须由部署控制器生成 `LoadCredentialEncrypted` 制品、修改 unit 并受控重启，不能伪装成本地文件写入。
 
 秘密最大 64 KiB，只借给同步回调，回调结束立即清零缓冲区。Profile、状态、日志和错误码不包含秘密或原始数据库错误。
