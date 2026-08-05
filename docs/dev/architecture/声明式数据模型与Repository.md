@@ -70,4 +70,6 @@ go run ./engineering/tools/datamodelgen \
 
 P3b 已在 Database Runtime 内部实现 `record.store.v1` 的 CRUD、受限分页、Batch、实例亲和 UnitOfWork、幂等账本、事务内 Outbox，以及 PostgreSQL/MySQL Schema Controller 和 SQL Shared State。Schema Controller 只自动执行建表、增加可空字段和非唯一索引，并同时要求可信 SYSTEM 调用、Schema Controller credential evidence、数据库迁移锁和持久账本；其他变化保持 manual。SQL Shared State 延续既有 `sharedstate.Store` 的 1 MiB、CAS revision、游标分页、tenant/service 隔离和 fail-closed 语义。
 
-这些模块已经进入 Database Runtime 主入口和公开 Manifest。Controller 从同一 Deployment 的精确制品生成宿主保留 Inventory，Node Agent 在候选路由发布前同步模型目录；Platform Control Bootstrap 在双 binding 切换前完成安全 Schema 准备。普通插件只使用 `extensions/sdk/go/recordstore` 等协议客户端，具体 Repository Adapter 仍归插件所有，SDK 不拥有 Provider、Engine 或业务 Repository 实现。真实 PostgreSQL/MySQL 集成矩阵仍需在 Docker daemon 恢复后补跑，未通过前不把最终验收标记为完成。
+这些模块已经进入 Database Runtime 主入口和公开 Manifest。Controller 从同一 Deployment 的精确制品生成宿主保留 Inventory，Node Agent 在候选路由发布前同步模型目录；Platform Control Bootstrap 在双 binding 切换前完成安全 Schema 准备。普通插件只使用 `extensions/sdk/go/recordstore` 等协议客户端，具体 Repository Adapter 仍归插件所有，SDK 不拥有 Provider、Engine 或业务 Repository 实现。
+
+`engineering/tools/database-fault-matrix.sh` 是 PostgreSQL/MySQL 真实验收的唯一入口。除 Provider、Record Store、故障注入外，它还验证两个 Runtime 副本并发初始化，以及全部连接池关闭、Registry 重建后的 Platform Control 状态恢复。Docker daemon 未在五秒内响应时脚本立即失败，不把“测试未执行”误报成通过。

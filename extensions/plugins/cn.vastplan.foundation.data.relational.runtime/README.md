@@ -48,12 +48,21 @@ Provider options 强制使用结构化 JSON，不接受 DSN。两者都要求 `u
 
 仅本地临时数据库可显式设置 `_TLS_MODE=disable`。生产配置不应放宽宿主 TLS 策略。
 
-发布候选的 A5 故障矩阵使用仓库的一键入口：
+发布候选的真实数据库矩阵使用仓库的一键入口：
 
 ```bash
 ./engineering/tools/database-fault-matrix.sh
 ```
 
-脚本要求本机 Docker daemon 已运行，默认使用 PostgreSQL 17.10 与 MySQL 8.0.42。它在 `127.0.0.1` 临时固定端口启动两类数据库，验证真实死锁冲突、调用方/连接池预算耗尽、旧 generation 强制 drain、网络冻结与恢复、数据库停止/重启与恢复，退出时自动回收容器。可通过 `VASTPLAN_A5_POSTGRES_IMAGE` 和 `VASTPLAN_A5_MYSQL_IMAGE` 覆盖镜像以扩展版本矩阵；测试密码仅存在于临时容器和该脚本子进程环境，不写入仓库或测试日志。
+脚本要求本机 Docker daemon 已运行，且必须在 5 秒内响应，避免损坏的 Docker Desktop 让门禁无限等待。默认使用 PostgreSQL 17.10 与 MySQL 8.0.42。它在 `127.0.0.1` 临时固定端口启动两类数据库，使用每次随机生成的临时密码，依次验证：
+
+- 真实 Provider、Record Store 与 SQL Shared State；
+- 死锁冲突、调用方/连接池预算耗尽和旧 generation 强制 drain；
+- 网络冻结、数据库停止及恢复；
+- Platform Control 两个 Runtime 副本并发初始化；
+- 关闭全部内存池并重建 Registry 后，Profile 仍能重新打开且 Shared State 数据不丢失；
+- 使用 PostgreSQL `pg_dump/pg_restore` 和 MySQL `mysqldump/mysql` 完成事务一致备份、删除原命名空间、隔离恢复，并重新打开 Store 验证 CAS revision 与内容。
+
+退出时脚本始终回收容器。可通过 `VASTPLAN_A5_POSTGRES_IMAGE` 和 `VASTPLAN_A5_MYSQL_IMAGE` 覆盖镜像以扩展版本矩阵；临时密码只存在于容器和该脚本子进程环境，不写入仓库、Profile 或测试日志。
 
 设计依据见 [ADR-0095](../../../docs/dev/decisions/ADR-0095-Database-Runtime多Provider连接池与集群事务.md)。
