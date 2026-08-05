@@ -1,5 +1,9 @@
 package apiexposure
 
+// vastplan:local-file-boundary derived-projection
+// gatewayCatalogFile is rebuilt from Shared State and never becomes a source
+// of governance truth.
+
 import (
 	"encoding/json"
 	"errors"

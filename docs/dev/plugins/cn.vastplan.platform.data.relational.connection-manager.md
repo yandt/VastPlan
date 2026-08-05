@@ -24,6 +24,8 @@
 
 0.15.1 将 `platform.credentials` 修正为调用期懒依赖。Platform Control 的状态、测试和初始化不需要凭证服务，因此 Bootstrap Tier 不再因尚未启动的完整平台凭证管理面而被错误标记为 degraded；普通连接定义、短期测试和凭证轮换仍在实际调用时按原失败语义检查该能力。
 
+生产源码不再保留历史 JSON Store 或开发/生产模式分支。`service` 只依赖在组合根注入的状态协议，生产固定为 fenced Shared State；File 实现仅存在于 `_test.go`，用于验证重启和不确定提交场景。全仓架构门禁会拒绝 `external-shared` 插件新增未分类的本机持久写入；Bootstrap/Recovery 根、Provider 私有文件和可重建投影必须在拥有文件中显式声明边界。
+
 ## API
 
 | 操作 | 含义 |
@@ -43,7 +45,7 @@
 
 ## 当前与目标状态
 
-连接定义、托管凭证 candidate Saga、Runtime publication outbox、Runtime 探测和 active-active 惰性收敛已经完成。列表中的 `runtime=ready|pending` 表示当前 revision 是否至少成功发布到一个副本；它不谎称所有副本已预热。每个 Runtime 副本拥有本地有界池，未预热副本在首次请求时自行收敛。事务亲和仍属于下一阶段。
+连接定义、托管凭证 candidate Saga、Runtime publication outbox、Runtime 探测和 active-active 惰性收敛已经完成。列表中的 `runtime=ready|pending` 表示当前 revision 是否至少成功发布到一个副本；它不谎称所有副本已预热。每个 Runtime 副本拥有本地有界池，未预热副本在首次请求时自行收敛。事务句柄已绑定 owner Runtime，非 owner 通过受限 relay 精确转发，owner 丢失稳定返回 `transaction_lost`。
 
 ## Portal 管理页
 

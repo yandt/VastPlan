@@ -1,5 +1,9 @@
 package authorizationpolicy
 
+// vastplan:local-file-boundary bootstrap-root
+// FileStore is read only by the one-time Bootstrap import path. Runtime policy
+// state is owned by the fenced Shared State Store.
+
 import (
 	"bytes"
 	"encoding/json"

@@ -19,10 +19,22 @@ type sharedStateOperation struct {
 	revision uint64
 }
 
+type stateProtocol interface {
+	begin(*service, context.Context, sdk.Host, *contractv1.CallContext, string) error
+	end(*service)
+	save([]byte) error
+}
+
+type sharedStateProtocol struct{ operation *sharedStateOperation }
+
 func (s *service) beginStateOperation(ctx context.Context, host sdk.Host, call *contractv1.CallContext, tenantID string) error {
-	if !s.shared {
-		return nil
+	if s.state == nil {
+		return errors.New("数据库状态协议未配置")
 	}
+	return s.state.begin(s, ctx, host, call, tenantID)
+}
+
+func (p *sharedStateProtocol) begin(s *service, ctx context.Context, host sdk.Host, call *contractv1.CallContext, tenantID string) error {
 	client, err := sharedstatesdk.NewFenced(host, "tenant", sharedStateNamespace)
 	if err != nil {
 		return err
@@ -43,16 +55,26 @@ func (s *service) beginStateOperation(ctx context.Context, host sdk.Host, call *
 		return err
 	}
 	s.data = data
-	s.operation = operation
+	p.operation = operation
 	return nil
 }
 
 func (s *service) endStateOperation() {
-	if !s.shared {
-		return
+	if s.state != nil {
+		s.state.end(s)
 	}
-	s.operation = nil
+}
+
+func (p *sharedStateProtocol) end(s *service) {
+	p.operation = nil
 	s.data = emptyPersisted()
+}
+
+func (p *sharedStateProtocol) save(raw []byte) error {
+	if p.operation == nil {
+		return errors.New("数据库 Shared State 保存缺少当前操作")
+	}
+	return p.operation.save(raw)
 }
 
 func (o *sharedStateOperation) save(raw []byte) error {

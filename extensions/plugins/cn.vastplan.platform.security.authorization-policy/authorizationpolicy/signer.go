@@ -1,5 +1,9 @@
 package authorizationpolicy
 
+// vastplan:local-file-boundary derived-projection
+// The signed policy snapshot is a replaceable distribution projection; the
+// authoritative policy aggregate remains in Shared State.
+
 import (
 	"crypto/ed25519"
 	"crypto/sha256"

@@ -6,8 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"sync"
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
@@ -98,34 +96,14 @@ type runtimePublication struct {
 }
 
 type service struct {
-	opMu      sync.Mutex
-	mu        sync.RWMutex
-	file      string
-	data      persisted
-	shared    bool
-	operation *sharedStateOperation
-}
-
-func newService(file string) (*service, error) {
-	if file == "" {
-		return nil, errors.New("VASTPLAN_DATABASE_CONNECTIONS_STATE_FILE 不能为空")
-	}
-	service := &service{file: file, data: emptyPersisted()}
-	raw, err := os.ReadFile(file)
-	if errors.Is(err, os.ErrNotExist) {
-		return service, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	if err := decodePersisted(raw, &service.data); err != nil {
-		return nil, err
-	}
-	return service, nil
+	opMu  sync.Mutex
+	mu    sync.RWMutex
+	data  persisted
+	state stateProtocol
 }
 
 func newSharedStateService() *service {
-	return &service{shared: true, data: emptyPersisted()}
+	return &service{data: emptyPersisted(), state: &sharedStateProtocol{}}
 }
 
 func emptyPersisted() persisted {
@@ -176,33 +154,10 @@ func (s *service) save() error {
 	if err != nil {
 		return err
 	}
-	if s.shared {
-		if s.operation == nil {
-			return errors.New("数据库 Shared State 保存缺少当前操作")
-		}
-		return s.operation.save(raw)
+	if s.state == nil {
+		return errors.New("数据库 Shared State 保存缺少当前操作")
 	}
-	if err := os.MkdirAll(filepath.Dir(s.file), 0o700); err != nil {
-		return err
-	}
-	temporary, err := os.CreateTemp(filepath.Dir(s.file), ".connections-*")
-	if err != nil {
-		return err
-	}
-	name := temporary.Name()
-	defer os.Remove(name)
-	if _, err := temporary.Write(raw); err != nil {
-		_ = temporary.Close()
-		return err
-	}
-	if err := temporary.Chmod(0o600); err != nil {
-		_ = temporary.Close()
-		return err
-	}
-	if err := temporary.Close(); err != nil {
-		return err
-	}
-	return os.Rename(name, s.file)
+	return s.state.save(raw)
 }
 
 func (s *service) definitions(tenantID string) map[string]definition {
