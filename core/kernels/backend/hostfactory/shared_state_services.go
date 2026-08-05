@@ -6,12 +6,12 @@ import (
 	"errors"
 	"time"
 
-	sharedstatev1 "cdsoft.com.cn/VastPlan/contracts/schemas/sharedstate/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	sharedstatev1 "cdsoft.com.cn/VastPlan/contracts/schemas/sharedstate/v1"
+	"cdsoft.com.cn/VastPlan/core/internal/runtimeidentity"
+	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/observability"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/operationfence"
-	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
-	"cdsoft.com.cn/VastPlan/core/internal/runtimeidentity"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
 )
 
@@ -106,6 +106,8 @@ func sharedStateMetricOutcome(err error) string {
 		return "conflict"
 	case errors.Is(err, sharedstate.ErrInvalid):
 		return "invalid"
+	case errors.Is(err, sharedstate.ErrUnconfigured):
+		return "unconfigured"
 	default:
 		return "unavailable"
 	}
@@ -149,6 +151,8 @@ func sharedStateStoreError(err error) *contractv1.CallResult {
 		return sharedStateError("state.conflict", "Shared State revision 冲突", true)
 	case errors.Is(err, sharedstate.ErrInvalid):
 		return sharedStateError("state.invalid", "Shared State 请求无效", false)
+	case errors.Is(err, sharedstate.ErrUnconfigured):
+		return sharedStateError("state.unconfigured", "Shared State Provider 尚未配置", false)
 	default:
 		return sharedStateError("state.unavailable", "Shared State Provider 不可用", true)
 	}

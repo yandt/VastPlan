@@ -141,11 +141,16 @@ func TestKernelSharedStateMetricsUseFixedOperationAndOutcomeLabels(t *testing.T)
 	if result, _, _ := unavailable(trusted, call, missing); result.GetError().GetCode() != "state.unavailable" {
 		t.Fatal("Provider 故障应形成 unavailable")
 	}
+	unconfigured := kernelSharedStateWithMetrics(sharedstate.NewBindingStore(), sharedstatev1.OperationGet, metrics)
+	if result, _, _ := unconfigured(trusted, call, missing); result.GetError().GetCode() != "state.unconfigured" || result.GetError().GetRetryable() {
+		t.Fatalf("未配置 Provider 应形成不可重试的 unconfigured: %+v", result)
+	}
 	snapshot := metrics.Snapshot()
 	if snapshot.Counters["shared_state_operations_total|operation=create|outcome=ok"] != 1 ||
 		snapshot.Counters["shared_state_operations_total|operation=create|outcome=conflict"] != 1 ||
 		snapshot.Counters["shared_state_operations_total|operation=get|outcome=not_found"] != 1 ||
-		snapshot.Counters["shared_state_operations_total|operation=get|outcome=unavailable"] != 1 {
+		snapshot.Counters["shared_state_operations_total|operation=get|outcome=unavailable"] != 1 ||
+		snapshot.Counters["shared_state_operations_total|operation=get|outcome=unconfigured"] != 1 {
 		t.Fatalf("Shared State 指标不完整: %+v", snapshot.Counters)
 	}
 	for key := range snapshot.Counters {

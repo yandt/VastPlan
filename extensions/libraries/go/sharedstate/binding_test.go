@@ -10,8 +10,12 @@ import (
 func TestBindingStoreOnlyMovesForwardAndNeverFallsBack(t *testing.T) {
 	binding := NewBindingStore()
 	scope := Scope{Kind: ScopeService, RuntimeScope: "service-a", PluginID: "cn.vastplan.test", Namespace: "state"}
+	if _, err := binding.Get(context.Background(), scope, "key"); !errors.Is(err, ErrUnconfigured) {
+		t.Fatalf("尚未提交 Provider Profile 时必须报告未配置: %v", err)
+	}
+	binding.RequireProvider()
 	if _, err := binding.Get(context.Background(), scope, "key"); !errors.Is(err, ErrUnavailable) {
-		t.Fatalf("未绑定时必须 fail-closed: %v", err)
+		t.Fatalf("Provider 已成为必需项后必须 fail-closed: %v", err)
 	}
 	first, _ := OpenFileStore(filepath.Join(t.TempDir(), "first.json"))
 	if err := binding.Bind(1, "profile-a", first); err != nil {
@@ -62,5 +66,24 @@ func TestBindingStoreSignalsOnlySuccessfulGenerationSwitches(t *testing.T) {
 	case <-binding.Changes():
 	default:
 		t.Fatal("new generation did not signal")
+	}
+}
+
+func TestBindingStoreClosesFallbackWhileProfileCommitIsPending(t *testing.T) {
+	binding := NewBindingStore()
+	scope := Scope{Kind: ScopeService, RuntimeScope: "service-a", PluginID: "cn.vastplan.test", Namespace: "state"}
+	complete := binding.BeginProviderCommit()
+	if _, err := binding.Get(context.Background(), scope, "key"); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("Profile 提交窗口必须 fail-closed: %v", err)
+	}
+	complete(false)
+	complete(true)
+	if _, err := binding.Get(context.Background(), scope, "key"); !errors.Is(err, ErrUnconfigured) {
+		t.Fatalf("失败提交应恢复未配置且 completion 必须幂等: %v", err)
+	}
+	complete = binding.BeginProviderCommit()
+	complete(true)
+	if _, err := binding.Get(context.Background(), scope, "key"); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("成功提交必须永久关闭 bootstrap 回退: %v", err)
 	}
 }

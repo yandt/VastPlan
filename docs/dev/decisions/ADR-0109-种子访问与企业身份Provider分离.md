@@ -48,6 +48,7 @@
 - Node OIDC Provider 完成 confidential client 路径：配置只保存 `clientSecretRef`，秘密通过 audience/tenant/purpose 绑定的单次 Material Lease 取得并在回调后清零。
 - 新增通用关系数据库用户 Provider：通过 `foundation.data.relational.runtime` 与现有连接池查询，支持 `?`/`$1` 参数方言，使用有界 Argon2id PHC 验证、伪校验路径与统一凭据错误；它不属于内核，也不构成平台用户系统。
 - Portal Host 删除直连 OIDC 模式；生产身份只接受 Authentication Broker。Node 本地验签后必须由 leader-routed Broker 原子消费 Assertion，再通过独立 Authorization Session 插件读取受签名 Policy Snapshot，外部 claim/Group/Role 不得直接进入权限上下文。
+- 2026-08-05：修正 Recovery Tier 中 Authentication Broker 已获得 Manifest 与 Platform Profile 双重 Kernel Service Grant，但共享 Authorization Enforcer 缺少对应 workload 结论的问题。Platform Admin Policy 现在只允许该精确插件调用 `kernel.state.shared.get` 与 fenced create/update；其他插件、无 fence mutation 和未声明的 Kernel Service 继续失败关闭。Authorization Enforcer 提升到 0.4.2，Seed Profile 同步精确引用。
 - 新增 `cn.vastplan.foundation.security.authorization-session` Go 插件与稳定主体哈希；会话只投影无资源/属性约束的 allow 权限，deny 与撤销优先，细粒度约束仍交给 Authorization Engine。
 - Seed Handoff 接入 Broker Assertion 和签名 Policy Snapshot 双证明；可信 BFF 在 HttpOnly 密封 Session 内转交证明，企业主体完成授权绑定后经 CAS 进入 `EnterpriseActive`，Seed 登录随即关闭。
 - `/auth/access` 完成会话前语义 AuthenticationFlow；页面只渲染受限步骤，Provider 无法注入前端代码、样式或任意 Schema。

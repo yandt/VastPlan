@@ -28,7 +28,8 @@ import (
 )
 
 const (
-	Capability = "foundation.security.platform-admin-access-policy"
+	Capability                   = "foundation.security.platform-admin-access-policy"
+	authenticationBrokerPluginID = "cn.vastplan.foundation.security.authentication-broker"
 )
 
 func Check(_ context.Context, callCtx *v1.CallContext, payload []byte) (*v1.CallResult, []byte, error) {
@@ -343,6 +344,8 @@ func allowedKernelCallback(c *v1.CallContext, request extpoint.PermissionRequest
 	case configurationauthority.CustodianPluginID:
 		return request.Capability == configurationauthority.KernelConsumeService || credentialsSharedStateKernelService(request.Capability)
 	case "cn.vastplan.platform.security.authorization-policy":
+		return authorizationPolicySharedStateKernelService(request.Capability)
+	case authenticationBrokerPluginID:
 		return authorizationPolicySharedStateKernelService(request.Capability)
 	case databasev1.RuntimePluginID:
 		return request.Capability == "kernel.credential.material-lease"

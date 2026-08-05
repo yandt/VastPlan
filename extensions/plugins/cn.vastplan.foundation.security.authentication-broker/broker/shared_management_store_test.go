@@ -13,14 +13,18 @@ import (
 )
 
 type managementSharedStateHost struct {
-	value       []byte
-	revision    uint64
-	unavailable bool
+	value        []byte
+	revision     uint64
+	unavailable  bool
+	unconfigured bool
 }
 
 func (h *managementSharedStateHost) Call(_ context.Context, target *contractv1.CallTarget, _ *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 	if h.unavailable {
 		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: "state.unavailable", Retryable: true}}, nil, nil
+	}
+	if h.unconfigured {
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: "state.unconfigured"}}, nil, nil
 	}
 	operation := ""
 	switch target.GetCapability() {
@@ -59,6 +63,9 @@ func TestBootstrapCatalogFallbackRejectsSharedStateOutage(t *testing.T) {
 	root := BootstrapFallbackCatalog{Primary: StateCatalog{Store: &SharedManagementStore{}}, Bootstrap: staticCatalog{value: bootstrap}}
 	if catalog, err := bindCatalog(context.Background(), root, &managementSharedStateHost{}, call).Load(); err != nil || catalog.ID != "seed" {
 		t.Fatalf("仅未发布状态应使用 Bootstrap Catalog: %+v err=%v", catalog, err)
+	}
+	if catalog, err := bindCatalog(context.Background(), root, &managementSharedStateHost{unconfigured: true}, call).Load(); err != nil || catalog.ID != "seed" {
+		t.Fatalf("平台控制存储尚未配置时应使用 Bootstrap Catalog: %+v err=%v", catalog, err)
 	}
 	if _, err := bindCatalog(context.Background(), root, &managementSharedStateHost{unavailable: true}, call).Load(); err == nil {
 		t.Fatal("Shared State 不可用时不得静默回退 Bootstrap Catalog")

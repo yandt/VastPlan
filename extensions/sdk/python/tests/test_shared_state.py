@@ -2,7 +2,7 @@ import json
 import unittest
 
 from contract.v1 import contract_pb2
-from vastplan_plugin import SharedStateClient, is_shared_state_conflict
+from vastplan_plugin import SharedStateClient, is_shared_state_conflict, is_shared_state_unconfigured
 
 
 class FakePlugin:
@@ -40,6 +40,14 @@ class SharedStateSDKTest(unittest.TestCase):
         client.get({}, "active")
         self.assertEqual(plugin.calls[0][0]["capability"], "kernel.state.shared.fenced.create")
         self.assertEqual(plugin.calls[1][0]["capability"], "kernel.state.shared.get")
+
+    def test_unconfigured_code_is_stable(self):
+        plugin = FakePlugin()
+        plugin.result = contract_pb2.CallResult(status=contract_pb2.CallResult.STATUS_ERROR, error=contract_pb2.Error(code="state.unconfigured", message="unconfigured"))
+        client = SharedStateClient(plugin, "service", "ledger")
+        with self.assertRaises(Exception) as caught:
+            client.get({}, "active")
+        self.assertTrue(is_shared_state_unconfigured(caught.exception))
 
 
 if __name__ == "__main__":

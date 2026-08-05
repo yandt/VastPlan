@@ -21,7 +21,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.foundation.security.authorization-enforcer"
-	PluginVersion = "0.4.1"
+	PluginVersion = "0.4.2"
 	Capability    = "foundation.security.authorization-enforcer"
 )
 

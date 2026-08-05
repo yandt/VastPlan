@@ -7,11 +7,14 @@ import (
 )
 
 // BindingStore is the kernel's stable state.shared.v1 port across two-stage
-// bootstrap. It starts unavailable and can only move to a newer provider
-// generation. It never falls back to a local file after an external provider
-// has failed, preventing split-brain state.
+// bootstrap. Before a durable provider profile is committed it reports the
+// distinct unconfigured state. Once RequireProvider or Bind is called it can
+// only move forward and never falls back to the bootstrap state, preventing
+// split-brain persistence after an external provider has failed.
 type BindingStore struct {
 	mu         sync.RWMutex
+	required   bool
+	pending    uint64
 	generation uint64
 	identity   string
 	store      Store
@@ -19,6 +22,44 @@ type BindingStore struct {
 }
 
 func NewBindingStore() *BindingStore { return &BindingStore{changes: make(chan struct{}, 1)} }
+
+// RequireProvider records the durable decision that this binding must use an
+// external provider. The transition is intentionally irreversible for the
+// lifetime of the kernel process.
+func (s *BindingStore) RequireProvider() {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	s.required = true
+	s.mu.Unlock()
+}
+
+// BeginProviderCommit closes the bootstrap fallback while a durable profile
+// commit is in flight. The returned completion must be called exactly once;
+// successful commits make the requirement permanent, while failed commits
+// restore unconfigured only when no other commit is pending.
+func (s *BindingStore) BeginProviderCommit() func(bool) {
+	if s == nil {
+		return func(bool) {}
+	}
+	s.mu.Lock()
+	s.pending++
+	s.mu.Unlock()
+	var once sync.Once
+	return func(committed bool) {
+		once.Do(func() {
+			s.mu.Lock()
+			if s.pending > 0 {
+				s.pending--
+			}
+			if committed {
+				s.required = true
+			}
+			s.mu.Unlock()
+		})
+	}
+}
 
 func (s *BindingStore) Bind(generation uint64, identity string, store Store) error {
 	if s == nil || generation == 0 || identity == "" || store == nil {
@@ -35,6 +76,7 @@ func (s *BindingStore) Bind(generation uint64, identity string, store Store) err
 		}
 		return nil
 	}
+	s.required = true
 	s.generation, s.identity, s.store = generation, identity, store
 	select {
 	case s.changes <- struct{}{}:
@@ -67,9 +109,12 @@ func (s *BindingStore) current() (Store, error) {
 		return nil, ErrUnavailable
 	}
 	s.mu.RLock()
-	store := s.store
+	store, required := s.store, s.required || s.pending > 0
 	s.mu.RUnlock()
 	if store == nil {
+		if !required {
+			return nil, ErrUnconfigured
+		}
 		return nil, ErrUnavailable
 	}
 	return store, nil
@@ -118,3 +163,5 @@ func (s *BindingStore) List(ctx context.Context, scope Scope, prefix string, lim
 var _ Store = (*BindingStore)(nil)
 
 func IsUnavailable(err error) bool { return errors.Is(err, ErrUnavailable) }
+
+func IsUnconfigured(err error) bool { return errors.Is(err, ErrUnconfigured) }

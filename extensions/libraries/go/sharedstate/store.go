@@ -19,10 +19,11 @@ const (
 )
 
 var (
-	ErrNotFound    = errors.New("shared state entry not found")
-	ErrConflict    = errors.New("shared state revision conflict")
-	ErrInvalid     = errors.New("shared state request invalid")
-	ErrUnavailable = errors.New("shared state provider unavailable")
+	ErrNotFound     = errors.New("shared state entry not found")
+	ErrConflict     = errors.New("shared state revision conflict")
+	ErrInvalid      = errors.New("shared state request invalid")
+	ErrUnconfigured = errors.New("shared state provider unconfigured")
+	ErrUnavailable  = errors.New("shared state provider unavailable")
 )
 
 type ScopeKind string

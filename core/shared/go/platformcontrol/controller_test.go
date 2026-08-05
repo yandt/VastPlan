@@ -70,6 +70,9 @@ func TestControllerConfiguresThenBindsSQLSharedStateAtomically(t *testing.T) {
 	if err := controller.Start(context.Background()); err != nil || controller.Status().Phase != platformcontrolv1.PhaseUnconfigured {
 		t.Fatalf("空环境应进入未配置态: %+v %v", controller.Status(), err)
 	}
+	if _, err := binding.Get(context.Background(), sharedstate.Scope{}, "probe"); !errors.Is(err, sharedstate.ErrUnconfigured) {
+		t.Fatalf("未提交 Profile 时 Shared State 必须保持未配置语义: %v", err)
+	}
 	profile := testProfile(filepath.Join(root, "password"), 1)
 	if err := controller.Configure(context.Background(), profile, 0); err != nil {
 		t.Fatal(err)
@@ -111,6 +114,29 @@ func TestControllerFailsClosedWithoutCommittingOrFallback(t *testing.T) {
 	}
 	if _, _, ready := binding.Snapshot(); ready {
 		t.Fatal("失败时不得绑定本地 JSON 或候选 Store")
+	}
+	if _, err := binding.Get(context.Background(), sharedstate.Scope{}, "probe"); !errors.Is(err, sharedstate.ErrUnconfigured) {
+		t.Fatalf("未提交的失败候选不得关闭 Seed bootstrap 路径: %v", err)
+	}
+}
+
+func TestControllerExistingProfileFailureRequiresProviderAndFailsClosed(t *testing.T) {
+	root := t.TempDir()
+	profiles := &FileProfileStore{Path: filepath.Join(root, "platform-control.json")}
+	profile := testProfile(filepath.Join(root, "password"), 1)
+	if err := profiles.Commit(context.Background(), profile, 0); err != nil {
+		t.Fatal(err)
+	}
+	binding := sharedstate.NewBindingStore()
+	bootstrapper := &fakeBootstrapper{openErr: errors.New("database unavailable")}
+	controller, _ := NewController(profiles, func(platformcontrolv1.SecretRef) (SecretSource, error) {
+		return staticSecretSource{value: []byte("secret")}, nil
+	}, bootstrapper, binding)
+	if err := controller.Start(context.Background()); err == nil {
+		t.Fatal("已配置数据库打开失败必须返回错误")
+	}
+	if _, err := binding.Get(context.Background(), sharedstate.Scope{}, "probe"); !errors.Is(err, sharedstate.ErrUnavailable) {
+		t.Fatalf("已提交 Profile 后不得重新进入未配置回退: %v", err)
 	}
 }
 

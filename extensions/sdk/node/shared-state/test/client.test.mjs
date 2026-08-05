@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { SharedStateClient, isSharedStateConflict } from "../src/index.mjs";
+import { SharedStateClient, isSharedStateConflict, isSharedStateUnconfigured } from "../src/index.mjs";
 
 test("uses identity-free kernel services and decodes an immutable entry", async () => {
   const calls = [];
@@ -21,6 +21,12 @@ test("preserves stable conflict errors", async () => {
   const plugin = { call: async () => ({ result: { status: "STATUS_ERROR", error: { code: "state.conflict", message: "stale", retryable: true } } }) };
   const client = new SharedStateClient(plugin, { scope: "service", namespace: "ledger" });
   await assert.rejects(() => client.update({}, "active", Buffer.from("{}"), 1), isSharedStateConflict);
+});
+
+test("preserves stable unconfigured errors", async () => {
+  const plugin = { call: async () => ({ result: { status: "STATUS_ERROR", error: { code: "state.unconfigured", message: "unconfigured", retryable: false } } }) };
+  const client = new SharedStateClient(plugin, { scope: "service", namespace: "ledger" });
+  await assert.rejects(() => client.get({}, "active"), isSharedStateUnconfigured);
 });
 
 test("fenced mode only changes mutation capabilities", async () => {

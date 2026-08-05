@@ -81,6 +81,7 @@ export function parseEntry(value) {
 
 export function isSharedStateConflict(error) { return error instanceof SharedStateError && error.code === "state.conflict"; }
 export function isSharedStateNotFound(error) { return error instanceof SharedStateError && error.code === "state.not_found"; }
+export function isSharedStateUnconfigured(error) { return error instanceof SharedStateError && error.code === "state.unconfigured"; }
 
 function encodeValue(value) {
   if (!Buffer.isBuffer(value) && !(value instanceof Uint8Array)) throw new Error("Shared State value 必须是 bytes");

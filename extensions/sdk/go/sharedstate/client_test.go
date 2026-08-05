@@ -55,6 +55,15 @@ func TestClientExposesStableConflict(t *testing.T) {
 	}
 }
 
+func TestClientExposesStableUnconfiguredState(t *testing.T) {
+	host := &fakeHost{result: &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: "state.unconfigured", Message: "unconfigured"}}}
+	client, _ := New(host, "service", "ledger")
+	_, err := client.Get(context.Background(), &contractv1.CallContext{}, "active")
+	if !IsUnconfigured(err) {
+		t.Fatalf("必须保留 unconfigured 语义: %v", err)
+	}
+}
+
 func TestFencedClientUsesDedicatedMutationCapabilityOnly(t *testing.T) {
 	entry := sharedstatev1.Entry{Protocol: sharedstatev1.Protocol, Key: "active", Value: sharedstatev1.EncodeValue([]byte(`{}`)), Revision: 1, UpdatedAt: time.Now().UTC()}
 	raw, _ := json.Marshal(entry)

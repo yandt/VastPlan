@@ -96,6 +96,12 @@ func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
 			t.Fatalf("Authorization Policy 的 Shared State 回调 %s 应允许: %s", capability, got)
 		}
 	}
+	authenticationBroker := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: authenticationBrokerPluginID}}
+	for _, capability := range []string{"kernel.state.shared.get", "kernel.state.shared.fenced.create", "kernel.state.shared.fenced.update"} {
+		if got, _ := decide(authenticationBroker, extpoint.PermissionRequest{Capability: capability}); got != extpoint.DecisionAllow {
+			t.Fatalf("Authentication Broker 的 Shared State 回调 %s 应允许: %s", capability, got)
+		}
+	}
 	for _, capability := range []string{"kernel.state.shared.create", "kernel.state.shared.update", "kernel.state.shared.delete", "kernel.state.shared.fenced.delete"} {
 		if got, _ := decide(authorizationPolicy, extpoint.PermissionRequest{Capability: capability}); got == extpoint.DecisionAllow {
 			t.Fatalf("Authorization Policy 不得获得未声明的 Shared State 回调 %s: %s", capability, got)

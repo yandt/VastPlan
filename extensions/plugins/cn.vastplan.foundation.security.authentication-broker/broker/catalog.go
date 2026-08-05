@@ -11,7 +11,10 @@ import (
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
-var ErrCatalogNotPublished = errors.New("Authentication Provider Catalog 尚未发布")
+var (
+	ErrCatalogNotPublished      = errors.New("Authentication Provider Catalog 尚未发布")
+	ErrCatalogStoreUnconfigured = errors.New("Authentication Provider Catalog 存储尚未配置")
+)
 
 type Catalog interface {
 	Load() (authenticationv1.AuthenticationProviderCatalog, error)
@@ -29,9 +32,9 @@ func bindCatalog(ctx context.Context, catalog Catalog, host sdk.Host, call *cont
 }
 
 // BootstrapFallbackCatalog falls back only when the durable catalog has never
-// been published. Database outages and corrupt Shared State remain fatal and
-// must enter the platform recovery flow instead of silently restoring JSON as
-// an online truth source.
+// been published or the platform control store has never been configured.
+// Database outages and corrupt Shared State remain fatal and must enter the
+// platform recovery flow instead of silently restoring JSON as online truth.
 type BootstrapFallbackCatalog struct {
 	Primary   Catalog
 	Bootstrap Catalog
@@ -46,7 +49,7 @@ func (c BootstrapFallbackCatalog) Load() (authenticationv1.AuthenticationProvide
 		return authenticationv1.AuthenticationProviderCatalog{}, errors.New("Authentication Provider Catalog 组合不完整")
 	}
 	catalog, err := c.Primary.Load()
-	if err == nil || !errors.Is(err, ErrCatalogNotPublished) {
+	if err == nil || !errors.Is(err, ErrCatalogNotPublished) && !errors.Is(err, ErrCatalogStoreUnconfigured) {
 		return catalog, err
 	}
 	return c.Bootstrap.Load()

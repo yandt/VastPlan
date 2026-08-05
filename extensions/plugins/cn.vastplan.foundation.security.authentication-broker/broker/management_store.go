@@ -72,6 +72,9 @@ func (s *boundSharedManagementStore) LoadState() (ManagementState, error) {
 		return ManagementState{}, err
 	}
 	entry, err := client.Get(s.ctx, s.call, managementStateKey)
+	if sharedstatesdk.IsUnconfigured(err) {
+		return ManagementState{}, ErrCatalogStoreUnconfigured
+	}
 	if sharedstatesdk.IsNotFound(err) {
 		return emptyManagementState(), nil
 	}

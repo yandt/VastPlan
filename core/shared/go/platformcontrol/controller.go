@@ -50,6 +50,9 @@ func (c *Controller) Start(ctx context.Context) error {
 		c.setStatus(platformcontrolv1.PhaseUnconfigured, 0, "")
 		return nil
 	}
+	// A committed profile is the durable boundary after which bootstrap state
+	// must never become an authentication fallback, even if opening SQL fails.
+	c.binding.RequireProvider()
 	c.setProfile(*profile)
 	source, err := c.resolve(profile.SecretRef)
 	if err != nil {
@@ -94,11 +97,14 @@ func (c *Controller) Configure(ctx context.Context, candidate platformcontrolv1.
 		c.setCandidateFailure(expectedGeneration, CodeInitializationFailed)
 		return err
 	}
+	completeCommit := c.binding.BeginProviderCommit()
 	if err := c.profiles.Commit(ctx, candidate, expectedGeneration); err != nil {
+		completeCommit(false)
 		_ = store.Close()
 		c.setCandidateFailure(expectedGeneration, CodeCommitConflict)
 		return err
 	}
+	completeCommit(true)
 	c.setProfile(candidate)
 	if err := c.binding.Bind(candidate.Generation, platformcontrolport.ProfileIdentity(candidate), store); err != nil {
 		_ = store.Close()

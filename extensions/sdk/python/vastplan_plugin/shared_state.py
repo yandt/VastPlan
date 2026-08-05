@@ -121,6 +121,10 @@ def is_shared_state_not_found(error: BaseException) -> bool:
     return isinstance(error, SharedStateError) and error.code == "state.not_found"
 
 
+def is_shared_state_unconfigured(error: BaseException) -> bool:
+    return isinstance(error, SharedStateError) and error.code == "state.unconfigured"
+
+
 def _entry(value: Mapping[str, Any]) -> SharedStateEntry:
     if set(value) != {"protocol", "key", "value", "revision", "updatedAt"} or value["protocol"] != PROTOCOL or not _valid_key(value["key"]) or \
             not _revision(value["revision"]) or not _time(value["updatedAt"]):

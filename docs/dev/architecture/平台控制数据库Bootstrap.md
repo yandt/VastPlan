@@ -31,11 +31,13 @@ Configure
   Test → Initialize → Profile CAS Commit → Bind → ready
 ```
 
-状态只有 `unconfigured / testing / initializing / ready / recovery` 和稳定错误码。首次配置任一步失败都进入最小 recovery 且 Shared State 保持 unavailable；已有 Ready generation 的替换候选失败时保留旧 Store 和旧 generation，只投影候选错误码。Profile 已提交但绑定异常属于不应发生的信任边界故障，必须 recovery，不能继续把旧 Store 冒充当前 Profile。
+状态只有 `unconfigured / testing / initializing / ready / recovery` 和稳定错误码。尚无已提交 Profile 时，Shared State 返回稳定的 `state.unconfigured`；首次候选在提交前失败仍保持该状态，使 Seed 登录可以继续进入数据库配置页。已有 Ready generation 的替换候选失败时保留旧 Store 和旧 generation，只投影候选错误码。Profile 已提交但绑定异常属于不应发生的信任边界故障，必须 recovery，不能继续把旧 Store 冒充当前 Profile。
 
 ## 4. 不可回退 Shared State 绑定
 
-`sharedstate.BindingStore` 是 Kernel 暴露给插件的稳定 `state.shared.v1` 端口。它启动时 unavailable，只接受更高 generation 的 Provider；同 generation 只有相同 Profile identity 才幂等。Provider 故障不会切回本地 JSON，避免同一插件出现 SQL 与文件双真相源。候选 Store 在 Profile 提交或绑定失败时必须关闭自身连接池，不能留下不可达 generation 的数据库连接。
+`sharedstate.BindingStore` 是 Kernel 暴露给插件的稳定 `state.shared.v1` 端口。它以单调协议状态区分 `unconfigured` 与 `unavailable`：只有从未提交 Platform Control Profile 时返回前者；读取到既有 Profile 或首次 Profile CAS 提交成功后，Provider 即被永久标记为必需，此后尚未绑定或发生故障一律返回后者。它只接受更高 generation 的 Provider，同 generation 只有相同 Profile identity 才幂等。Provider 故障不会切回本地 JSON，避免同一插件出现 SQL 与文件双真相源。候选 Store 在 Profile 提交或绑定失败时必须关闭自身连接池，不能留下不可达 generation 的数据库连接。
+
+Authentication Broker 只把 `state.unconfigured` 解释为“尚未建立平台控制库”，此时可读取只读 Seed Catalog 完成首次登录；`state.unavailable`、超时、损坏和未知错误仍全部 fail-closed。该判断由 Shared State 协议和 Broker 存储适配器完成，前端、工作流和各层 Loader 不传递开发/生产开关。
 
 File Provider 仍只服务单测、开发未初始化阶段和明确的 Seed/Recovery 根状态，不能绑定为生产 Platform Control Store。
 

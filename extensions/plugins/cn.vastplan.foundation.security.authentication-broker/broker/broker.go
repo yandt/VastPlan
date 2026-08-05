@@ -22,7 +22,7 @@ import (
 
 const (
 	PluginID                   = "cn.vastplan.foundation.security.authentication-broker"
-	PluginVersion              = "0.6.0"
+	PluginVersion              = "0.6.1"
 	Capability                 = "foundation.security.authentication.broker"
 	OperationConsumeAssertion  = "consumeAssertion"
 	OperationBeginProviderTest = "beginProviderTest"
