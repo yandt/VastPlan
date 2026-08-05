@@ -10,7 +10,6 @@ import (
 
 func main() {
 	var startup struct {
-		StateFile           string `json:"stateFile"`
 		GatewayCatalogFile  string `json:"gatewayCatalogFile"`
 		ContractCatalogFile string `json:"contractCatalogFile"`
 	}
@@ -21,7 +20,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("读取 API Contract Catalog 失败: %v", err)
 	}
-	service, err := apiexposure.New(startup.StateFile, startup.GatewayCatalogFile, catalog)
+	service, err := apiexposure.New(startup.GatewayCatalogFile, catalog)
 	if err != nil {
 		log.Fatalf("初始化 API Exposure 服务失败: %v", err)
 	}

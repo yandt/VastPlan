@@ -2,13 +2,13 @@
   "id": "cn.vastplan.platform.integration.api-exposure",
   "name": "VastPlan API Exposure",
   "description": "治理插件 API Contract、稳定公开 Route Key 与独立数据面 Endpoint Lease",
-  "version": "0.7.2",
+  "version": "0.8.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
   "engines": { "backend": "^0.1", "frontend": "^1.0" },
-  "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
+  "capabilities": { "kernelServices": ["kernel.state.shared.get", "kernel.state.shared.fenced.create", "kernel.state.shared.fenced.update"], "credentials": [], "resources": [] },
   "contextAccess": { "required": ["scope.tenant", "caller"], "optional": ["subject.id", "authorization.roles", "scene", "trace", "request.deadline"] },
   "authorization": {
     "browserExposed": true,
@@ -45,7 +45,7 @@
   },
   "runtime": {
     "instancePolicy": "leader",
-    "stateModel": "leader-owned",
+    "stateModel": "external-shared",
     "visibility": "cluster",
     "routing": "leader",
     "routingDomain": "platform",
@@ -59,11 +59,10 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "stateFile": { "type": "string", "minLength": 1 },
         "gatewayCatalogFile": { "type": "string", "minLength": 1 },
         "contractCatalogFile": { "type": "string", "minLength": 1 }
       },
-      "required": ["stateFile", "gatewayCatalogFile", "contractCatalogFile"]
+      "required": ["gatewayCatalogFile", "contractCatalogFile"]
     }
   },
   "state": { "backend": { "format": "cn.vastplan.platform.integration.api-exposure", "formatVersion": 1 } },

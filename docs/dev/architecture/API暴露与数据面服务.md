@@ -93,7 +93,7 @@ Version Content Staging 是第二个正式消费者。浏览器先通过上述�
 
 ## 6. 发布与演进
 
-Exposure 使用 `Draft → PendingApproval → Approved → Published → Retired`。发布产生新 generation，并以 CAS 原子替换 Gateway Catalog；Gateway 保留最近可用 generation，错误快照不得覆盖当前版本。Route Key 只标识公开 Exposure，契约兼容性由 URL 中的 major 和 Contract semver 控制。实现插件升级、迁移或替换不改变 Route Key，只更新受信 Contract Reference 和目标绑定。
+Exposure 使用 `Draft → PendingApproval → Approved → Published → Retired`。治理真相保存在平台控制数据库承载的 leader-fenced Shared State；发布先以 CAS 提交 dirty journal，再原子替换本机 Gateway Catalog 派生投影，最后清除 dirty。新 Leader 从 Shared State 和当前可信 Contract Catalog 重建投影；错误快照不得覆盖当前版本，也不得回退旧本机 JSON。Route Key 只标识公开 Exposure，契约兼容性由 URL 中的 major 和 Contract semver 控制。实现插件升级、迁移或替换不改变 Route Key，只更新受信 Contract Reference 和目标绑定。
 
 ## 7. 语言与 Runtime
 

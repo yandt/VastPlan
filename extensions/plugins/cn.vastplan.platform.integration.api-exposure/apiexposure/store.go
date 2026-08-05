@@ -16,7 +16,7 @@ import (
 )
 
 const stateFormatVersion = 1
-const maximumStateBytes = 64 << 20
+const maximumStateBytes = 1 << 20
 
 var routeKeyPattern = regexp.MustCompile(`^[a-z2-7]{20}$`)
 
@@ -34,11 +34,14 @@ type persistedState struct {
 
 type Service struct {
 	mu                 sync.Mutex
+	workflowMu         sync.Mutex
 	state              persistedState
-	stateFile          string
 	gatewayCatalogFile string
 	contractCatalog    apiv1.ContractCatalog
 	configured         bool
+	stateSession       *apiExposureStateSession
+	testSave           func(persistedState) error
+	catalogRestored    bool
 	now                func() time.Time
 	leases             map[string]apiv1.EndpointLease
 	leaseOwners        map[string]RuntimeCaller
@@ -50,85 +53,53 @@ func EmptyContractCatalog() apiv1.ContractCatalog {
 	return apiv1.ContractCatalog{SchemaVersion: apiv1.SchemaVersion, Generation: 1, Contracts: []apiv1.ResolvedContract{}, DataPlaneServices: []apiv1.ResolvedDataPlaneService{}}
 }
 
-func New(stateFile, gatewayCatalogFile string, catalog apiv1.ContractCatalog) (*Service, error) {
+func New(gatewayCatalogFile string, catalog apiv1.ContractCatalog) (*Service, error) {
 	s := &Service{
 		state: persistedState{FormatVersion: stateFormatVersion, Tombstones: map[string]time.Time{}},
 		now:   time.Now, leases: map[string]apiv1.EndpointLease{}, leaseOwners: map[string]RuntimeCaller{}, tickets: map[string]ticketRecord{},
 	}
-	if strings.TrimSpace(stateFile) == "" && strings.TrimSpace(gatewayCatalogFile) == "" {
-		return s, nil
-	}
-	if err := s.configure(stateFile, gatewayCatalogFile, catalog); err != nil {
+	if err := s.configure(gatewayCatalogFile, catalog); err != nil {
 		return nil, err
 	}
 	return s, nil
 }
 
-func (s *Service) configure(stateFile, gatewayCatalogFile string, catalog apiv1.ContractCatalog) error {
-	if strings.TrimSpace(stateFile) == "" || strings.TrimSpace(gatewayCatalogFile) == "" {
-		return errors.New("API Exposure stateFile 与 gatewayCatalogFile 均不能为空")
+func (s *Service) configure(gatewayCatalogFile string, catalog apiv1.ContractCatalog) error {
+	if strings.TrimSpace(gatewayCatalogFile) == "" {
+		return errors.New("API Exposure gatewayCatalogFile 不能为空")
 	}
 	if err := apiv1.ValidateContractCatalog(catalog); err != nil {
 		return fmt.Errorf("API Contract Catalog 无效: %w", err)
 	}
 	if s.configured {
-		if s.stateFile != stateFile || s.gatewayCatalogFile != gatewayCatalogFile || s.contractCatalog.Generation != catalog.Generation {
-			return errors.New("API Exposure 运行中不允许切换状态或 Contract Catalog")
+		if s.gatewayCatalogFile != gatewayCatalogFile || s.contractCatalog.Generation != catalog.Generation {
+			return errors.New("API Exposure 运行中不允许切换 Gateway 或 Contract Catalog")
 		}
 		return nil
 	}
-	s.stateFile, s.gatewayCatalogFile, s.contractCatalog = stateFile, gatewayCatalogFile, catalog
-	if err := s.loadLocked(); err != nil {
-		return err
-	}
-	if s.state.CatalogGeneration == 0 {
-		s.state.CatalogGeneration = 1
-	}
-	// Always regenerate from the current trusted Contract Catalog. This removes
-	// routes whose signed artifact was revoked or disappeared while the control
-	// plane was stopped, even when the previous file was clean.
-	s.state.CatalogDirty = true
-	if err := s.saveLocked(); err != nil {
-		return err
-	}
-	if err := s.publishCatalogLocked(); err != nil {
-		return err
-	}
-	s.state.CatalogDirty = false
-	if err := s.saveLocked(); err != nil {
-		return err
-	}
+	s.gatewayCatalogFile, s.contractCatalog = gatewayCatalogFile, catalog
 	s.configured = true
 	return nil
 }
 
-func (s *Service) loadLocked() error {
-	_, statErr := os.Lstat(s.stateFile)
-	if errors.Is(statErr, os.ErrNotExist) {
-		return nil
-	}
-	if statErr != nil {
-		return fmt.Errorf("检查 API Exposure 状态: %w", statErr)
-	}
-	raw, err := readSecureRegularFile(s.stateFile, maximumStateBytes)
-	if err != nil {
-		return fmt.Errorf("读取 API Exposure 状态: %w", err)
+func decodePersistedState(raw []byte) (persistedState, error) {
+	if len(raw) == 0 || len(raw) > maximumStateBytes {
+		return persistedState{}, errors.New("API Exposure Shared State 为空或超过 1 MiB")
 	}
 	var state persistedState
 	if err := json.Unmarshal(raw, &state); err != nil {
-		return fmt.Errorf("解析 API Exposure 状态: %w", err)
+		return persistedState{}, fmt.Errorf("解析 API Exposure Shared State: %w", err)
 	}
 	if state.FormatVersion != stateFormatVersion {
-		return fmt.Errorf("API Exposure 状态格式版本 %d 不受支持", state.FormatVersion)
+		return persistedState{}, fmt.Errorf("API Exposure 状态格式版本 %d 不受支持", state.FormatVersion)
 	}
 	if state.Tombstones == nil {
 		state.Tombstones = map[string]time.Time{}
 	}
 	if err := validatePersistedState(state); err != nil {
-		return err
+		return persistedState{}, err
 	}
-	s.state = state
-	return nil
+	return state, nil
 }
 
 func validatePersistedState(state persistedState) error {
@@ -185,11 +156,17 @@ func validStatus(status Status) bool {
 }
 
 func (s *Service) saveLocked() error {
-	raw, err := json.Marshal(s.state)
-	if err != nil {
-		return err
+	if s.testSave != nil {
+		return s.testSave(s.state)
 	}
-	return atomicWrite(s.stateFile, raw, 0o600)
+	if s.stateSession == nil {
+		return ErrStoreUnavailable
+	}
+	revision, err := s.stateSession.repository.save(s.stateSession.ctx, s.stateSession.call, s.state, s.stateSession.revision)
+	if err == nil {
+		s.stateSession.revision = revision
+	}
+	return err
 }
 
 func (s *Service) saveAndPublishLocked() error {

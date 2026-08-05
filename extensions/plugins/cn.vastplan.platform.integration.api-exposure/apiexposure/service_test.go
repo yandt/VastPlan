@@ -175,7 +175,7 @@ func TestDataPlaneLeaseAndTicketAreBoundShortLivedAndSingleUse(t *testing.T) {
 func TestRestartRecoversDirtyCatalogPublication(t *testing.T) {
 	root := t.TempDir()
 	stateFile, catalogFile := filepath.Join(root, "state.json"), filepath.Join(root, "catalog.json")
-	service, err := New(stateFile, catalogFile, testContractCatalog())
+	service, err := newFileTestService(stateFile, catalogFile, testContractCatalog())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +185,7 @@ func TestRestartRecoversDirtyCatalogPublication(t *testing.T) {
 		t.Fatal(err)
 	}
 	service.mu.Unlock()
-	if _, err := New(stateFile, catalogFile, testContractCatalog()); err != nil {
+	if _, err := newFileTestService(stateFile, catalogFile, testContractCatalog()); err != nil {
 		t.Fatalf("重启应完成脏 Catalog 重放: %v", err)
 	}
 }
@@ -193,7 +193,7 @@ func TestRestartRecoversDirtyCatalogPublication(t *testing.T) {
 func TestRestartRemovesExposureWhoseArtifactIsNoLongerTrusted(t *testing.T) {
 	root := t.TempDir()
 	stateFile, catalogFile := filepath.Join(root, "state.json"), filepath.Join(root, "catalog.json")
-	service, err := New(stateFile, catalogFile, testContractCatalog())
+	service, err := newFileTestService(stateFile, catalogFile, testContractCatalog())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,7 +211,7 @@ func TestRestartRemovesExposureWhoseArtifactIsNoLongerTrusted(t *testing.T) {
 	if _, err := service.Transition(context.Background(), Principal{ID: "carol", TenantID: "tenant-a", Roles: []string{"platform.api-exposure.publish"}}, draft.ID, "publish"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := New(stateFile, catalogFile, EmptyContractCatalog()); err != nil {
+	if _, err := newFileTestService(stateFile, catalogFile, EmptyContractCatalog()); err != nil {
 		t.Fatal(err)
 	}
 	raw, err := os.ReadFile(catalogFile)
@@ -253,13 +253,57 @@ func testService(t *testing.T) (*Service, string) {
 	t.Helper()
 	root := t.TempDir()
 	catalogFile := filepath.Join(root, "gateway-catalog.json")
-	service, err := New(filepath.Join(root, "state.json"), catalogFile, testContractCatalog())
+	service, err := newFileTestService(filepath.Join(root, "state.json"), catalogFile, testContractCatalog())
 	if err != nil {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 7, 22, 12, 0, 0, 0, time.UTC)
 	service.now = func() time.Time { return now }
 	return service, catalogFile
+}
+
+// newFileTestService keeps the production package free of a local authoritative
+// state provider while allowing deterministic restart tests. Production always
+// binds the same Service workflow to fenced Shared State in Contribution.
+func newFileTestService(stateFile, catalogFile string, catalog apiv1.ContractCatalog) (*Service, error) {
+	service, err := New(catalogFile, catalog)
+	if err != nil {
+		return nil, err
+	}
+	state := emptyPersistedState()
+	raw, err := os.ReadFile(stateFile)
+	if err == nil {
+		state, err = decodePersistedState(raw)
+	} else {
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+		err = nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	service.state = state
+	service.testSave = func(next persistedState) error {
+		raw, marshalErr := json.Marshal(next)
+		if marshalErr != nil || len(raw) > maximumStateBytes {
+			return errors.New("测试状态序列化失败或超过 Shared State 上限")
+		}
+		return atomicWrite(stateFile, raw, 0o600)
+	}
+	service.state.CatalogDirty = true
+	if err := service.saveLocked(); err != nil {
+		return nil, err
+	}
+	if err := service.publishCatalogLocked(); err != nil {
+		return nil, err
+	}
+	service.state.CatalogDirty = false
+	if err := service.saveLocked(); err != nil {
+		return nil, err
+	}
+	service.catalogRestored = true
+	return service, nil
 }
 
 func testContractCatalog() apiv1.ContractCatalog {

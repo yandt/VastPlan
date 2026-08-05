@@ -30,49 +30,76 @@ func Contribution(service *Service) sdk.Contribution {
 	handlers := make(map[string]sdk.Handler, len(operations))
 	for _, name := range operations {
 		operation := name
-		handlers[operation] = func(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
-			var raw []byte
-			var err error
-			if operation == "issuePrivateDataPlaneTicket" {
-				principal, projectErr := projectPrivatePrincipal(callCtx)
-				if projectErr != nil {
-					return nil, nil, projectErr
-				}
-				raw, err = service.issueAndInstallPrivateTicket(ctx, host, callCtx, principal, payload)
-			} else if runtimeOperation(operation) {
-				caller, projectErr := projectRuntimeCaller(callCtx)
-				if projectErr != nil {
-					return nil, nil, projectErr
-				}
-				raw, err = service.handleRuntime(ctx, caller, operation, payload)
-			} else {
-				principal, projectErr := projectPrincipal(callCtx)
-				if projectErr != nil {
-					return nil, nil, projectErr
-				}
-				if operation == "issueDataPlaneTicket" {
-					raw, err = service.issueAndInstallTicket(ctx, host, callCtx, principal, payload)
-				} else {
-					raw, err = service.handlePrincipal(ctx, principal, operation, payload)
-				}
-			}
-			if err != nil {
-				if errors.Is(err, ErrForbidden) || errors.Is(err, ErrSelfApproval) {
-					return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: errorcode.PermissionDenied, Message: err.Error()}}, nil, nil
-				}
-				code := "platform.api-exposure.invalid"
-				if errors.Is(err, ErrNotFound) {
-					code = "platform.api-exposure.not_found"
-				}
-				if errors.Is(err, ErrInvalidState) {
-					code = "platform.api-exposure.state_conflict"
-				}
-				return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: code, Message: err.Error()}}, nil, nil
-			}
-			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
-		}
+		handlers[operation] = service.handler(operation)
 	}
 	return sdk.Contribution{ExtensionPoint: extpoint.ToolPackage, ID: Capability, Descriptor: Descriptor(), Handlers: handlers}
+}
+
+func (s *Service) handler(operation string) sdk.Handler {
+	return func(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+		var result *contractv1.CallResult
+		var response []byte
+		var invokeErr error
+		if err := s.withSharedState(ctx, host, callCtx, func() error {
+			result, response, invokeErr = s.handleLoaded(ctx, host, callCtx, operation, payload)
+			return nil
+		}); err != nil {
+			code := "platform.api-exposure.unavailable"
+			retryable := errors.Is(err, ErrStoreConflict) || errors.Is(err, ErrStoreUnavailable)
+			if errors.Is(err, ErrStoreConflict) {
+				code = "platform.api-exposure.state_conflict"
+			}
+			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: code, Message: err.Error(), Retryable: retryable}}, nil, nil
+		}
+		return result, response, invokeErr
+	}
+}
+
+func (s *Service) handleLoaded(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, operation string, payload []byte) (*contractv1.CallResult, []byte, error) {
+	var raw []byte
+	var err error
+	if operation == "issuePrivateDataPlaneTicket" {
+		principal, projectErr := projectPrivatePrincipal(callCtx)
+		if projectErr != nil {
+			return nil, nil, projectErr
+		}
+		raw, err = s.issueAndInstallPrivateTicket(ctx, host, callCtx, principal, payload)
+	} else if runtimeOperation(operation) {
+		caller, projectErr := projectRuntimeCaller(callCtx)
+		if projectErr != nil {
+			return nil, nil, projectErr
+		}
+		raw, err = s.handleRuntime(ctx, caller, operation, payload)
+	} else {
+		principal, projectErr := projectPrincipal(callCtx)
+		if projectErr != nil {
+			return nil, nil, projectErr
+		}
+		if operation == "issueDataPlaneTicket" {
+			raw, err = s.issueAndInstallTicket(ctx, host, callCtx, principal, payload)
+		} else {
+			raw, err = s.handlePrincipal(ctx, principal, operation, payload)
+		}
+	}
+	if err != nil {
+		if errors.Is(err, ErrForbidden) || errors.Is(err, ErrSelfApproval) {
+			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: errorcode.PermissionDenied, Message: err.Error()}}, nil, nil
+		}
+		code := "platform.api-exposure.invalid"
+		retryable := false
+		if errors.Is(err, ErrNotFound) {
+			code = "platform.api-exposure.not_found"
+		}
+		if errors.Is(err, ErrInvalidState) || errors.Is(err, ErrStoreConflict) {
+			code = "platform.api-exposure.state_conflict"
+			retryable = errors.Is(err, ErrStoreConflict)
+		}
+		if errors.Is(err, ErrStoreUnavailable) {
+			code, retryable = "platform.api-exposure.unavailable", true
+		}
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: code, Message: err.Error(), Retryable: retryable}}, nil, nil
+	}
+	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
 }
 
 func (s *Service) issueAndInstallTicket(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, principal Principal, payload []byte) ([]byte, error) {

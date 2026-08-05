@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.platform.integration.api-exposure`
 
-当前制品版本：`0.5.8`
+当前制品版本：`0.8.0`
 能力：`tool.package/platform.api-exposure`
 
 ## 职责
@@ -19,11 +19,10 @@ Data Plane Exposure 使用相同职责分离流程，审批内容还必须固定
 
 | 字段 | 必填 | 说明 |
 |---|---:|---|
-| `stateFile` | 是 | `0600`、非符号链接、最大 64 MiB 的治理状态 |
-| `gatewayCatalogFile` | 是 | 原子替换的 Gateway Catalog |
+| `gatewayCatalogFile` | 是 | 从 Shared State 重建并原子替换的 Gateway Catalog 派生投影，不是真相源 |
 | `contractCatalogFile` | 是 | 可信宿主生成的私有只读 Catalog 文件；避免把大型目录塞入进程环境 |
 
-Endpoint Lease 与 Ticket 只保存在内存中，进程重启后失效；发布 revision、Route Key tombstone 和审计持久化。Catalog 使用 dirty journal 恢复，损坏或 generation 回退的候选不会覆盖 Gateway 最近可用快照。
+发布 revision、Route Key tombstone 和审计通过 leader-fenced、service-scope Shared State CAS 持久化，单个聚合遵守 1 MiB 上限；状态不可用或并发冲突时 fail-closed，不回退本机 JSON。Endpoint Lease 与 Ticket 只保存在内存中，进程重启后失效。Gateway Catalog 只是本机可重建投影：每个新 Leader 首次调用都会用当前可信 Contract Catalog 重建，dirty journal 先持久化再替换文件，损坏、失信制品或 generation 回退不会被当成治理真相。
 
 ## Portal
 

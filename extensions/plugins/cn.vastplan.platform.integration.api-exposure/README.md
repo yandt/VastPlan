@@ -19,11 +19,10 @@
 
 | 字段 | 说明 |
 |---|---|
-| `stateFile` | 私有治理状态文件 |
 | `gatewayCatalogFile` | Node Portal Gateway 只读的原子 Catalog 文件 |
 | `contractCatalogFile` | 可信宿主从已验签制品生成的私有 Catalog 文件；不接受浏览器拼装 |
 
-状态和 Gateway Catalog 必须位于受控私有目录。插件启动时完成状态恢复和 Catalog 重放，配置错误会使进程 fail-closed。
+治理状态通过宿主注入的 leader-fenced Shared State 保存到平台控制数据库；插件不接收物理数据库、NATS 或文件状态地址。Gateway Catalog 位于受控私有目录，但只是一份可重建投影：新 Leader 首次调用会从 Shared State 与当前可信 Contract Catalog 完成重放，配置或状态错误会使能力 fail-closed。
 
 ## 开发语言与运行形态
 
