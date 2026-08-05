@@ -9,38 +9,13 @@ import (
 	"strings"
 	"time"
 
-	uiv1 "cdsoft.com.cn/VastPlan/contracts/schemas/ui/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/errorcode"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	uiv1 "cdsoft.com.cn/VastPlan/contracts/schemas/ui/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/interactionapi"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
-
-func (s *Service) ensureConfigured(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext) error {
-	s.mu.Lock()
-	configured := s.stateFile != ""
-	s.mu.Unlock()
-	if configured {
-		return nil
-	}
-	op := "get"
-	payload, _ := json.Marshal(map[string]string{"key": StateFileConfigKey})
-	result, raw, err := host.Call(ctx, &contractv1.CallTarget{ExtensionPoint: extpoint.KernelService, Capability: "kernel.config.get", Operation: &op}, callCtx, payload)
-	if err != nil {
-		return fmt.Errorf("读取 Interaction Broker 部署配置: %w", err)
-	}
-	if result == nil || result.Status != contractv1.CallResult_STATUS_OK {
-		return errors.New("未提供 Interaction Broker 部署配置")
-	}
-	var stateFile string
-	if err := json.Unmarshal(raw, &stateFile); err != nil || strings.TrimSpace(stateFile) == "" {
-		return fmt.Errorf("%s 必须是非空 JSON 字符串", StateFileConfigKey)
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.configure(stateFile)
-}
 
 // Contribution adapts the trusted CallContext into the least amount of
 // identity the broker needs. The request payload never supplies an identity.
@@ -49,10 +24,11 @@ func Contribution(service *Service) sdk.Contribution {
 	for _, operation := range []string{"open", "list", "get", "watch", "present", "respond", "cancel"} {
 		op := operation
 		handlers[op] = func(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
-			if err := service.ensureConfigured(ctx, host, callCtx); err != nil {
+			repository, err := NewRecordRepository(host, callCtx)
+			if err != nil {
 				return nil, nil, err
 			}
-			raw, err := service.Handle(ctx, callCtx, op, payload)
+			raw, err := service.Workflow(repository).Handle(ctx, callCtx, op, payload)
 			if err != nil {
 				if errors.Is(err, ErrForbidden) {
 					return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: errorcode.PermissionDenied, Message: err.Error()}}, nil, nil
@@ -69,7 +45,7 @@ func Descriptor() []byte {
 	return []byte(`{"title":"跨端交互协调","subcommands":[{"name":"open","description":"创建交互任务"},{"name":"list","description":"列出当前用户可处理的交互"},{"name":"get","description":"读取交互任务状态"},{"name":"watch","description":"以更新游标等待交互状态变化"},{"name":"present","description":"标记交互已呈现"},{"name":"respond","description":"提交一次性终态响应"},{"name":"cancel","description":"取消来源侧交互任务"}]}`)
 }
 
-func (s *Service) Handle(ctx context.Context, callCtx *contractv1.CallContext, operation string, payload []byte) ([]byte, error) {
+func (w *Workflow) Handle(ctx context.Context, callCtx *contractv1.CallContext, operation string, payload []byte) ([]byte, error) {
 	switch operation {
 	case "open":
 		source, err := sourceSubject(callCtx)
@@ -80,7 +56,7 @@ func (s *Service) Handle(ctx context.Context, callCtx *contractv1.CallContext, o
 		if err := decode(payload, &request); err != nil {
 			return nil, err
 		}
-		return marshal(s.Open(ctx, source, request))
+		return marshal(w.Open(ctx, source, request))
 	case "list":
 		subject, err := rendererSubject(callCtx)
 		if err != nil {
@@ -92,7 +68,7 @@ func (s *Service) Handle(ctx context.Context, callCtx *contractv1.CallContext, o
 		if err := decode(payload, &request); err != nil {
 			return nil, err
 		}
-		return marshal(s.List(ctx, subject, request.Surface))
+		return marshal(w.List(ctx, subject, request.Surface))
 	case "get":
 		subject, err := anySubject(callCtx)
 		if err != nil {
@@ -104,7 +80,7 @@ func (s *Service) Handle(ctx context.Context, callCtx *contractv1.CallContext, o
 		if err := decode(payload, &request); err != nil {
 			return nil, err
 		}
-		return marshal(s.Get(ctx, subject, request.ID))
+		return marshal(w.Get(ctx, subject, request.ID))
 	case "watch":
 		source, err := sourceSubject(callCtx)
 		if err != nil {
@@ -117,7 +93,7 @@ func (s *Service) Handle(ctx context.Context, callCtx *contractv1.CallContext, o
 		if err := decode(payload, &request); err != nil {
 			return nil, err
 		}
-		return marshal(s.Watch(ctx, source, request.ID, request.After))
+		return marshal(w.Watch(ctx, source, request.ID, request.After))
 	case "present":
 		subject, err := rendererSubject(callCtx)
 		if err != nil {
@@ -130,7 +106,7 @@ func (s *Service) Handle(ctx context.Context, callCtx *contractv1.CallContext, o
 		if err := decode(payload, &request); err != nil {
 			return nil, err
 		}
-		return marshal(s.Present(ctx, subject, request.ID, request.Surface))
+		return marshal(w.Present(ctx, subject, request.ID, request.Surface))
 	case "respond":
 		subject, err := rendererSubject(callCtx)
 		if err != nil {
@@ -144,7 +120,7 @@ func (s *Service) Handle(ctx context.Context, callCtx *contractv1.CallContext, o
 		if err := decode(payload, &request); err != nil {
 			return nil, err
 		}
-		return marshal(s.Respond(ctx, subject, request.ID, request.Surface, request.Response))
+		return marshal(w.Respond(ctx, subject, request.ID, request.Surface, request.Response))
 	case "cancel":
 		source, err := sourceSubject(callCtx)
 		if err != nil {
@@ -156,7 +132,7 @@ func (s *Service) Handle(ctx context.Context, callCtx *contractv1.CallContext, o
 		if err := decode(payload, &request); err != nil {
 			return nil, err
 		}
-		return marshal(s.Cancel(ctx, source, request.ID))
+		return marshal(w.Cancel(ctx, source, request.ID))
 	default:
 		return nil, fmt.Errorf("不支持 Interaction Broker 操作 %q", operation)
 	}

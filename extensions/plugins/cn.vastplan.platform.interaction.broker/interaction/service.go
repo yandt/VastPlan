@@ -1,15 +1,13 @@
-// Package interaction implements the durable state and authorization boundary
-// for cross-platform human interactions.
+// Package interaction implements application workflows and authorization for
+// cross-platform human interactions. Persistence is owned by a Repository;
+// the service contains only clocks and local wake-up channels.
 package interaction
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
-	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -19,10 +17,9 @@ import (
 )
 
 const (
-	PluginID           = "cn.vastplan.platform.interaction.broker"
-	PluginVersion      = "0.1.8"
-	Capability         = interactionapi.Capability
-	StateFileConfigKey = "platform.interaction-broker.stateFile"
+	PluginID      = "cn.vastplan.platform.interaction.broker"
+	PluginVersion = "0.2.0"
+	Capability    = interactionapi.Capability
 )
 
 var (
@@ -33,93 +30,36 @@ var (
 	ErrInvalidState = interactionapi.ErrInvalidState
 )
 
-type persistedState struct {
-	Records map[string]storedRecord `json:"records"`
-}
-
 type storedRecord struct {
 	interactionapi.Record
-	RequestHash string `json:"requestHash"`
+	RequestHash string
+	Revision    int64
+}
+
+type Repository interface {
+	Create(ctx context.Context, record storedRecord, idempotencyKey string) (storedRecord, error)
+	Get(ctx context.Context, tenantID, id string) (storedRecord, error)
+	List(ctx context.Context, tenantID string) ([]storedRecord, error)
+	Update(ctx context.Context, record storedRecord, expectedRevision int64, idempotencyKey string) (storedRecord, error)
 }
 
 type Service struct {
-	mu        sync.Mutex
-	state     persistedState
-	stateFile string
-	now       func() time.Time
-	watchers  map[string]map[chan struct{}]struct{}
+	now      func() time.Time
+	watchMu  sync.Mutex
+	watchers map[string]map[chan struct{}]struct{}
 }
 
-func New(stateFile string) (*Service, error) {
-	s := &Service{state: persistedState{Records: map[string]storedRecord{}}, now: time.Now, watchers: map[string]map[chan struct{}]struct{}{}}
-	if strings.TrimSpace(stateFile) != "" {
-		if err := s.configure(stateFile); err != nil {
-			return nil, err
-		}
-	}
-	return s, nil
+type Workflow struct {
+	service    *Service
+	repository Repository
 }
 
-func (s *Service) configure(stateFile string) error {
-	if strings.TrimSpace(stateFile) == "" {
-		return errors.New("Interaction Broker stateFile 不能为空")
-	}
-	if s.stateFile != "" && s.stateFile != stateFile {
-		return errors.New("Interaction Broker stateFile 不允许在运行中切换")
-	}
-	if s.stateFile != "" {
-		return nil
-	}
-	s.stateFile = stateFile
-	return s.load()
+func New() *Service {
+	return &Service{now: time.Now, watchers: map[string]map[chan struct{}]struct{}{}}
 }
 
-func (s *Service) load() error {
-	raw, err := os.ReadFile(s.stateFile)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("读取 Interaction Broker 状态: %w", err)
-	}
-	if err := json.Unmarshal(raw, &s.state); err != nil {
-		return fmt.Errorf("解析 Interaction Broker 状态: %w", err)
-	}
-	if s.state.Records == nil {
-		s.state.Records = map[string]storedRecord{}
-	}
-	return nil
-}
-
-func (s *Service) save() error {
-	if s.stateFile == "" {
-		return errors.New("Interaction Broker 尚未配置状态文件")
-	}
-	raw, err := json.Marshal(s.state)
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(s.stateFile), 0o700); err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(s.stateFile), ".interaction-broker-*")
-	if err != nil {
-		return err
-	}
-	name := tmp.Name()
-	defer os.Remove(name)
-	if _, err := tmp.Write(raw); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(0o600); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(name, s.stateFile)
+func (s *Service) Workflow(repository Repository) *Workflow {
+	return &Workflow{service: s, repository: repository}
 }
 
 func validSubject(subject interactionapi.Subject) bool {
@@ -133,4 +73,35 @@ func requestHash(request uiv1.InteractionRequest) (string, error) {
 	}
 	sum := sha256.Sum256(raw)
 	return hex.EncodeToString(sum[:]), nil
+}
+
+func (w *Workflow) notify(id string) {
+	w.service.watchMu.Lock()
+	defer w.service.watchMu.Unlock()
+	for wait := range w.service.watchers[id] {
+		close(wait)
+	}
+	delete(w.service.watchers, id)
+}
+
+func (w *Workflow) wait(id string) chan struct{} {
+	w.service.watchMu.Lock()
+	defer w.service.watchMu.Unlock()
+	wait := make(chan struct{})
+	if w.service.watchers[id] == nil {
+		w.service.watchers[id] = map[chan struct{}]struct{}{}
+	}
+	w.service.watchers[id][wait] = struct{}{}
+	return wait
+}
+
+func (w *Workflow) removeWatcher(id string, wait chan struct{}) {
+	w.service.watchMu.Lock()
+	defer w.service.watchMu.Unlock()
+	if waiting := w.service.watchers[id]; waiting != nil {
+		delete(waiting, wait)
+		if len(waiting) == 0 {
+			delete(w.service.watchers, id)
+		}
+	}
 }

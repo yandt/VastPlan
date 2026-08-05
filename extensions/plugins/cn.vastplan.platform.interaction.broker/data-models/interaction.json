@@ -1,0 +1,27 @@
+{
+  "contract": "data.model.v1",
+  "id": "platform.interaction.record",
+  "schemaVersion": 1,
+  "storage": { "kind": "platform-control", "table": "platform_interactions" },
+  "fields": [
+    { "id": "id", "column": "id", "type": "uuid", "nullable": false, "sensitivity": "internal" },
+    { "id": "tenantId", "column": "tenant_id", "type": "string", "nullable": false, "sensitivity": "confidential", "maxLength": 160 },
+    { "id": "state", "column": "state", "type": "string", "nullable": false, "sensitivity": "internal", "maxLength": 32 },
+    { "id": "requestHash", "column": "request_hash", "type": "string", "nullable": false, "sensitivity": "internal", "maxLength": 64 },
+    { "id": "record", "column": "record_document", "type": "json", "nullable": false, "sensitivity": "confidential" },
+    { "id": "expiresAt", "column": "expires_at", "type": "timestamp", "nullable": false, "sensitivity": "internal" },
+    { "id": "revision", "column": "revision", "type": "int64", "nullable": false, "sensitivity": "internal" },
+    { "id": "createdAt", "column": "created_at", "type": "timestamp", "nullable": false, "sensitivity": "internal" },
+    { "id": "updatedAt", "column": "updated_at", "type": "timestamp", "nullable": false, "sensitivity": "internal" }
+  ],
+  "primaryKey": ["id"],
+  "indexes": [
+    { "id": "byTenantState", "fields": ["tenantId", "state"], "unique": false },
+    { "id": "byTenantExpiry", "fields": ["tenantId", "expiresAt"], "unique": false }
+  ],
+  "uniqueConstraints": [],
+  "scope": { "tenant": "required", "service": "none" },
+  "optimisticLock": { "field": "revision" },
+  "audit": { "createdAt": "createdAt", "updatedAt": "updatedAt" },
+  "deletion": { "mode": "hard" }
+}

@@ -3,6 +3,7 @@ package databaseruntime
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
@@ -40,6 +41,30 @@ func (s *Service) executePlatformSchemaController(ctx context.Context, call *con
 		return recordResult(nil, err)
 	}
 	return s.executeSchemaWithPinned(ctx, call, operation, ref, entry, request, dialect, snapshot.store.WithPinned)
+}
+
+// PreparePlatformModels applies only migrations classified as safe by the
+// signed DataModel policy before a Platform Control candidate is bound. Manual
+// or destructive changes remain fail-closed and require the normal evidence
+// carrying Schema Controller workflow.
+func (s *Service) PreparePlatformModels(ctx context.Context, store PlatformRecordStore) error {
+	if s == nil || store == nil {
+		return recordstore.ErrStorageUnavailable
+	}
+	dialect, err := recordstore.DialectFor(store.ProviderID())
+	if err != nil {
+		return err
+	}
+	for _, entry := range s.recordModels.PlatformModels() {
+		err = store.WithPinned(ctx, func(pinned PinnedSession) error {
+			_, applyErr := s.applySchema(ctx, pinned, dialect, entry, "", nil)
+			return applyErr
+		})
+		if err != nil {
+			return fmt.Errorf("准备 Platform Control DataModel %s: %w", entry.Model.ID, err)
+		}
+	}
+	return nil
 }
 
 func (s *Service) executeSchemaWithPinned(ctx context.Context, call *contractv1.CallContext,

@@ -21,6 +21,32 @@ type schemaSession struct {
 	statements []string
 }
 
+func (s *schemaSession) Begin(context.Context, databasev1.TransactionOptions) (Transaction, error) {
+	return s, nil
+}
+func (*schemaSession) Commit(context.Context) error   { return nil }
+func (*schemaSession) Rollback(context.Context) error { return nil }
+
+type schemaPlatformStore struct {
+	*schemaSession
+	closed chan struct{}
+}
+
+func (*schemaPlatformStore) ProviderID() string { return "postgresql" }
+func (s *schemaPlatformStore) Read(ctx context.Context, work func(recordstore.Session) error) error {
+	return work(s.schemaSession)
+}
+func (s *schemaPlatformStore) Write(ctx context.Context, work func(recordstore.Session) error) error {
+	return work(s.schemaSession)
+}
+func (*schemaPlatformStore) Begin(context.Context, databasev1.TransactionOptions) (Transaction, error) {
+	return nil, errors.New("not used")
+}
+func (s *schemaPlatformStore) WithPinned(ctx context.Context, work func(PinnedSession) error) error {
+	return work(s.schemaSession)
+}
+func (s *schemaPlatformStore) Closed() <-chan struct{} { return s.closed }
+
 func TestSchemaControllerRequiresSignedMigrationBackupAndApproval(t *testing.T) {
 	previous := schemaTestModel()
 	previousDocument, _ := recordstore.MarshalModel(previous)
@@ -112,6 +138,32 @@ func TestSchemaControllerAppliesAndReplaysLedgerIdempotently(t *testing.T) {
 		if strings.HasPrefix(statement, "CREATE TABLE IF NOT EXISTS \"orders\"") {
 			t.Fatal("Ready 模型不得重复执行领域 DDL")
 		}
+	}
+}
+
+func TestPreparePlatformModelsCreatesSafeSchemaBeforeBinding(t *testing.T) {
+	model := schemaTestModel()
+	model.Storage = datamodelv1.StorageBinding{Kind: "platform-control", Table: "platform_orders"}
+	document, _ := recordstore.MarshalModel(model)
+	ref, _ := recordstore.ModelRef(document)
+	service := &Service{recordModels: recordstore.NewCatalog()}
+	_, err := service.recordModels.Replace(recordstorev1.SyncModelsRequest{Generation: 1,
+		InventoryDigest: "1111111111111111111111111111111111111111111111111111111111111111",
+		Models: []recordstorev1.SignedModel{recordstore.EncodeSignedModel("cn.vastplan.application.orders",
+			"2222222222222222222222222222222222222222222222222222222222222222", ref, document)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := &schemaPlatformStore{schemaSession: &schemaSession{}, closed: make(chan struct{})}
+	if err := service.PreparePlatformModels(context.Background(), store); err != nil {
+		t.Fatal(err)
+	}
+	if store.state == nil || store.state.SHA256 != ref.SHA256 {
+		t.Fatalf("Platform DataModel 未写入迁移账本: %+v", store.state)
+	}
+	if joined := strings.Join(store.statements, "\n"); !strings.Contains(joined, `CREATE TABLE IF NOT EXISTS "platform_orders"`) {
+		t.Fatalf("Platform DataModel 未执行安全建表: %s", joined)
 	}
 }
 

@@ -41,7 +41,7 @@ go run ./engineering/tools/datamodelgen \
   -package generated
 ```
 
-生成物必须提交到插件自己的 `generated/` 目录。架构门禁会重新读取签名模型、核对摘要、复生成已存在语言目录并逐字节比较；生成结果不确定、模型被修改但 Manifest 摘要未更新、或提交的生成文件陈旧都会失败。
+生成物必须提交到插件自己的 `generated/` 目录。生成器把 Manifest 锁定的模型 SHA-256 同时写入 Go、TypeScript 或 Python 常量，使自定义 Repository Adapter 不必再复制摘要字符串。架构门禁会重新读取签名模型、核对摘要、携带同一摘要复生成已存在语言目录并逐字节比较；生成结果不确定、模型被修改但 Manifest 摘要未更新、或提交的生成文件陈旧都会失败。
 
 生成的公共面包括 Create、Get、List、Update、Delete、Batch、乐观锁 revision、幂等键、UnitOfWork 和 Outbox。V1 不生成公开 CRUD API、业务 Workflow、关联查询、任意 Join、报表聚合或 Workbench 页面。复杂查询由插件自己的 Repository Adapter 实现，但仍须通过 Database Runtime 使用参数化 SQL。
 
@@ -58,16 +58,16 @@ go run ./engineering/tools/datamodelgen \
 
 破坏性迁移必须显式声明 `requiresBackup=true`、`requiresApproval=true` 和 `retrySafe=true`。Schema Controller 只接受受限单条 SQL 列表，禁止注释、多语句、事务控制和 `vastplan_*` 内部表；执行前必须同时验证当前连接 leader、备份完成与审批完成的宿主 evidence。账本成功记录模型版本、摘要和 migration ID；失败不会推进目标版本，调用方只能在恢复检查后重试同一已签名、声明可重放的迁移或从备份恢复。
 
-首个真实模型是 Database Capability Pack 中的 `platform.database.connection`。它用于验证签名外部模型、Go/TypeScript 双语言生成和零漂移门禁；其业务工作流迁移属于 P5，不能因为生成了 Repository 类型就宣称状态已经进入 SQL。
+首个真实模型是 Database Capability Pack 中的 `platform.database.connection`，用于验证签名外部模型、Go/TypeScript 双语言生成和零漂移门禁。`platform.interaction.record` 是首个完成业务迁移的增长型模型：Interaction Broker 通过通用 Go Record Store 协议客户端和本插件自有 Adapter 执行逐记录 CAS，Workflow 不依赖 SQL、驱动或具体 Provider。
 
 ## 5. 当前实施状态
 
 - P2 已建立 `data.model.v1` JSON Schema、Go 严格解析与语义校验；
 - 已提供 Go、TypeScript、Python 确定性生成器；
 - Plugin Manifest 已支持签名 `backend.dataModels[]` 引用；
-- Database Connection 模型已作为首个真实样本接入；
+- Database Connection 与 Interaction Record 模型已接入；
 - 已建立摘要、路径、模型身份和生成物零漂移门禁。
 
 P3b 已在 Database Runtime 内部实现 `record.store.v1` 的 CRUD、受限分页、Batch、实例亲和 UnitOfWork、幂等账本、事务内 Outbox，以及 PostgreSQL/MySQL Schema Controller 和 SQL Shared State。Schema Controller 只自动执行建表、增加可空字段和非唯一索引，并同时要求可信 SYSTEM 调用、Schema Controller credential evidence、数据库迁移锁和持久账本；其他变化保持 manual。SQL Shared State 延续既有 `sharedstate.Store` 的 1 MiB、CAS revision、游标分页、tenant/service 隔离和 fail-closed 语义。
 
-这些模块目前仍是 Runtime 内部能力，主入口和公开 Manifest 暂不注册：P4 必须先通过 Bootstrap 注入保留的 Platform Control Store 会话，P6 必须解决 active-active 副本的同代模型目录与本地优先路由，之后才能公开为可调用 capability。P3 的实现面已经闭合；真实 PostgreSQL/MySQL 集成矩阵仍需在 Docker daemon 恢复后补跑，未通过前不把 P3 标记为完成验收。
+这些模块已经进入 Database Runtime 主入口和公开 Manifest。Controller 从同一 Deployment 的精确制品生成宿主保留 Inventory，Node Agent 在候选路由发布前同步模型目录；Platform Control Bootstrap 在双 binding 切换前完成安全 Schema 准备。普通插件只使用 `extensions/sdk/go/recordstore` 等协议客户端，具体 Repository Adapter 仍归插件所有，SDK 不拥有 Provider、Engine 或业务 Repository 实现。真实 PostgreSQL/MySQL 集成矩阵仍需在 Docker daemon 恢复后补跑，未通过前不把最终验收标记为完成。

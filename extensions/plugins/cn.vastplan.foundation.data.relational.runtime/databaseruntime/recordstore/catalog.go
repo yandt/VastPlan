@@ -43,6 +43,24 @@ func NewCatalog() *Catalog {
 	return &Catalog{models: map[string]ModelEntry{}, migrations: map[string]MigrationEntry{}}
 }
 
+// PlatformModels returns a stable copy of models explicitly bound to the
+// reserved Platform Control store. Callers cannot mutate the live catalog.
+func (c *Catalog) PlatformModels() []ModelEntry {
+	if c == nil {
+		return nil
+	}
+	c.mu.RLock()
+	result := make([]ModelEntry, 0, len(c.models))
+	for _, entry := range c.models {
+		if entry.Model.Storage.Kind == "platform-control" {
+			result = append(result, entry)
+		}
+	}
+	c.mu.RUnlock()
+	sort.Slice(result, func(i, j int) bool { return result[i].Model.ID < result[j].Model.ID })
+	return result
+}
+
 func (c *Catalog) Replace(request recordstorev1.SyncModelsRequest) (recordstorev1.SyncModelsResult, error) {
 	if c == nil || request.Generation == 0 || !commonv1.IsSHA256(request.InventoryDigest) || len(request.Models) > 512 || len(request.Migrations) > 1024 {
 		return recordstorev1.SyncModelsResult{}, errors.New("Record Store 模型目录请求无效")

@@ -38,19 +38,6 @@ func main() {
 	}
 	binding := sharedstate.NewBindingStore()
 	recordBinding := runtime.NewPlatformRecordBinding()
-	bootstrapper, err := platformcontrolbootstrap.New(registry)
-	if err != nil {
-		log.Fatalf("初始化 Platform Control Bootstrapper: %v", err)
-	}
-	bootstrapService, err := platformcontrolbootstrap.NewService(bootstrapper, binding, recordBinding, os.Getenv("CREDENTIALS_DIRECTORY"))
-	if err != nil {
-		log.Fatalf("初始化 Platform Control Runtime Service: %v", err)
-	}
-	defer bootstrapService.Close()
-	sharedStateService, err := sqlsharedstate.NewCapabilityService(binding)
-	if err != nil {
-		log.Fatalf("初始化 SQL Shared State Capability: %v", err)
-	}
 	policy, err := runtime.ClusterManagerPolicy(startup.ClusterMaxOpen, maxReplicas)
 	if err != nil {
 		log.Fatalf("计算 Database Runtime 集群连接预算: %v", err)
@@ -63,6 +50,19 @@ func main() {
 		log.Fatalf("初始化 Database Runtime: %v", err)
 	}
 	defer service.Close()
+	bootstrapper, err := platformcontrolbootstrap.New(registry)
+	if err != nil {
+		log.Fatalf("初始化 Platform Control Bootstrapper: %v", err)
+	}
+	bootstrapService, err := platformcontrolbootstrap.NewService(bootstrapper, binding, recordBinding, service.PreparePlatformModels, os.Getenv("CREDENTIALS_DIRECTORY"))
+	if err != nil {
+		log.Fatalf("初始化 Platform Control Runtime Service: %v", err)
+	}
+	defer bootstrapService.Close()
+	sharedStateService, err := sqlsharedstate.NewCapabilityService(binding)
+	if err != nil {
+		log.Fatalf("初始化 SQL Shared State Capability: %v", err)
+	}
 	plugin := sdk.New(runtime.PluginID, runtime.PluginVersion, map[string]string{"backend": "^0.1"})
 	plugin.Contribute(service.Contribution())
 	plugin.Contribute(service.RecordContribution())

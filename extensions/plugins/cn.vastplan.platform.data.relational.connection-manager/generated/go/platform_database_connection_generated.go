@@ -8,6 +8,7 @@ import (
 )
 
 const PlatformDatabaseConnectionModelID = "platform.database.connection"
+const PlatformDatabaseConnectionModelSHA256 = "44ba1561d43100a3daa581a72f197e16270a65affd66ac4bdeb8004aa6ee1b92"
 const PlatformDatabaseConnectionSchemaVersion uint64 = 1
 
 type PlatformDatabaseConnection struct {

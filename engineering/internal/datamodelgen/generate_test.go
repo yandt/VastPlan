@@ -51,6 +51,9 @@ func TestGenerateRejectsInvalidInput(t *testing.T) {
 	if _, err := Generate(testModel(), Go, "bad-package"); err == nil {
 		t.Fatal("非法 Go 包名必须拒绝")
 	}
+	if _, err := GenerateWithSHA256(testModel(), "bad", Go, "generated"); err == nil {
+		t.Fatal("非法 DataModel SHA-256 必须拒绝")
+	}
 }
 
 func testModel() datamodelv1.Model {

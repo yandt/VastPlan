@@ -2,6 +2,8 @@ package interaction
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -10,14 +12,14 @@ import (
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/interactionapi"
 )
 
-func (s *Service) Open(_ context.Context, source interactionapi.Subject, request uiv1.InteractionRequest) (interactionapi.Record, error) {
+func (w *Workflow) Open(ctx context.Context, source interactionapi.Subject, request uiv1.InteractionRequest) (interactionapi.Record, error) {
 	if !validSubject(source) || request.TenantID != source.TenantID || request.Source.Capability != source.ID {
 		return interactionapi.Record{}, ErrForbidden
 	}
 	if err := uiv1.ValidateInteractionRequest(request); err != nil {
 		return interactionapi.Record{}, err
 	}
-	now := s.now().UTC()
+	now := w.service.now().UTC()
 	if !request.ExpiresAt.After(now) {
 		return interactionapi.Record{}, ErrExpired
 	}
@@ -25,157 +27,128 @@ func (s *Service) Open(_ context.Context, source interactionapi.Subject, request
 	if err != nil {
 		return interactionapi.Record{}, err
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if existing, ok := s.state.Records[request.ID]; ok {
+	if existing, err := w.repository.Get(ctx, source.TenantID, request.ID); err == nil {
 		if existing.RequestHash == hash {
 			return copyRecord(existing.Record), nil
 		}
 		return interactionapi.Record{}, ErrConflict
+	} else if !errors.Is(err, ErrNotFound) {
+		return interactionapi.Record{}, err
 	}
 	record := interactionapi.Record{Request: request, State: interactionapi.StateCreated, CreatedAt: now, UpdatedAt: now}
 	record.Audit = append(record.Audit, interactionapi.AuditEvent{Action: "created", ActorID: source.ID, At: now})
-	s.state.Records[request.ID] = storedRecord{Record: record, RequestHash: hash}
-	if err := s.save(); err != nil {
-		delete(s.state.Records, request.ID)
-		return interactionapi.Record{}, err
+	created, err := w.repository.Create(ctx, storedRecord{Record: record, RequestHash: hash}, "open:"+request.ID+":"+hash)
+	if errors.Is(err, ErrConflict) {
+		existing, getErr := w.repository.Get(ctx, source.TenantID, request.ID)
+		if getErr == nil && existing.RequestHash == hash {
+			return copyRecord(existing.Record), nil
+		}
 	}
-	return copyRecord(record), nil
+	return copyRecord(created.Record), err
 }
 
-func (s *Service) List(_ context.Context, subject interactionapi.Subject, surface uiv1.InteractionSurface) ([]interactionapi.Record, error) {
+func (w *Workflow) List(ctx context.Context, subject interactionapi.Subject, surface uiv1.InteractionSurface) ([]interactionapi.Record, error) {
 	if !validSubject(subject) || !validSurface(surface) {
 		return nil, ErrForbidden
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.expireLocked(s.now().UTC())
-	result := make([]interactionapi.Record, 0)
-	for _, stored := range s.state.Records {
-		record := stored.Record
-		if record.Request.TenantID == subject.TenantID && !record.State.Terminal() && allowsSurface(record.Request, surface) && eligible(record.Request, subject) {
+	stored, err := w.repository.List(ctx, subject.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	now := w.service.now().UTC()
+	result := make([]interactionapi.Record, 0, len(stored))
+	for _, candidate := range stored {
+		candidate, err = w.expire(ctx, candidate, now)
+		if err != nil {
+			return nil, err
+		}
+		record := candidate.Record
+		if !record.State.Terminal() && allowsSurface(record.Request, surface) && eligible(record.Request, subject) {
 			result = append(result, copyRecord(record))
 		}
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].CreatedAt.Before(result[j].CreatedAt) })
-	if err := s.save(); err != nil {
-		return nil, err
-	}
 	return result, nil
 }
 
-func (s *Service) Get(_ context.Context, subject interactionapi.Subject, id string) (interactionapi.Record, error) {
+func (w *Workflow) Get(ctx context.Context, subject interactionapi.Subject, id string) (interactionapi.Record, error) {
 	if !validSubject(subject) || strings.TrimSpace(id) == "" {
 		return interactionapi.Record{}, ErrForbidden
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	expired := s.expireLocked(s.now().UTC())
-	stored, ok := s.state.Records[id]
-	if !ok || stored.Request.TenantID != subject.TenantID || !(subject.System || stored.Request.Source.Capability == subject.ID || eligible(stored.Request, subject)) {
-		if expired {
-			if err := s.save(); err != nil {
-				return interactionapi.Record{}, err
-			}
-		}
-		return interactionapi.Record{}, ErrNotFound
-	}
-	if err := s.save(); err != nil {
+	stored, err := w.repository.Get(ctx, subject.TenantID, id)
+	if err != nil {
 		return interactionapi.Record{}, err
+	}
+	stored, err = w.expire(ctx, stored, w.service.now().UTC())
+	if err != nil {
+		return interactionapi.Record{}, err
+	}
+	if !subject.System && stored.Request.Source.Capability != subject.ID && !eligible(stored.Request, subject) {
+		return interactionapi.Record{}, ErrNotFound
 	}
 	return copyRecord(stored.Record), nil
 }
 
-// Watch is a reconnect-safe long-poll primitive for Runner and backend sources.
-// The caller retains Record.UpdatedAt as its cursor; reconnecting with that
-// cursor returns after a mutation, expiry, or context deadline without any
-// dependency on Portal or Mobile runtime code.
-func (s *Service) Watch(ctx context.Context, source interactionapi.Subject, id string, after time.Time) (interactionapi.Record, error) {
+// Watch is a reconnect-safe long-poll primitive. Database state is always
+// re-read after registering a local wake-up to close the check/wait race.
+func (w *Workflow) Watch(ctx context.Context, source interactionapi.Subject, id string, after time.Time) (interactionapi.Record, error) {
 	if !validSubject(source) || strings.TrimSpace(id) == "" {
 		return interactionapi.Record{}, ErrForbidden
 	}
 	for {
-		s.mu.Lock()
-		now := s.now().UTC()
-		expired := s.expireLocked(now)
-		stored, ok := s.state.Records[id]
-		if !ok || stored.Request.TenantID != source.TenantID {
-			if expired {
-				if err := s.save(); err != nil {
-					s.mu.Unlock()
-					return interactionapi.Record{}, err
-				}
-			}
-			s.mu.Unlock()
-			return interactionapi.Record{}, ErrNotFound
+		stored, err := w.repository.Get(ctx, source.TenantID, id)
+		if err != nil {
+			return interactionapi.Record{}, err
 		}
 		if !source.System && stored.Request.Source.Capability != source.ID {
-			s.mu.Unlock()
 			return interactionapi.Record{}, ErrForbidden
 		}
-		if expired {
-			if err := s.save(); err != nil {
-				s.mu.Unlock()
-				return interactionapi.Record{}, err
-			}
-			s.notifyLocked(id)
-			stored = s.state.Records[id]
+		stored, err = w.expire(ctx, stored, w.service.now().UTC())
+		if err != nil {
+			return interactionapi.Record{}, err
 		}
 		if stored.State.Terminal() || stored.UpdatedAt.After(after) {
-			record := copyRecord(stored.Record)
-			s.mu.Unlock()
-			return record, nil
+			return copyRecord(stored.Record), nil
 		}
-		wait := make(chan struct{})
-		if s.watchers[id] == nil {
-			s.watchers[id] = map[chan struct{}]struct{}{}
+		wait := w.wait(id)
+		latest, readErr := w.repository.Get(ctx, source.TenantID, id)
+		if readErr != nil || latest.Revision != stored.Revision {
+			w.removeWatcher(id, wait)
+			if readErr != nil {
+				return interactionapi.Record{}, readErr
+			}
+			continue
 		}
-		s.watchers[id][wait] = struct{}{}
-		expiresIn := stored.Request.ExpiresAt.Sub(now)
-		s.mu.Unlock()
-
-		timer := time.NewTimer(expiresIn)
+		timer := time.NewTimer(stored.Request.ExpiresAt.Sub(w.service.now().UTC()))
 		select {
 		case <-ctx.Done():
-			if !timer.Stop() {
-				select {
-				case <-timer.C:
-				default:
-				}
-			}
-			s.removeWatcher(id, wait)
+			stopTimer(timer)
+			w.removeWatcher(id, wait)
 			return interactionapi.Record{}, ctx.Err()
 		case <-wait:
-			if !timer.Stop() {
-				select {
-				case <-timer.C:
-				default:
-				}
-			}
+			stopTimer(timer)
 		case <-timer.C:
-			s.removeWatcher(id, wait)
+			w.removeWatcher(id, wait)
 		}
 	}
 }
 
-func (s *Service) Present(_ context.Context, subject interactionapi.Subject, id string, surface uiv1.InteractionSurface) (interactionapi.Record, error) {
-	return s.mutateRenderer(subject, id, surface, func(record *interactionapi.Record, now time.Time) error {
+func (w *Workflow) Present(ctx context.Context, subject interactionapi.Subject, id string, surface uiv1.InteractionSurface) (interactionapi.Record, error) {
+	return w.mutateRenderer(ctx, subject, id, surface, "present", func(record *interactionapi.Record, now time.Time) error {
 		if record.State != interactionapi.StateCreated && record.State != interactionapi.StatePresented {
 			return ErrInvalidState
 		}
-		record.State = interactionapi.StatePresented
-		record.PresentedBy = subject.ID
-		record.UpdatedAt = now
+		record.State, record.PresentedBy, record.UpdatedAt = interactionapi.StatePresented, subject.ID, now
 		record.Audit = append(record.Audit, interactionapi.AuditEvent{Action: "presented", ActorID: subject.ID, Surface: string(surface), At: now})
 		return nil
 	})
 }
 
-func (s *Service) Respond(_ context.Context, subject interactionapi.Subject, id string, surface uiv1.InteractionSurface, response uiv1.InteractionResponse) (interactionapi.Record, error) {
-	if response.InteractionID != id || (response.Decision != uiv1.DecisionAnswered && response.Decision != uiv1.DecisionRejected) {
+func (w *Workflow) Respond(ctx context.Context, subject interactionapi.Subject, id string, surface uiv1.InteractionSurface, response uiv1.InteractionResponse) (interactionapi.Record, error) {
+	if response.InteractionID != id || response.Decision != uiv1.DecisionAnswered && response.Decision != uiv1.DecisionRejected {
 		return interactionapi.Record{}, ErrInvalidState
 	}
-	return s.mutateRenderer(subject, id, surface, func(record *interactionapi.Record, now time.Time) error {
+	return w.mutateRenderer(ctx, subject, id, surface, "respond", func(record *interactionapi.Record, now time.Time) error {
 		if record.State != interactionapi.StateCreated && record.State != interactionapi.StatePresented {
 			return ErrConflict
 		}
@@ -195,114 +168,91 @@ func (s *Service) Respond(_ context.Context, subject interactionapi.Subject, id 
 	})
 }
 
-func (s *Service) Cancel(_ context.Context, source interactionapi.Subject, id string) (interactionapi.Record, error) {
+func (w *Workflow) Cancel(ctx context.Context, source interactionapi.Subject, id string) (interactionapi.Record, error) {
 	if !validSubject(source) || strings.TrimSpace(id) == "" {
 		return interactionapi.Record{}, ErrForbidden
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	now := s.now().UTC()
-	expired := s.expireLocked(now)
-	stored, ok := s.state.Records[id]
-	if !ok || stored.Request.TenantID != source.TenantID {
-		if expired {
-			if err := s.save(); err != nil {
-				return interactionapi.Record{}, err
-			}
-		}
-		return interactionapi.Record{}, ErrNotFound
-	}
-	if !source.System && stored.Request.Source.Capability != source.ID {
-		if expired {
-			if err := s.save(); err != nil {
-				return interactionapi.Record{}, err
-			}
-		}
-		return interactionapi.Record{}, ErrForbidden
-	}
-	if stored.State.Terminal() {
-		if expired {
-			if err := s.save(); err != nil {
-				return interactionapi.Record{}, err
-			}
-		}
-		return interactionapi.Record{}, ErrConflict
-	}
-	stored.State = interactionapi.StateCancelled
-	stored.UpdatedAt = now
-	stored.Audit = append(stored.Audit, interactionapi.AuditEvent{Action: "cancelled", ActorID: source.ID, At: now})
-	s.state.Records[id] = stored
-	if err := s.save(); err != nil {
+	stored, err := w.repository.Get(ctx, source.TenantID, id)
+	if err != nil {
 		return interactionapi.Record{}, err
 	}
-	s.notifyLocked(id)
-	return copyRecord(stored.Record), nil
+	if !source.System && stored.Request.Source.Capability != source.ID {
+		return interactionapi.Record{}, ErrForbidden
+	}
+	stored, err = w.expire(ctx, stored, w.service.now().UTC())
+	if err != nil {
+		return interactionapi.Record{}, err
+	}
+	if stored.State.Terminal() {
+		return interactionapi.Record{}, ErrConflict
+	}
+	now := w.service.now().UTC()
+	stored.State, stored.UpdatedAt = interactionapi.StateCancelled, now
+	stored.Audit = append(stored.Audit, interactionapi.AuditEvent{Action: "cancelled", ActorID: source.ID, At: now})
+	updated, err := w.repository.Update(ctx, stored, stored.Revision, mutationKey("cancel", id, stored.Revision))
+	if err != nil {
+		return interactionapi.Record{}, err
+	}
+	w.notify(id)
+	return copyRecord(updated.Record), nil
 }
 
-func (s *Service) mutateRenderer(subject interactionapi.Subject, id string, surface uiv1.InteractionSurface, mutate func(*interactionapi.Record, time.Time) error) (interactionapi.Record, error) {
+func (w *Workflow) mutateRenderer(ctx context.Context, subject interactionapi.Subject, id string, surface uiv1.InteractionSurface,
+	action string, mutate func(*interactionapi.Record, time.Time) error) (interactionapi.Record, error) {
 	if !validSubject(subject) || !validSurface(surface) || strings.TrimSpace(id) == "" {
 		return interactionapi.Record{}, ErrForbidden
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	now := s.now().UTC()
-	expired := s.expireLocked(now)
-	stored, ok := s.state.Records[id]
-	if !ok || stored.Request.TenantID != subject.TenantID || !allowsSurface(stored.Request, surface) || !eligible(stored.Request, subject) {
-		if expired {
-			if err := s.save(); err != nil {
-				return interactionapi.Record{}, err
-			}
-		}
+	stored, err := w.repository.Get(ctx, subject.TenantID, id)
+	if err != nil {
+		return interactionapi.Record{}, err
+	}
+	if !allowsSurface(stored.Request, surface) || !eligible(stored.Request, subject) {
 		return interactionapi.Record{}, ErrNotFound
 	}
+	stored, err = w.expire(ctx, stored, w.service.now().UTC())
+	if err != nil {
+		return interactionapi.Record{}, err
+	}
 	if stored.State == interactionapi.StateExpired {
-		if expired {
-			if err := s.save(); err != nil {
-				return interactionapi.Record{}, err
-			}
-		}
 		return interactionapi.Record{}, ErrExpired
 	}
-	if err := mutate(&stored.Record, now); err != nil {
+	if err := mutate(&stored.Record, w.service.now().UTC()); err != nil {
 		return interactionapi.Record{}, err
 	}
-	s.state.Records[id] = stored
-	if err := s.save(); err != nil {
+	updated, err := w.repository.Update(ctx, stored, stored.Revision, mutationKey(action, id, stored.Revision))
+	if err != nil {
 		return interactionapi.Record{}, err
 	}
-	s.notifyLocked(id)
-	return copyRecord(stored.Record), nil
+	w.notify(id)
+	return copyRecord(updated.Record), nil
 }
 
-func (s *Service) expireLocked(now time.Time) bool {
-	changed := false
-	for id, stored := range s.state.Records {
-		if !stored.State.Terminal() && !stored.Request.ExpiresAt.After(now) {
-			stored.State = interactionapi.StateExpired
-			stored.UpdatedAt = now
-			stored.Audit = append(stored.Audit, interactionapi.AuditEvent{Action: "expired", ActorID: "system", At: now})
-			s.state.Records[id] = stored
-			changed = true
+func (w *Workflow) expire(ctx context.Context, stored storedRecord, now time.Time) (storedRecord, error) {
+	if stored.State.Terminal() || stored.Request.ExpiresAt.After(now) {
+		return stored, nil
+	}
+	stored.State, stored.UpdatedAt = interactionapi.StateExpired, now
+	stored.Audit = append(stored.Audit, interactionapi.AuditEvent{Action: "expired", ActorID: "system", At: now})
+	updated, err := w.repository.Update(ctx, stored, stored.Revision, mutationKey("expire", stored.Request.ID, stored.Revision))
+	if err != nil {
+		if errors.Is(err, ErrConflict) {
+			return w.repository.Get(ctx, stored.Request.TenantID, stored.Request.ID)
 		}
+		return storedRecord{}, err
 	}
-	return changed
+	w.notify(stored.Request.ID)
+	return updated, nil
 }
 
-func (s *Service) notifyLocked(id string) {
-	for wait := range s.watchers[id] {
-		close(wait)
-	}
-	delete(s.watchers, id)
+func mutationKey(action, id string, revision int64) string {
+	return fmt.Sprintf("%s:%s:%d", action, id, revision)
 }
 
-func (s *Service) removeWatcher(id string, wait chan struct{}) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if waiting := s.watchers[id]; waiting != nil {
-		delete(waiting, wait)
-		if len(waiting) == 0 {
-			delete(s.watchers, id)
+func stopTimer(timer *time.Timer) {
+	if !timer.Stop() {
+		select {
+		case <-timer.C:
+		default:
 		}
 	}
 }

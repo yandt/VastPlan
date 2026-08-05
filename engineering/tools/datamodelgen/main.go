@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"flag"
 	"fmt"
 	"os"
@@ -28,7 +29,7 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
-	output, err := datamodelgen.Generate(model, datamodelgen.Language(*language), *packageName)
+	output, err := datamodelgen.GenerateWithSHA256(model, fmt.Sprintf("%x", sha256.Sum256(raw)), datamodelgen.Language(*language), *packageName)
 	if err != nil {
 		fatal(err)
 	}

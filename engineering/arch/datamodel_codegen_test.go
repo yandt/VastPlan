@@ -41,9 +41,9 @@ func TestSignedDataModelsAndGeneratedRepositoriesHaveNoDrift(t *testing.T) {
 				if model.ID != reference.ID || reference.ContractVersion != datamodelv1.ContractVersion {
 					t.Fatalf("DataModel 身份不一致: ref=%+v model=%s", reference, model.ID)
 				}
-				assertGeneratedRepository(t, pluginRoot, model, datamodelgen.Go, "go", "generated")
-				assertGeneratedRepository(t, pluginRoot, model, datamodelgen.TypeScript, "typescript", "generated")
-				assertGeneratedRepository(t, pluginRoot, model, datamodelgen.Python, "python", "generated")
+				assertGeneratedRepository(t, pluginRoot, model, reference.SHA256, datamodelgen.Go, "go", "generated")
+				assertGeneratedRepository(t, pluginRoot, model, reference.SHA256, datamodelgen.TypeScript, "typescript", "generated")
+				assertGeneratedRepository(t, pluginRoot, model, reference.SHA256, datamodelgen.Python, "python", "generated")
 			})
 		}
 	})
@@ -100,7 +100,7 @@ func safePluginPath(t *testing.T, root, relative string) string {
 	return path
 }
 
-func assertGeneratedRepository(t *testing.T, pluginRoot string, model datamodelv1.Model, language datamodelgen.Language, directory, packageName string) {
+func assertGeneratedRepository(t *testing.T, pluginRoot string, model datamodelv1.Model, modelSHA256 string, language datamodelgen.Language, directory, packageName string) {
 	t.Helper()
 	root := filepath.Join(pluginRoot, "generated", directory)
 	if _, err := os.Stat(root); os.IsNotExist(err) {
@@ -108,7 +108,7 @@ func assertGeneratedRepository(t *testing.T, pluginRoot string, model datamodelv
 	} else if err != nil {
 		t.Fatal(err)
 	}
-	output, err := datamodelgen.Generate(model, language, packageName)
+	output, err := datamodelgen.GenerateWithSHA256(model, modelSHA256, language, packageName)
 	if err != nil {
 		t.Fatal(err)
 	}

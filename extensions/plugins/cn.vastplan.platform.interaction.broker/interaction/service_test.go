@@ -13,11 +13,8 @@ import (
 
 func TestService_CompetesForOneTerminalResponseAndPersists(t *testing.T) {
 	now := time.Date(2026, 7, 18, 9, 0, 0, 0, time.UTC)
-	service, err := New(t.TempDir() + "/interactions.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	service.now = func() time.Time { return now }
+	service, repository := newTestWorkflow()
+	service.service.now = func() time.Time { return now }
 	source := interactionapi.Subject{ID: "cn.vastplan.runner.workflow", TenantID: "tenant-a"}
 	alice := interactionapi.Subject{ID: "alice", TenantID: "tenant-a", Roles: []string{"approver"}}
 	bob := interactionapi.Subject{ID: "bob", TenantID: "tenant-a", Roles: []string{"approver"}}
@@ -49,11 +46,8 @@ func TestService_CompetesForOneTerminalResponseAndPersists(t *testing.T) {
 		t.Fatalf("并发响应只能有一个成功，实际 %d", count)
 	}
 
-	restarted, err := New(service.stateFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	restarted.now = func() time.Time { return now }
+	restarted := New().Workflow(repository)
+	restarted.service.now = func() time.Time { return now }
 	record, err := restarted.Get(context.Background(), source, request.ID)
 	if err != nil || !record.State.Terminal() || record.Response == nil {
 		t.Fatalf("重启后必须恢复终态响应，record=%+v err=%v", record, err)
@@ -62,11 +56,8 @@ func TestService_CompetesForOneTerminalResponseAndPersists(t *testing.T) {
 
 func TestService_RejectsCrossTenantAndSecretPlaintext(t *testing.T) {
 	now := time.Date(2026, 7, 18, 9, 0, 0, 0, time.UTC)
-	service, err := New(t.TempDir() + "/interactions.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	service.now = func() time.Time { return now }
+	service, _ := newTestWorkflow()
+	service.service.now = func() time.Time { return now }
 	source := interactionapi.Subject{ID: "cn.vastplan.runner.workflow", TenantID: "tenant-a"}
 	alice := interactionapi.Subject{ID: "alice", TenantID: "tenant-a", Roles: []string{"approver"}}
 	request := testRequest(now)
@@ -76,7 +67,7 @@ func TestService_RejectsCrossTenantAndSecretPlaintext(t *testing.T) {
 	if _, err := service.Get(context.Background(), interactionapi.Subject{ID: "mallory", TenantID: "tenant-b"}, request.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("跨租户读取必须不可见，err=%v", err)
 	}
-	_, err = service.Respond(context.Background(), alice, request.ID, uiv1.SurfaceFrontend, uiv1.InteractionResponse{
+	_, err := service.Respond(context.Background(), alice, request.ID, uiv1.SurfaceFrontend, uiv1.InteractionResponse{
 		InteractionID: request.ID,
 		Decision:      uiv1.DecisionAnswered,
 		Values:        map[string]any{"password": "plaintext"},
@@ -141,11 +132,8 @@ func TestValidateResponse_ValidatesNestedSchemaAndCredentialPaths(t *testing.T) 
 
 func TestService_ExpiresFailClosed(t *testing.T) {
 	now := time.Date(2026, 7, 18, 9, 0, 0, 0, time.UTC)
-	service, err := New(t.TempDir() + "/interactions.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	service.now = func() time.Time { return now }
+	service, repository := newTestWorkflow()
+	service.service.now = func() time.Time { return now }
 	source := interactionapi.Subject{ID: "cn.vastplan.runner.workflow", TenantID: "tenant-a"}
 	alice := interactionapi.Subject{ID: "alice", TenantID: "tenant-a", Roles: []string{"approver"}}
 	request := testRequest(now)
@@ -156,11 +144,8 @@ func TestService_ExpiresFailClosed(t *testing.T) {
 	if _, err := service.Respond(context.Background(), alice, request.ID, uiv1.SurfaceFrontend, uiv1.InteractionResponse{InteractionID: request.ID, Decision: uiv1.DecisionAnswered}); !errors.Is(err, ErrExpired) {
 		t.Fatalf("过期交互必须 fail-closed，err=%v", err)
 	}
-	restarted, err := New(service.stateFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	restarted.now = func() time.Time { return now }
+	restarted := New().Workflow(repository)
+	restarted.service.now = func() time.Time { return now }
 	record, err := restarted.Get(context.Background(), source, request.ID)
 	if err != nil || record.State != interactionapi.StateExpired {
 		t.Fatalf("过期交互必须持久化为 expired，record=%+v err=%v", record, err)
@@ -169,11 +154,8 @@ func TestService_ExpiresFailClosed(t *testing.T) {
 
 func TestService_WatchResumesFromCursorAfterRendererResponse(t *testing.T) {
 	now := time.Date(2026, 7, 18, 9, 0, 0, 0, time.UTC)
-	service, err := New(t.TempDir() + "/interactions.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	service.now = func() time.Time { return now }
+	service, repository := newTestWorkflow()
+	service.service.now = func() time.Time { return now }
 	source := interactionapi.Subject{ID: "cn.vastplan.runner.workflow", TenantID: "tenant-a"}
 	alice := interactionapi.Subject{ID: "alice", TenantID: "tenant-a", Roles: []string{"approver"}}
 	created, err := service.Open(context.Background(), source, testRequest(now))
@@ -207,11 +189,8 @@ func TestService_WatchResumesFromCursorAfterRendererResponse(t *testing.T) {
 	}
 
 	// 断线重连使用旧 cursor 时，持久化终态必须立即返回而无需重新创建任务。
-	restarted, err := New(service.stateFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	restarted.now = func() time.Time { return now }
+	restarted := New().Workflow(repository)
+	restarted.service.now = func() time.Time { return now }
 	record, err := restarted.Watch(context.Background(), source, created.Request.ID, created.UpdatedAt)
 	if err != nil || record.State != interactionapi.StateAnswered {
 		t.Fatalf("重连 watch 必须恢复已持久化终态: record=%+v err=%v", record, err)

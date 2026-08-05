@@ -22,6 +22,7 @@ type Service struct {
 	bootstrapper         *Bootstrapper
 	binding              *sharedstate.BindingStore
 	recordBinding        *databaseruntime.PlatformRecordBinding
+	prepareModels        func(context.Context, databaseruntime.PlatformRecordStore) error
 	credentialsDirectory string
 
 	mu      sync.Mutex
@@ -29,11 +30,12 @@ type Service struct {
 	status  platformcontrolv1.Status
 }
 
-func NewService(bootstrapper *Bootstrapper, binding *sharedstate.BindingStore, recordBinding *databaseruntime.PlatformRecordBinding, credentialsDirectory string) (*Service, error) {
-	if bootstrapper == nil || binding == nil || recordBinding == nil {
+func NewService(bootstrapper *Bootstrapper, binding *sharedstate.BindingStore, recordBinding *databaseruntime.PlatformRecordBinding,
+	prepareModels func(context.Context, databaseruntime.PlatformRecordStore) error, credentialsDirectory string) (*Service, error) {
+	if bootstrapper == nil || binding == nil || recordBinding == nil || prepareModels == nil {
 		return nil, errors.New("Platform Control Runtime Service 依赖不能为空")
 	}
-	return &Service{bootstrapper: bootstrapper, binding: binding, recordBinding: recordBinding, credentialsDirectory: credentialsDirectory,
+	return &Service{bootstrapper: bootstrapper, binding: binding, recordBinding: recordBinding, prepareModels: prepareModels, credentialsDirectory: credentialsDirectory,
 		status: platformcontrolv1.Status{Phase: platformcontrolv1.PhaseUnconfigured}}, nil
 }
 
@@ -134,14 +136,19 @@ func (s *Service) activate(ctx context.Context, operation string, profile platfo
 		s.status = platformcontrolv1.Status{Phase: platformcontrolv1.PhaseRecovery, Generation: profile.Generation, Code: platformcontrolv1.ErrorInitializationFailed}
 		return bootstrapResult(s.status, platformcontrolv1.ErrorInitializationFailed, true)
 	}
-	if err := s.binding.Bind(profile.Generation, identity, candidate); err != nil {
-		_ = candidate.Close()
-		return bootstrapResult(s.status, platformcontrolv1.ErrorConflict, false)
-	}
 	recordStore, ok := candidate.(databaseruntime.PlatformRecordStore)
 	if !ok {
 		_ = candidate.Close()
 		return bootstrapResult(s.status, platformcontrolv1.ErrorInitializationFailed, false)
+	}
+	if err := s.prepareModels(ctx, recordStore); err != nil {
+		_ = candidate.Close()
+		s.status = platformcontrolv1.Status{Phase: platformcontrolv1.PhaseRecovery, Generation: profile.Generation, Code: platformcontrolv1.ErrorInitializationFailed}
+		return bootstrapResult(s.status, platformcontrolv1.ErrorInitializationFailed, false)
+	}
+	if err := s.binding.Bind(profile.Generation, identity, candidate); err != nil {
+		_ = candidate.Close()
+		return bootstrapResult(s.status, platformcontrolv1.ErrorConflict, false)
 	}
 	if err := s.recordBinding.Bind(profile.Generation, identity, recordStore); err != nil {
 		_ = candidate.Close()

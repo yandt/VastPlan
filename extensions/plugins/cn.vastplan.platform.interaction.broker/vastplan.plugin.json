@@ -1,29 +1,31 @@
 {
   "id": "cn.vastplan.platform.interaction.broker",
   "name": "VastPlan Interaction Broker",
-  "description": "持久化、授权并协调跨 Portal、Mobile 与 Runner 的人机交互",
-  "version": "0.1.8",
+  "description": "通过声明式 Record Store 持久化、授权并协调跨 Portal、Mobile 与 Runner 的人机交互",
+  "version": "0.2.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
   "engines": { "backend": "^0.1" },
-  "capabilities": { "kernelServices": ["kernel.config.get"], "credentials": [], "resources": [] },
+  "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
   "contextAccess": { "required": ["scope.tenant", "caller"], "optional": ["scene", "subject.id", "authorization.roles", "trace", "request.deadline", "propagation.callPath"] },
   "runtime": {
     "instancePolicy": "leader",
-    "stateModel": "leader-owned",
+    "stateModel": "external-shared",
     "visibility": "cluster",
     "routing": "leader",
     "routingDomain": "platform",
+    "requires": [{ "capability": "foundation.data.record-store", "contractRange": "^1.1.0", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "fail", "logicalService": "foundation.data.relational.runtime", "routingDomain": "platform" }],
     "provides": [{ "extensionPoint": "tool.package", "capability": "platform.interaction-broker", "contractVersion": "1.0.0", "visibility": "cluster", "routing": "leader", "routingDomain": "platform" }]
   },
   "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
-  "state": { "backend": { "format": "cn.vastplan.platform.interaction-broker", "formatVersion": 1 } },
+  "state": { "backend": { "format": "data.model.v1.platform.interaction.record", "formatVersion": 1 } },
   "activation": ["onStartup"],
   "entry": { "backend": "backend/interaction-broker" },
   "contributes": {
     "backend": {
+      "dataModels": [{ "id": "platform.interaction.record", "contractVersion": "1.1.0", "path": "data-models/interaction.json", "sha256": "8b97ed3ef4668be322b5edc34645bd78e3f14a648cecc77e2c3f9f139dfa548e" }],
       "tools": [{
         "id": "platform.interaction-broker",
         "service_role": "backend",

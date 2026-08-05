@@ -9,10 +9,7 @@ import (
 )
 
 func main() {
-	service, err := interaction.New("")
-	if err != nil {
-		log.Fatalf("初始化 Interaction Broker 服务失败: %v", err)
-	}
+	service := interaction.New()
 	p := sdk.New(interaction.PluginID, interaction.PluginVersion, map[string]string{"backend": "^0.1"})
 	p.Contribute(interaction.Contribution(service))
 	if err := p.Serve(); err != nil {
