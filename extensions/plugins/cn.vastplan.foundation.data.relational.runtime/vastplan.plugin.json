@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.foundation.data.relational.runtime",
   "name": "VastPlan Database Runtime",
-  "version": "0.14.1",
+  "version": "0.14.3",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -113,6 +113,28 @@
             { "name": "schemaPlan", "description": "读取 DataModel 迁移计划" },
             { "name": "schemaApply", "description": "由唯一 Schema Controller 应用安全迁移" },
             { "name": "schemaStatus", "description": "读取持久迁移账本状态" }
+          ]
+        },
+        {
+          "id": "foundation.state.shared.sql.bootstrap",
+          "service_role": "backend",
+          "title": "Platform Control SQL Bootstrap",
+          "subcommands": [
+            { "name": "test", "description": "测试 Platform Control SQL 候选" },
+            { "name": "initialize", "description": "初始化并绑定 Platform Control SQL 候选" },
+            { "name": "open", "description": "打开已提交的 Platform Control SQL Profile" }
+          ]
+        },
+        {
+          "id": "foundation.state.shared.sql",
+          "service_role": "backend",
+          "title": "SQL Shared State",
+          "subcommands": [
+            { "name": "get", "description": "读取 Shared State 条目" },
+            { "name": "create", "description": "创建 Shared State 条目" },
+            { "name": "update", "description": "按 CAS 更新 Shared State 条目" },
+            { "name": "delete", "description": "按 CAS 删除 Shared State 条目" },
+            { "name": "list", "description": "分页列出 Shared State 条目" }
           ]
         }
       ]

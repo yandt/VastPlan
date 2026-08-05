@@ -15,9 +15,10 @@ type BindingStore struct {
 	generation uint64
 	identity   string
 	store      Store
+	changes    chan struct{}
 }
 
-func NewBindingStore() *BindingStore { return &BindingStore{} }
+func NewBindingStore() *BindingStore { return &BindingStore{changes: make(chan struct{}, 1)} }
 
 func (s *BindingStore) Bind(generation uint64, identity string, store Store) error {
 	if s == nil || generation == 0 || identity == "" || store == nil {
@@ -35,7 +36,21 @@ func (s *BindingStore) Bind(generation uint64, identity string, store Store) err
 		return nil
 	}
 	s.generation, s.identity, s.store = generation, identity, store
+	select {
+	case s.changes <- struct{}{}:
+	default:
+	}
 	return nil
+}
+
+// Changes reports successful generation switches. It is an edge-triggered
+// wake-up hint: consumers must re-read Snapshot and must not derive state from
+// the number of received events.
+func (s *BindingStore) Changes() <-chan struct{} {
+	if s == nil {
+		return nil
+	}
+	return s.changes
 }
 
 func (s *BindingStore) Snapshot() (uint64, string, bool) {

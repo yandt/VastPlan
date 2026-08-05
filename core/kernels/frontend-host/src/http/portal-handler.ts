@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { PortalAssets } from "../assets/portal-assets";
-import type { IdentityProvider } from "../identity/identity-provider";
+import type { IdentityProvider, Principal } from "../identity/identity-provider";
 import type { PortalComposerPort } from "../capabilities/portal-composer-client";
 import type { PortalPreferencePort } from "../capabilities/portal-preference-client";
 import type { InteractionPort } from "../capabilities/interaction-client";
@@ -19,6 +19,9 @@ import type { TrustedCapabilityInvoker } from "../capabilities/capability-invoke
 import { sendAPIError, sendJSON } from "./json-response";
 import type { PortalGenerationCoordinationPort } from "../runtime/portal-generation-coordinator";
 import { KernelRecoveryClient, serveKernelRecovery, serveKernelRecoveryPage } from "./kernel-recovery-route";
+import type { PlatformControlBootstrapPort } from "../capabilities/platform-control-bootstrap-client";
+import { BootstrapPlatformControlRoutes } from "./bootstrap-platform-control-routes";
+import { bootstrapPlatformControlPath, serveBootstrapPlatformControlPage } from "./bootstrap-platform-control-page";
 
 export interface PortalHandlerOptions {
   assets: PortalAssets;
@@ -34,9 +37,11 @@ export interface PortalHandlerOptions {
   generations?: PortalGenerationCoordinationPort;
   ssr?: PortalSSRPort;
   recovery?: KernelRecoveryClient;
+  platformControlBootstrap?: PlatformControlBootstrapPort;
 }
 
 export function createPortalHandler(options: PortalHandlerOptions): (request: IncomingMessage, response: ServerResponse) => void {
+  const platformControlBootstrap = options.platformControlBootstrap === undefined ? undefined : new BootstrapPlatformControlRoutes(options.platformControlBootstrap);
   const api = options.identity === undefined ? undefined : createAPIHandler({
     identity: options.identity,
     secureCookies: options.secureCookies ?? true,
@@ -46,6 +51,7 @@ export function createPortalHandler(options: PortalHandlerOptions): (request: In
     ...(options.platform === undefined ? {} : { platform: options.platform }),
     ...(options.delivery === undefined ? {} : { delivery: options.delivery }),
     ...(options.generations === undefined ? {} : { generations: options.generations }),
+    ...(options.platformControlBootstrap === undefined ? {} : { platformControlBootstrap: options.platformControlBootstrap }),
   });
   const apiExposure = options.identity === undefined || options.apiExposure === undefined ? undefined : new APIExposureGateway(
     options.apiExposure.catalog, options.identity, options.apiExposure.invoker, options.secureCookies ?? true,
@@ -113,7 +119,7 @@ export function createPortalHandler(options: PortalHandlerOptions): (request: In
     if (method !== "GET" && method !== "HEAD") return sendEmpty(response, 405, { Allow: "GET, HEAD" });
     if (path === "/healthz" || path === "/readyz") return sendText(response, method, 200, "ok\n");
     if (path.startsWith("/assets/")) return serveAsset(options.assets, path.slice("/assets/".length), method, request, response);
-    void servePage(options, request, response, method, path);
+    void servePage(options, platformControlBootstrap, request, response, method, path);
   };
 }
 
@@ -128,13 +134,37 @@ async function serveIdentitySession(identity: IdentityProvider, request: Incomin
   }
 }
 
-async function servePage(options: PortalHandlerOptions, request: IncomingMessage, response: ServerResponse, method: string, path: string): Promise<void> {
+async function servePage(options: PortalHandlerOptions, bootstrap: BootstrapPlatformControlRoutes | undefined, request: IncomingMessage, response: ServerResponse, method: string, path: string): Promise<void> {
+  let principal: Principal | undefined;
   if (options.identity?.loginRedirect !== undefined) {
-    try { await options.identity.authenticate(request); }
+    try { principal = await options.identity.authenticate(request); }
     catch {
       response.statusCode = 302;
       response.setHeader("Location", options.identity.loginRedirect(request.url ?? path));
       response.setHeader("Cache-Control", "no-store");
+      response.end();
+      return;
+    }
+  }
+  if (bootstrap !== undefined && options.identity !== undefined && principal === undefined) {
+    try { principal = await options.identity.authenticate(request); }
+    catch { return sendAPIError(response, 401, "session_required", method === "HEAD"); }
+  }
+  if (bootstrap !== undefined && principal !== undefined && (path === bootstrapPlatformControlPath || path === "/operations")) {
+    const status = await bootstrap.status(principal);
+    if (path === bootstrapPlatformControlPath) {
+      if (status?.phase === "ready") {
+        response.statusCode = 303;
+        response.setHeader("Location", "/operations");
+        response.end();
+        return;
+      }
+      serveBootstrapPlatformControlPage(request, response, method === "HEAD");
+      return;
+    }
+    if (status !== undefined && status.phase !== "ready") {
+      response.statusCode = 307;
+      response.setHeader("Location", bootstrapPlatformControlPath);
       response.end();
       return;
     }

@@ -48,8 +48,13 @@ func (r *runtime) waitForRecoveryStage(ctx context.Context, stageID string, star
 	if err != nil {
 		return err
 	}
-	deadline := time.NewTimer(timeout)
-	defer deadline.Stop()
+	var deadline <-chan time.Time
+	var timer *time.Timer
+	if timeout > 0 {
+		timer = time.NewTimer(timeout)
+		deadline = timer.C
+		defer timer.Stop()
+	}
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
 	last := "尚未观察"
@@ -68,7 +73,7 @@ func (r *runtime) waitForRecoveryStage(ctx context.Context, stageID string, star
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-deadline.C:
+		case <-deadline:
 			return fmt.Errorf("等待 Recovery Capsule 阶段 %s 超时: %s", stageID, last)
 		case <-ticker.C:
 		}
@@ -90,7 +95,7 @@ func (r *runtime) observeRecoveryCapsule(capsule recoveryv1.Capsule, startedAt t
 func evaluateRecoveryCapsule(capsule recoveryv1.Capsule, state readinessState, startedAt time.Time) recoveryStatus {
 	units := make(map[string]recoveryv1.UnitObservation, len(state.Units))
 	for id, unit := range state.Units {
-		units[id] = recoveryv1.UnitObservation{Phase: unit.Phase, Readiness: unit.Readiness, Candidate: unit.Candidate != nil}
+		units[id] = recoveryv1.UnitObservation{AppliedRevision: unit.AppliedRevision, Phase: unit.Phase, Readiness: unit.Readiness, Candidate: unit.Candidate != nil}
 	}
 	now := time.Now().UTC()
 	report := recoveryv1.BuildNodeReport(capsule, recoveryv1.RuntimeObservation{

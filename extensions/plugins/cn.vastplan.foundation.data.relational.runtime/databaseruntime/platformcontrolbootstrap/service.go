@@ -43,7 +43,7 @@ func (s *Service) Contribution() sdk.Contribution {
 	return sdk.Contribution{
 		ExtensionPoint: extpoint.ToolPackage,
 		ID:             platformcontrolv1.BootstrapCapability,
-		Descriptor:     []byte(`{"title":"Platform Control SQL Bootstrap","subcommands":[{"name":"test"},{"name":"initialize"},{"name":"open"}]}`),
+		Descriptor:     []byte(`{"title":"Platform Control SQL Bootstrap","subcommands":[{"name":"test","description":"测试 Platform Control SQL 候选"},{"name":"initialize","description":"初始化并绑定 Platform Control SQL 候选"},{"name":"open","description":"打开已提交的 Platform Control SQL Profile"}]}`),
 		Handlers: map[string]sdk.Handler{
 			platformcontrolv1.OperationTest:       s.handler(platformcontrolv1.OperationTest),
 			platformcontrolv1.OperationInitialize: s.handler(platformcontrolv1.OperationInitialize),

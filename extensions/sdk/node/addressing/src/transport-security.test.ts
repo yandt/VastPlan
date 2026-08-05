@@ -45,9 +45,12 @@ describe("NodeTransportSecurity", () => {
     directory.apply(key, "PUT", new TextEncoder().encode(JSON.stringify(signed)));
     expect(directory.instances({ capability: record.capability })).toMatchObject([{ instance_id: "settings-a" }]);
     expect(() => directory.apply(`${key}.tampered`, "PUT", new TextEncoder().encode(JSON.stringify(signed)))).toThrow(/key/);
+    expect(() => directory.apply(key, "PUT", new TextEncoder().encode(JSON.stringify({ ...signed, schema_version: 1 })))).toThrow(/缺少必填字段/);
+    expect(() => directory.apply(key, "PUT", new TextEncoder().encode(JSON.stringify({ ...signed, contract: { ...signed.contract, interface_fingerprint: "" } })))).toThrow(/契约身份/);
 
     const leaderRecord: CapabilityAnnouncement = {
       ...record, capability: "platform.deployment", logical_service: "platform.deployment",
+      contract: { ...record.contract, capability: "platform.deployment" },
       instance_policy: "leader", state_model: "external-shared", routing: "leader",
       instance_id: "deployment-a", subject: rpcSubject("platform.deployment", "platform.deployment", "platform"), fencing_token: "7",
     };
@@ -76,10 +79,12 @@ function trust(items: readonly TestTransportIdentity[]) {
 
 function announcement(identity: TestTransportIdentity["identity"]): CapabilityAnnouncement {
   return {
-    schema_version: 1, capability: "platform.settings", extension_point: "tool.package", service_role: "backend",
+    schema_version: 2, capability: "platform.settings", extension_point: "tool.package", service_role: "backend",
     logical_service: "platform.settings", routing_domain: "platform", instance_policy: "active-active", state_model: "external-shared", visibility: "cluster", routing: "queue",
     instance_id: "settings-a", node_id: identity.nodeId!, unit_id: "unit-a",
     subject: rpcSubject("platform.settings", "platform.settings", "platform"), health: "healthy", readiness: "ready",
+    artifact: { plugin_id: "cn.vastplan.platform.configuration.global-settings", version: "1.2.3", sha256: "a".repeat(64) },
+    contract: { capability: "platform.settings", version: "1.1.0", interface_fingerprint: "b".repeat(64) },
     lease_expires_at: "2026-07-21T00:00:30Z", updated_at: "2026-07-21T00:00:00Z",
   };
 }

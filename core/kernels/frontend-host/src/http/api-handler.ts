@@ -15,6 +15,8 @@ import { PortalRuntimeRoutes } from "./portal-runtime-routes";
 import { PortalPreferenceRoutes } from "./portal-preference-routes";
 import type { APIContractCatalogPort } from "../api-exposure/api-exposure-contract";
 import type { PortalGenerationCoordinationPort } from "../runtime/portal-generation-coordinator";
+import type { PlatformControlBootstrapPort } from "../capabilities/platform-control-bootstrap-client";
+import { BootstrapPlatformControlRoutes } from "./bootstrap-platform-control-routes";
 
 export interface APIHandlerOptions {
   identity: IdentityProvider;
@@ -25,6 +27,7 @@ export interface APIHandlerOptions {
   platform?: { resolver: PlatformManagementResolver; client: PlatformCapabilityPort; contractCatalog?: APIContractCatalogPort };
   delivery?: PortalDeliveryStore;
   generations?: PortalGenerationCoordinationPort;
+  platformControlBootstrap?: PlatformControlBootstrapPort;
 }
 
 export function createAPIHandler(options: APIHandlerOptions): (request: IncomingMessage, response: ServerResponse, path: string) => Promise<void> {
@@ -33,6 +36,7 @@ export function createAPIHandler(options: APIHandlerOptions): (request: Incoming
   const platform = options.platform === undefined ? undefined : new PlatformManagementRoutes(options.platform.resolver, options.platform.client, options.identity, options.platform.contractCatalog);
   const runtime = options.composer === undefined || options.delivery === undefined ? undefined : new PortalRuntimeRoutes(options.composer, options.delivery, options.generations);
   const preferences = options.composer === undefined || options.preferences === undefined ? undefined : new PortalPreferenceRoutes(options.composer, options.preferences);
+  const platformControlBootstrap = options.platformControlBootstrap === undefined ? undefined : new BootstrapPlatformControlRoutes(options.platformControlBootstrap);
   return async (request, response, path) => {
     const method = request.method ?? "GET";
     let principal;
@@ -50,6 +54,7 @@ export function createAPIHandler(options: APIHandlerOptions): (request: Incoming
     if (method !== "GET" && method !== "HEAD" && !renewCSRF(request, response, options.secureCookies)) return sendAPIError(response, 403, "csrf_rejected");
     const controller = new AbortController();
     request.once("aborted", () => controller.abort(new Error("Browser request aborted")));
+    if (platformControlBootstrap !== undefined && await platformControlBootstrap.handle(path, principal, request, response, controller.signal)) return;
     if (runtime !== undefined) {
       if (await runtime.handle(path, principal, request, response, controller.signal)) return;
     }

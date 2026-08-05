@@ -95,10 +95,16 @@ function parseAnnouncement(bytes: Uint8Array): CapabilityAnnouncement {
 }
 
 function validateAnnouncementShape(key: string, record: CapabilityAnnouncement): void {
-  if (record.schema_version !== 1 || !requiredStrings(record.capability, record.extension_point, record.service_role, record.instance_id, record.node_id, record.unit_id, record.subject, record.health, record.updated_at)) {
+  if (record.schema_version !== 2 || !requiredStrings(record.capability, record.extension_point, record.service_role, record.instance_id, record.node_id, record.unit_id, record.subject, record.health, record.updated_at)) {
     throw new Error("能力目录记录缺少必填字段");
   }
-  for (const value of [record.logical_service, record.routing_domain, record.partition_key, record.instance_policy, record.state_model, record.visibility, record.routing, record.stream_endpoint, record.version, record.readiness, record.readiness_reason, record.fencing_token, record.lease_expires_at, record.transport_public_key, record.transport_timestamp, record.transport_nonce, record.transport_signature]) {
+  if (!isRecord(record.artifact) || !requiredStrings(record.artifact.plugin_id, record.artifact.version, record.artifact.sha256)) {
+    throw new Error("能力目录制品身份无效");
+  }
+  if (!isRecord(record.contract) || !requiredStrings(record.contract.capability, record.contract.version, record.contract.interface_fingerprint) || record.contract.capability !== record.capability) {
+    throw new Error("能力目录契约身份无效");
+  }
+  for (const value of [record.logical_service, record.routing_domain, record.partition_key, record.instance_policy, record.state_model, record.visibility, record.routing, record.stream_endpoint, record.readiness, record.readiness_reason, record.fencing_token, record.lease_expires_at, record.transport_public_key, record.transport_timestamp, record.transport_nonce, record.transport_signature]) {
     if (value !== undefined && typeof value !== "string") throw new Error("能力目录可选字段类型无效");
   }
   if (record.generation !== undefined && (!Number.isSafeInteger(record.generation) || record.generation < 0)) throw new Error("能力目录 generation 无效");

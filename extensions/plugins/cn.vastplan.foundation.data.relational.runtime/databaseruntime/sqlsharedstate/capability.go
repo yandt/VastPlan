@@ -28,7 +28,7 @@ func (s *CapabilityService) Contribution() sdk.Contribution {
 		handlers[operation] = s.handler(operation)
 	}
 	return sdk.Contribution{ExtensionPoint: extpoint.ToolPackage, ID: sharedstatesqlv1.Capability,
-		Descriptor: []byte(`{"title":"SQL Shared State","subcommands":[{"name":"get"},{"name":"create"},{"name":"update"},{"name":"delete"},{"name":"list"}]}`), Handlers: handlers}
+		Descriptor: []byte(`{"title":"SQL Shared State","subcommands":[{"name":"get","description":"读取 Shared State 条目"},{"name":"create","description":"创建 Shared State 条目"},{"name":"update","description":"按 CAS 更新 Shared State 条目"},{"name":"delete","description":"按 CAS 删除 Shared State 条目"},{"name":"list","description":"分页列出 Shared State 条目"}]}`), Handlers: handlers}
 }
 
 func (s *CapabilityService) handler(operation string) sdk.Handler {

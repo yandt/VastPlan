@@ -278,6 +278,9 @@ func runReconcile(args []string) (runErr error) {
 		Source: plane.source, Reconciler: reconciler,
 		Interval: options.interval, Logf: logf, Pulse: liveness.Pulse, BeginWork: liveness.Begin,
 	}
+	if platformControl != nil {
+		agent.Triggers = platformControl.binding.Changes()
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if platformControl != nil {

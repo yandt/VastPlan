@@ -4,31 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"time"
 )
 
-func (r *runtime) startPortalKernel(ctx context.Context, env map[string]string, natsURL string, beforePublication func() error) error {
-	base, err := r.portalBaseArguments(natsURL)
+func (r *runtime) startPortalKernel(ctx context.Context, env map[string]string, natsURL string) error {
+	base, err := r.portalBaseArguments(natsURL, r.options.portalListen)
 	if err != nil {
 		return err
-	}
-	if r.options.applyPlatform && r.identity.needsBootstrapPublisher() {
-		bootstrapArgs := append(append([]string{}, base...), autoLoginIdentityProtocol{}.portalArguments(r)...)
-		if err := r.withBootstrapPublisherPortal(ctx, env, bootstrapArgs, func() error {
-			if beforePublication != nil {
-				if err := beforePublication(); err != nil {
-					return err
-				}
-			}
-			return publishPortal("http://"+r.options.portalListen,
-				filepath.Join(r.options.root, "engineering", "deploy", "portal-application-composition.json"),
-				filepath.Join(r.runDir, "portal-platform-catalog.json"))
-		}); err != nil {
-			return fmt.Errorf("显式发布初始 Portal 组合: %w", err)
-		}
 	}
 	portalArgs := append(append([]string{}, base...), r.identity.portalArguments(r)...)
 	if _, err := r.startChild("portal-kernel", env, "node", portalArgs...); err != nil {
@@ -37,25 +23,47 @@ func (r *runtime) startPortalKernel(ctx context.Context, env map[string]string, 
 	if err := waitHTTP(ctx, "http://"+r.options.portalListen+"/readyz", 45*time.Second, false); err != nil {
 		return fmt.Errorf("Node Portal Kernel 未就绪: %w", err)
 	}
-	if r.options.applyPlatform && !r.identity.needsBootstrapPublisher() {
-		if beforePublication != nil {
-			if err := beforePublication(); err != nil {
-				return err
-			}
-		}
-		if err := publishPortal("http://"+r.options.portalListen,
-			filepath.Join(r.options.root, "engineering", "deploy", "portal-application-composition.json"),
-			filepath.Join(r.runDir, "portal-platform-catalog.json")); err != nil {
-			return fmt.Errorf("显式发布初始 Portal 组合: %w", err)
-		}
-	}
 	return nil
 }
 
-func (r *runtime) portalBaseArguments(natsURL string) ([]string, error) {
+func (r *runtime) publishInitialPortal(ctx context.Context, env map[string]string, natsURL string) error {
+	if !r.identity.needsBootstrapPublisher() {
+		return publishPortal("http://"+r.options.portalListen,
+			filepath.Join(r.options.root, "engineering", "deploy", "portal-application-composition.json"),
+			filepath.Join(r.runDir, "portal-platform-catalog.json"))
+	}
+	listen, err := availableLoopbackAddress()
+	if err != nil {
+		return err
+	}
+	base, err := r.portalBaseArguments(natsURL, listen)
+	if err != nil {
+		return err
+	}
+	bootstrapArgs := append(append([]string{}, base...), autoLoginIdentityProtocol{}.portalArguments(r)...)
+	return r.withBootstrapPublisherPortal(ctx, env, listen, bootstrapArgs, func() error {
+		return publishPortal("http://"+listen,
+			filepath.Join(r.options.root, "engineering", "deploy", "portal-application-composition.json"),
+			filepath.Join(r.runDir, "portal-platform-catalog.json"))
+	})
+}
+
+func availableLoopbackAddress() (string, error) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return "", fmt.Errorf("分配临时 Portal 发布端口: %w", err)
+	}
+	address := listener.Addr().String()
+	if err := listener.Close(); err != nil {
+		return "", err
+	}
+	return address, nil
+}
+
+func (r *runtime) portalBaseArguments(natsURL, listen string) ([]string, error) {
 	args := []string{
 		filepath.Join(r.options.root, "core", "kernels", "frontend-host", "dist", "portal-host.cjs"),
-		"--listen", r.options.portalListen,
+		"--listen", listen,
 		"--allow-insecure-http",
 		"--portal-assets", filepath.Join(r.runDir, "portal-assets"),
 		"--access-profile-catalog", filepath.Join(r.runDir, "access-profile-catalog.json"),
@@ -68,12 +76,13 @@ func (r *runtime) portalBaseArguments(natsURL string) ([]string, error) {
 		"--transport-trust", filepath.Join(r.runDir, "secrets", transportTrustDocument),
 		"--composer-logical-service", "platform.portal-composer",
 		"--interaction-logical-service", "platform.interaction-broker",
+		"--platform-control-bootstrap-logical-service", "platform.database",
 		"--kernel-recovery-url", "http://" + r.options.recoveryListen,
 	}
 	return appendPublishedAPIExposureCatalog(args, filepath.Join(r.persistentStateRoot(), "api-exposure-gateway.json"))
 }
 
-func (r *runtime) withBootstrapPublisherPortal(ctx context.Context, env map[string]string, args []string, action func() error) error {
+func (r *runtime) withBootstrapPublisherPortal(ctx context.Context, env map[string]string, listen string, args []string, action func() error) error {
 	cmd := exec.Command("node", args...)
 	configureManagedChild(cmd)
 	cmd.Dir = r.options.root
@@ -104,7 +113,7 @@ func (r *runtime) withBootstrapPublisherPortal(ctx context.Context, env map[stri
 			_ = stop()
 		}
 	}()
-	if err := waitHTTPOrExit(ctx, "http://"+r.options.portalListen+"/readyz", 45*time.Second, done); err != nil {
+	if err := waitHTTPOrExit(ctx, "http://"+listen+"/readyz", 45*time.Second, done); err != nil {
 		return fmt.Errorf("临时 Portal 发布端未就绪: %w", err)
 	}
 	if err := action(); err != nil {

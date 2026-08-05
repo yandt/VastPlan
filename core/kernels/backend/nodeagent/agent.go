@@ -30,9 +30,12 @@ type DesiredStateSource interface {
 type Agent struct {
 	Source     DesiredStateSource
 	Reconciler *Reconciler
-	Interval   time.Duration
-	RetryMin   time.Duration
-	RetryMax   time.Duration
+	// Triggers carries composition-root events that can make an unchanged
+	// desired state actionable, such as a two-stage Shared State binding.
+	Triggers <-chan struct{}
+	Interval time.Duration
+	RetryMin time.Duration
+	RetryMax time.Duration
 	// ReconcileTimeout bounds one complete desired-to-actual convergence pass.
 	// Zero selects 15 minutes, covering large artifact work without allowing a
 	// permanently stuck driver to feed the service watchdog forever.
@@ -178,6 +181,15 @@ func (a *Agent) Run(ctx context.Context) error {
 			}
 			if retry == nil {
 				run("source_watch")
+			}
+		case _, ok := <-a.Triggers:
+			pulse()
+			if !ok {
+				a.Triggers = nil
+				continue
+			}
+			if retry == nil {
+				run("composition_trigger")
 			}
 		case <-retry:
 			pulse()

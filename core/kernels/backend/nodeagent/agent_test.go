@@ -118,3 +118,46 @@ func TestAgentBoundsReconcileAndWatchdogWorkLeaseTogether(t *testing.T) {
 		t.Fatal("Agent 未在取消后退出")
 	}
 }
+
+func TestAgentReconcilesImmediatelyWhenCompositionRootTriggers(t *testing.T) {
+	source := &unpublishedSource{}
+	triggers := make(chan struct{}, 1)
+	agent := &Agent{
+		Source: source, Reconciler: &Reconciler{Runtime: newFakeRuntime()},
+		Triggers: triggers, Interval: time.Hour,
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- agent.Run(ctx) }()
+
+	deadline := time.Now().Add(time.Second)
+	for {
+		source.mu.Lock()
+		loads := source.loads
+		source.mu.Unlock()
+		if loads >= 1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("startup reconcile did not run")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	triggers <- struct{}{}
+	for {
+		source.mu.Lock()
+		loads := source.loads
+		source.mu.Unlock()
+		if loads >= 2 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("composition trigger did not reconcile")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatalf("Agent exit=%v", err)
+	}
+}

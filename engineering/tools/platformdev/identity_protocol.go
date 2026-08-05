@@ -50,8 +50,13 @@ func (brokerIdentityProtocol) needsBootstrapPublisher() bool { return true }
 
 type autoLoginIdentityProtocol struct{}
 
-func (autoLoginIdentityProtocol) name() string           { return "auto-login" }
-func (autoLoginIdentityProtocol) prepare(*runtime) error { return nil }
+func (autoLoginIdentityProtocol) name() string { return "auto-login" }
+func (autoLoginIdentityProtocol) prepare(r *runtime) error {
+	// Auto-login replaces only the browser-facing identity protocol. The Seed
+	// still starts Authentication Broker as a bootstrap service, so its signed
+	// assertion material must exist exactly as in interactive mode.
+	return r.ensureDevelopmentAuthenticationMaterial()
+}
 func (autoLoginIdentityProtocol) portalArguments(r *runtime) []string {
 	return []string{"--identity-provider", "file", "--session-file", filepath.Join(r.runDir, "secrets", "portal-sessions.json")}
 }

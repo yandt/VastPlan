@@ -20,15 +20,18 @@ func TestPlatformRecoveryPlanCoversProfileAndDerivesLKGPlugins(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, id := range []string{
+		"cn.vastplan.foundation.data.relational.runtime",
+		"cn.vastplan.foundation.security.authentication-broker",
 		"cn.vastplan.foundation.security.authorization-enforcer",
-		"cn.vastplan.platform.artifacts.storage.file",
-		"cn.vastplan.platform.artifacts.repository",
+		"cn.vastplan.foundation.security.authorization-session",
+		"cn.vastplan.foundation.security.seed-access",
+		"cn.vastplan.platform.data.relational.connection-manager",
 	} {
 		if _, ok := plugins[id]; !ok {
 			t.Fatalf("Recovery LKG 缺少 %s: %v", id, plugins)
 		}
 	}
-	if len(plugins) != 3 {
+	if len(plugins) != 6 {
 		t.Fatalf("Recovery LKG 不应隐式扩大: %v", plugins)
 	}
 }

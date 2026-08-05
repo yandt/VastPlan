@@ -31,7 +31,9 @@ func registerAddressingScopedConfiguration(t *testing.T, router *addressing.Rout
 		Capability: configurationscopedv1.Capability, ExtensionPoint: configurationscopedv1.ExtensionPoint,
 		ServiceRole: "backend", LogicalService: "platform.plugin-configuration", RoutingDomain: "platform",
 		InstancePolicy: "active-active", StateModel: "external-shared", Visibility: "cluster", Routing: "queue",
-		Readiness: "ready", UnitID: "scoped-configuration-e2e", Version: "1.0.0",
+		Readiness: "ready", UnitID: "scoped-configuration-e2e",
+		PluginID: "cn.vastplan.test.scoped-configuration", ArtifactVersion: "1.0.0", ArtifactSHA256: strings.Repeat("a", 64),
+		ContractVersion: "1.0.0", InterfaceFingerprint: strings.Repeat("b", 64),
 	}, func(ctx context.Context, target *contractv1.CallTarget, call *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 		if target.GetExtensionPoint() != configurationscopedv1.ExtensionPoint || target.GetCapability() != configurationscopedv1.Capability || target.GetOperation() != configurationscopedv1.OperationResolve {
 			return nil, nil, fmt.Errorf("E2E Scoped Configuration target 无效")

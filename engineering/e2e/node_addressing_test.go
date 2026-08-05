@@ -86,7 +86,9 @@ func TestNodeAddressingInvokesSecureGoCapability(t *testing.T) {
 	registration, err := worker.Register(context.Background(), addressing.RegisterOptions{
 		Capability: capability, ExtensionPoint: "tool.package", ServiceRole: "backend",
 		InstancePolicy: "active-active", StateModel: "external-shared", Visibility: "service", Routing: "queue",
-		UnitID: "interop", InstanceID: "go-worker-a", Version: "1.0.0",
+		UnitID: "interop", InstanceID: "go-worker-a",
+		PluginID: "cn.vastplan.test.node-addressing", ArtifactVersion: "1.0.0", ArtifactSHA256: strings.Repeat("a", 64),
+		ContractVersion: "1.0.0", InterfaceFingerprint: strings.Repeat("b", 64),
 	}, func(_ context.Context, target *contractv1.CallTarget, callContext *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 		if target.GetCapability() != capability || callContext.GetTenantId() != "acme" || string(payload) != "from-node" {
 			t.Fatalf("Node 请求未按 Wire v1 到达 Go: target=%+v context=%+v payload=%q", target, callContext, payload)

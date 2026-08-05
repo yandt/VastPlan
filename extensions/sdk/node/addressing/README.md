@@ -6,7 +6,7 @@ VastPlan Node 进程对现有 Addressing v1 的原生实现。它直接消费签
 
 - `protocol-codec.ts`：加载 `contracts/proto` 的 Addressing/Contract v1 Wire。
 - `transport-security.ts`：NKey 信封、信任文档、重放保护与 capability 可见性授权。
-- `capability-directory.ts`：签名 KV 公告、健康/租约/路由域选择。
+- `capability-directory.ts`：严格消费 `schema_version=2` 的签名 KV 公告，绑定 ArtifactIdentity、ContractIdentity、接口 fingerprint、健康、租约与路由域；不保留已废弃的 v1 公告兼容分支。
 - `addressing-client.ts`：有界 unary request/reply、响应身份绑定、超时与取消传播。
 - `node-addressing.ts`：NATS mTLS、目录和资源生命周期组合。
 

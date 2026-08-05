@@ -5,7 +5,10 @@
     {
       "id": "recovery",
       "units": [
-        { "id": "platform-artifacts", "minReady": 1 }
+        { "id": "platform-authentication-broker", "minReady": 1 },
+        { "id": "platform-authorization-session", "minReady": 1 },
+        { "id": "platform-database", "minReady": 1 },
+        { "id": "platform-database-runtime", "minReady": 1 }
       ]
     },
     {
@@ -14,8 +17,6 @@
         { "id": "platform-approval-policy-native", "minReady": 1 },
         { "id": "platform-authorization", "minReady": 1 },
         { "id": "platform-authorization-engine-native", "minReady": 1 },
-        { "id": "platform-authentication-broker", "minReady": 1 },
-        { "id": "platform-authorization-session", "minReady": 1 },
         { "id": "platform-composition-planner", "minReady": 1 },
         { "id": "platform-credentials", "minReady": 1 },
         { "id": "platform-deployment", "minReady": 1 },
@@ -29,9 +30,8 @@
       "id": "platform",
       "units": [
         { "id": "platform-api-exposure", "minReady": 1 },
+        { "id": "platform-artifacts", "minReady": 1 },
         { "id": "platform-authentication-delivery", "minReady": 1 },
-        { "id": "platform-database", "minReady": 1 },
-        { "id": "platform-database-runtime", "minReady": 1 },
         { "id": "platform-marketplace", "minReady": 1 }
       ]
     }

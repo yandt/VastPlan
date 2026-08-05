@@ -114,10 +114,13 @@ function allocate(name: string, node: string): TestTransportIdentity {
 
 function announcement(identity: TestTransportIdentity["identity"]): CapabilityAnnouncement {
   return {
-    schema_version: 1, capability: "platform.settings", extension_point: "tool.package", service_role: "backend",
+    schema_version: 2, capability: "platform.settings", extension_point: "tool.package", service_role: "backend",
     logical_service: "platform.settings", routing_domain: "platform", visibility: "cluster",
     instance_id: "settings-a", node_id: identity.nodeId!, unit_id: "unit-a",
-    subject: rpcSubject("platform.settings", "platform.settings", "platform"), health: "healthy", readiness: "ready", updated_at: new Date().toISOString(),
+    subject: rpcSubject("platform.settings", "platform.settings", "platform"),
+    artifact: { plugin_id: "cn.vastplan.platform.configuration.global-settings", version: "1.2.3", sha256: "a".repeat(64) },
+    contract: { capability: "platform.settings", version: "1.1.0", interface_fingerprint: "b".repeat(64) },
+    health: "healthy", readiness: "ready", updated_at: new Date().toISOString(),
     transport_public_key: identity.publicKey,
   };
 }

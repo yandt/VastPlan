@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/tls"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/nats-io/nats.go"
@@ -79,7 +80,9 @@ func (f *portalAddressingFixture) register(t *testing.T, handler addressing.Invo
 	registration, err := f.worker.Register(context.Background(), addressing.RegisterOptions{
 		Capability: "platform.portal-composer", ExtensionPoint: "tool.package", ServiceRole: "backend", RoutingDomain: "platform",
 		InstancePolicy: "active-active", StateModel: "external-shared", Visibility: "service", Routing: "queue",
-		UnitID: "portal-composer", InstanceID: "portal-composer-a", Version: "1.0.0",
+		UnitID: "portal-composer", InstanceID: "portal-composer-a",
+		PluginID: "cn.vastplan.test.portal-composer", ArtifactVersion: "1.0.0", ArtifactSHA256: strings.Repeat("a", 64),
+		ContractVersion: "1.0.0", InterfaceFingerprint: strings.Repeat("b", 64),
 	}, handler)
 	if err != nil {
 		t.Fatal(err)

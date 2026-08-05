@@ -245,13 +245,19 @@ func (r *runtime) status(w http.ResponseWriter, _ *http.Request) {
 	r.mu.RLock()
 	ready := r.ready
 	recovery := r.recovery
+	platformPhase, platformError := r.platformPhase, r.platformError
 	r.mu.RUnlock()
+	platformControl := map[string]any{"phase": platformPhase, "profile": r.platformControlProfilePath()}
+	if platformError != "" {
+		platformControl["error"] = platformError
+	}
 	w.Header().Set("Content-Type", "application/json")
 	status := map[string]any{
 		"ready": ready, "portal": "http://" + r.options.listen + "/operations", "runDir": r.runDir,
 		"mode": "local-development", "productionEquivalent": false,
 		"identity": map[string]any{"protocol": r.identity.name(), "autoLogin": r.options.autoLogin},
 		"hot":      r.options.hot, "startupPublication": r.options.applyPlatform,
+		"platformControl": platformControl,
 		"repositories": map[string]any{
 			"seed": map[string]any{"url": "https://" + r.options.seedArtifactListen, "persistent": false},
 			"testing": map[string]any{

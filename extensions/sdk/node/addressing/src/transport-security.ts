@@ -136,7 +136,8 @@ export function canonicalAnnouncementBytes(record: CapabilityAnnouncement): Uint
   value.unit_id = record.unit_id;
   value.subject = record.subject;
   add(value, "stream_endpoint", record.stream_endpoint);
-  add(value, "version", record.version);
+  value.artifact = record.artifact;
+  value.contract = record.contract;
   value.health = record.health;
   add(value, "readiness", record.readiness);
   add(value, "readiness_reason", record.readiness_reason);

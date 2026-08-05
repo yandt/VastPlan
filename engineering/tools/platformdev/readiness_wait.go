@@ -24,10 +24,11 @@ type readinessError struct {
 }
 
 type readinessUnit struct {
-	Phase     string    `json:"phase"`
-	Readiness string    `json:"readiness"`
-	LastError string    `json:"last_error"`
-	Candidate *struct{} `json:"candidate"`
+	AppliedRevision uint64    `json:"applied_revision"`
+	Phase           string    `json:"phase"`
+	Readiness       string    `json:"readiness"`
+	LastError       string    `json:"last_error"`
+	Candidate       *struct{} `json:"candidate"`
 }
 
 func waitForUnits(ctx context.Context, filename string, count int, startedAt time.Time, timeout time.Duration) error {

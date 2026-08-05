@@ -55,6 +55,23 @@ func TestAggregatePreservesRecoveryReadyWhenLaterStageFails(t *testing.T) {
 	}
 }
 
+func TestBuildNodeReportAllowsCurrentLowerStageDuringGatedReconcile(t *testing.T) {
+	now := time.Now().UTC()
+	capsule := statusTestCapsule(1)
+	report := BuildNodeReport(capsule, RuntimeObservation{
+		NodeID: "node-a", ObservedRevision: 7, AppliedRevision: 0, UpdatedAt: now, ReconcileFailed: true,
+		Units: map[string]UnitObservation{
+			"repository": {AppliedRevision: 7, Phase: "active", Readiness: "ready"},
+			"deployment": {AppliedRevision: 7, Phase: "failed"},
+			"database":   {AppliedRevision: 6, Phase: "active", Readiness: "ready"},
+		},
+	}, EvaluationPolicy{Now: now})
+	status := Aggregate(capsule, []NodeReport{report}, now, time.Minute)
+	if status.Overall != OverallRecoveryReady || status.Stages[0].Status != UnitReady || status.Stages[1].Status != UnitFailed || status.Stages[2].Status == UnitReady {
+		t.Fatalf("current lower stage must survive a gated or failed higher stage: %+v", status)
+	}
+}
+
 func statusTestCapsule(minReady uint16) Capsule {
 	return Capsule{
 		Version: Version, ID: "platform", Inventory: InventoryBinding{RepositoryID: "seed", Generation: 9},

@@ -47,13 +47,13 @@ Database Runtime 内部的 `platformcontrolbootstrap` 适配器复用 PostgreSQL
 - 初始化后重新打开并执行健康探针，只有成功的 `ManagedStore` 才允许绑定；
 - 支持 `verify-full / verify-ca / disable`，其中 `verify-ca` 校验证书链但不校验主机名。
 
-该适配器是 Database Runtime 内部模块，不是新插件，也不允许 Backend Kernel 链接具体数据库 Provider。P4 后续检查点只需通过 Bootstrap Tier 生命周期调用该统一端口。
+该适配器是 Database Runtime 内部模块，不是新插件，也不允许 Backend Kernel 链接具体数据库 Provider。Bootstrap Tier 生命周期只调用该统一端口。
 
 ## 5. 当前状态
 
 P4a 已完成 Profile 契约、owner-only CAS 文件存储、systemd/development file Secret Source、两阶段 Controller 和不可回退 Binding Store，并覆盖空环境、首次成功、失败不提交、旧代保留、权限与秘密清零测试。
 
-P4b 已完成 Database Runtime 进程内 Bootstrap 适配：PostgreSQL/MySQL 初始化、限定 schema SQL Shared State、迁移锁、候选连接池回收和 TLS `verify-ca`。公开 Database Runtime Capability 提升至 `1.2.0`，插件提升至 `0.9.0`。Bootstrap Tier 启动、配置 API/UI 和恢复动作仍属于 P4 后续。
+P4b 已完成 Database Runtime 进程内 Bootstrap 适配：PostgreSQL/MySQL 初始化、限定 schema SQL Shared State、迁移锁、候选连接池回收和 TLS `verify-ca`。公开 Database Runtime Capability 为 `1.2.0`。
 
 P4c 已把进程边界接通：
 
@@ -72,6 +72,15 @@ P4d 已完成受限管理闭环：
 - Portal BFF 使用固定、CSRF 保护且受 Management Binding 和角色权限约束的 `/platform-control` 路由。授权页面只接收 systemd credential name 或 owner-only 文件绝对路径，不接收密码明文；
 - 同一数据库全栈插件增加 Workbench Form Page，覆盖未配置、测试、初始化、Ready 和 Recovery 状态。当前非敏感 Profile 可在授权页面回填，语言切换仍由插件目录驱动。
 
-开发编排器默认启用两阶段 Profile 路径、全新 Seed 无 Portal Activation 时的静态恢复入口，以及 Seed Recovery 可写动作仍属于 P4 的最后一个检查点。
+P4e 已完成开发编排器与最小 Portal 的两阶段闭环：
+
+- `platformdev` 总是为 Backend Kernel 注入受保护的 Profile 与 credential directory，并只等待 Recovery Tier 4 个 Bootstrap 单元后对外宣告最小服务就绪；ControlPlane/Platform Tier 在 SQL Shared State 绑定后由同一 Desired Revision 继续收敛，人工首次配置没有虚假的启动超时；
+- Recovery Capsule 按每个单元实际应用的 revision 评估分阶段就绪，较高 Tier 尚未应用不会反向把 Recovery Tier 判为失败；
+- Node Portal Host 提供固定 `/bootstrap/platform-control` 最小界面和 `/v1/bootstrap/platform-control` BFF，只能在已认证 Seed 会话、数据库角色和 CSRF 边界内访问固定 `platform.database` logical service。它不加载普通 Portal Generation，不允许浏览器选择 capability、服务或路由；
+- 该 Host 页面是数据库全栈能力的恢复安全呈现面，不是新的应用插件。完整平台 Ready 后仍由 Connection Manager 的 Workbench 页面承担日常管理；
+- Shared State 绑定成功会发出一次有界组合触发，Node Agent 复用同一 Planner/Activation 数据链继续激活 Full 单元，不增加状态轮询；
+- Go 能力目录 `schema_version=2` 的 ArtifactIdentity、ContractIdentity 与 fingerprint 已同步到 Node Addressing SDK，Portal 不再静默丢弃新目录记录。
+
+真实进程空环境验收已覆盖 Recovery `4/4 Ready`、完整 Tier 保持 Pending、最小页面可达和固定 Bootstrap API 可路由。PostgreSQL/MySQL 的真实初始化、重启保留和多节点竞争仍由后续集成矩阵完成，不能仅凭空环境验收宣称 P4/P6 全部封板。
 
 P5 第一批迁移已删除 Connection Manager 的直接 JSON 状态文件。普通数据库管理请求通过统一 Workflow 进入按租户、Leader-fenced 的 Shared State CAS 聚合；连接定义、凭证候选、Runtime publication outbox 和回收队列保持原有原子边界。Platform Control 配置操作在 Shared State 尚未绑定时仍走独立受限内核端口，因此不会形成“为了配置数据库而先依赖数据库”的循环。

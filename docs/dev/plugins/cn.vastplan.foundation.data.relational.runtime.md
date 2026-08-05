@@ -4,7 +4,7 @@
 
 能力：`tool.package/foundation.data.relational.runtime`
 
-当前制品版本：`0.14.1`
+当前制品版本：`0.14.3`
 
 当前公开 Capability 契约：`foundation.data.relational.runtime@1.2.0`
 

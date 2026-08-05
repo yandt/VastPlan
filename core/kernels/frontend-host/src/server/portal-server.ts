@@ -23,6 +23,7 @@ import { FileAPIExposureCatalog } from "../api-exposure/file-api-exposure-catalo
 import { FileAPIContractCatalog } from "../api-exposure/file-api-contract-catalog";
 import { PortalGenerationCoordinator } from "../runtime/portal-generation-coordinator";
 import { KernelRecoveryClient } from "../http/kernel-recovery-route";
+import { AddressingPlatformControlBootstrapClient } from "../capabilities/platform-control-bootstrap-client";
 
 interface PortalServerResources {
 	readonly addressing?: NodeAddressingRuntime;
@@ -53,6 +54,8 @@ export async function createPortalServer(config: PortalHostConfig): Promise<Serv
       resolver: new PlatformManagementResolver(composer), client: new AddressingPlatformManagementClient(invoker),
       ...(apiContractCatalog === undefined ? {} : { contractCatalog: apiContractCatalog }),
     };
+    const platformControlBootstrap = invoker === undefined || config.addressing?.platformControlBootstrapLogicalService === undefined
+      ? undefined : new AddressingPlatformControlBootstrapClient(invoker, config.addressing.platformControlBootstrapLogicalService);
     const delivery = config.delivery === undefined ? undefined : await PortalDeliveryStore.open(config.delivery.cacheRoot, config.delivery.originRoot);
     const recovery = config.kernelRecoveryURL === undefined ? undefined : new KernelRecoveryClient(config.kernelRecoveryURL);
     generations = composer === undefined || delivery === undefined ? undefined : new ServerGenerationManager(
@@ -72,6 +75,7 @@ export async function createPortalServer(config: PortalHostConfig): Promise<Serv
       ...(coordination === undefined ? {} : { generations: coordination }),
       ...(ssr === undefined ? {} : { ssr }),
       ...(recovery === undefined ? {} : { recovery }),
+      ...(platformControlBootstrap === undefined ? {} : { platformControlBootstrap }),
     });
     let server: Server;
     if (config.tls === undefined) server = createHTTPServer(handler);

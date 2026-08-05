@@ -34,3 +34,33 @@ func TestBindingStoreOnlyMovesForwardAndNeverFallsBack(t *testing.T) {
 		t.Fatalf("新代必须使用新 Provider，不能回退旧 Store: %v", err)
 	}
 }
+
+func TestBindingStoreSignalsOnlySuccessfulGenerationSwitches(t *testing.T) {
+	binding := NewBindingStore()
+	first, _ := OpenFileStore(filepath.Join(t.TempDir(), "first.json"))
+	if err := binding.Bind(1, "profile-a", first); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-binding.Changes():
+	default:
+		t.Fatal("first generation did not signal")
+	}
+	if err := binding.Bind(1, "profile-a", first); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-binding.Changes():
+		t.Fatal("idempotent bind must not signal")
+	default:
+	}
+	second, _ := OpenFileStore(filepath.Join(t.TempDir(), "second.json"))
+	if err := binding.Bind(2, "profile-b", second); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-binding.Changes():
+	default:
+		t.Fatal("new generation did not signal")
+	}
+}

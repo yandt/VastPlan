@@ -15,7 +15,8 @@ func projectRecoveryObservation(actual nodeagent.ActualState) recoveryv1.Runtime
 	units := make(map[string]recoveryv1.UnitObservation, len(actual.Units))
 	for id, unit := range actual.Units {
 		units[id] = recoveryv1.UnitObservation{
-			Phase: string(unit.Phase), Readiness: unit.Readiness, Candidate: unit.Candidate != nil,
+			AppliedRevision: unit.AppliedRevision,
+			Phase:           string(unit.Phase), Readiness: unit.Readiness, Candidate: unit.Candidate != nil,
 		}
 	}
 	return recoveryv1.RuntimeObservation{

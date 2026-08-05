@@ -71,6 +71,8 @@ type runtime struct {
 	seedHostRefresh       bool
 	recovery              recoveryStatus
 	identity              developmentIdentityProtocol
+	platformPhase         string
+	platformError         string
 }
 
 type packageSpec struct {
@@ -284,6 +286,12 @@ func (r *runtime) start(ctx context.Context) error {
 		return err
 	}
 	env := r.serviceEnv()
+	if err := ensurePrivateDirectory(filepath.Dir(r.platformControlProfilePath())); err != nil {
+		return fmt.Errorf("准备 Platform Control Bootstrap 目录: %w", err)
+	}
+	if err := ensurePrivateDirectory(r.platformControlCredentialsDirectory()); err != nil {
+		return fmt.Errorf("准备 Platform Control Credential 目录: %w", err)
+	}
 	natsURL := "nats://" + r.options.natsListen
 	nodeArgs := []string{
 		"reconcile", "-nats-url", natsURL, "-nats-allow-insecure", "-nats-bootstrap", "-nats-replicas", "1",
@@ -300,6 +308,8 @@ func (r *runtime) start(ctx context.Context) error {
 		"-recovery-capsule", filepath.Join(r.runDir, recoveryCapsuleFilename),
 		"-recovery-status", filepath.Join(r.persistentStateRoot(), "recovery-status.json"),
 		"-recovery-listen", r.options.recoveryListen,
+		"-platform-control-profile", r.platformControlProfilePath(),
+		"-platform-control-credentials-directory", r.platformControlCredentialsDirectory(),
 	}
 	nodeArgs = append(nodeArgs, r.nodeBootstrapCredentialArgs()...)
 	nodeArgs = append(nodeArgs, r.managedArtifactSourceArgs()...)
@@ -339,31 +349,8 @@ func (r *runtime) start(ctx context.Context) error {
 			return fmt.Errorf("显式发布的平台 Recovery 阶段未收敛: %w", err)
 		}
 	}
-	beforePortalPublication := func() error { return nil }
-	if r.options.applyPlatform {
-		beforePortalPublication = func() error {
-			if err := r.waitForRecoveryStage(ctx, recoveryv1.StageControlPlane, platformNodeStartedAt, 120*time.Second); err != nil {
-				return fmt.Errorf("显式发布的平台控制面未收敛: %w", err)
-			}
-			if err := r.waitForRecoveryStage(ctx, recoveryv1.StagePlatform, platformNodeStartedAt, 120*time.Second); err != nil {
-				return fmt.Errorf("显式发布的平台完整能力未收敛: %w", err)
-			}
-			// Deployment 已经引用本次 Seed 候选；必须先提交对应 LKG，再进入
-			// 独立的 Portal 业务发布。后者即使因用户的未完成 Publication
-			// 被安全拒绝，也不能留下“新 Deployment + 旧 LKG”的混合状态。
-			if err := r.commitSeedRuntimeSnapshot(); err != nil {
-				return fmt.Errorf("提交已收敛的 Seed Runtime 快照: %w", err)
-			}
-			return nil
-		}
-	}
-	if err := r.startPortalKernel(ctx, env, natsURL, beforePortalPublication); err != nil {
+	if err := r.startPortalKernel(ctx, env, natsURL); err != nil {
 		return err
-	}
-	if r.options.applyPlatform {
-		if err := r.waitForRecoveryStage(ctx, recoveryv1.StagePlatform, platformNodeStartedAt, 120*time.Second); err != nil {
-			return fmt.Errorf("显式发布的平台完整能力未收敛: %w", err)
-		}
 	}
 	// Business deployments are never published by startup. This agent may join
 	// before the first explicit publication and remains in a quiet waiting state.
@@ -389,12 +376,15 @@ func (r *runtime) start(ctx context.Context) error {
 	if err := r.startProxy(); err != nil {
 		return err
 	}
-	if err := r.commitSeedRuntimeSnapshot(); err != nil {
-		return fmt.Errorf("提交已收敛的 Seed Runtime 快照: %w", err)
-	}
 	r.mu.Lock()
 	r.ready = true
+	r.platformPhase = "bootstrap-ready"
 	r.mu.Unlock()
+	if r.options.applyPlatform {
+		go r.completePlatformBootstrap(ctx, env, natsURL, platformNodeStartedAt)
+	} else if err := r.commitSeedRuntimeSnapshot(); err != nil {
+		return fmt.Errorf("提交恢复的 Seed Runtime 快照: %w", err)
+	}
 	if r.options.hot {
 		if err := r.startPluginLibrarySource(ctx); err != nil {
 			return fmt.Errorf("启动 Local Plugin Library 源控制器: %w", err)

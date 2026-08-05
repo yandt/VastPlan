@@ -65,11 +65,12 @@ describe("parseHostArguments", () => {
     const config = parseHostArguments([
       ...base, "--nats-servers", "nats://127.0.0.1:4222,nats://127.0.0.1:4223", "--addressing-contracts", "contracts/proto",
       "--transport-seed", "portal.seed", "--transport-trust", "trust.json", "--allow-insecure-nats", "--composer-logical-service", "platform.portal-composer",
-      "--interaction-logical-service", "platform.interaction-broker",
+      "--interaction-logical-service", "platform.interaction-broker", "--platform-control-bootstrap-logical-service", "platform.database",
     ], "/srv/vastplan");
     expect(config.addressing).toMatchObject({
       servers: ["nats://127.0.0.1:4222", "nats://127.0.0.1:4223"], contractsDirectory: "/srv/vastplan/contracts/proto",
       seedFile: "/srv/vastplan/portal.seed", allowInsecure: true, composerLogicalService: "platform.portal-composer", interactionLogicalService: "platform.interaction-broker",
+      platformControlBootstrapLogicalService: "platform.database",
     });
   });
 

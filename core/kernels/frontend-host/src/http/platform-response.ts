@@ -21,9 +21,13 @@ export async function sendPlatformResponse(options: {
   } catch (error) {
     reportCapabilityFailure({ operation: options.operation, capability: options.capability, logicalService: options.target.service.logicalService }, error);
     if (error instanceof ManagementAuthorizationError) return sendAPIError(options.response, 403, "management_binding_forbidden", options.head);
-    if (error instanceof CapabilityApplicationError) return mapCapabilityError(options.response, error.code, options.head);
-    sendAPIError(options.response, 502, "platform_service_unavailable", options.head);
+    sendCapabilityFailure(options.response, error, options.head);
   }
+}
+
+export function sendCapabilityFailure(response: ServerResponse, error: unknown, head = false): void {
+  if (error instanceof CapabilityApplicationError) return mapCapabilityError(response, error.code, head);
+  sendAPIError(response, 502, "platform_service_unavailable", head);
 }
 
 export function authorizePlatformOperation(client: PlatformCapabilityPort, target: PlatformManagementTarget, capability: string, operation: string, write: boolean, response: ServerResponse): boolean {

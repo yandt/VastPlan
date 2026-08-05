@@ -31,9 +31,10 @@ type RuntimeObservation struct {
 }
 
 type UnitObservation struct {
-	Phase     string
-	Readiness string
-	Candidate bool
+	AppliedRevision uint64
+	Phase           string
+	Readiness       string
+	Candidate       bool
 }
 
 type EvaluationPolicy struct {
@@ -114,14 +115,20 @@ func BuildNodeReport(capsule Capsule, observation RuntimeObservation, policy Eva
 		ObservedRevision: observation.ObservedRevision, AppliedRevision: observation.AppliedRevision,
 		Units: map[string]UnitReport{}, UpdatedAt: now,
 	}
-	validState := !observation.UpdatedAt.IsZero() && !observation.UpdatedAt.Before(policy.NotBefore) &&
+	validObservation := !observation.UpdatedAt.IsZero() && !observation.UpdatedAt.Before(policy.NotBefore) &&
 		(policy.MaxAge <= 0 || !observation.UpdatedAt.Before(now.Add(-policy.MaxAge))) &&
-		observation.ObservedRevision > 0 && observation.AppliedRevision == observation.ObservedRevision && !observation.ReconcileFailed
+		observation.ObservedRevision > 0
 	for _, stage := range capsule.Stages {
 		for _, requirement := range stage.Units {
 			status := UnitPending
 			unit, exists := observation.Units[requirement.ID]
-			if validState && exists {
+			// Staged recovery must be able to prove a lower-tier unit ready while
+			// higher tiers are deliberately gated. A unit is current only when its
+			// own applied revision matches the observed assignment. The legacy
+			// zero value is accepted solely for a completely applied observation.
+			unitCurrent := unit.AppliedRevision == observation.ObservedRevision ||
+				unit.AppliedRevision == 0 && observation.AppliedRevision == observation.ObservedRevision && !observation.ReconcileFailed
+			if validObservation && exists && unitCurrent {
 				switch {
 				case unit.Candidate:
 					status = UnitPending

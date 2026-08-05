@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.platform.data.relational.connection-manager`
 能力：`tool.package/platform.database`
-当前制品版本：`0.15.0`
+当前制品版本：`0.15.1`
 
 ## 边界
 
@@ -21,6 +21,8 @@
 ## 运行配置
 
 0.15.0 删除 `VASTPLAN_DATABASE_CONNECTIONS_STATE_FILE`。组合根只注入统一 `state.shared.v1` Kernel Service；插件固定选择按租户、Leader-fenced 的 Shared State 协议实现，启动与嵌套工作流不再自行判断开发/生产。每次管理 Workflow 先加载当前租户聚合并记录 Store revision，随后凭证候选、连接定义、Runtime publication outbox 和回收队列的每个耐久步骤都使用 CAS 推进。Shared State 不可用或 revision 冲突时 fail-closed，不回退本机 JSON。插件仍采用 leader 路由，fence 与 Store CAS 共同阻止旧实例写入。
+
+0.15.1 将 `platform.credentials` 修正为调用期懒依赖。Platform Control 的状态、测试和初始化不需要凭证服务，因此 Bootstrap Tier 不再因尚未启动的完整平台凭证管理面而被错误标记为 degraded；普通连接定义、短期测试和凭证轮换仍在实际调用时按原失败语义检查该能力。
 
 ## API
 

@@ -17,7 +17,7 @@ export interface TransportTrustDocument {
 }
 
 export interface CapabilityAnnouncement {
-  schema_version: number;
+  schema_version: 2;
   capability: string;
   extension_point: string;
   service_role: string;
@@ -33,7 +33,16 @@ export interface CapabilityAnnouncement {
   unit_id: string;
   subject: string;
   stream_endpoint?: string;
-  version?: string;
+  artifact: {
+    plugin_id: string;
+    version: string;
+    sha256: string;
+  };
+  contract: {
+    capability: string;
+    version: string;
+    interface_fingerprint: string;
+  };
   health: string;
   readiness?: string;
   readiness_reason?: string;
