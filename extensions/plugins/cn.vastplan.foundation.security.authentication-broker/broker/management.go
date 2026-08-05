@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	authenticationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authentication/v1"
-	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	authenticationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authentication/v1"
+	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
@@ -43,8 +43,10 @@ func (s *ManagementService) Contribution() sdk.Contribution {
 	handlers := map[string]sdk.Handler{}
 	for _, operation := range []string{"get", "createDraft", "validate", "recordTest", "approve", "publish", "retire"} {
 		op := operation
-		handlers[op] = func(_ context.Context, _ sdk.Host, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
-			return s.handle(callCtx, op, payload)
+		handlers[op] = func(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+			bound := *s
+			bound.store = bindManagementStore(ctx, s.store, host, callCtx)
+			return bound.handle(callCtx, op, payload)
 		}
 	}
 	return sdk.Contribution{ExtensionPoint: extpoint.ToolPackage, ID: ManagementCapability, Descriptor: ManagementDescriptor(), Handlers: handlers}

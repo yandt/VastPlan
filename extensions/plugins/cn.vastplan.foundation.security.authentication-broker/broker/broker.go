@@ -22,7 +22,7 @@ import (
 
 const (
 	PluginID                   = "cn.vastplan.foundation.security.authentication-broker"
-	PluginVersion              = "0.5.4"
+	PluginVersion              = "0.6.0"
 	Capability                 = "foundation.security.authentication.broker"
 	OperationConsumeAssertion  = "consumeAssertion"
 	OperationBeginProviderTest = "beginProviderTest"
@@ -74,7 +74,7 @@ func (b *Broker) Contribution() sdk.Contribution {
 		return b.consumeAssertion(callCtx, payload)
 	}
 	handlers[OperationBeginProviderTest] = func(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
-		return b.beginProviderTest(ctx, host, callCtx, payload)
+		return b.Handle(ctx, host, callCtx, OperationBeginProviderTest, payload)
 	}
 	return sdk.Contribution{ExtensionPoint: extpoint.ToolPackage, ID: Capability, Descriptor: Descriptor(), Handlers: handlers}
 }
@@ -83,6 +83,12 @@ func (b *Broker) Handle(ctx context.Context, host sdk.Host, callCtx *contractv1.
 	if host == nil {
 		return brokerError("foundation.authentication.host_unavailable", errors.New("可信宿主不可用")), nil, nil
 	}
+	bound := *b
+	bound.catalog = bindCatalog(ctx, b.catalog, host, callCtx)
+	return bound.handle(ctx, host, callCtx, operation, payload)
+}
+
+func (b *Broker) handle(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, operation string, payload []byte) (*contractv1.CallResult, []byte, error) {
 	if operation == OperationConsumeAssertion {
 		return b.consumeAssertion(callCtx, payload)
 	}

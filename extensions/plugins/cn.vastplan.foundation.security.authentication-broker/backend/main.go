@@ -10,12 +10,15 @@ import (
 )
 
 func main() {
-	stateStore := &broker.FileManagementStore{Path: os.Getenv("VASTPLAN_AUTHENTICATION_PROVIDER_STATE")}
+	stateStore := &broker.SharedManagementStore{}
+	bootstrapStore := &broker.FileManagementStore{Path: os.Getenv("VASTPLAN_AUTHENTICATION_PROVIDER_STATE")}
 	assertions, err := broker.LoadAssertionKey(os.Getenv("VASTPLAN_AUTHENTICATION_ASSERTION_KEY_FILE"))
 	if err != nil {
 		log.Fatalf("加载 Authentication Assertion key: %v", err)
 	}
-	service, err := broker.New(broker.StateCatalog{Store: stateStore}, broker.NewMemoryTransactionStore(4096), assertions)
+	service, err := broker.New(broker.BootstrapFallbackCatalog{
+		Primary: broker.StateCatalog{Store: stateStore}, Bootstrap: broker.StateCatalog{Store: bootstrapStore},
+	}, broker.NewMemoryTransactionStore(4096), assertions)
 	if err != nil {
 		log.Fatalf("初始化 Authentication Broker: %v", err)
 	}
