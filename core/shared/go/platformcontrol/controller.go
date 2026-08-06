@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 
+	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
 	platformcontrolport "cdsoft.com.cn/VastPlan/extensions/libraries/go/platformcontrol"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
@@ -74,7 +75,7 @@ func (c *Controller) Start(ctx context.Context) error {
 	}
 	store, err := c.database.Open(ctx, *profile, source)
 	if err != nil {
-		c.setStatus(platformcontrolv1.PhaseRecovery, profile.Generation, CodeDatabaseUnavailable)
+		c.setStatus(platformcontrolv1.PhaseRecovery, profile.Generation, databaseFailureCode(err, CodeDatabaseUnavailable))
 		return err
 	}
 	if err := c.binding.Bind(profile.Generation, platformcontrolport.ProfileIdentity(*profile), store); err != nil {
@@ -121,13 +122,13 @@ func (c *Controller) Configure(ctx context.Context, request platformcontrolv1.Ch
 	}
 	c.setStatus(platformcontrolv1.PhaseTesting, expectedGeneration, "")
 	if err := c.database.Test(ctx, candidate, source); err != nil {
-		c.setCandidateFailure(expectedGeneration, CodeDatabaseUnavailable)
+		c.setCandidateFailure(expectedGeneration, databaseFailureCode(err, CodeDatabaseUnavailable))
 		return err
 	}
 	c.setStatus(platformcontrolv1.PhaseInitializing, expectedGeneration, "")
 	store, err := c.database.Initialize(ctx, candidate, source)
 	if err != nil {
-		c.setCandidateFailure(expectedGeneration, CodeInitializationFailed)
+		c.setCandidateFailure(expectedGeneration, databaseFailureCode(err, CodeInitializationFailed))
 		return err
 	}
 	if prepared != nil {
@@ -191,7 +192,7 @@ func (c *Controller) TestCandidate(ctx context.Context, request platformcontrolv
 	}
 	c.setStatus(platformcontrolv1.PhaseTesting, expectedGeneration, "")
 	if err := c.database.Test(ctx, candidate, source); err != nil {
-		c.setCandidateFailure(expectedGeneration, CodeDatabaseUnavailable)
+		c.setCandidateFailure(expectedGeneration, databaseFailureCode(err, CodeDatabaseUnavailable))
 		return err
 	}
 	generation, _, ready := c.binding.Snapshot()
@@ -201,6 +202,14 @@ func (c *Controller) TestCandidate(ctx context.Context, request platformcontrolv
 		c.setStatus(platformcontrolv1.PhaseUnconfigured, 0, "")
 	}
 	return nil
+}
+
+func databaseFailureCode(err error, fallback string) string {
+	code, _, ok := platformcontrolport.FailureDetails(err)
+	if ok && databasev1.KnownErrorCode(code) {
+		return code
+	}
+	return fallback
 }
 
 var _ platformcontrolport.Administration = (*Controller)(nil)

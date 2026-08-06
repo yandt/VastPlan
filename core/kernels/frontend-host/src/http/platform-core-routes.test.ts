@@ -132,6 +132,18 @@ describe("Platform core management routes", () => {
     expect(response.status).toBe(422);
     expect(await response.json()).toEqual({ error: "database_credential_unavailable" });
   });
+
+  it("preserves Platform Control Runtime diagnosis and trace identity", async () => {
+    const traceId = "b".repeat(32);
+    const invoker: TrustedCapabilityInvoker = { async invoke() {
+      throw new CapabilityApplicationError("database.runtime.authentication_failed", "driver detail must not cross the BFF", {}, traceId);
+    } };
+    const server = await startPlatformManagementTestServer(invoker, ["platform.database.probe"], fullBinding());
+    close.push(server.close);
+    const response = await fetch(`${server.origin}/v1/portals/operations/platform/services/core/platform-control/test`, { method: "POST", headers: server.writeHeaders, body: "{}" });
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: "database_authentication_failed", traceId });
+  });
 });
 
 function fullBinding(): Record<string, unknown> {

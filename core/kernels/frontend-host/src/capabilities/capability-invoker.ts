@@ -14,7 +14,12 @@ export interface TrustedCapabilityInvoker {
 }
 
 export class CapabilityApplicationError extends Error {
-  public constructor(public readonly code: string, message: string, public readonly details: Readonly<Record<string, string>> = {}) {
+  public constructor(
+    public readonly code: string,
+    message: string,
+    public readonly details: Readonly<Record<string, string>> = {},
+    public readonly traceId?: string,
+  ) {
     super(message);
     this.name = "CapabilityApplicationError";
   }
@@ -24,6 +29,7 @@ export class AddressingCapabilityInvoker implements TrustedCapabilityInvoker {
   public constructor(private readonly addressing: Pick<NodeAddressingClient, "invoke">) {}
 
   public async invoke(principal: Principal, route: CapabilityRoute, operation: string, payload: Uint8Array, signal?: AbortSignal): Promise<Uint8Array> {
+    const traceId = randomBytes(16).toString("hex");
     const response = await this.addressing.invoke({
       extension_point: "tool.package", capability: route.capability, operation, routing_domain: route.routingDomain,
       ...(route.logicalService === undefined ? {} : { logical_service: route.logicalService }),
@@ -35,9 +41,14 @@ export class AddressingCapabilityInvoker implements TrustedCapabilityInvoker {
         "vastplan.portal.activation-id": String(route.portalBinding.activationId),
         "vastplan.portal.generation": String(route.portalBinding.generation),
       } }),
-      trace: { trace_id: randomBytes(16).toString("hex"), span_id: randomBytes(8).toString("hex") },
+      trace: { trace_id: traceId, span_id: randomBytes(8).toString("hex") },
     }, payload, signal);
-    if (response.result.status !== 1) throw new CapabilityApplicationError(response.result.error?.code ?? "capability.failed", response.result.error?.message ?? "Capability 调用失败", response.result.error?.details ?? {});
+    if (response.result.status !== 1) throw new CapabilityApplicationError(
+      response.result.error?.code ?? "capability.failed",
+      response.result.error?.message ?? "Capability 调用失败",
+      response.result.error?.details ?? {},
+      traceId,
+    );
     return response.payload;
   }
 }

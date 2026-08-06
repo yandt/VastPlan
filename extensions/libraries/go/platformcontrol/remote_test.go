@@ -9,6 +9,7 @@ import (
 	"time"
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
 	sharedstatesqlv1 "cdsoft.com.cn/VastPlan/contracts/schemas/sharedstatesql/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
@@ -71,6 +72,22 @@ func TestRemoteBootstrapperAndStoreUseSeparateCapabilities(t *testing.T) {
 		invoke.calls[1] != platformcontrolv1.BootstrapCapability+"/"+platformcontrolv1.OperationOpen+"@runtime-remote" ||
 		invoke.calls[2] != sharedstatesqlv1.Capability+"/"+sharedstatesqlv1.OperationList+"@runtime-local" {
 		t.Fatalf("Capability 路由错误: %v", invoke.calls)
+	}
+}
+
+func TestRemoteBootstrapperPreservesSafeDatabaseFailure(t *testing.T) {
+	invoke := &testInvoker{instances: map[string][]RuntimeInstance{
+		platformcontrolv1.BootstrapCapability: {{ID: "runtime-a"}},
+	}, result: func(_, _, _ string) (*contractv1.CallResult, []byte, error) {
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{
+			Code: databasev1.ErrorAuthenticationFailed, Message: "safe message", Retryable: false,
+		}}, nil, nil
+	}}
+	bootstrapper, _ := NewRemoteBootstrapper(invoke)
+	err := bootstrapper.Test(context.Background(), platformcontrolv1.Profile{SchemaVersion: 1, Generation: 1}, testSecret("secret"))
+	code, retryable, ok := FailureDetails(err)
+	if !ok || code != databasev1.ErrorAuthenticationFailed || retryable {
+		t.Fatalf("跨进程数据库诊断丢失: code=%s retryable=%v ok=%v err=%v", code, retryable, ok, err)
 	}
 }
 

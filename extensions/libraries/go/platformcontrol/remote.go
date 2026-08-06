@@ -7,6 +7,7 @@ import (
 	"errors"
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
 	sharedstatesqlv1 "cdsoft.com.cn/VastPlan/contracts/schemas/sharedstatesql/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
@@ -197,6 +198,9 @@ func resultError(result *contractv1.CallResult) error {
 	}
 	if result.GetStatus() == contractv1.CallResult_STATUS_OK {
 		return nil
+	}
+	if databasev1.KnownErrorCode(result.GetError().GetCode()) {
+		return NewFailure(result.GetError().GetCode(), result.GetError().GetRetryable())
 	}
 	switch result.GetError().GetCode() {
 	case sharedstatesqlv1.ErrorInvalid, platformcontrolv1.ErrorInvalid:

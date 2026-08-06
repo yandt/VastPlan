@@ -70,6 +70,12 @@ func (i *AddressingInvoker) invoke(ctx context.Context, capability, operation, i
 	wire := &contractv1.CallContext{Caller: &contractv1.Caller{
 		Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: platformcontrolv1.TrustedBootstrapSystemID,
 	}, Scene: "platform.control.bootstrap"}
+	// Keep only the parent's trace correlation. The Bootstrap hop replaces the
+	// caller and scene and must not inherit user identity, tenant, credentials or
+	// other request authority from the Connection Manager call.
+	if parent, ok := callcontext.FromContext(ctx); ok {
+		wire.Trace = parent.Wire().GetTrace()
+	}
 	trusted, err := callcontext.ValidateIngress(wire, callcontext.Provenance{
 		Source: "backend.kernel", AuthenticatedBy: "platform-control-controller",
 	})

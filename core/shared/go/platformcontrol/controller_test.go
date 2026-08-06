@@ -8,7 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
+	platformcontrolport "cdsoft.com.cn/VastPlan/extensions/libraries/go/platformcontrol"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
 )
 
@@ -155,6 +157,23 @@ func TestControllerFailsClosedWithoutCommittingOrFallback(t *testing.T) {
 	}
 	if _, err := binding.Get(context.Background(), sharedstate.Scope{}, "probe"); !errors.Is(err, sharedstate.ErrUnconfigured) {
 		t.Fatalf("未提交的失败候选不得关闭 Seed bootstrap 路径: %v", err)
+	}
+}
+
+func TestControllerPreservesRemoteDatabaseFailureCode(t *testing.T) {
+	root := t.TempDir()
+	controller, _ := NewController(
+		&FileProfileStore{Path: filepath.Join(root, "platform-control.json")},
+		func(platformcontrolv1.SecretRef) (SecretSource, error) {
+			return staticSecretSource{value: []byte("secret")}, nil
+		},
+		&fakeBootstrapper{testErr: platformcontrolport.NewFailure(databasev1.ErrorAuthenticationFailed, false)},
+		sharedstate.NewBindingStore(),
+		&FileSecretMaterialStore{Root: filepath.Join(root, "managed-secrets")},
+	)
+	err := controller.TestCandidate(context.Background(), platformcontrolv1.ChangeRequest{Profile: testProfile(filepath.Join(root, "password"), 1)})
+	if err == nil || controller.Status().Code != databasev1.ErrorAuthenticationFailed {
+		t.Fatalf("Controller 覆盖了 Runtime 数据库诊断: status=%+v err=%v", controller.Status(), err)
 	}
 }
 

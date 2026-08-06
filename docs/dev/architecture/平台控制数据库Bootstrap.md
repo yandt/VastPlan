@@ -20,7 +20,7 @@ Profile 文件必须使用规范绝对路径、普通文件和 owner-only 权限
 
 候选密码跨独立 Database Runtime 进程传递时，Wire Profile 在 Test/Initialize 阶段必须引用当前真实存在的临时 `0600` 文件，不能提前引用尚未创建的最终文件名。Initialize 成功后可信宿主先原子重命名密码文件，再把 Profile 中的 `secretRef` 切换为最终路径并执行 Profile CAS；失败或仅测试时同时删除临时与最终候选。Runtime 始终只按受限引用重新读取密码，协议中不传递密码明文。
 
-最小 Bootstrap 页面与 Portal Edge 通过 `X-VastPlan-Bootstrap-Page-Contract` 执行轻量契约握手。测试或初始化前发现已打开页面落后于当前宿主时，页面必须自动刷新，禁止把旧表单结构送入新后端后再显示泛化 Schema 错误。响应继续使用 `Cache-Control: no-store`，但不能依赖缓存策略替换已经运行在浏览器中的旧 JavaScript。
+最小 Bootstrap 页面与 Portal Edge 通过 `X-VastPlan-Bootstrap-Page-Contract` 执行轻量契约握手，当前页面契约为 `3`。测试或初始化前发现已打开页面落后于当前宿主时，页面必须自动刷新，禁止把旧表单结构送入新后端后再显示泛化 Schema 错误。响应继续使用 `Cache-Control: no-store`，但不能依赖缓存策略替换已经运行在浏览器中的旧 JavaScript。
 
 页面提交必须先从仍处于启用状态的控件生成一次性请求快照，再禁用表单并取得 CSRF Token。禁止在 `disabled` 之后通过 `FormData` 读取表单，因为浏览器不会提交 disabled 控件，这会把完整配置静默退化为空候选。
 
@@ -42,6 +42,8 @@ Configure
 ```
 
 状态只有 `unconfigured / testing / initializing / ready / recovery` 和稳定错误码。尚无已提交 Profile 时，Shared State 返回稳定的 `state.unconfigured`；首次候选在提交前失败仍保持该状态，使 Seed 登录可以继续进入数据库配置页。已有 Ready generation 的替换候选失败时保留旧 Store 和旧 generation，只投影候选错误码。Profile 已提交但绑定异常属于不应发生的信任边界故障，必须 recovery，不能继续把旧 Store 冒充当前 Profile。
+
+数据库候选失败沿单一诊断协议返回。Database Runtime 是分类真源，负责把 Provider/驱动错误归一为稳定、无敏感值的 `database.runtime.*`；Remote Bootstrapper、Controller 和 Backend Kernel 只能保留该类别及 retryable 属性，不能再次压缩成通用 `database_unavailable`。Portal BFF 把类别映射为本地化公开码，并把本次调用的 32 位十六进制 `traceId` 返回页面；Bootstrap 内部跳转沿可信上下文继承同一 trace，因此页面编号能够直接关联 Runtime 日志。原始驱动消息只留在 Runtime 进程内，日志仅记录 SQLSTATE/MySQL 错误号或 DNS、网络、TLS 等脱敏诊断。
 
 ## 4. 不可回退 Shared State 绑定
 
@@ -69,7 +71,7 @@ P4b 已完成 Database Runtime 进程内 Bootstrap 适配：PostgreSQL/MySQL 初
 
 P4c 已把进程边界接通：
 
-- Database Runtime `0.16.0` 同时贡献公开数据面、`foundation.data.record-store@1.2.0`，以及仅宿主可调用的 `foundation.state.shared.sql.bootstrap@2.0.0` 和 `foundation.state.shared.sql@1.0.0`；Bootstrap 2.0 使用与普通连接相同的 `DatabaseConnectionCandidate`，但仍由可信宿主管理 secret、Profile 和 Store 绑定；Controller 从 Deployment 锁定的已验证制品投影 DataModel Inventory，只向该 Runtime 注入宿主保留配置，Node Agent 在候选能力进入公开路由前使用 Host 固定的 SYSTEM 身份同步，并在收到与候选目录精确绑定的 Schema Activation 授权后执行迁移，再从普通插件配置中摘除目录；其用户配置 `clusterMaxOpen` 与 Scheduler 可信派生的 `clusterMaxReplicas` 在组合根生成每实例连接硬预算，覆盖 active-active 与双代轮换的最坏连接占用；
+- Database Runtime `0.16.1` 同时贡献公开数据面、`foundation.data.record-store@1.2.0`，以及仅宿主可调用的 `foundation.state.shared.sql.bootstrap@2.0.0` 和 `foundation.state.shared.sql@1.0.0`；Bootstrap 2.0 使用与普通连接相同的 `DatabaseConnectionCandidate`，但仍由可信宿主管理 secret、Profile 和 Store 绑定；Controller 从 Deployment 锁定的已验证制品投影 DataModel Inventory，只向该 Runtime 注入宿主保留配置，Node Agent 在候选能力进入公开路由前使用 Host 固定的 SYSTEM 身份同步，并在收到与候选目录精确绑定的 Schema Activation 授权后执行迁移，再从普通插件配置中摘除目录；其用户配置 `clusterMaxOpen` 与 Scheduler 可信派生的 `clusterMaxReplicas` 在组合根生成每实例连接硬预算，覆盖 active-active 与双代轮换的最坏连接占用；
 - Bootstrap Capability 只接受固定 SYSTEM caller `platform-control-bootstrap/primary`，目标 logical service 和 routing domain 也由宿主固定；
 - 宿主用 `RemoteBootstrapper/RemoteStore` 把跨进程 Capability 重新适配为原有 `sharedstate.Store`，业务插件看不到传输差异；
 - Deployment/Assignment 增加 `startup_tier=bootstrap|full`，默认 `full`。Node Agent 可以完成 Full 单元的下载、验签和安装，但在 Shared State Ready 前拒绝激活；

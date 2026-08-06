@@ -123,11 +123,12 @@ describe("PlatformAdminClient", () => {
   });
 
   it("gives safe database diagnoses a specific client message", async () => {
+    const traceId = "a".repeat(32);
     const client = new PlatformAdminClient(async (path) => path === "/v1/csrf"
       ? { ok: true, status: 200, json: async () => ({ token: "safe" }) }
-      : { ok: false, status: 422, json: async () => ({ error: "database_authentication_failed" }) }, "operations", "database");
+      : { ok: false, status: 422, json: async () => ({ error: "database_authentication_failed", traceId }) }, "operations", "database");
     await expect(client.testDatabaseConnection("main", connectionRequest("one-time")))
-      .rejects.toMatchObject({ code: "database_authentication_failed", message: "数据库用户名或密码验证失败。" });
+      .rejects.toMatchObject({ code: "database_authentication_failed", traceId, message: `数据库用户名或密码验证失败。（跟踪编号：${traceId}）` });
   });
 
   it("asks for a new database password when managed material is unusable", async () => {

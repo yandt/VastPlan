@@ -21,7 +21,10 @@ func (s bootstrapSecret) WithSecret(_ context.Context, use func([]byte) error) e
 	return use(value)
 }
 
-type bootstrapProvider struct{ pools []*bootstrapPool }
+type bootstrapProvider struct {
+	pools    []*bootstrapPool
+	probeErr error
+}
 
 func (*bootstrapProvider) Descriptor() databasev1.ProviderDescriptor {
 	return databasev1.ProviderDescriptor{ID: "mysql", Version: "1.0.0", DisplayName: "test mysql", ConfigurationSchema: json.RawMessage(`{"type":"object"}`), Capabilities: databasev1.ProviderCapabilities{Query: true, Execute: true, Transactions: true}}
@@ -36,7 +39,7 @@ func (p *bootstrapProvider) OpenPool(ctx context.Context, _ databasev1.Connectio
 	}); err != nil {
 		return nil, err
 	}
-	pool := &bootstrapPool{}
+	pool := &bootstrapPool{probeErr: p.probeErr}
 	p.pools = append(p.pools, pool)
 	return pool, nil
 }
@@ -44,11 +47,12 @@ func (p *bootstrapProvider) OpenPool(ctx context.Context, _ databasev1.Connectio
 type bootstrapPool struct {
 	statements []string
 	closed     bool
+	probeErr   error
 }
 
 func (p *bootstrapPool) Probe(context.Context) error {
 	p.statements = append(p.statements, "probe")
-	return nil
+	return p.probeErr
 }
 func (p *bootstrapPool) Query(_ context.Context, statement databasev1.Statement, _ int) (databasev1.QueryResult, error) {
 	p.statements = append(p.statements, statement.SQL)

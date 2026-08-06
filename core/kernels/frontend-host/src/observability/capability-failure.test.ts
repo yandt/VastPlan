@@ -5,13 +5,15 @@ import { capabilityFailureRecord } from "./capability-failure";
 describe("capability failure diagnostics", () => {
   it("keeps routing facts and a correlation digest without logging upstream detail", () => {
     const secret = "vault endpoint=https://secret.invalid token=do-not-log";
-    const record = capabilityFailureRecord({ operation: "list", capability: "platform.credentials", logicalService: "platform.credentials" }, new CapabilityApplicationError("platform.credentials.unavailable", secret));
+    const traceId = "a".repeat(32);
+    const record = capabilityFailureRecord({ operation: "list", capability: "platform.credentials", logicalService: "platform.credentials" }, new CapabilityApplicationError("platform.credentials.unavailable", secret, {}, traceId));
     expect(record).toMatchObject({
       operation: "list",
       capability: "platform.credentials",
       logical_service: "platform.credentials",
       code: "platform.credentials.unavailable",
       error_type: "CapabilityApplicationError",
+      trace_id: traceId,
     });
     expect(record.detail_digest).toMatch(/^[a-f0-9]{16}$/);
     expect(JSON.stringify(record)).not.toContain(secret);

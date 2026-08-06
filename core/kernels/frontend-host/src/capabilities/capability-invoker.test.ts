@@ -19,9 +19,20 @@ describe("AddressingCapabilityInvoker", () => {
   });
 
   it("preserves stable application error codes and structured details", async () => {
-    const addressing = { async invoke() { return { result: { status: 2, error: { code: "permission.denied", message: "denied", retryable: false, details: { validationField: "profile.schema" } } }, payload: new Uint8Array() }; } } satisfies Pick<NodeAddressingClient, "invoke">;
+    let observed: unknown;
+    const addressing = { async invoke(_target: unknown, context: unknown) {
+      observed = context;
+      return { result: { status: 2, error: { code: "permission.denied", message: "denied", retryable: false, details: { validationField: "profile.schema" } } }, payload: new Uint8Array() };
+    } } satisfies Pick<NodeAddressingClient, "invoke">;
     const invoker = new AddressingCapabilityInvoker(addressing);
-    await expect(invoker.invoke({ id: "alice", tenantId: "acme", roles: [] }, { capability: "demo", routingDomain: "platform" }, "read", new Uint8Array())).rejects.toEqual(expect.objectContaining<Partial<CapabilityApplicationError>>({ code: "permission.denied", details: { validationField: "profile.schema" } }));
+    const rejected = invoker.invoke({ id: "alice", tenantId: "acme", roles: [] }, { capability: "demo", routingDomain: "platform" }, "read", new Uint8Array());
+    await expect(rejected).rejects.toEqual(expect.objectContaining<Partial<CapabilityApplicationError>>({
+      code: "permission.denied", details: { validationField: "profile.schema" },
+      traceId: expect.stringMatching(/^[a-f0-9]{32}$/) as unknown as string,
+    }));
+    await rejected.catch((error: CapabilityApplicationError) => {
+      expect(error.traceId).toBe((observed as { trace: { trace_id: string } }).trace.trace_id);
+    });
   });
 
   it("binds trusted Portal Activation and Generation metadata", async () => {

@@ -8,6 +8,7 @@ import (
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
 	platformcontrol "cdsoft.com.cn/VastPlan/extensions/libraries/go/platformcontrol"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
@@ -82,11 +83,11 @@ func (s *Service) handler(operation string) sdk.Handler {
 		if err != nil {
 			return bootstrapResult(platformcontrolv1.Status{}, platformcontrolv1.ErrorUnavailable, false)
 		}
-		return s.execute(ctx, operation, profile, source)
+		return s.execute(ctx, call, operation, profile, source)
 	}
 }
 
-func (s *Service) execute(ctx context.Context, operation string, profile platformcontrolv1.Profile, source platformcontrol.SecretSource) (*contractv1.CallResult, []byte, error) {
+func (s *Service) execute(ctx context.Context, call *contractv1.CallContext, operation string, profile platformcontrolv1.Profile, source platformcontrol.SecretSource) (*contractv1.CallResult, []byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -94,8 +95,7 @@ func (s *Service) execute(ctx context.Context, operation string, profile platfor
 	case platformcontrolv1.OperationTest:
 		s.status = platformcontrolv1.Status{Phase: platformcontrolv1.PhaseTesting, Generation: profile.Generation}
 		if err := s.bootstrapper.Test(ctx, profile, source); err != nil {
-			s.status = platformcontrolv1.Status{Phase: platformcontrolv1.PhaseRecovery, Generation: profile.Generation, Code: platformcontrolv1.ErrorUnavailable}
-			return bootstrapResult(s.status, platformcontrolv1.ErrorUnavailable, true)
+			return s.databaseFailure(call, operation, profile, "probe", err, databasev1.ErrorConnectionUnavailable)
 		}
 		// Test must never mutate the current binding.
 		generation, _, ready := s.binding.Snapshot()
@@ -106,13 +106,13 @@ func (s *Service) execute(ctx context.Context, operation string, profile platfor
 		s.status = platformcontrolv1.Status{Phase: phase, Generation: generation}
 		return bootstrapResult(s.status, "", false)
 	case platformcontrolv1.OperationInitialize, platformcontrolv1.OperationOpen:
-		return s.activate(ctx, operation, profile, source)
+		return s.activate(ctx, call, operation, profile, source)
 	default:
 		return bootstrapResult(platformcontrolv1.Status{}, platformcontrolv1.ErrorInvalid, false)
 	}
 }
 
-func (s *Service) activate(ctx context.Context, operation string, profile platformcontrolv1.Profile, source platformcontrol.SecretSource) (*contractv1.CallResult, []byte, error) {
+func (s *Service) activate(ctx context.Context, call *contractv1.CallContext, operation string, profile platformcontrolv1.Profile, source platformcontrol.SecretSource) (*contractv1.CallResult, []byte, error) {
 	identity := platformcontrol.ProfileIdentity(profile)
 	currentGeneration, currentIdentity, ready := s.binding.Snapshot()
 	recordGeneration, recordIdentity, recordReady := s.recordBinding.Snapshot()
@@ -133,8 +133,7 @@ func (s *Service) activate(ctx context.Context, operation string, profile platfo
 		candidate, err = s.bootstrapper.Open(ctx, profile, source)
 	}
 	if err != nil {
-		s.status = platformcontrolv1.Status{Phase: platformcontrolv1.PhaseRecovery, Generation: profile.Generation, Code: platformcontrolv1.ErrorInitializationFailed}
-		return bootstrapResult(s.status, platformcontrolv1.ErrorInitializationFailed, true)
+		return s.databaseFailure(call, operation, profile, "initialize", err, platformcontrolv1.ErrorInitializationFailed)
 	}
 	recordStore, ok := candidate.(databaseruntime.PlatformRecordStore)
 	if !ok {
@@ -163,6 +162,16 @@ func (s *Service) activate(ctx context.Context, operation string, profile platfo
 	return bootstrapResult(s.status, "", false)
 }
 
+func (s *Service) databaseFailure(call *contractv1.CallContext, operation string, profile platformcontrolv1.Profile, stage string, err error, fallback string) (*contractv1.CallResult, []byte, error) {
+	code, retryable := databaseruntime.ErrorDetails(err)
+	if code == databasev1.ErrorQueryFailed || !databasev1.KnownErrorCode(code) {
+		code = fallback
+	}
+	databaseruntime.LogRuntimeDiagnostic(call, operation, profile.Connection.ProviderID, stage, err)
+	s.status = platformcontrolv1.Status{Phase: platformcontrolv1.PhaseRecovery, Generation: profile.Generation, Code: code}
+	return bootstrapResult(s.status, code, retryable)
+}
+
 func trustedBootstrapCaller(call *contractv1.CallContext) bool {
 	return call != nil && call.GetCaller() != nil &&
 		call.GetCaller().GetKind() == contractv1.CallerKind_CALLER_KIND_SYSTEM &&
@@ -171,8 +180,12 @@ func trustedBootstrapCaller(call *contractv1.CallContext) bool {
 
 func bootstrapResult(status platformcontrolv1.Status, code string, retryable bool) (*contractv1.CallResult, []byte, error) {
 	if code != "" {
+		message := "Platform Control SQL Bootstrap 请求失败"
+		if databasev1.KnownErrorCode(code) {
+			message = databaseruntime.RuntimeSafeMessage(code)
+		}
 		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{
-			Code: code, Message: "Platform Control SQL Bootstrap 请求失败", Retryable: retryable,
+			Code: code, Message: message, Retryable: retryable,
 		}}, nil, nil
 	}
 	raw, err := json.Marshal(status)

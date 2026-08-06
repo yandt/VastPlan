@@ -22,8 +22,13 @@ export function capabilityFailureRecord(context: CapabilityFailureContext, error
     code: safeFailureCode(error),
     error_type: error instanceof Error ? error.name : "UnknownError",
     detail_digest: createHash("sha256").update(detail).digest("hex").slice(0, 16),
+    ...(error instanceof CapabilityApplicationError && validTraceId(error.traceId) ? { trace_id: error.traceId } : {}),
     ...(isRetryable(error) ? { retryable: true } : {}),
   };
+}
+
+function validTraceId(value: string | undefined): value is string {
+  return value !== undefined && /^[a-f0-9]{32}$/.test(value);
 }
 
 export function reportCapabilityFailure(context: CapabilityFailureContext, error: unknown): void {

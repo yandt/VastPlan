@@ -353,7 +353,7 @@ export class PlatformAdminClient {
     if (!response.ok) {
       const code = typeof value === "object" && value !== null && "error" in value && typeof value.error === "string" ? value.error : "request_rejected";
       const validation = parseValidation(value);
-      throw new PlatformAdminError(response.status, code, validation);
+      throw new PlatformAdminError(response.status, code, validation, parseTraceId(value));
     }
     return value as T;
   }
@@ -379,8 +379,13 @@ export function createBrowserPlatformAdminClient(portalID: string, serviceID: st
 }
 
 export class PlatformAdminError extends Error {
-  public constructor(public readonly status: number, public readonly code: string, public readonly validation?: Readonly<{ field: string; reason: string }>) {
-    super(platformAdminErrorMessage(code));
+  public constructor(
+    public readonly status: number,
+    public readonly code: string,
+    public readonly validation?: Readonly<{ field: string; reason: string }>,
+    public readonly traceId?: string,
+  ) {
+    super(`${platformAdminErrorMessage(code)}${traceId === undefined ? "" : `（跟踪编号：${traceId}）`}`);
     this.name = "PlatformAdminError";
   }
 }
@@ -391,6 +396,12 @@ function parseValidation(value: unknown): Readonly<{ field: string; reason: stri
   if (typeof validation !== "object" || validation === null) return undefined;
   const record = validation as Record<string, unknown>;
   return typeof record.field === "string" && typeof record.reason === "string" ? { field: record.field, reason: record.reason } : undefined;
+}
+
+function parseTraceId(value: unknown): string | undefined {
+  if (typeof value !== "object" || value === null || !("traceId" in value)) return undefined;
+  const traceId = (value as { traceId?: unknown }).traceId;
+  return typeof traceId === "string" && /^[a-f0-9]{32}$/.test(traceId) ? traceId : undefined;
 }
 
 function platformAdminErrorMessage(code: string): string {

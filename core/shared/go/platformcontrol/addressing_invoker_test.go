@@ -6,6 +6,7 @@ import (
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
+	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
 	"cdsoft.com.cn/VastPlan/core/shared/go/addressing"
 	platformcontrolport "cdsoft.com.cn/VastPlan/extensions/libraries/go/platformcontrol"
 )
@@ -53,5 +54,21 @@ func TestAddressingInvokerFixesTrustedIdentityAndRoute(t *testing.T) {
 	}
 	if _, _, err := invoker.InvokeInstance(context.Background(), platformcontrolv1.BootstrapCapability, operation, "remote-b", nil); err != nil || router.target.GetInstanceId() != "remote-b" {
 		t.Fatalf("精确实例调用未固定 instance_id: target=%+v err=%v", router.target, err)
+	}
+}
+
+func TestAddressingInvokerPreservesParentTraceForRuntimeDiagnostics(t *testing.T) {
+	router := &captureRouter{}
+	invoker, _ := NewAddressingInvoker(router)
+	parent := callcontext.MustAdopt(&contractv1.CallContext{
+		Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.vastplan.platform.data.relational.connection-manager"},
+		Trace:  &contractv1.Trace{TraceId: "0123456789abcdef0123456789abcdef", SpanId: "0123456789abcdef"},
+	}, callcontext.Provenance{Source: "test", AuthenticatedBy: "test"})
+	ctx := callcontext.WithTrusted(context.Background(), parent)
+	if _, _, err := invoker.Invoke(ctx, platformcontrolv1.BootstrapCapability, platformcontrolv1.OperationTest, nil); err != nil {
+		t.Fatal(err)
+	}
+	if router.call.GetTrace().GetTraceId() != parent.Wire().GetTrace().GetTraceId() {
+		t.Fatalf("Platform Control 子调用丢失父 trace: %+v", router.call.GetTrace())
 	}
 }

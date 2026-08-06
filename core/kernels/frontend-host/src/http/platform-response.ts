@@ -70,11 +70,24 @@ function mapCapabilityError(response: ServerResponse, error: CapabilityApplicati
   if (code === "platform.database.permission_denied") return sendAPIError(response, 422, "database_permission_denied", head);
   if (code === "platform.database.pool_exhausted") return sendAPIError(response, 429, "database_pool_exhausted", head);
   if (code === "platform.database.runtime_unavailable") return sendAPIError(response, 503, "database_runtime_unavailable", head);
-  if (code === "platform_control.profile_invalid" || code === "platform.database.platform_control_invalid") return sendValidationError(response, 422, "platform_control_invalid", error.details, head);
-  if (code === "platform_control.secret_unavailable") return sendAPIError(response, 422, "platform_control_secret_unavailable", head);
-  if (code === "platform_control.database_unavailable") return sendAPIError(response, 422, "platform_control_database_unavailable", head);
-  if (code === "platform_control.initialization_failed") return sendAPIError(response, 422, "platform_control_initialization_failed", head);
-  if (code === "platform_control.commit_conflict") return sendAPIError(response, 409, "platform_control_conflict", head);
+  if (code === "database.runtime.invalid_request" || code === "database.runtime.provider_not_found" || code === "database.runtime.unsupported") return sendApplicationError(response, 422, "database_connection_invalid", error, head);
+  if (code === "database.runtime.connection_unavailable" || code === "database.runtime.query_failed") return sendApplicationError(response, 422, "database_connection_failed", error, head);
+  if (code === "database.runtime.credential_unavailable") return sendApplicationError(response, 422, "database_credential_unavailable", error, head);
+  if (code === "database.runtime.credential_service_unavailable") return sendApplicationError(response, 503, "database_credential_service_unavailable", error, head);
+  if (code === "database.runtime.tls_policy_forbidden") return sendApplicationError(response, 422, "database_tls_policy_forbidden", error, head);
+  if (code === "database.runtime.name_resolution_failed") return sendApplicationError(response, 422, "database_name_resolution_failed", error, head);
+  if (code === "database.runtime.connection_refused") return sendApplicationError(response, 422, "database_connection_refused", error, head);
+  if (code === "database.runtime.connection_timeout" || code === "database.runtime.deadline_exceeded") return sendApplicationError(response, 422, "database_connection_timeout", error, head);
+  if (code === "database.runtime.tls_verification_failed") return sendApplicationError(response, 422, "database_tls_verification_failed", error, head);
+  if (code === "database.runtime.authentication_failed") return sendApplicationError(response, 422, "database_authentication_failed", error, head);
+  if (code === "database.runtime.database_not_found") return sendApplicationError(response, 422, "database_not_found", error, head);
+  if (code === "database.runtime.permission_denied") return sendApplicationError(response, 422, "database_permission_denied", error, head);
+  if (code === "database.runtime.pool_exhausted") return sendApplicationError(response, 429, "database_pool_exhausted", error, head);
+  if (code === "platform_control.profile_invalid" || code === "platform.database.platform_control_invalid") return sendValidationError(response, 422, "platform_control_invalid", error.details, head, error.traceId);
+  if (code === "platform_control.secret_unavailable") return sendApplicationError(response, 422, "platform_control_secret_unavailable", error, head);
+  if (code === "platform_control.database_unavailable") return sendApplicationError(response, 422, "platform_control_database_unavailable", error, head);
+  if (code === "platform_control.initialization_failed") return sendApplicationError(response, 422, "platform_control_initialization_failed", error, head);
+  if (code === "platform_control.commit_conflict") return sendApplicationError(response, 409, "platform_control_conflict", error, head);
   if (code === "platform.plugin_installation.invalid") return sendAPIError(response, 400, "invalid_installation_request", head);
   if (code === "platform.plugin_configuration.unavailable") return sendAPIError(response, 503, "configuration_unavailable", head);
   if (code === "platform.marketplace.catalog_unavailable") return sendAPIError(response, 503, "marketplace_unavailable", head);
@@ -83,11 +96,19 @@ function mapCapabilityError(response: ServerResponse, error: CapabilityApplicati
   sendAPIError(response, 502, "platform_service_unavailable", head);
 }
 
-function sendValidationError(response: ServerResponse, status: number, code: string, details: Readonly<Record<string, string>>, head: boolean): void {
+function sendValidationError(response: ServerResponse, status: number, code: string, details: Readonly<Record<string, string>>, head: boolean, traceId?: string): void {
   const field = details.validationField;
   const reason = details.validationReason;
   if (field === undefined || reason === undefined || !/^[a-z][a-zA-Z0-9_.]*$/.test(field) || !/^[a-z][a-z0-9_]*$/.test(reason)) {
-    return sendAPIError(response, status, code, head);
+    return sendJSON(response, status, { error: code, ...traceIdentity(traceId) }, head);
   }
-  sendJSON(response, status, { error: code, validation: { field, reason } }, head);
+  sendJSON(response, status, { error: code, validation: { field, reason }, ...traceIdentity(traceId) }, head);
+}
+
+function sendApplicationError(response: ServerResponse, status: number, code: string, error: CapabilityApplicationError, head: boolean): void {
+  sendJSON(response, status, { error: code, ...traceIdentity(error.traceId) }, head);
+}
+
+function traceIdentity(traceId: string | undefined): Readonly<{ traceId: string }> | Readonly<Record<string, never>> {
+  return traceId !== undefined && /^[a-f0-9]{32}$/.test(traceId) ? { traceId } : {};
 }

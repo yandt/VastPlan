@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.foundation.data.relational.runtime/databaseruntime"
@@ -101,6 +102,23 @@ func TestServiceTestDoesNotBindStore(t *testing.T) {
 	}
 	if len(provider.pools) != 1 || !provider.pools[0].closed {
 		t.Fatal("连接测试必须关闭候选池")
+	}
+}
+
+func TestServicePreservesSafeDatabaseFailureCode(t *testing.T) {
+	provider := &bootstrapProvider{probeErr: databaseruntime.NewRuntimeError(databasev1.ErrorAuthenticationFailed, false, errors.New("driver detail must remain private"))}
+	registry := databaseruntime.NewRegistry()
+	_ = registry.Register(provider)
+	bootstrapper, _ := New(registry)
+	service, _ := NewService(bootstrapper, sharedstate.NewBindingStore(), databaseruntime.NewPlatformRecordBinding(), func(context.Context, databaseruntime.PlatformRecordStore) error { return nil }, "")
+	secretPath := filepath.Join(t.TempDir(), "password")
+	_ = os.WriteFile(secretPath, []byte("secret"), 0o600)
+	profile := bootstrapProfile("mysql", "db.internal:3306", "platform", "platform", "vastplan", "verify-ca", secretPath)
+	payload, _ := json.Marshal(profile)
+	trusted := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: platformcontrolv1.TrustedBootstrapSystemID}}
+	result, _, err := service.Contribution().Handlers[platformcontrolv1.OperationTest](context.Background(), nil, trusted, payload)
+	if err != nil || result.GetError().GetCode() != databasev1.ErrorAuthenticationFailed || result.GetError().GetMessage() == "driver detail must remain private" {
+		t.Fatalf("Bootstrap 必须保留稳定分类且隐藏驱动详情: result=%+v err=%v", result, err)
 	}
 }
 

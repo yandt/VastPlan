@@ -4,7 +4,7 @@
 
 能力：`tool.package/foundation.data.relational.runtime`
 
-当前制品版本：`0.15.0`
+当前制品版本：`0.16.1`
 
 当前公开 Capability 契约：`foundation.data.relational.runtime@1.3.0`
 
@@ -38,6 +38,8 @@ Database Runtime 是关系数据库数据面，负责 Provider、节点本地连
 凭证故障在进入数据库驱动前单独分类：引用、版本或 material 已失效使用不可重试 `database.runtime.credential_unavailable`；Vault、凭证服务或可信中继暂时不可用使用可重试 `database.runtime.credential_service_unavailable`。Runtime 不把凭证插件的远端文本、密文或引用带入诊断详情。
 
 Runtime 在可信进程日志中记录 `operation/stage/provider/error_code/retryable/trace_id`，以及不含地址、用户名、数据库名和凭证的驱动证据，例如 PostgreSQL SQLSTATE、MySQL 错误号或网络/TLS 分类。日志禁止输出原始驱动字符串，因为驱动可能把 endpoint、账号或 DSN 拼入其中。
+
+`0.16.1` 将同一组稳定错误码用于普通连接测试和 Platform Control Bootstrap。Bootstrap 内部调用、可信宿主 Controller、Portal BFF 与 SDK 不得把已分类的 `database.runtime.*` 覆盖成统一的“数据库不可连接”；浏览器获得中文类别与同一 `traceId`，运维可用该编号关联 Runtime 的脱敏诊断日志。未知错误仍按边界收敛为通用失败，原始驱动文本不会跨进程或返回浏览器。
 
 ## Provider SPI
 

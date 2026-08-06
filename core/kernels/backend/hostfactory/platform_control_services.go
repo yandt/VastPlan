@@ -72,6 +72,19 @@ func platformControlFailure(status platformcontrolv1.Status, err error) (*contra
 		details = map[string]string{"validationField": issue.Field, "validationReason": issue.Reason}
 	}
 	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{
-		Code: code, Message: "Platform Control 请求失败", Retryable: code == platformcontrolv1.ErrorUnavailable, Details: details,
+		Code: code, Message: "Platform Control 请求失败", Retryable: platformControlRetryable(code), Details: details,
 	}}, nil, nil
+}
+
+func platformControlRetryable(code string) bool {
+	switch code {
+	case platformcontrolv1.ErrorUnavailable,
+		databasev1.ErrorConnectionUnavailable, databasev1.ErrorNameResolutionFailed,
+		databasev1.ErrorConnectionRefused, databasev1.ErrorConnectionTimeout,
+		databasev1.ErrorPoolExhausted, databasev1.ErrorDeadlineExceeded,
+		databasev1.ErrorCredentialServiceUnavailable:
+		return true
+	default:
+		return false
+	}
 }

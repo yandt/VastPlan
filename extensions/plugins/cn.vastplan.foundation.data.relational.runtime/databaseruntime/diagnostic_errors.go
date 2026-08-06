@@ -62,6 +62,11 @@ func runtimeSafeMessage(code string) string {
 	}
 }
 
+// RuntimeSafeMessage returns the localized, value-free message associated
+// with a stable Database Runtime error code. It is safe to cross plugin and
+// browser boundaries; raw driver errors remain inside the Runtime process.
+func RuntimeSafeMessage(code string) string { return runtimeSafeMessage(code) }
+
 // logRuntimeDiagnostic records a useful but non-secret technical conclusion.
 // It deliberately never logs endpoint, username, database, SQL, CredentialRef
 // or the raw driver message, which may embed those values.
@@ -85,6 +90,12 @@ func logRuntimeDiagnostic(call *contractv1.CallContext, operation, providerID, s
 		attributes = append(attributes, "trace_id", call.GetTrace().GetTraceId(), "span_id", call.GetTrace().GetSpanId())
 	}
 	slog.Warn("database runtime operation failed", attributes...)
+}
+
+// LogRuntimeDiagnostic exposes the same bounded diagnostic path to internal
+// Database Runtime modules such as Platform Control Bootstrap.
+func LogRuntimeDiagnostic(call *contractv1.CallContext, operation, providerID, stage string, err error) {
+	logRuntimeDiagnostic(call, operation, providerID, stage, err)
 }
 
 func diagnosticEvidence(err error) (diagnostic, driverCode string) {
