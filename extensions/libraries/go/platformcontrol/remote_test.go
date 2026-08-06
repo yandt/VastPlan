@@ -91,6 +91,20 @@ func TestRemoteBootstrapperPreservesSafeDatabaseFailure(t *testing.T) {
 	}
 }
 
+func TestRemoteBootstrapperProvisionsOnlyOneTrustedRuntimeInstance(t *testing.T) {
+	invoke := &testInvoker{instances: map[string][]RuntimeInstance{
+		platformcontrolv1.BootstrapCapability: {{ID: "runtime-a"}, {ID: "runtime-b"}},
+	}}
+	bootstrapper, _ := NewRemoteBootstrapper(invoke)
+	if err := bootstrapper.Provision(context.Background(), platformcontrolv1.Profile{SchemaVersion: 1, Generation: 1}, testSecret("secret")); err != nil {
+		t.Fatal(err)
+	}
+	want := platformcontrolv1.BootstrapCapability + "/" + platformcontrolv1.OperationProvision + "@runtime-a"
+	if len(invoke.calls) != 1 || invoke.calls[0] != want {
+		t.Fatalf("建库必须只由首个可信 Runtime 执行: %v", invoke.calls)
+	}
+}
+
 func TestRemoteStorePreservesStableConflict(t *testing.T) {
 	invoke := &testInvoker{instances: map[string][]RuntimeInstance{sharedstatesqlv1.Capability: {{ID: "runtime-a"}}}, result: func(_, _, _ string) (*contractv1.CallResult, []byte, error) {
 		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: sharedstatesqlv1.ErrorConflict}}, nil, nil

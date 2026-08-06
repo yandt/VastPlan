@@ -43,6 +43,8 @@ describe("Platform Control bootstrap surface", () => {
       expect(pageHTML).toContain("const request=payload();busy(true)");
       expect(pageHTML).toContain("mutate('/v1/bootstrap/platform-control/test','POST',request)");
       expect(pageHTML).toContain("database_authentication_failed:'数据库用户名或密码验证失败'");
+      expect(pageHTML).toContain("数据库不存在时自动创建");
+      expect(pageHTML).toContain("createDatabaseIfMissing:data.get('createDatabaseIfMissing')==='on'");
       expect(pageHTML).toContain("跟踪编号：");
       expect(pageHTML).not.toContain("body:JSON.stringify(payload())");
       const pageHead = await fetch(`${origin}/bootstrap/platform-control`, { method: "HEAD", headers: { Cookie: cookie } });

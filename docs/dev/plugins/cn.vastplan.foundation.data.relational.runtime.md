@@ -4,11 +4,11 @@
 
 能力：`tool.package/foundation.data.relational.runtime`
 
-当前制品版本：`0.16.1`
+当前制品版本：`0.16.2`
 
 当前公开 Capability 契约：`foundation.data.relational.runtime@1.3.0`
 
-宿主内部 Capability：`foundation.state.shared.sql.bootstrap@2.0.0`、`foundation.state.shared.sql@1.0.0`。两者只服务 Platform Control 两阶段启动，不作为普通插件可选择的数据库连接暴露。
+宿主内部 Capability：`foundation.state.shared.sql.bootstrap@3.0.0`、`foundation.state.shared.sql@1.0.0`。两者只服务 Platform Control 两阶段启动，不作为普通插件可选择的数据库连接暴露。
 
 1.3.0 新增唯一的非敏感 `DatabaseConnectionCandidate`。普通托管连接与 Platform Control Bootstrap 都以该对象传递 Provider、endpoint、database、options 和池策略；`ConnectionSpec` 只在进入 Runtime 数据面时再附加可信 `ConnectionRef` 与 `ManagedCredentialRef`。候选不拥有密码、名称、generation 或持久化语义，避免 Bootstrap 与普通 Connection Manager 互相形成启动依赖。
 
@@ -40,6 +40,8 @@ Database Runtime 是关系数据库数据面，负责 Provider、节点本地连
 Runtime 在可信进程日志中记录 `operation/stage/provider/error_code/retryable/trace_id`，以及不含地址、用户名、数据库名和凭证的驱动证据，例如 PostgreSQL SQLSTATE、MySQL 错误号或网络/TLS 分类。日志禁止输出原始驱动字符串，因为驱动可能把 endpoint、账号或 DSN 拼入其中。
 
 `0.16.1` 将同一组稳定错误码用于普通连接测试和 Platform Control Bootstrap。Bootstrap 内部调用、可信宿主 Controller、Portal BFF 与 SDK 不得把已分类的 `database.runtime.*` 覆盖成统一的“数据库不可连接”；浏览器获得中文类别与同一 `traceId`，运维可用该编号关联 Runtime 的脱敏诊断日志。未知错误仍按边界收敛为通用失败，原始驱动文本不会跨进程或返回浏览器。
+
+`0.16.2` 为 Bootstrap 3.0 增加独立 `provision` 操作。它只在可信宿主首次配置工作流显式调用，使用短生命周期单连接管理池创建目标逻辑数据库，随后由宿主重新 Test 才进入 Schema 初始化。测试、Open、恢复和普通数据面不会触发建库；实现没有 DROP 路径。PostgreSQL 并发建库的 `duplicate_database` 和 MySQL `IF NOT EXISTS` 作为幂等成功处理，其他权限或连接错误仍使用稳定 Runtime 错误码。
 
 ## Provider SPI
 

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgconn"
+
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformcontrol"
@@ -22,15 +24,21 @@ func (s bootstrapSecret) WithSecret(_ context.Context, use func([]byte) error) e
 }
 
 type bootstrapProvider struct {
-	pools    []*bootstrapPool
-	probeErr error
+	providerID string
+	pools      []*bootstrapPool
+	specs      []databasev1.ConnectionSpec
+	probeErr   error
 }
 
-func (*bootstrapProvider) Descriptor() databasev1.ProviderDescriptor {
-	return databasev1.ProviderDescriptor{ID: "mysql", Version: "1.0.0", DisplayName: "test mysql", ConfigurationSchema: json.RawMessage(`{"type":"object"}`), Capabilities: databasev1.ProviderCapabilities{Query: true, Execute: true, Transactions: true}}
+func (p *bootstrapProvider) Descriptor() databasev1.ProviderDescriptor {
+	providerID := p.providerID
+	if providerID == "" {
+		providerID = "mysql"
+	}
+	return databasev1.ProviderDescriptor{ID: providerID, Version: "1.0.0", DisplayName: "test database", ConfigurationSchema: json.RawMessage(`{"type":"object"}`), Capabilities: databasev1.ProviderCapabilities{Query: true, Execute: true, Transactions: true}}
 }
 func (*bootstrapProvider) Validate(context.Context, databasev1.ConnectionSpec) error { return nil }
-func (p *bootstrapProvider) OpenPool(ctx context.Context, _ databasev1.ConnectionSpec, material databaseruntime.MaterialSource) (databaseruntime.Pool, error) {
+func (p *bootstrapProvider) OpenPool(ctx context.Context, spec databasev1.ConnectionSpec, material databaseruntime.MaterialSource) (databaseruntime.Pool, error) {
 	if err := material.WithMaterial(ctx, func(value databaseruntime.CredentialMaterial) error {
 		if string(value.Bytes()) != "secret" {
 			return errors.New("secret mismatch")
@@ -41,7 +49,56 @@ func (p *bootstrapProvider) OpenPool(ctx context.Context, _ databasev1.Connectio
 	}
 	pool := &bootstrapPool{probeErr: p.probeErr}
 	p.pools = append(p.pools, pool)
+	p.specs = append(p.specs, spec)
 	return pool, nil
+}
+
+func TestBootstrapperProvisionsMySQLThroughServerConnection(t *testing.T) {
+	provider := &bootstrapProvider{providerID: "mysql"}
+	registry := databaseruntime.NewRegistry()
+	if err := registry.Register(provider); err != nil {
+		t.Fatal(err)
+	}
+	bootstrapper, _ := New(registry)
+	profile := bootstrapProfile("mysql", "db.internal:3306", "platform", "platform", "vastplan", "verify-ca", "/run/vastplan/password")
+	if err := bootstrapper.Provision(context.Background(), profile, bootstrapSecret("secret")); err != nil {
+		t.Fatal(err)
+	}
+	if len(provider.specs) != 1 || provider.specs[0].Database != "" || provider.specs[0].Pool.MaxOpen != 1 {
+		t.Fatalf("MySQL 建库必须使用无默认库的单连接管理池: %+v", provider.specs)
+	}
+	if got := strings.Join(provider.pools[0].statements, "\n"); !strings.Contains(got, "CREATE DATABASE IF NOT EXISTS `platform`") {
+		t.Fatalf("MySQL 建库语句错误: %s", got)
+	}
+	if !provider.pools[0].closed {
+		t.Fatal("管理连接池必须关闭")
+	}
+}
+
+func TestBootstrapperProvisionsPostgreSQLThroughMaintenanceDatabase(t *testing.T) {
+	provider := &bootstrapProvider{providerID: "postgresql"}
+	registry := databaseruntime.NewRegistry()
+	if err := registry.Register(provider); err != nil {
+		t.Fatal(err)
+	}
+	bootstrapper, _ := New(registry)
+	profile := bootstrapProfile("postgresql", "db.internal:5432", "platform", "platform", "vastplan", "verify-ca", "/run/vastplan/password")
+	if err := bootstrapper.Provision(context.Background(), profile, bootstrapSecret("secret")); err != nil {
+		t.Fatal(err)
+	}
+	if len(provider.specs) != 1 || provider.specs[0].Database != "postgres" || provider.specs[0].Pool.MaxOpen != 1 {
+		t.Fatalf("PostgreSQL 建库必须使用 postgres 单连接管理池: %+v", provider.specs)
+	}
+	if got := strings.Join(provider.pools[0].statements, "\n"); !strings.Contains(got, `CREATE DATABASE "platform"`) {
+		t.Fatalf("PostgreSQL 建库语句错误: %s", got)
+	}
+}
+
+func TestPostgreSQLConcurrentCreateTreatsDuplicateDatabaseAsSuccess(t *testing.T) {
+	err := databaseruntime.NewRuntimeError(databasev1.ErrorQueryFailed, false, &pgconn.PgError{Code: "42P04"})
+	if !databaseAlreadyExists(err) {
+		t.Fatal("并发创建 PostgreSQL 数据库时 duplicate_database 必须幂等收敛")
+	}
 }
 
 type bootstrapPool struct {

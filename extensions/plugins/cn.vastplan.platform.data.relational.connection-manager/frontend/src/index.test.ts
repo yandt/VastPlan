@@ -17,13 +17,13 @@ describe("database connections Workbench page", () => {
     expect(page.form.workflow).toMatchObject({ surface: "page", submitLabel: expect.objectContaining({ key: "platformControl.action.initialize" }) });
     expect(page.form.workflow.actions).toContainEqual(expect.objectContaining({ id: "test", placement: "footer.start", requiresValid: true }));
     const loaded = await page.form.load?.([], new AbortController().signal);
-    expect(loaded).toMatchObject({ phase: "unconfigured", currentGeneration: 0, providerId: "postgresql", secretMode: "direct", contractRange: "^1.0.0" });
+    expect(loaded).toMatchObject({ phase: "unconfigured", currentGeneration: 0, providerId: "postgresql", createDatabaseIfMissing: true, secretMode: "direct", contractRange: "^1.0.0" });
     const value = { ...loaded, host: "db.internal", username: "vastplan", serverName: "db.internal", password: "one-time-password" };
     const action = page.form.workflow.actions?.[0];
     if (action === undefined) throw new Error("平台控制数据库测试动作未注册");
     await page.form.runAction?.({ action, value, selected: [] }, new AbortController().signal);
     await page.form.submit({ value, selected: [] }, new AbortController().signal);
-    const expected = expect.objectContaining({ expectedGeneration: 0, secretMaterial: "one-time-password", profile: expect.objectContaining({ schemaVersion: 1, generation: 1, connection: expect.objectContaining({ endpoint: "db.internal:5432" }) }) });
+    const expected = expect.objectContaining({ expectedGeneration: 0, createDatabaseIfMissing: true, secretMaterial: "one-time-password", profile: expect.objectContaining({ schemaVersion: 1, generation: 1, connection: expect.objectContaining({ endpoint: "db.internal:5432" }) }) });
     expect(testPlatformControl).toHaveBeenCalledWith(expected);
     expect(configurePlatformControl).toHaveBeenCalledWith(expected);
     expect(testPlatformControl).toHaveBeenCalledWith(expect.objectContaining({ profile: expect.not.objectContaining({ secretRef: expect.anything() }) }));
@@ -41,6 +41,23 @@ describe("database connections Workbench page", () => {
     if (action === undefined) throw new Error("平台控制数据库测试动作未注册");
     const result = await page.form.runAction?.({ action, value: { ...loaded, host: "db", username: "app", serverName: "db", password: "secret" }, selected: [] }, new AbortController().signal);
     expect(result?.fieldErrors).toMatchObject({ "/host": expect.objectContaining({ key: "platformControl.validation.profile.connection.endpoint.host_port_required" }) });
+  });
+
+  it("keeps connection tests read-only and explains first-time database creation", async () => {
+    const client = {
+      platformControlStatus: vi.fn(async () => ({ phase: "unconfigured" as const })),
+      testPlatformControl: vi.fn(async () => { throw new PlatformAdminError(422, "database_not_found"); }),
+    } as unknown as PlatformAdminClient;
+    const page = createPlatformControlPage(client, "database", "/settings/databases/platform-control");
+    const loaded = await page.form.load?.([], new AbortController().signal);
+    const action = page.form.workflow.actions?.[0];
+    if (action === undefined) throw new Error("平台控制数据库测试动作未注册");
+    const outcome = await page.form.runAction?.({
+      action,
+      value: { ...loaded, host: "db.internal", username: "vastplan", serverName: "db.internal", password: "secret" },
+      selected: [],
+    }, new AbortController().signal);
+    expect(outcome?.notify).toMatchObject({ kind: "warning", title: expect.objectContaining({ key: "platformControl.notice.databaseWillBeCreated" }) });
   });
 
   it("requires one-time material on create but never loads it for edit", async () => {

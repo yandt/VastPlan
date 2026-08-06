@@ -15,6 +15,7 @@ const (
 	CodeProfileInvalid       = "platform_control.profile_invalid"
 	CodeSecretUnavailable    = "platform_control.secret_unavailable"
 	CodeDatabaseUnavailable  = "platform_control.database_unavailable"
+	CodeProvisioningFailed   = "platform_control.provisioning_failed"
 	CodeInitializationFailed = "platform_control.initialization_failed"
 	CodeCommitConflict       = "platform_control.commit_conflict"
 )
@@ -122,8 +123,20 @@ func (c *Controller) Configure(ctx context.Context, request platformcontrolv1.Ch
 	}
 	c.setStatus(platformcontrolv1.PhaseTesting, expectedGeneration, "")
 	if err := c.database.Test(ctx, candidate, source); err != nil {
-		c.setCandidateFailure(expectedGeneration, databaseFailureCode(err, CodeDatabaseUnavailable))
-		return err
+		if !request.CreateDatabaseIfMissing || !databaseNotFound(err) {
+			c.setCandidateFailure(expectedGeneration, databaseFailureCode(err, CodeDatabaseUnavailable))
+			return err
+		}
+		c.setStatus(platformcontrolv1.PhaseProvisioning, expectedGeneration, "")
+		if err := c.database.Provision(ctx, candidate, source); err != nil {
+			c.setCandidateFailure(expectedGeneration, databaseFailureCode(err, CodeProvisioningFailed))
+			return err
+		}
+		c.setStatus(platformcontrolv1.PhaseTesting, expectedGeneration, "")
+		if err := c.database.Test(ctx, candidate, source); err != nil {
+			c.setCandidateFailure(expectedGeneration, databaseFailureCode(err, CodeDatabaseUnavailable))
+			return err
+		}
 	}
 	c.setStatus(platformcontrolv1.PhaseInitializing, expectedGeneration, "")
 	store, err := c.database.Initialize(ctx, candidate, source)
@@ -210,6 +223,11 @@ func databaseFailureCode(err error, fallback string) string {
 		return code
 	}
 	return fallback
+}
+
+func databaseNotFound(err error) bool {
+	code, _, ok := platformcontrolport.FailureDetails(err)
+	return ok && code == databasev1.ErrorDatabaseNotFound
 }
 
 var _ platformcontrolport.Administration = (*Controller)(nil)

@@ -30,7 +30,7 @@
     "status": {
       "type": "object", "additionalProperties": false, "required": ["phase"],
       "properties": {
-        "phase": { "enum": ["unconfigured", "testing", "initializing", "ready", "recovery"] },
+        "phase": { "enum": ["unconfigured", "testing", "provisioning", "initializing", "ready", "recovery"] },
         "generation": { "type": "integer", "minimum": 1 },
         "code": { "type": "string", "pattern": "^[a-z][a-z0-9_.-]+$", "maxLength": 160 }
       }

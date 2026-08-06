@@ -25,9 +25,11 @@ func (s staticSecretSource) WithSecret(_ context.Context, use func([]byte) error
 type fakeBootstrapper struct {
 	store         ManagedStore
 	testErr       error
+	provisionErr  error
 	initializeErr error
 	openErr       error
 	tested        int
+	provisioned   int
 	initialized   int
 	opened        int
 }
@@ -50,6 +52,10 @@ func (profileSecretBootstrapper) Test(ctx context.Context, profile platformcontr
 	})
 }
 
+func (profileSecretBootstrapper) Provision(context.Context, platformcontrolv1.Profile, SecretSource) error {
+	return errors.New("not used")
+}
+
 func (profileSecretBootstrapper) Initialize(context.Context, platformcontrolv1.Profile, SecretSource) (ManagedStore, error) {
 	return nil, errors.New("not used")
 }
@@ -69,6 +75,15 @@ func (f *fakeBootstrapper) Test(ctx context.Context, _ platformcontrolv1.Profile
 		}
 		return nil
 	})
+}
+
+func (f *fakeBootstrapper) Provision(context.Context, platformcontrolv1.Profile, SecretSource) error {
+	f.provisioned++
+	if f.provisionErr != nil {
+		return f.provisionErr
+	}
+	f.testErr = nil
+	return nil
 }
 
 func (f *fakeBootstrapper) Initialize(context.Context, platformcontrolv1.Profile, SecretSource) (ManagedStore, error) {
@@ -157,6 +172,51 @@ func TestControllerFailsClosedWithoutCommittingOrFallback(t *testing.T) {
 	}
 	if _, err := binding.Get(context.Background(), sharedstate.Scope{}, "probe"); !errors.Is(err, sharedstate.ErrUnconfigured) {
 		t.Fatalf("未提交的失败候选不得关闭 Seed bootstrap 路径: %v", err)
+	}
+}
+
+func TestControllerProvisionsMissingDatabaseOnlyWhenExplicitlyRequested(t *testing.T) {
+	root := t.TempDir()
+	stateStore, _ := sharedstate.OpenFileStore(filepath.Join(root, "provider-state.json"))
+	missing := platformcontrolport.NewFailure(databasev1.ErrorDatabaseNotFound, false)
+	bootstrapper := &fakeBootstrapper{store: managedTestStore{Store: stateStore}, testErr: missing}
+	controller, _ := NewController(
+		&FileProfileStore{Path: filepath.Join(root, "platform-control.json")},
+		func(platformcontrolv1.SecretRef) (SecretSource, error) {
+			return staticSecretSource{value: []byte("secret")}, nil
+		},
+		bootstrapper,
+		sharedstate.NewBindingStore(),
+		&FileSecretMaterialStore{Root: filepath.Join(root, "managed-secrets")},
+	)
+	request := platformcontrolv1.ChangeRequest{
+		Profile: testProfile(filepath.Join(root, "password"), 1), CreateDatabaseIfMissing: true,
+	}
+	if err := controller.Configure(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+	if bootstrapper.tested != 2 || bootstrapper.provisioned != 1 || bootstrapper.initialized != 1 {
+		t.Fatalf("首次建库链必须为 test -> provision -> test -> initialize: %+v", bootstrapper)
+	}
+}
+
+func TestControllerTestCandidateNeverProvisionsMissingDatabase(t *testing.T) {
+	root := t.TempDir()
+	bootstrapper := &fakeBootstrapper{testErr: platformcontrolport.NewFailure(databasev1.ErrorDatabaseNotFound, false)}
+	controller, _ := NewController(
+		&FileProfileStore{Path: filepath.Join(root, "platform-control.json")},
+		func(platformcontrolv1.SecretRef) (SecretSource, error) {
+			return staticSecretSource{value: []byte("secret")}, nil
+		},
+		bootstrapper,
+		sharedstate.NewBindingStore(),
+		&FileSecretMaterialStore{Root: filepath.Join(root, "managed-secrets")},
+	)
+	err := controller.TestCandidate(context.Background(), platformcontrolv1.ChangeRequest{
+		Profile: testProfile(filepath.Join(root, "password"), 1), CreateDatabaseIfMissing: true,
+	})
+	if err == nil || bootstrapper.provisioned != 0 || controller.Status().Code != databasev1.ErrorDatabaseNotFound {
+		t.Fatalf("测试连接必须保持只读并保留 database_not_found: bootstrapper=%+v status=%+v err=%v", bootstrapper, controller.Status(), err)
 	}
 }
 

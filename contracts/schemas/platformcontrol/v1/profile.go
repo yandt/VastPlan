@@ -8,16 +8,18 @@ const (
 	SchemaURL                 = "https://schemas.cdsoft.com.cn/vastplan/platformcontrol/v1/vastplan.platform-control.schema.json"
 	Version                   = 1
 	BootstrapCapability       = "foundation.state.shared.sql.bootstrap"
-	BootstrapContractVersion  = "2.0.0"
+	BootstrapContractVersion  = "3.0.0"
 	RuntimeLogicalService     = "foundation.data.relational.runtime"
 	RuntimeRoutingDomain      = "platform"
 	OperationTest             = "test"
+	OperationProvision        = "provision"
 	OperationInitialize       = "initialize"
 	OperationOpen             = "open"
 	TrustedBootstrapSystemID  = "platform-control-bootstrap/primary"
 	ErrorInvalid              = "platform.control.invalid"
 	ErrorUnavailable          = "platform.control.unavailable"
 	ErrorConflict             = "platform.control.conflict"
+	ErrorProvisioningFailed   = "platform.control.provisioning_failed"
 	ErrorInitializationFailed = "platform.control.initialization_failed"
 	KernelStatusService       = "kernel.platform-control.status"
 	KernelTestService         = "kernel.platform-control.test"
@@ -45,6 +47,7 @@ type Phase string
 const (
 	PhaseUnconfigured Phase = "unconfigured"
 	PhaseTesting      Phase = "testing"
+	PhaseProvisioning Phase = "provisioning"
 	PhaseInitializing Phase = "initializing"
 	PhaseReady        Phase = "ready"
 	PhaseRecovery     Phase = "recovery"
@@ -58,7 +61,8 @@ type Status struct {
 }
 
 type ChangeRequest struct {
-	Profile            Profile `json:"profile"`
-	ExpectedGeneration uint64  `json:"expectedGeneration"`
-	SecretMaterial     string  `json:"secretMaterial,omitempty"`
+	Profile                 Profile `json:"profile"`
+	ExpectedGeneration      uint64  `json:"expectedGeneration"`
+	SecretMaterial          string  `json:"secretMaterial,omitempty"`
+	CreateDatabaseIfMissing bool    `json:"createDatabaseIfMissing,omitempty"`
 }

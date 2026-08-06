@@ -26,6 +26,7 @@ func TestPlatformControlRuntimeOnlyAcceptsTrustedBootstrapSystem(t *testing.T) {
 	}
 	for _, request := range []extpoint.PermissionRequest{
 		{ExtensionPoint: extpoint.ToolPackage, Capability: platformcontrolv1.BootstrapCapability, Operation: platformcontrolv1.OperationTest},
+		{ExtensionPoint: extpoint.ToolPackage, Capability: platformcontrolv1.BootstrapCapability, Operation: platformcontrolv1.OperationProvision},
 		{ExtensionPoint: extpoint.ToolPackage, Capability: platformcontrolv1.BootstrapCapability, Operation: platformcontrolv1.OperationInitialize},
 		{ExtensionPoint: extpoint.ToolPackage, Capability: platformcontrolv1.BootstrapCapability, Operation: platformcontrolv1.OperationOpen},
 		{ExtensionPoint: extpoint.ToolPackage, Capability: sharedstatesqlv1.Capability, Operation: sharedstatesqlv1.OperationGet},

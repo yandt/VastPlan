@@ -109,6 +109,7 @@ describe("Platform core management routes", () => {
       ["platform.database.tls_verification_failed", "database_tls_verification_failed", 422],
       ["platform.database.authentication_failed", "database_authentication_failed", 422],
       ["platform.database.database_not_found", "database_not_found", 422],
+      ["platform_control.provisioning_failed", "platform_control_provisioning_failed", 422],
       ["platform.database.permission_denied", "database_permission_denied", 422],
       ["platform.database.pool_exhausted", "database_pool_exhausted", 429],
       ["platform.database.credential_unavailable", "database_credential_unavailable", 422],

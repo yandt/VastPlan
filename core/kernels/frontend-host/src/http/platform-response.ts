@@ -87,6 +87,7 @@ function mapCapabilityError(response: ServerResponse, error: CapabilityApplicati
   if (code === "platform_control.secret_unavailable") return sendApplicationError(response, 422, "platform_control_secret_unavailable", error, head);
   if (code === "platform_control.database_unavailable") return sendApplicationError(response, 422, "platform_control_database_unavailable", error, head);
   if (code === "platform_control.initialization_failed") return sendApplicationError(response, 422, "platform_control_initialization_failed", error, head);
+  if (code === "platform_control.provisioning_failed") return sendApplicationError(response, 422, "platform_control_provisioning_failed", error, head);
   if (code === "platform_control.commit_conflict") return sendApplicationError(response, 409, "platform_control_conflict", error, head);
   if (code === "platform.plugin_installation.invalid") return sendAPIError(response, 400, "invalid_installation_request", head);
   if (code === "platform.plugin_configuration.unavailable") return sendAPIError(response, 503, "configuration_unavailable", head);

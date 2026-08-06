@@ -165,9 +165,9 @@ export interface PlatformControlProfile {
   schema: string;
   secretRef: PlatformControlSecretRef; contractRange: string;
 }
-export interface PlatformControlStatus { phase: "unconfigured" | "testing" | "initializing" | "ready" | "recovery"; generation?: number; code?: string; profile?: PlatformControlProfile; }
+export interface PlatformControlStatus { phase: "unconfigured" | "testing" | "provisioning" | "initializing" | "ready" | "recovery"; generation?: number; code?: string; profile?: PlatformControlProfile; }
 export type PlatformControlCandidateProfile = Omit<PlatformControlProfile, "secretRef"> & { secretRef?: PlatformControlSecretRef };
-export interface PlatformControlChangeRequest { profile: PlatformControlCandidateProfile; expectedGeneration: number; secretMaterial?: string; }
+export interface PlatformControlChangeRequest { profile: PlatformControlCandidateProfile; expectedGeneration: number; secretMaterial?: string; createDatabaseIfMissing?: boolean; }
 export type AuthenticationProviderState = "draft" | "validated" | "tested" | "approved" | "published" | "retired";
 export type AuthenticationProviderReadiness = "unknown" | "blocked" | "ready" | "degraded" | "failed";
 export interface AuthenticationProviderProfile {

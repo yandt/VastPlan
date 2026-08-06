@@ -111,14 +111,19 @@ export VASTPLAN_TEST_POSTGRESQL_ENDPOINT="127.0.0.1:${POSTGRES_PORT}"
 export VASTPLAN_TEST_POSTGRESQL_USER=vastplan
 export VASTPLAN_TEST_POSTGRESQL_PASSWORD="$PASSWORD"
 export VASTPLAN_TEST_POSTGRESQL_DATABASE=vastplan
+export VASTPLAN_TEST_POSTGRESQL_PROVISION_USER=vastplan
+export VASTPLAN_TEST_POSTGRESQL_PROVISION_PASSWORD="$PASSWORD"
 export VASTPLAN_TEST_POSTGRESQL_TLS_MODE=disable
 export VASTPLAN_TEST_POSTGRESQL_FAULT_CONTAINER="$POSTGRES_CONTAINER"
 export VASTPLAN_TEST_MYSQL_ENDPOINT="127.0.0.1:${MYSQL_PORT}"
 export VASTPLAN_TEST_MYSQL_USER=vastplan
 export VASTPLAN_TEST_MYSQL_PASSWORD="$PASSWORD"
 export VASTPLAN_TEST_MYSQL_DATABASE=vastplan
+export VASTPLAN_TEST_MYSQL_PROVISION_USER=root
+export VASTPLAN_TEST_MYSQL_PROVISION_PASSWORD="$PASSWORD"
 export VASTPLAN_TEST_MYSQL_TLS_MODE=disable
 export VASTPLAN_TEST_MYSQL_FAULT_CONTAINER="$MYSQL_CONTAINER"
+export VASTPLAN_TEST_DATABASE_PROVISIONING=1
 
 echo "[1/4] 验证 Provider、Record Store、连接池与故障恢复矩阵"
 go test -count=1 -timeout=3m \
@@ -128,9 +133,9 @@ go test -count=1 -timeout=8m \
   -run 'Test(PostgreSQL|MySQL)ProviderFaultMatrix$' \
   ./extensions/plugins/cn.vastplan.foundation.data.relational.runtime/databaseruntime
 
-echo "[2/4] 验证 Platform Control 并发初始化与完整重启恢复"
+echo "[2/4] 验证 Platform Control 缺库创建、并发初始化与完整重启恢复"
 go test -count=1 -timeout=3m \
-  -run 'Test(PostgreSQL|MySQL)PlatformControlBootstrapIntegration$' \
+  -run 'Test(PostgreSQL|MySQL)PlatformControl(Bootstrap|Provisioning)Integration$' \
   ./extensions/plugins/cn.vastplan.foundation.data.relational.runtime/databaseruntime/platformcontrolbootstrap
 
 echo "[3/4] 创建 Platform Control 事务一致备份并执行隔离恢复"

@@ -4,11 +4,9 @@ package platformcontrolbootstrap
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"sync"
 
-	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
 	platformcontrol "cdsoft.com.cn/VastPlan/extensions/libraries/go/platformcontrol"
@@ -72,26 +70,12 @@ func (b *Bootstrapper) Open(ctx context.Context, profile platformcontrolv1.Profi
 }
 
 func (b *Bootstrapper) openPool(ctx context.Context, profile platformcontrolv1.Profile, secret platformcontrol.SecretSource) (databaseruntime.Pool, recordstore.Dialect, error) {
-	if err := platformcontrolv1.ValidateProfile(profile); err != nil || secret == nil {
-		return nil, nil, errors.New("Platform Control Bootstrap 输入无效")
+	if err := validateBootstrapInput(profile, secret); err != nil {
+		return nil, nil, err
 	}
-	if profile.Connection.ProviderID == "mysql" && profile.Schema != profile.Connection.Database {
-		return nil, nil, errors.New("MySQL Platform Control schema 必须等于连接 database")
-	}
-	var options map[string]any
-	if err := json.Unmarshal(profile.Connection.Options, &options); err != nil || options == nil {
-		return nil, nil, errors.New("Platform Control Provider options 无效")
-	}
-	if profile.Connection.ProviderID == "postgresql" {
-		options["applicationName"] = "vastplan-platform-control"
-		options["searchPath"] = profile.Schema
-	}
-	raw, _ := json.Marshal(options)
-	spec := databasev1.ConnectionSpec{
-		Ref:        databasev1.ConnectionRef{ResourceID: "platform.control", Revision: profile.Generation},
-		ProviderID: profile.Connection.ProviderID, Endpoint: profile.Connection.Endpoint, Database: profile.Connection.Database, Options: raw,
-		Credentials: commonv1.ManagedCredentialRef{Handle: "credential://managed/platform-control-bootstrap", Scope: "service", Owner: databaseruntime.PluginID, Purpose: databasev1.CredentialPurpose, Version: int64(profile.Generation)},
-		Pool:        profile.Connection.Pool,
+	spec, err := connectionSpec(profile, false)
+	if err != nil {
+		return nil, nil, err
 	}
 	pool, err := b.registry.OpenPool(ctx, spec, secretMaterialSource{source: secret})
 	if err != nil {

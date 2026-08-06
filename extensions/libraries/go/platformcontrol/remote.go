@@ -37,11 +37,19 @@ func NewRemoteBootstrapper(invoke Invoker) (*RemoteBootstrapper, error) {
 }
 
 func (b *RemoteBootstrapper) Test(ctx context.Context, profile platformcontrolv1.Profile, secret SecretSource) error {
+	return b.callFirst(ctx, platformcontrolv1.OperationTest, profile, secret)
+}
+
+func (b *RemoteBootstrapper) Provision(ctx context.Context, profile platformcontrolv1.Profile, secret SecretSource) error {
+	return b.callFirst(ctx, platformcontrolv1.OperationProvision, profile, secret)
+}
+
+func (b *RemoteBootstrapper) callFirst(ctx context.Context, operation string, profile platformcontrolv1.Profile, secret SecretSource) error {
 	instances := b.invoke.Instances(platformcontrolv1.BootstrapCapability)
 	if len(instances) == 0 {
 		return sharedstate.ErrUnavailable
 	}
-	_, err := b.callInstance(ctx, platformcontrolv1.OperationTest, instances[0].ID, profile, secret)
+	_, err := b.callInstance(ctx, operation, instances[0].ID, profile, secret)
 	return err
 }
 

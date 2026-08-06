@@ -95,7 +95,7 @@ func classifySQLError(err error, transaction bool) error {
 			return NewRuntimeError(databasev1.ErrorAuthenticationFailed, false, err)
 		case 1049:
 			return NewRuntimeError(databasev1.ErrorDatabaseNotFound, false, err)
-		case 1044:
+		case 1044, 1142, 1227:
 			return NewRuntimeError(databasev1.ErrorPermissionDenied, false, err)
 		case 1040, 1203:
 			return NewRuntimeError(databasev1.ErrorPoolExhausted, true, err)

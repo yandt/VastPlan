@@ -151,7 +151,7 @@ func platformControlRuntimeAllowed(c *v1.CallContext, request extpoint.Permissio
 	switch request.Capability {
 	case platformcontrolv1.BootstrapCapability:
 		switch request.Operation {
-		case platformcontrolv1.OperationTest, platformcontrolv1.OperationInitialize, platformcontrolv1.OperationOpen:
+		case platformcontrolv1.OperationTest, platformcontrolv1.OperationProvision, platformcontrolv1.OperationInitialize, platformcontrolv1.OperationOpen:
 			return true
 		}
 	case sharedstatesqlv1.Capability:

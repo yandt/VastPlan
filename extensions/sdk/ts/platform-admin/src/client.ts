@@ -422,6 +422,7 @@ function platformAdminErrorMessage(code: string): string {
   if (code === "platform_control_invalid") return "平台控制数据库配置无效，请检查数据库地址、凭证引用和契约范围。";
   if (code === "platform_control_secret_unavailable") return "平台控制数据库密码引用不可用，请检查 systemd credential 或受保护文件。";
   if (code === "platform_control_database_unavailable") return "平台控制数据库连接失败，请检查网络、账户、传输加密和数据库权限。";
+  if (code === "platform_control_provisioning_failed") return "目标数据库创建失败，请检查账户是否具有建库权限。";
   if (code === "platform_control_initialization_failed") return "平台控制数据库初始化失败，请检查建表权限和迁移日志。";
   if (code === "platform_control_conflict") return "平台控制数据库配置已被其他节点更新，请刷新后重试。";
   return `Platform administration request failed: ${code}`;

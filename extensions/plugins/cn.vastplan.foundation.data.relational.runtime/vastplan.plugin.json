@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.foundation.data.relational.runtime",
   "name": "VastPlan Database Runtime",
-  "version": "0.16.1",
+  "version": "0.16.2",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -36,7 +36,7 @@
       },
       {
         "extensionPoint": "tool.package",
-        "capability": "foundation.state.shared.sql.bootstrap", "contractVersion": "2.0.0",
+        "capability": "foundation.state.shared.sql.bootstrap", "contractVersion": "3.0.0",
         "visibility": "cluster",
         "routing": "queue",
         "routingDomain": "platform"
@@ -121,6 +121,7 @@
           "title": "Platform Control SQL Bootstrap",
           "subcommands": [
             { "name": "test", "description": "测试 Platform Control SQL 候选" },
+            { "name": "provision", "description": "首次配置时创建 Platform Control 目标数据库" },
             { "name": "initialize", "description": "初始化并绑定 Platform Control SQL 候选" },
             { "name": "open", "description": "打开已提交的 Platform Control SQL Profile" }
           ]

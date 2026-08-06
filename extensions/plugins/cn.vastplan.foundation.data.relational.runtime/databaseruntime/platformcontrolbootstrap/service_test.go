@@ -105,6 +105,31 @@ func TestServiceTestDoesNotBindStore(t *testing.T) {
 	}
 }
 
+func TestServiceProvisionCreatesDatabaseWithoutBindingStore(t *testing.T) {
+	provider := &bootstrapProvider{}
+	registry := databaseruntime.NewRegistry()
+	_ = registry.Register(provider)
+	bootstrapper, _ := New(registry)
+	binding := sharedstate.NewBindingStore()
+	recordBinding := databaseruntime.NewPlatformRecordBinding()
+	service, _ := NewService(bootstrapper, binding, recordBinding, func(context.Context, databaseruntime.PlatformRecordStore) error { return nil }, "")
+	secretPath := filepath.Join(t.TempDir(), "password")
+	_ = os.WriteFile(secretPath, []byte("secret"), 0o600)
+	profile := bootstrapProfile("mysql", "db.internal:3306", "platform", "platform", "vastplan", "verify-ca", secretPath)
+	payload, _ := json.Marshal(profile)
+	trusted := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: platformcontrolv1.TrustedBootstrapSystemID}}
+	result, _, err := service.Contribution().Handlers[platformcontrolv1.OperationProvision](context.Background(), nil, trusted, payload)
+	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK {
+		t.Fatalf("首次建库失败: result=%+v err=%v", result, err)
+	}
+	if _, _, ready := binding.Snapshot(); ready {
+		t.Fatal("建库不得绑定 Shared State")
+	}
+	if _, _, ready := recordBinding.Snapshot(); ready {
+		t.Fatal("建库不得绑定 Platform Record Store")
+	}
+}
+
 func TestServicePreservesSafeDatabaseFailureCode(t *testing.T) {
 	provider := &bootstrapProvider{probeErr: databaseruntime.NewRuntimeError(databasev1.ErrorAuthenticationFailed, false, errors.New("driver detail must remain private"))}
 	registry := databaseruntime.NewRegistry()

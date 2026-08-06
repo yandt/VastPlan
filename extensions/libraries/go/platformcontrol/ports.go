@@ -36,6 +36,7 @@ type ManagedStore interface {
 // caller owns workflow ordering but never imports a driver or pool type.
 type Bootstrapper interface {
 	Test(context.Context, platformcontrolv1.Profile, SecretSource) error
+	Provision(context.Context, platformcontrolv1.Profile, SecretSource) error
 	Initialize(context.Context, platformcontrolv1.Profile, SecretSource) (ManagedStore, error)
 	Open(context.Context, platformcontrolv1.Profile, SecretSource) (ManagedStore, error)
 }

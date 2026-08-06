@@ -61,6 +61,19 @@ func TestChangeRequestReturnsSafeStructuredValidationIssue(t *testing.T) {
 	}
 }
 
+func TestChangeRequestAllowsDatabaseCreationOnlyForInitialGeneration(t *testing.T) {
+	profile := testProfile("db.internal:5432")
+	if err := ValidateChangeRequest(ChangeRequest{Profile: profile, SecretMaterial: "secret", CreateDatabaseIfMissing: true}); err != nil {
+		t.Fatalf("首次配置应允许显式建库: %v", err)
+	}
+	profile.Generation = 2
+	err := ValidateChangeRequest(ChangeRequest{Profile: profile, ExpectedGeneration: 1, SecretMaterial: "secret", CreateDatabaseIfMissing: true})
+	issue, ok := ValidationIssueFrom(err)
+	if !ok || issue.Field != "createDatabaseIfMissing" || issue.Reason != "initial_only" {
+		t.Fatalf("已配置 Profile 不得再次触发自动建库: issue=%+v err=%v", issue, err)
+	}
+}
+
 func TestBootstrapPageCandidateMatchesCanonicalSchema(t *testing.T) {
 	profile := Profile{
 		SchemaVersion: 1,

@@ -23,6 +23,7 @@ type PlatformControlForm = Record<string, unknown> & {
   host?: string;
   port?: number;
   database?: string;
+  createDatabaseIfMissing?: boolean;
   schema?: string;
   username?: string;
   tlsMode?: string;
@@ -48,8 +49,9 @@ const schema: FormSchema = {
       providerId: { type: "string", title: "数据库类型", oneOf: [{ const: "postgresql", title: "PostgreSQL" }, { const: "mysql", title: "MySQL" }] },
       host: { type: "string", title: "地址", minLength: 1, maxLength: 253 },
       port: { type: "integer", title: "端口", minimum: 1, maximum: 65535 },
-      database: { type: "string", title: "数据库", minLength: 1, maxLength: 128 },
-      schema: { type: "string", title: "专用 Schema", minLength: 1, maxLength: 128 },
+      database: { type: "string", title: "数据库", minLength: 1, maxLength: 63 },
+      createDatabaseIfMissing: { type: "boolean", title: "数据库不存在时创建", default: true },
+      schema: { type: "string", title: "专用 Schema", minLength: 1, maxLength: 63 },
       username: { type: "string", title: "用户名", minLength: 1, maxLength: 128 },
       tlsMode: { type: "string", title: "传输加密模式", oneOf: [{ const: "verify-full", title: "完整校验（推荐）" }, { const: "verify-ca", title: "校验证书机构" }, { const: "disable", title: "关闭（仅受控测试环境）" }] },
       serverName: { type: "string", title: "证书校验服务器名称", maxLength: 253 },
@@ -93,13 +95,14 @@ export function createPlatformControlPage(client: PlatformAdminClient, serviceID
         navigation: "sections",
         sections: [
           { id: "status", title: message(namespace, "platformControl.section.status", "运行状态"), columns: 2, fields: ["/phase", "/currentGeneration"] },
-          { id: "database", title: message(namespace, "platformControl.section.database", "数据库连接"), columns: 2, fields: ["/providerId", "/host", "/port", "/database", "/schema", "/username"] },
+          { id: "database", title: message(namespace, "platformControl.section.database", "数据库连接"), columns: 2, fields: ["/providerId", "/host", "/port", "/database", "/createDatabaseIfMissing", "/schema", "/username"] },
           { id: "security", title: message(namespace, "platformControl.section.security", "传输与密码"), columns: 2, fields: ["/tlsMode", "/serverName", "/secretMode", "/password", "/externalKind", "/externalName", "/externalPath"] },
           { id: "contract", title: message(namespace, "platformControl.section.contract", "能力契约"), columns: 1, fields: ["/contractRange"] },
         ],
         fields: [
           { pointer: "/phase", readOnlyWhen: { pointer: "/phase", exists: true } },
           { pointer: "/currentGeneration", readOnlyWhen: { pointer: "/currentGeneration", exists: true } },
+          { pointer: "/createDatabaseIfMissing", visibleWhen: { pointer: "/currentGeneration", equals: 0 } },
           { pointer: "/serverName", visibleWhen: { pointer: "/tlsMode", equals: "verify-full" } },
           { pointer: "/password", widget: "secretMaterial", visibleWhen: { pointer: "/secretMode", equals: "direct" } },
           { pointer: "/externalKind", visibleWhen: { pointer: "/secretMode", equals: "external" } },
@@ -127,6 +130,9 @@ export function createPlatformControlPage(client: PlatformAdminClient, serviceID
           await client.testPlatformControl(toChangeRequest(value as PlatformControlForm));
         } catch (error) {
           if (error instanceof PlatformAdminError && error.validation !== undefined) return { fieldErrors: platformControlValidationErrors(error.validation) };
+          if (error instanceof PlatformAdminError && error.code === "database_not_found" && (value as PlatformControlForm).createDatabaseIfMissing === true) {
+            return { notify: { title: message(namespace, "platformControl.notice.databaseWillBeCreated", "目标数据库尚不存在；初始化并启用时将自动创建"), kind: "warning" } };
+          }
           throw error;
         }
         return { notify: { title: message(namespace, "platformControl.notice.testSucceeded", "平台控制数据库连接测试成功"), kind: "success" } };
@@ -152,6 +158,7 @@ function statusToForm(status: PlatformControlStatus): PlatformControlForm {
       providerId: "postgresql",
       port: defaultConnectionPort("postgresql"),
       database: "vastplan",
+      createDatabaseIfMissing: true,
       schema: "platform_control",
       tlsMode: "verify-full",
       secretMode: "direct",
@@ -167,6 +174,7 @@ function statusToForm(status: PlatformControlStatus): PlatformControlForm {
     host: endpoint.host,
     port: endpoint.port,
     database: profile.connection.database,
+    createDatabaseIfMissing: false,
     schema: profile.schema,
     username: text(options.user),
     tlsMode: text(options.tlsMode),
@@ -198,6 +206,7 @@ function toChangeRequest(value: PlatformControlForm): PlatformControlChangeReque
     : { kind: "owner-file" as const, path: text(value.externalPath) ?? "" };
   return {
     expectedGeneration,
+    ...(expectedGeneration === 0 && value.createDatabaseIfMissing === true ? { createDatabaseIfMissing: true } : {}),
     profile: {
       schemaVersion: 1,
       generation: expectedGeneration + 1,

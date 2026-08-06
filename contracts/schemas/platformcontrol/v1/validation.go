@@ -120,6 +120,13 @@ func validateProfileCore(profile Profile) error {
 	if !safeName(profile.Connection.Database) {
 		return invalid("profile.connection.database", "identifier_required")
 	}
+	identifierLimit := 64
+	if profile.Connection.ProviderID == "postgresql" {
+		identifierLimit = 63
+	}
+	if len(profile.Connection.Database) > identifierLimit {
+		return invalid("profile.connection.database", "provider_length_exceeded")
+	}
 	var options map[string]any
 	if err := json.Unmarshal(profile.Connection.Options, &options); err != nil {
 		return invalid("profile.connection.options", "object_required")
@@ -139,6 +146,9 @@ func validateProfileCore(profile Profile) error {
 	if !safeName(profile.Schema) {
 		return invalid("profile.schema", "identifier_required")
 	}
+	if len(profile.Schema) > identifierLimit {
+		return invalid("profile.schema", "provider_length_exceeded")
+	}
 	if _, err := semver.NewConstraint(profile.ContractRange); err != nil {
 		return invalid("profile.contractRange", "semver_range_required")
 	}
@@ -151,6 +161,9 @@ func validateProfileCore(profile Profile) error {
 func ValidateChangeRequest(request ChangeRequest) error {
 	if request.Profile.Generation != request.ExpectedGeneration+1 {
 		return invalid("profile.generation", "stale")
+	}
+	if request.CreateDatabaseIfMissing && request.ExpectedGeneration != 0 {
+		return invalid("createDatabaseIfMissing", "initial_only")
 	}
 	if err := validateProfileCore(request.Profile); err != nil {
 		return err
@@ -196,6 +209,8 @@ func validationIssueMessage(field, reason string) string {
 		return "数据库地址必须包含有效主机和 1–65535 端口"
 	case "profile.connection.database:identifier_required":
 		return "数据库名称只能包含字母、数字、点、下划线和连字符"
+	case "profile.connection.database:provider_length_exceeded":
+		return "数据库名称超过当前数据库类型的标识符长度上限"
 	case "profile.connection.options.user:identifier_required":
 		return "用户名只能包含字母、数字、点、下划线和连字符"
 	case "profile.connection.options.tlsMode:unsupported":
@@ -204,6 +219,8 @@ func validationIssueMessage(field, reason string) string {
 		return "完整校验模式必须填写证书校验服务器名称"
 	case "profile.schema:identifier_required":
 		return "Schema 名称只能包含字母、数字、点、下划线和连字符"
+	case "profile.schema:provider_length_exceeded":
+		return "Schema 名称超过当前数据库类型的标识符长度上限"
 	case "profile.contractRange:semver_range_required":
 		return "能力契约范围必须是有效的 SemVer 范围"
 	case "secretMaterial:conflicts_with_reference":
@@ -212,6 +229,8 @@ func validationIssueMessage(field, reason string) string {
 		return "密码长度超过 64 KiB 上限"
 	case "secretMaterial:contains_nul":
 		return "密码不能包含空字符"
+	case "createDatabaseIfMissing:initial_only":
+		return "仅首次配置平台控制数据库时可以自动创建目标数据库"
 	case "profile.secretRef.name:identifier_required":
 		return "systemd Credential 名称格式无效"
 	case "profile.secretRef.path:absolute_path_required":

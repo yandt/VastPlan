@@ -44,9 +44,10 @@ func (s *Service) Contribution() sdk.Contribution {
 	return sdk.Contribution{
 		ExtensionPoint: extpoint.ToolPackage,
 		ID:             platformcontrolv1.BootstrapCapability,
-		Descriptor:     []byte(`{"title":"Platform Control SQL Bootstrap","subcommands":[{"name":"test","description":"测试 Platform Control SQL 候选"},{"name":"initialize","description":"初始化并绑定 Platform Control SQL 候选"},{"name":"open","description":"打开已提交的 Platform Control SQL Profile"}]}`),
+		Descriptor:     []byte(`{"title":"Platform Control SQL Bootstrap","subcommands":[{"name":"test","description":"测试 Platform Control SQL 候选"},{"name":"provision","description":"首次配置时创建 Platform Control 目标数据库"},{"name":"initialize","description":"初始化并绑定 Platform Control SQL 候选"},{"name":"open","description":"打开已提交的 Platform Control SQL Profile"}]}`),
 		Handlers: map[string]sdk.Handler{
 			platformcontrolv1.OperationTest:       s.handler(platformcontrolv1.OperationTest),
+			platformcontrolv1.OperationProvision:  s.handler(platformcontrolv1.OperationProvision),
 			platformcontrolv1.OperationInitialize: s.handler(platformcontrolv1.OperationInitialize),
 			platformcontrolv1.OperationOpen:       s.handler(platformcontrolv1.OperationOpen),
 		},
@@ -98,6 +99,18 @@ func (s *Service) execute(ctx context.Context, call *contractv1.CallContext, ope
 			return s.databaseFailure(call, operation, profile, "probe", err, databasev1.ErrorConnectionUnavailable)
 		}
 		// Test must never mutate the current binding.
+		generation, _, ready := s.binding.Snapshot()
+		phase := platformcontrolv1.PhaseUnconfigured
+		if ready {
+			phase = platformcontrolv1.PhaseReady
+		}
+		s.status = platformcontrolv1.Status{Phase: phase, Generation: generation}
+		return bootstrapResult(s.status, "", false)
+	case platformcontrolv1.OperationProvision:
+		s.status = platformcontrolv1.Status{Phase: platformcontrolv1.PhaseProvisioning, Generation: profile.Generation}
+		if err := s.bootstrapper.Provision(ctx, profile, source); err != nil {
+			return s.databaseFailure(call, operation, profile, "provision", err, platformcontrolv1.ErrorProvisioningFailed)
+		}
 		generation, _, ready := s.binding.Snapshot()
 		phase := platformcontrolv1.PhaseUnconfigured
 		if ready {
