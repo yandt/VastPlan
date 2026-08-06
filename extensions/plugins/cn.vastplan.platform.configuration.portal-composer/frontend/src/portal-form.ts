@@ -42,6 +42,8 @@ export const portalConfigurationSchema: FormSchema = {
     },
   },
   uiSchema: {
+    domains: { items: { "ui:title": "" } },
+    audience: { items: { "ui:title": "" } },
     defaultRenderer: { "ui:widget": "select" },
     defaultTemplate: { "ui:widget": "select" },
     pageBodyWidth: { "ui:widget": "select" },

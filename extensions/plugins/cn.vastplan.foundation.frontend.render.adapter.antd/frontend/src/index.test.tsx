@@ -170,7 +170,7 @@ describe("Ant Design portal UI renderer", () => {
     expect(markup).toContain("credential://");
     expect(markup).toContain("minmax(0, 35fr) minmax(0, 65fr)");
     expect(markup).toContain("Name is already used");
-    expect(markup).toContain("flex:0 0 112px");
+    expect(markup).toContain("flex:0 0 min(var(--vp-form-label-width,var(--vp-form-label-min-width,112px)),48%)");
     expect(markup).toContain('data-form-control-alignment="end"');
     expect(markup).toContain("vp-antd-form-controls-end");
     expect(markup.match(/Name is already used/g)).toHaveLength(1);
@@ -178,6 +178,31 @@ describe("Ant Design portal UI renderer", () => {
     expect(markup).toContain('data-tooltip-color="red"');
     expect(markup).toContain('aria-label="Name is already used"');
     expect(markup).not.toContain("Submit");
+  });
+
+  it("renders scalar lists as compact draggable form controls", () => {
+    const Form = antdPortalUIComponents.FormRenderer;
+    const markup = renderToStaticMarkup(<PortalI18nProvider policy={{ defaultLocale: "zh-CN", supportedLocales: ["zh-CN"] }} catalogs={{}} candidates={["zh-CN"]}><Form
+      schema={{
+        id: "portal-domains",
+        schema: { type: "object", properties: { domains: { type: "array", title: "绑定域名", items: { type: "string" } } } },
+        uiSchema: { domains: { items: { "ui:title": "" } } },
+      }}
+      value={{ domains: ["portal.example.com", "ops.example.com"] }}
+      onChange={() => undefined}
+    /></PortalI18nProvider>);
+    expect(markup).toContain("vp-antd-form-field-array");
+    expect(markup).toContain('data-form-array="scalar"');
+    expect(markup).toContain("vp-antd-form-array-list");
+    expect(markup).toContain("vp-antd-form-array-add");
+    expect(markup).toContain("ant-btn-block");
+    expect(markup).toContain('aria-label="拖拽排序"');
+    expect(markup).toContain('aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"');
+    expect(markup).toContain('draggable="true"');
+    expect(markup).toContain('aria-label="删除此项"');
+    expect(markup).toContain(".vp-antd-form-array-item .ant-form-item-label{display:none!important}");
+    expect(markup).toContain("flex:0 0 112px");
+    expect(markup).not.toContain("ant-card");
   });
 
   it("anchors missing required properties to their owning fields", () => {
