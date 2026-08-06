@@ -199,7 +199,10 @@ describe("Ant Design portal UI renderer", () => {
     expect(markup).toContain("ant-btn-block");
     expect(markup).toContain('aria-label="拖拽排序"');
     expect(markup).toContain('aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"');
-    expect(markup).toContain('draggable="true"');
+    expect(markup).toContain("data-array-drag-handle");
+    const dragHandles = markup.match(/<button[^>]*data-array-drag-handle[^>]*>/g) ?? [];
+    expect(dragHandles).toHaveLength(2);
+    expect(dragHandles.every((handle) => !handle.includes("disabled"))).toBe(true);
     expect(markup).toContain('aria-label="删除此项"');
     expect(markup).toContain(".vp-antd-form-array-item .ant-form-item-label{display:none!important}");
     expect(markup).toContain("flex:0 0 112px");
