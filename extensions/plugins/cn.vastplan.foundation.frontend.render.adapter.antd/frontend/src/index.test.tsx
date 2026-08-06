@@ -192,6 +192,7 @@ describe("Ant Design portal UI renderer", () => {
       onChange={() => undefined}
     /></PortalI18nProvider>);
     expect(markup).toContain("vp-antd-form-field-array");
+    expect(markup).toContain(">绑定域名</label>");
     expect(markup).toContain('data-form-array="scalar"');
     expect(markup).toContain("vp-antd-form-array-list");
     expect(markup).toContain("vp-antd-form-array-add");
