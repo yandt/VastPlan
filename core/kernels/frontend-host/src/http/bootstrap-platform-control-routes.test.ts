@@ -9,23 +9,28 @@ import { createPortalFixture } from "../testing/portal-fixture";
 import { writeSessionFixture } from "../testing/session-fixture";
 import { bootstrapPlatformControlPageContract, bootstrapPlatformControlPageContractHeader } from "./bootstrap-platform-control-page";
 import { createPortalHandler } from "./portal-handler";
+import type { PortalComposerPort } from "../capabilities/portal-composer-client";
 
 describe("Platform Control bootstrap surface", () => {
   it("redirects the seed root to an authenticated minimal page and keeps mutations CSRF protected", async () => {
     const calls: string[] = [];
     const payloads: unknown[] = [];
     let phase = "unconfigured";
+    let releases: unknown[] = [];
     const client: PlatformControlBootstrapPort = { logicalService: "platform.database", async call(_principal, operation, payload) {
       calls.push(operation);
       payloads.push(JSON.parse(new TextDecoder().decode(payload)) as unknown);
       return new TextEncoder().encode(JSON.stringify({ phase, generation: phase === "ready" ? 1 : 0 }));
+    } };
+    const composer: PortalComposerPort = { async call(_principal, operation) {
+      return new TextEncoder().encode(JSON.stringify(operation === "listPortalReleases" ? releases : { portals: [] }));
     } };
     const root = await createPortalFixture();
     const sessionFile = join(root, "sessions.json");
     await writeSessionFixture(sessionFile, "browser-token", new Date(Date.now() + 60_000), ["platform.database.read", "platform.database.probe", "platform.database.write"]);
     const identity = await FileIdentityProvider.open(sessionFile);
     const assets = await PortalAssets.load(root);
-    const server = createServer(createPortalHandler({ assets, identity, platformControlBootstrap: client, secureCookies: false }));
+    const server = createServer(createPortalHandler({ assets, identity, composer, platformControlBootstrap: client, secureCookies: false }));
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
     const cookie = "vastplan_session=browser-token";
@@ -68,10 +73,23 @@ describe("Platform Control bootstrap surface", () => {
       expect(await testResponse.text()).not.toContain("one-time-password");
 
       phase = "ready";
+      const waiting = await fetch(`${origin}/operations`, { headers: { Cookie: cookie } });
+      expect(waiting.status).toBe(200);
+      expect(waiting.headers.get(bootstrapPlatformControlPageContractHeader)).toBe(bootstrapPlatformControlPageContract);
+      expect(await waiting.text()).toContain("正在等待完整平台服务和已发布的 Portal 生效");
+
       const configure = await fetch(`${origin}/v1/bootstrap/platform-control`, { method: "PUT", headers: writeHeaders, body: JSON.stringify(change) });
       expect(configure.status).toBe(409);
       expect(await configure.json()).toEqual({ error: "platform_control_ready" });
       expect(calls).not.toContain("platformControlConfigure");
+
+      releases = [{
+        id: 1, tenantId: "tenant-a", portalId: "operations", status: "Current",
+        resolved: { id: "operations", tenantId: "tenant-a", revision: 1, route: "/operations" },
+      }];
+      const readyPage = await fetch(`${origin}/bootstrap/platform-control`, { headers: { Cookie: cookie }, redirect: "manual" });
+      expect(readyPage.status).toBe(303);
+      expect(readyPage.headers.get("location")).toBe("/operations");
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }

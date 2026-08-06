@@ -39,7 +39,7 @@ func (r *runtime) prepareTestingRepositoryProtocol() (artifactrepositoryv1.Profi
 			return artifactrepositoryv1.Profile{}, err
 		}
 		if quarantined.Artifacts > 0 {
-			fmt.Printf("已隔离 %d 个不兼容当前 Manifest Schema 的旧 workspace 制品\n", quarantined.Artifacts)
+			fmt.Printf("已隔离 %d 个不兼容当前插件契约的旧 workspace 制品\n", quarantined.Artifacts)
 		}
 		if quarantined.CatalogRebuilt {
 			fmt.Println("已归档旧 local-test Catalog；将从剩余不可变制品重建开发态流水账")

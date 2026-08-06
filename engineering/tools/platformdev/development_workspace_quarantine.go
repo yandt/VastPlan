@@ -37,8 +37,9 @@ type developmentCatalogProjection struct {
 }
 
 // quarantineIncompatibleDevelopmentWorkspaceArtifacts keeps ephemeral
-// workspace records from an older Manifest Schema out of the active local-test
-// repository. Stable/testing records and malformed metadata remain fail-closed.
+// workspace records from an older Manifest or runtime contribution contract
+// out of the active local-test repository. Stable/testing records and malformed
+// metadata remain fail-closed.
 func quarantineIncompatibleDevelopmentWorkspaceArtifacts(repositoryRoot string) (developmentWorkspaceQuarantineResult, error) {
 	artifactsRoot := filepath.Join(repositoryRoot, "artifacts")
 	if _, err := os.Lstat(artifactsRoot); os.IsNotExist(err) {
@@ -80,10 +81,19 @@ func quarantineIncompatibleDevelopmentWorkspaceArtifacts(repositoryRoot string) 
 		if filepath.Base(versionDirectory) != metadata.Version || filepath.Base(pluginDirectory) != metadata.PluginID {
 			return fmt.Errorf("workspace 制品元数据与目录身份不一致: %s", path)
 		}
-		if _, err := pluginv1.ParseManifest(metadata.Manifest); err == nil {
-			return nil
-		} else if !isCurrentManifestSchemaIncompatible(err) {
+		manifest, err := pluginv1.ParseManifest(metadata.Manifest)
+		if err != nil && !isCurrentManifestSchemaIncompatible(err) {
 			return fmt.Errorf("验证 workspace 制品清单 %s: %w", path, err)
+		}
+		if err == nil {
+			// ParseManifest owns the closed JSON shape. Runtime contribution
+			// binding is a second contract layer because every executable
+			// contribution must map to an exact runtime.provides declaration.
+			// Old workspace candidates are disposable and must be quarantined
+			// before one stale candidate can prevent the repository from opening.
+			if _, err = pluginv1.BackendRuntimeContributions(manifest); err == nil {
+				return nil
+			}
 		}
 		candidates = append(candidates, path)
 		return nil

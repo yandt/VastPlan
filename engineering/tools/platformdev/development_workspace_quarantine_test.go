@@ -55,3 +55,34 @@ func TestQuarantineIncompatibleDevelopmentWorkspaceArtifacts(t *testing.T) {
 		t.Fatalf("未创建可重建的 Catalog 目录: %v", err)
 	}
 }
+
+func TestQuarantineWorkspaceArtifactWithStaleRuntimeContributionContract(t *testing.T) {
+	root := t.TempDir()
+	directory := filepath.Join(root, "artifacts", "cn.vastplan.example.backend.audit", "0.1.1-dev.workspace.old", "workspace")
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	manifest := json.RawMessage(`{
+  "id":"cn.vastplan.example.backend.audit","name":"Legacy Audit","description":"Schema-valid workspace artifact with stale runtime bindings",
+  "version":"0.1.1-dev.workspace.old","publisher":"vastplan","engines":{"backend":"^0.1"},
+  "capabilities":{},"activation":["onStartup"],"entry":{"backend":"backend/demo-audit"},
+  "contributes":{"backend":{"tools":[{"id":"demo.audit","title":"Audit","subcommands":[{"name":"list","description":"List"}]}]}}
+}`)
+	metadata, err := json.Marshal(developmentArtifactMetadataProjection{
+		PluginID: "cn.vastplan.example.backend.audit", Version: "0.1.1-dev.workspace.old", Channel: "workspace", Manifest: manifest,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(directory, "artifact.json"), metadata, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := quarantineIncompatibleDevelopmentWorkspaceArtifacts(root)
+	if err != nil || result.Artifacts != 1 || result.CatalogRebuilt {
+		t.Fatalf("旧运行贡献契约必须在仓库启动前隔离: result=%+v err=%v", result, err)
+	}
+	if _, err := os.Stat(directory); !os.IsNotExist(err) {
+		t.Fatalf("不兼容 workspace 制品仍在活动目录: %v", err)
+	}
+}

@@ -22,6 +22,8 @@ import { KernelRecoveryClient, serveKernelRecovery, serveKernelRecoveryPage } fr
 import type { PlatformControlBootstrapPort } from "../capabilities/platform-control-bootstrap-client";
 import { BootstrapPlatformControlRoutes } from "./bootstrap-platform-control-routes";
 import { bootstrapPlatformControlPath, serveBootstrapPlatformControlPage } from "./bootstrap-platform-control-page";
+import { PortalActivationCatalog } from "../runtime/portal-activation-catalog";
+import { requestHostname } from "./platform-route-contract";
 
 export interface PortalHandlerOptions {
   assets: PortalAssets;
@@ -42,6 +44,7 @@ export interface PortalHandlerOptions {
 
 export function createPortalHandler(options: PortalHandlerOptions): (request: IncomingMessage, response: ServerResponse) => void {
   const platformControlBootstrap = options.platformControlBootstrap === undefined ? undefined : new BootstrapPlatformControlRoutes(options.platformControlBootstrap);
+  const portalActivations = options.composer === undefined ? undefined : new PortalActivationCatalog(options.composer);
   const api = options.identity === undefined ? undefined : createAPIHandler({
     identity: options.identity,
     secureCookies: options.secureCookies ?? true,
@@ -119,7 +122,7 @@ export function createPortalHandler(options: PortalHandlerOptions): (request: In
     if (method !== "GET" && method !== "HEAD") return sendEmpty(response, 405, { Allow: "GET, HEAD" });
     if (path === "/healthz" || path === "/readyz") return sendText(response, method, 200, "ok\n");
     if (path.startsWith("/assets/")) return serveAsset(options.assets, path.slice("/assets/".length), method, request, response);
-    void servePage(options, platformControlBootstrap, request, response, method, path);
+    void servePage(options, platformControlBootstrap, portalActivations, request, response, method, path);
   };
 }
 
@@ -134,7 +137,8 @@ async function serveIdentitySession(identity: IdentityProvider, request: Incomin
   }
 }
 
-async function servePage(options: PortalHandlerOptions, bootstrap: BootstrapPlatformControlRoutes | undefined, request: IncomingMessage, response: ServerResponse, method: string, path: string): Promise<void> {
+async function servePage(options: PortalHandlerOptions, bootstrap: BootstrapPlatformControlRoutes | undefined, portalActivations: PortalActivationCatalog | undefined,
+  request: IncomingMessage, response: ServerResponse, method: string, path: string): Promise<void> {
   let principal: Principal | undefined;
   if (options.identity?.loginRedirect !== undefined) {
     try { principal = await options.identity.authenticate(request); }
@@ -150,10 +154,11 @@ async function servePage(options: PortalHandlerOptions, bootstrap: BootstrapPlat
     try { principal = await options.identity.authenticate(request); }
     catch { return sendAPIError(response, 401, "session_required", method === "HEAD"); }
   }
-  if (bootstrap !== undefined && principal !== undefined && (path === bootstrapPlatformControlPath || path === "/operations")) {
+  if (bootstrap !== undefined && principal !== undefined && (path === bootstrapPlatformControlPath || operationsPath(path))) {
     const status = await bootstrap.status(principal);
+    const portalReady = status?.phase === "ready" && await hasCurrentPortal(portalActivations, principal, request);
     if (path === bootstrapPlatformControlPath) {
-      if (status?.phase === "ready") {
+      if (portalReady) {
         response.statusCode = 303;
         response.setHeader("Location", "/operations");
         response.end();
@@ -168,8 +173,26 @@ async function servePage(options: PortalHandlerOptions, bootstrap: BootstrapPlat
       response.end();
       return;
     }
+    if (!portalReady) {
+      serveBootstrapPlatformControlPage(request, response, method === "HEAD");
+      return;
+    }
   }
   await serveIndex(options.assets, options.ssr, request, response, method, path);
+}
+
+async function hasCurrentPortal(catalog: PortalActivationCatalog | undefined, principal: Principal, request: IncomingMessage): Promise<boolean> {
+  if (catalog === undefined) return false;
+  try {
+    const activations = await catalog.list(principal);
+    return catalog.selectCurrent(activations, principal, "/operations", requestHostname(request)) !== undefined;
+  } catch {
+    return false;
+  }
+}
+
+function operationsPath(path: string): boolean {
+  return path === "/operations" || path.startsWith("/operations/");
 }
 
 async function serveIndex(assets: PortalAssets, ssr: PortalSSRPort | undefined, request: IncomingMessage, response: ServerResponse, method: string, path: string): Promise<void> {

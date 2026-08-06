@@ -20,7 +20,9 @@ Profile 文件必须使用规范绝对路径、普通文件和 owner-only 权限
 
 候选密码跨独立 Database Runtime 进程传递时，Wire Profile 在 Test/Initialize 阶段必须引用当前真实存在的临时 `0600` 文件，不能提前引用尚未创建的最终文件名。Initialize 成功后可信宿主先原子重命名密码文件，再把 Profile 中的 `secretRef` 切换为最终路径并执行 Profile CAS；失败或仅测试时同时删除临时与最终候选。Runtime 始终只按受限引用重新读取密码，协议中不传递密码明文。
 
-最小 Bootstrap 页面与 Portal Edge 通过 `X-VastPlan-Bootstrap-Page-Contract` 执行轻量契约握手，当前页面契约为 `4`。测试或初始化前发现已打开页面落后于当前宿主时，页面必须自动刷新，禁止把旧表单结构送入新后端后再显示泛化 Schema 错误。响应继续使用 `Cache-Control: no-store`，但不能依赖缓存策略替换已经运行在浏览器中的旧 JavaScript。
+最小 Bootstrap 页面与 Portal Edge 通过 `X-VastPlan-Bootstrap-Page-Contract` 执行轻量契约握手，当前页面契约为 `5`。测试或初始化前发现已打开页面落后于当前宿主时，页面必须自动刷新，禁止把旧表单结构送入新后端后再显示泛化 Schema 错误。响应继续使用 `Cache-Control: no-store`，但不能依赖缓存策略替换已经运行在浏览器中的旧 JavaScript。
+
+`Platform Control ready` 只表示 SQL Shared State 已提交并绑定，不表示完整平台组合或 Portal Activation 已经就绪。配置页在数据库 Ready 后必须继续以有界退避探测规范 `/v1/portal-runtime`；只有目标路径存在当前 Activation 时才进入 `/operations`。Portal Host 对直接访问 `/operations` 也执行同一判断：未配置数据库时重定向到 Bootstrap，数据库已就绪但 Portal 尚未发布或平台仍在收敛时继续呈现最小 Bootstrap 状态页，不能先加载 SPA 再让浏览器以 `RUNTIME_FETCH_FAILED` 失败。
 
 页面提交必须先从仍处于启用状态的控件生成一次性请求快照，再禁用表单并取得 CSRF Token。禁止在 `disabled` 之后通过 `FormData` 读取表单，因为浏览器不会提交 disabled 控件，这会把完整配置静默退化为空候选。
 
