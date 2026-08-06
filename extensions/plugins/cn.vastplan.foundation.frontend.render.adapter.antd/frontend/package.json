@@ -6,7 +6,6 @@
   "exports": { ".": "./src/index.tsx" },
   "scripts": { "typecheck": "tsc --noEmit", "test": "vitest run" },
   "dependencies": {
-    "@dnd-kit/react": "0.5.0",
     "@ant-design/icons": "^6.1.0",
     "@ant-design/cssinjs": "^2.1.2",
     "@rjsf/antd": "^6.7.1",
