@@ -135,7 +135,15 @@ type filePreparedSecret struct {
 	rolledBack bool
 }
 
-func (s *filePreparedSecret) Ref() platformcontrolv1.SecretRef { return s.ref }
+func (s *filePreparedSecret) Ref() platformcontrolv1.SecretRef {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ref := s.ref
+	if !s.committed {
+		ref.Path = s.temporary
+	}
+	return ref
+}
 
 func (s *filePreparedSecret) Source() platformcontrolport.SecretSource {
 	s.mu.Lock()

@@ -30,6 +30,32 @@ type fakeBootstrapper struct {
 	opened        int
 }
 
+// profileSecretBootstrapper simulates the real cross-process Database Runtime:
+// it cannot use the host's in-memory SecretSource and must reopen the secret
+// from the reference carried by the wire Profile.
+type profileSecretBootstrapper struct{}
+
+func (profileSecretBootstrapper) Test(ctx context.Context, profile platformcontrolv1.Profile, _ SecretSource) error {
+	source, err := ResolveSecretSource(profile.SecretRef, "")
+	if err != nil {
+		return err
+	}
+	return source.WithSecret(ctx, func(value []byte) error {
+		if string(value) != "direct-password" {
+			return errors.New("unexpected direct password")
+		}
+		return nil
+	})
+}
+
+func (profileSecretBootstrapper) Initialize(context.Context, platformcontrolv1.Profile, SecretSource) (ManagedStore, error) {
+	return nil, errors.New("not used")
+}
+
+func (profileSecretBootstrapper) Open(context.Context, platformcontrolv1.Profile, SecretSource) (ManagedStore, error) {
+	return nil, errors.New("not used")
+}
+
 func (f *fakeBootstrapper) Test(ctx context.Context, _ platformcontrolv1.Profile, secret SecretSource) error {
 	f.tested++
 	if f.testErr != nil {
@@ -263,7 +289,7 @@ func TestControllerDirectPasswordTestDoesNotPersistMaterial(t *testing.T) {
 		func(platformcontrolv1.SecretRef) (SecretSource, error) {
 			return nil, errors.New("direct password must not use external resolver")
 		},
-		&fakeBootstrapper{},
+		profileSecretBootstrapper{},
 		sharedstate.NewBindingStore(),
 		&FileSecretMaterialStore{Root: managedRoot},
 	)

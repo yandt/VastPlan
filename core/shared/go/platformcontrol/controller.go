@@ -136,6 +136,11 @@ func (c *Controller) Configure(ctx context.Context, request platformcontrolv1.Ch
 			c.setCandidateFailure(expectedGeneration, CodeSecretUnavailable)
 			return err
 		}
+		// Test/Initialize use the short-lived candidate path so an isolated
+		// Database Runtime can reopen the secret from the wire Profile. Only
+		// after the atomic rename may the durable Profile reference the final
+		// owner-only path.
+		candidate.SecretRef = prepared.Ref()
 	}
 	completeCommit := c.binding.BeginProviderCommit()
 	if err := c.profiles.Commit(ctx, candidate, expectedGeneration); err != nil {
