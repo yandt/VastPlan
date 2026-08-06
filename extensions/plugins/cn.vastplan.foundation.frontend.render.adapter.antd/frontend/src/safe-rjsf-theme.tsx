@@ -1,4 +1,6 @@
 import { DeleteOutlined, HolderOutlined, PlusOutlined } from "@ant-design/icons";
+import { DragDropProvider } from "@dnd-kit/react";
+import { useSortable } from "@dnd-kit/react/sortable";
 import { Button, Input, InputNumber, Tooltip, Typography } from "antd";
 import type { ArrayFieldItemTemplateProps, ArrayFieldTemplateProps, BaseInputTemplateProps, DescriptionFieldProps, FieldHelpProps, TemplatesType } from "@rjsf/utils";
 import { ariaDescribedByIds, getInputProps, helpId } from "@rjsf/utils";
@@ -14,7 +16,7 @@ import MultiSchemaFieldTemplate from "@rjsf/antd/lib/templates/MultiSchemaFieldT
 import OptionalDataControlsTemplate from "@rjsf/antd/lib/templates/OptionalDataControlsTemplate/index.js";
 import TitleFieldTemplate from "@rjsf/antd/lib/templates/TitleField/index.js";
 import WrapIfAdditionalTemplate from "@rjsf/antd/lib/templates/WrapIfAdditionalTemplate/index.js";
-import { createContext, useContext, useRef } from "react";
+import { createContext, useContext, useId, useRef } from "react";
 import { message, usePortalI18n } from "@vastplan/ui-primitives";
 import { namespace } from "./theme";
 
@@ -39,17 +41,17 @@ export const safeAntdTemplates: Partial<TemplatesType> = {
 export { AntdFieldTemplate };
 
 interface ArrayDragControls {
-  begin(index: number): void;
-  end(): void;
-  moveTo(index: number): void;
+  group: string;
+  reorder(source: number, target: number): void;
 }
 
-const inactiveArrayDragControls: ArrayDragControls = { begin() {}, end() {}, moveTo() {} };
+const inactiveArrayDragControls: ArrayDragControls = { group: "", reorder() {} };
 const ArrayDragContext = createContext<ArrayDragControls>(inactiveArrayDragControls);
 
 /** Keeps scalar list values visually lightweight while preserving RJSF's schema-owned array behavior. */
 function CompactScalarArray(props: ArrayFieldTemplateProps) {
   const i18n = usePortalI18n();
+  const group = useId();
   const itemsRef = useRef(props.items);
   const dragRef = useRef<{ source: number }>();
   const moveRef = useRef<(target: number) => void>();
@@ -57,7 +59,8 @@ function CompactScalarArray(props: ArrayFieldTemplateProps) {
 
   moveRef.current = (target) => {
     const source = dragRef.current?.source;
-    if (source === undefined || source === target) return;
+    if (source === undefined) return;
+    if (source === target) { dragRef.current = undefined; return; }
     const item = itemsRef.current[source];
     const buttons = item?.props as ArrayFieldItemTemplateProps["buttonsProps"] | undefined;
     if (buttons === undefined) return;
@@ -68,6 +71,7 @@ function CompactScalarArray(props: ArrayFieldTemplateProps) {
       buttons.onMoveUpItem();
       dragRef.current = { source: source - 1 };
     } else {
+      dragRef.current = undefined;
       return;
     }
     if (dragRef.current.source !== target) window.requestAnimationFrame(() => moveRef.current?.(target));
@@ -75,40 +79,49 @@ function CompactScalarArray(props: ArrayFieldTemplateProps) {
 
   if (!isScalarArray(props)) return <ArrayFieldTemplate {...props} />;
   const controls: ArrayDragControls = {
-    begin(index) { dragRef.current = { source: index }; },
-    end() { dragRef.current = undefined; },
-    moveTo(index) { moveRef.current?.(index); },
+    group,
+    reorder(source, target) { dragRef.current = { source }; moveRef.current?.(target); },
   };
   const disabled = props.disabled || props.readonly || !props.canAdd;
-  return <ArrayDragContext.Provider value={controls}>
-    <div className="vp-antd-form-array" data-form-array="scalar">
-      <div className="vp-antd-form-array-list">{props.items}</div>
-      {props.canAdd ? <Button
-        className="vp-antd-form-array-add"
-        block
-        type="dashed"
-        disabled={disabled}
-        icon={<PlusOutlined />}
-        onClick={props.onAddClick}
-      >{i18n.text(message(namespace, "form.list.add", "添加一项"))}</Button> : null}
-    </div>
-  </ArrayDragContext.Provider>;
+  return <DragDropProvider onDragEnd={(event) => {
+    if (event.canceled) return;
+    const source = arrayIndex(event.operation.source?.id);
+    const target = arrayIndex(event.operation.target?.id);
+    if (source !== undefined && target !== undefined) controls.reorder(source, target);
+  }}><ArrayDragContext.Provider value={controls}>
+      <div className="vp-antd-form-array" data-form-array="scalar">
+        <div className="vp-antd-form-array-list">{props.items}</div>
+        {props.canAdd ? <Button
+          className="vp-antd-form-array-add"
+          block
+          type="dashed"
+          disabled={disabled}
+          icon={<PlusOutlined />}
+          onClick={props.onAddClick}
+        >{i18n.text(message(namespace, "form.list.add", "添加一项"))}</Button> : null}
+      </div>
+    </ArrayDragContext.Provider></DragDropProvider>;
 }
 
 function CompactScalarArrayItem(props: ArrayFieldItemTemplateProps) {
   if (!isScalarSchema(props.schema)) return <ArrayFieldItemTemplate {...props} />;
+  return <SortableScalarArrayItem {...props} />;
+}
+
+function SortableScalarArrayItem(props: ArrayFieldItemTemplateProps) {
   const i18n = usePortalI18n();
   const drag = useContext(ArrayDragContext);
   const buttons = props.buttonsProps;
   const reorderable = !props.disabled && !props.readonly && (buttons.hasMoveUp || buttons.hasMoveDown);
+  const sortable = useSortable({ id: String(props.index), index: props.index, group: drag.group, disabled: !reorderable });
   const removeLabel = i18n.text(message(namespace, "form.list.remove", "删除此项"));
   const reorderLabel = i18n.text(message(namespace, "form.list.reorder", "拖拽排序"));
   return <div
     className="vp-antd-form-array-item"
     data-array-index={props.index}
-    onDragOver={reorderable ? (event) => event.preventDefault() : undefined}
-    onDragEnter={reorderable ? (event) => { event.preventDefault(); drag.moveTo(props.index); } : undefined}
-    onDrop={reorderable ? (event) => { event.preventDefault(); drag.moveTo(props.index); } : undefined}
+    data-dragging={sortable.isDragging || undefined}
+    data-drop-target={sortable.isDropTarget || undefined}
+    ref={sortable.ref}
   >
     <Tooltip title={reorderLabel}><button
       className="vp-antd-form-array-drag"
@@ -116,9 +129,8 @@ function CompactScalarArrayItem(props: ArrayFieldItemTemplateProps) {
       aria-label={reorderLabel}
       aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
       disabled={!reorderable}
-      draggable={reorderable}
-      onDragStart={() => drag.begin(props.index)}
-      onDragEnd={() => drag.end()}
+      data-array-drag-handle
+      ref={sortable.handleRef}
       onKeyDown={(event) => {
         if (!event.altKey) return;
         if (event.key === "ArrowUp" && buttons.hasMoveUp) { event.preventDefault(); buttons.onMoveUpItem(); }
@@ -138,6 +150,12 @@ function CompactScalarArrayItem(props: ArrayFieldItemTemplateProps) {
   </div>;
 }
 
+function arrayIndex(id: unknown): number | undefined {
+  if (typeof id !== "string" && typeof id !== "number") return undefined;
+  const index = Number(id);
+  return Number.isInteger(index) && index >= 0 ? index : undefined;
+}
+
 function isScalarArray(props: ArrayFieldTemplateProps): boolean {
   const items = (props.schema as { items?: unknown }).items;
   return typeof items === "object" && items !== null && !Array.isArray(items) && isScalarSchema(items as { type?: unknown });
@@ -151,6 +169,8 @@ export const antdArrayFieldCSS = `
 .vp-antd-form-array{display:grid;gap:6px;width:100%;min-width:0}
 .vp-antd-form-array-list{display:grid;gap:6px;width:100%;min-width:0}
 .vp-antd-form-array-item{display:grid;grid-template-columns:28px minmax(0,1fr) 28px;align-items:start;gap:6px;width:100%;min-width:0}
+.vp-antd-form-array-item[data-dragging=true]{opacity:.6}
+.vp-antd-form-array-item[data-drop-target=true]{outline:1px solid var(--ant-color-primary);outline-offset:2px}
 .vp-antd-form-array-item .ant-form-item{width:100%;margin:0!important}
 .vp-antd-form-array-item .ant-form-item-label{display:none!important}
 .vp-antd-form-array-item .ant-form-item-control,.vp-antd-form-array-item .ant-form-item-control-input,.vp-antd-form-array-item .ant-form-item-control-input-content{width:100%;min-width:0}
