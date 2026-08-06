@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.platform.data.relational.connection-manager`
 能力：`tool.package/platform.database`
-当前制品版本：`0.16.1`
+当前制品版本：`0.16.2`
 
 ## 边界
 
@@ -56,6 +56,8 @@
 0.14.0 在同一签名制品增加 `/settings/databases/platform-control` Form Page，用于两阶段 Seed Bootstrap。页面显示状态和当前配置代，支持 PostgreSQL/MySQL、TLS、专用 database/schema 和 Shared State 契约范围。0.15.2 默认允许直接输入一次性密码，Connection Manager 只通过固定内核端口转发；Backend Kernel 将其原子写入核心受控的 `0600` owner-file，并且 Profile 只保存真实文件引用。高级模式仍可引用部署注入的 systemd credential 或已有 owner-only 文件。Database Runtime 负责驱动、连接池和 schema 初始化，Backend Kernel 负责精确调用者身份、密码文件提交/回滚、Profile CAS 和 Store 绑定。Credentials 在 Bootstrap 期间是 soft/degrade 依赖；普通连接定义、托管密码和运行期探测仍在 Credentials 未就绪时 fail-closed。
 
 0.16.1 在首次 Platform Control 表单增加默认选中的“数据库不存在时创建”。测试连接仍保持只读：目标库缺失时只提示初始化阶段会创建；用户提交后由可信宿主按 `Test -> Provision -> Test -> Initialize -> Commit -> Bind` 执行。该选项只存在于一次性 ChangeRequest，不进入 Profile；已有配置代不显示也不接受自动建库，插件本身不执行 SQL。
+
+0.16.2 统一最小 Bootstrap 与 Workbench 首次配置默认值：逻辑数据库为 `vastplan`，PostgreSQL 专用 Schema 为 `platform`；MySQL 隐藏独立 Schema 并在请求边界派生 `schema=database`。默认值仅属于可编辑的前端候选，不改变 Profile 或 Runtime 的自由配置边界。
 
 0.11.1 将既有 `probe` 数据链产品化为“测试连接”。列表行动作复用已保存定义与托管凭证；FormDialog 的 `footer.start` 动作使用当前表单值：编辑且密码留空时复用现有托管引用，新建或输入新密码时通过随机资源名创建短期托管凭证。凭证仍处于 Preparing 时就先耐久记录 `stageId + ref` 清理意图，再执行激活；测试完成立即终止候选或退役 Active，进程在任意步骤中断后由 reconcile 流程继续清理。两条路径都由 Database Runtime 创建短生命周期池并执行 Provider `Probe`，不保存表单定义、不发布 revision，也不污染正式连接池。Workbench 复用统一校验、等待和通知；成功提示实际 Provider 和握手耗时，失败仅给出安全的本地化排查建议，不向浏览器透传驱动、地址、账号或凭证诊断。
 

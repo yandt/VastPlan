@@ -24,6 +24,8 @@ Profile 文件必须使用规范绝对路径、普通文件和 owner-only 权限
 
 页面提交必须先从仍处于启用状态的控件生成一次性请求快照，再禁用表单并取得 CSRF Token。禁止在 `disabled` 之后通过 `FormData` 读取表单，因为浏览器不会提交 disabled 控件，这会把完整配置静默退化为空候选。
 
+首次配置时，最小 Bootstrap 页面与 Connection Manager Workbench 页面统一预填逻辑数据库 `vastplan`。PostgreSQL 显示并预填专用 Schema `platform`，物理表按 `"platform"."table_name"` 限定；MySQL 的 schema 与 database 是同一命名空间，页面不显示独立 Schema，可信请求构造层强制令 `schema=database`，物理表按 `` `database`.`table_name` `` 限定。默认值只是可编辑的输入初值，不是内核硬编码；提交后仍以签名 Profile 中的实际值为准。
+
 运行中的服务不能反写 systemd 创建的 `$CREDENTIALS_DIRECTORY`。`systemd-credential` 始终表示部署环境已注入的外部引用；未来若支持页面安装 systemd Credential，必须由部署控制器生成 `LoadCredentialEncrypted` 制品、修改 unit 并受控重启，不能伪装成本地文件写入。
 
 秘密最大 64 KiB，只借给同步回调，回调结束立即清零缓冲区。Profile、状态、日志和错误码不包含秘密或原始数据库错误。

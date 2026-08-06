@@ -15,6 +15,8 @@ import {
 import { connectionEndpoint, connectionEndpointFields, defaultConnectionPort } from "./connection-endpoint.js";
 
 const namespace = "cn.vastplan.platform.data.relational.connection-manager";
+const defaultPlatformControlDatabase = "vastplan";
+const defaultPlatformControlSchema = "platform";
 
 type PlatformControlForm = Record<string, unknown> & {
   phase?: string;
@@ -103,6 +105,7 @@ export function createPlatformControlPage(client: PlatformAdminClient, serviceID
           { pointer: "/phase", readOnlyWhen: { pointer: "/phase", exists: true } },
           { pointer: "/currentGeneration", readOnlyWhen: { pointer: "/currentGeneration", exists: true } },
           { pointer: "/createDatabaseIfMissing", visibleWhen: { pointer: "/currentGeneration", equals: 0 } },
+          { pointer: "/schema", visibleWhen: { pointer: "/providerId", equals: "postgresql" } },
           { pointer: "/serverName", visibleWhen: { pointer: "/tlsMode", equals: "verify-full" } },
           { pointer: "/password", widget: "secretMaterial", visibleWhen: { pointer: "/secretMode", equals: "direct" } },
           { pointer: "/externalKind", visibleWhen: { pointer: "/secretMode", equals: "external" } },
@@ -157,9 +160,9 @@ function statusToForm(status: PlatformControlStatus): PlatformControlForm {
       currentGeneration: status.generation ?? 0,
       providerId: "postgresql",
       port: defaultConnectionPort("postgresql"),
-      database: "vastplan",
+      database: defaultPlatformControlDatabase,
       createDatabaseIfMissing: true,
-      schema: "platform_control",
+      schema: defaultPlatformControlSchema,
       tlsMode: "verify-full",
       secretMode: "direct",
       contractRange: "^1.0.0",
@@ -193,7 +196,7 @@ function toChangeRequest(value: PlatformControlForm): PlatformControlChangeReque
   if (endpoint === undefined) throw new Error("平台控制数据库地址或端口无效");
   const providerValue = text(value.providerId);
   const database = text(value.database);
-  const schemaName = text(value.schema);
+  const schemaName = providerValue === "mysql" ? database : text(value.schema);
   const username = text(value.username);
   const tlsMode = text(value.tlsMode) as "disable" | "verify-ca" | "verify-full" | undefined;
   const contractRange = text(value.contractRange);
@@ -237,7 +240,7 @@ function validatePlatformControlForm(value: PlatformControlForm): WorkbenchFormF
   return {
     ...(endpointInvalid ? { "/host": message(namespace, "error.hostInvalid", "请输入有效地址"), "/port": message(namespace, "error.portInvalid", "端口必须为 1 到 65535 的整数") } : {}),
     ...(text(value.database) === undefined ? { "/database": message(namespace, "platformControl.error.databaseRequired", "数据库不能为空") } : {}),
-    ...(text(value.schema) === undefined ? { "/schema": message(namespace, "platformControl.error.schemaRequired", "专用 Schema 不能为空") } : {}),
+    ...(value.providerId !== "mysql" && text(value.schema) === undefined ? { "/schema": message(namespace, "platformControl.error.schemaRequired", "专用 Schema 不能为空") } : {}),
     ...(text(value.username) === undefined ? { "/username": message(namespace, "error.userRequired", "用户名不能为空") } : {}),
     ...(value.tlsMode === "verify-full" && text(value.serverName) === undefined ? { "/serverName": message(namespace, "platformControl.error.serverNameRequired", "完整校验需要填写证书校验服务器名称") } : {}),
     ...(secretMode === "direct" && secret(value.password) === undefined ? { "/password": message(namespace, "platformControl.error.passwordRequired", "请输入数据库密码") } : {}),

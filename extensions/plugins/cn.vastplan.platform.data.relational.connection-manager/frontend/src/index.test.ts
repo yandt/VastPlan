@@ -17,7 +17,16 @@ describe("database connections Workbench page", () => {
     expect(page.form.workflow).toMatchObject({ surface: "page", submitLabel: expect.objectContaining({ key: "platformControl.action.initialize" }) });
     expect(page.form.workflow.actions).toContainEqual(expect.objectContaining({ id: "test", placement: "footer.start", requiresValid: true }));
     const loaded = await page.form.load?.([], new AbortController().signal);
-    expect(loaded).toMatchObject({ phase: "unconfigured", currentGeneration: 0, providerId: "postgresql", createDatabaseIfMissing: true, secretMode: "direct", contractRange: "^1.0.0" });
+    expect(loaded).toMatchObject({
+      phase: "unconfigured",
+      currentGeneration: 0,
+      providerId: "postgresql",
+      database: "vastplan",
+      schema: "platform",
+      createDatabaseIfMissing: true,
+      secretMode: "direct",
+      contractRange: "^1.0.0",
+    });
     const value = { ...loaded, host: "db.internal", username: "vastplan", serverName: "db.internal", password: "one-time-password" };
     const action = page.form.workflow.actions?.[0];
     if (action === undefined) throw new Error("平台控制数据库测试动作未注册");
@@ -28,6 +37,34 @@ describe("database connections Workbench page", () => {
     expect(configurePlatformControl).toHaveBeenCalledWith(expected);
     expect(testPlatformControl).toHaveBeenCalledWith(expect.objectContaining({ profile: expect.not.objectContaining({ secretRef: expect.anything() }) }));
     expect(page.form.presentation?.fields).toContainEqual(expect.objectContaining({ pointer: "/password", widget: "secretMaterial" }));
+    expect(page.form.presentation?.fields).toContainEqual({ pointer: "/schema", visibleWhen: { pointer: "/providerId", equals: "postgresql" } });
+  });
+
+  it("derives the MySQL schema namespace from its database", async () => {
+    const configurePlatformControl = vi.fn(async () => ({ phase: "ready" as const, generation: 1 }));
+    const client = {
+      platformControlStatus: vi.fn(async () => ({ phase: "unconfigured" as const })),
+      configurePlatformControl,
+    } as unknown as PlatformAdminClient;
+    const page = createPlatformControlPage(client, "database", "/settings/databases/platform-control");
+    const loaded = await page.form.load?.([], new AbortController().signal);
+    await page.form.submit({
+      value: {
+        ...loaded,
+        providerId: "mysql",
+        host: "db.internal",
+        port: 3306,
+        database: "vastplan",
+        schema: "must-not-be-used",
+        username: "vastplan",
+        tlsMode: "disable",
+        password: "one-time-password",
+      },
+      selected: [],
+    }, new AbortController().signal);
+    expect(configurePlatformControl).toHaveBeenCalledWith(expect.objectContaining({
+      profile: expect.objectContaining({ schema: "vastplan", connection: expect.objectContaining({ providerId: "mysql", database: "vastplan" }) }),
+    }));
   });
 
   it("maps trusted Platform Control validation details onto the form field", async () => {
