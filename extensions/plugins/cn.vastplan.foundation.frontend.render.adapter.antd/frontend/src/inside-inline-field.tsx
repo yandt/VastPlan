@@ -6,11 +6,23 @@ import type { FormLabelPlacement } from "@vastplan/ui-primitives";
 import { AntdFieldTemplate } from "./safe-rjsf-theme";
 
 export function PresentedField(props: FieldTemplateProps & { placement?: FormLabelPlacement }) {
-  if (props.hidden || props.schema.type === "object" || props.schema.type === "array") return <AntdFieldTemplate {...props} />;
+  if (props.hidden || props.schema.type === "object") return <AntdFieldTemplate {...props} />;
   const label = props.displayLabel === false ? "" : props.label;
   const booleanField = props.schema.type === "boolean";
-  const fieldClassName = booleanField ? "vp-antd-form-field-boolean" : "vp-antd-form-field-value";
   const labelColumnWidth = "min(var(--vp-form-label-width,var(--vp-form-label-min-width,112px)),48%)";
+  if (props.schema.type === "array") return <Form.Item
+    className="vp-antd-form-field-value vp-antd-form-field-array"
+    label={label === "" ? undefined : label}
+    required={props.required}
+    extra={props.rawHelp ?? props.rawDescription}
+    validateStatus={(props.rawErrors?.length ?? 0) > 0 ? "error" : undefined}
+    help={null}
+    labelCol={{ flex: `0 0 ${labelColumnWidth}` }}
+    wrapperCol={{ flex: "1 1 0", style: { minWidth: 0 } }}
+    colon={false}
+    style={{ marginBottom: "var(--vp-form-item-margin-bottom, 16px)" }}
+  ><FieldControl errors={props.rawErrors}>{props.children}</FieldControl></Form.Item>;
+  const fieldClassName = booleanField ? "vp-antd-form-field-boolean" : "vp-antd-form-field-value";
   if (props.placement === "stacked") return <Form.Item
     className={fieldClassName}
     label={booleanField || label === "" ? undefined : label}

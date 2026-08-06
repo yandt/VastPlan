@@ -21,6 +21,7 @@ describe("Portal aggregate workspace", () => {
   it("edits platform, application and services as one data-driven configuration", () => {
     const properties = portalConfigurationSchema.schema.properties as Record<string, unknown>;
     expect(Object.keys(properties)).toEqual(expect.arrayContaining(["defaultRenderer", "defaultTemplate", "navigationOverrides", "applicationPlugins", "services"]));
+    expect(portalConfigurationSchema.uiSchema).toMatchObject({ domains: { items: { "ui:title": "" } }, audience: { items: { "ui:title": "" } } });
     const updated = buildPortalConfiguration(configuration(), {
       route: "/new", defaultRenderer: "antd", allowedRenderers: ["antd"], defaultTemplate: "top-navigation",
       navigationOverrides: [{ target: "cn.example.dashboard/main", order: 10, labels: { "zh-CN": "仪表盘" } }],
