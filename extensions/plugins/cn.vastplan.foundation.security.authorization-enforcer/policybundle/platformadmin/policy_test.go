@@ -11,12 +11,49 @@ import (
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
 	sharedstatev1 "cdsoft.com.cn/VastPlan/contracts/schemas/sharedstate/v1"
+	sharedstatesqlv1 "cdsoft.com.cn/VastPlan/contracts/schemas/sharedstatesql/v1"
 	stagingv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionstaging/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationactivation"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationauthority"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformprofileactivation"
 )
+
+func TestPlatformControlRuntimeOnlyAcceptsTrustedBootstrapSystem(t *testing.T) {
+	trusted := &contractv1.CallContext{
+		Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: platformcontrolv1.TrustedBootstrapSystemID},
+		Scene:  "platform.control.bootstrap",
+	}
+	for _, request := range []extpoint.PermissionRequest{
+		{ExtensionPoint: extpoint.ToolPackage, Capability: platformcontrolv1.BootstrapCapability, Operation: platformcontrolv1.OperationTest},
+		{ExtensionPoint: extpoint.ToolPackage, Capability: platformcontrolv1.BootstrapCapability, Operation: platformcontrolv1.OperationInitialize},
+		{ExtensionPoint: extpoint.ToolPackage, Capability: platformcontrolv1.BootstrapCapability, Operation: platformcontrolv1.OperationOpen},
+		{ExtensionPoint: extpoint.ToolPackage, Capability: sharedstatesqlv1.Capability, Operation: sharedstatesqlv1.OperationGet},
+		{ExtensionPoint: extpoint.ToolPackage, Capability: sharedstatesqlv1.Capability, Operation: sharedstatesqlv1.OperationCreate},
+		{ExtensionPoint: extpoint.ToolPackage, Capability: sharedstatesqlv1.Capability, Operation: sharedstatesqlv1.OperationUpdate},
+		{ExtensionPoint: extpoint.ToolPackage, Capability: sharedstatesqlv1.Capability, Operation: sharedstatesqlv1.OperationDelete},
+		{ExtensionPoint: extpoint.ToolPackage, Capability: sharedstatesqlv1.Capability, Operation: sharedstatesqlv1.OperationList},
+	} {
+		if got, reason := decide(trusted, request); got != extpoint.DecisionAllow {
+			t.Fatalf("可信 Platform Control 调用 %s/%s 应允许: %s (%s)", request.Capability, request.Operation, got, reason)
+		}
+	}
+
+	for name, call := range map[string]*contractv1.CallContext{
+		"错误系统身份": {Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: "node-agent/local"}, Scene: "platform.control.bootstrap"},
+		"错误调用场景": {Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: platformcontrolv1.TrustedBootstrapSystemID}, Scene: "portal.request"},
+		"插件伪装身份": {Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: platformcontrolv1.TrustedBootstrapSystemID}, Scene: "platform.control.bootstrap"},
+	} {
+		request := extpoint.PermissionRequest{ExtensionPoint: extpoint.ToolPackage, Capability: platformcontrolv1.BootstrapCapability, Operation: platformcontrolv1.OperationTest}
+		if got, _ := decide(call, request); got == extpoint.DecisionAllow {
+			t.Fatalf("%s 不得调用 Platform Control Bootstrap", name)
+		}
+	}
+	unknownOperation := extpoint.PermissionRequest{ExtensionPoint: extpoint.ToolPackage, Capability: platformcontrolv1.BootstrapCapability, Operation: "drop"}
+	if got, _ := decide(trusted, unknownOperation); got == extpoint.DecisionAllow {
+		t.Fatal("未知 Platform Control Bootstrap 操作不得放行")
+	}
+}
 
 func TestUserRolesNeverFallThroughLegacyWorkloadPolicy(t *testing.T) {
 	for _, test := range []extpoint.PermissionRequest{

@@ -16,6 +16,7 @@ import (
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
 	sharedstatev1 "cdsoft.com.cn/VastPlan/contracts/schemas/sharedstate/v1"
+	sharedstatesqlv1 "cdsoft.com.cn/VastPlan/contracts/schemas/sharedstatesql/v1"
 	stagingv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionstaging/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactstorage"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationactivation"
@@ -51,6 +52,12 @@ func decide(c *v1.CallContext, request extpoint.PermissionRequest) (extpoint.Dec
 	}
 	if c.Caller.Kind == v1.CallerKind_CALLER_KIND_SYSTEM && request.Capability == "foundation.security.authorization-engine.native" {
 		return extpoint.DecisionAllow, "可信宿主可调用本地 Native Authorization Engine"
+	}
+	if platformControlRuntimeCapability(request.Capability) {
+		if platformControlRuntimeAllowed(c, request) {
+			return extpoint.DecisionAllow, "可信 Platform Control 宿主可调用受限 SQL Bootstrap 数据面"
+		}
+		return extpoint.DecisionDeny, "Platform Control SQL 数据面只接受固定可信宿主身份与操作"
 	}
 	if allowedKernelCallback(c, request) {
 		return extpoint.DecisionAllow, "平台基础插件受限宿主回调"
@@ -129,6 +136,32 @@ func decide(c *v1.CallContext, request extpoint.PermissionRequest) (extpoint.Dec
 		return extpoint.DecisionDeny, "仅已认证用户可管理平台资源"
 	}
 	return extpoint.DecisionAbstain, "非平台管理能力"
+}
+
+func platformControlRuntimeCapability(capability string) bool {
+	return capability == platformcontrolv1.BootstrapCapability || capability == sharedstatesqlv1.Capability
+}
+
+func platformControlRuntimeAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {
+	if c.GetCaller().GetKind() != v1.CallerKind_CALLER_KIND_SYSTEM ||
+		c.GetCaller().GetId() != platformcontrolv1.TrustedBootstrapSystemID ||
+		c.GetScene() != "platform.control.bootstrap" || request.ExtensionPoint != extpoint.ToolPackage {
+		return false
+	}
+	switch request.Capability {
+	case platformcontrolv1.BootstrapCapability:
+		switch request.Operation {
+		case platformcontrolv1.OperationTest, platformcontrolv1.OperationInitialize, platformcontrolv1.OperationOpen:
+			return true
+		}
+	case sharedstatesqlv1.Capability:
+		switch request.Operation {
+		case sharedstatesqlv1.OperationGet, sharedstatesqlv1.OperationCreate, sharedstatesqlv1.OperationUpdate,
+			sharedstatesqlv1.OperationDelete, sharedstatesqlv1.OperationList:
+			return true
+		}
+	}
+	return false
 }
 
 func portalInstallationAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {

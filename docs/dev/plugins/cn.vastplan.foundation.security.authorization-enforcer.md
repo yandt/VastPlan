@@ -1,13 +1,15 @@
 # Authorization Enforcer
 
 插件 ID：`cn.vastplan.foundation.security.authorization-enforcer`
-当前制品版本：`0.4.3`
+当前制品版本：`0.4.4`
 
 该 foundation 插件在每个 Backend unit 内以 per-kernel + local-ephemeral + direct 运行，位于用户调用的最终本地 PEP。它严格验证 Catalog、签名 Snapshot、audience 和有效期；未知目录操作弃权给 workload policy，目录内用户操作缺少策略或权限时拒绝。
 
 平台管理、Portal、Interaction 与 Approval Provider 协议的首方无状态 workload 规则以四个独立 Policy Bundle 包编译进同一签名 Enforcer 制品，保留稳定 Checker ID、优先级和单元测试，但不再形成额外进程。Bundle 只承载策略内容；注册、调用、上下文裁剪和 fail-closed 强制仍走统一协议总线。
 
 `0.4.3` 起，所有 workload Policy Bundle 必须先确认 capability 属于自身职责，再校验该能力所需的 caller、tenant 与 scene。无关能力必须直接弃权，禁止因为缺少本策略所需的上下文字段而越界拒绝；最终仍由匹配该能力的策略及零/全弃权 fail-closed 规则决定是否放行。
+
+`0.4.4` 起，平台管理 Bundle 显式拥有 Platform Control SQL Bootstrap 与 Shared State SQL 宿主数据面的授权边界。它只允许固定 `platform-control-bootstrap/primary` SYSTEM caller 在 `platform.control.bootstrap` scene 下调用标准 `test/initialize/open` 与 `get/create/update/delete/list` 操作；其他身份、场景、扩展点和未知操作全部拒绝。
 
 `0.3.9` 起，每个调用源内核只按稳定 `foundation.security.approval-policy` capability 放行保留可信 Principal 的插件调用，不钉死 Composer、未来消费者或具体 Provider 插件 ID；Provider 目标侧仍重复校验 caller、actor 与 tenant。源端和目标端复用 Approval Go SDK 的同一访问判定，避免双强制点漂移。
 
