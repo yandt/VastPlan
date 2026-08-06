@@ -68,19 +68,12 @@ function CompactScalarArray(props: ArrayFieldTemplateProps) {
     const source = dragRef.current?.source;
     if (source === undefined) return;
     if (source === target) { dragRef.current = undefined; return; }
-    const item = itemsRef.current[source];
-    const buttons = item?.props as ArrayFieldItemTemplateProps["buttonsProps"] | undefined;
-    if (buttons === undefined) return;
-    if (source < target && buttons.hasMoveDown) {
-      buttons.onMoveDownItem();
-      dragRef.current = { source: source + 1 };
-    } else if (source > target && buttons.hasMoveUp) {
-      buttons.onMoveUpItem();
-      dragRef.current = { source: source - 1 };
-    } else {
+    const next = moveScalarArrayItem(itemsRef.current, source, target);
+    if (next === undefined) {
       dragRef.current = undefined;
       return;
     }
+    dragRef.current = { source: next };
     if (dragRef.current.source !== target) window.requestAnimationFrame(() => moveRef.current?.(target));
   };
 
@@ -149,6 +142,16 @@ function CompactScalarArray(props: ArrayFieldTemplateProps) {
         >{i18n.text(message(namespace, "form.list.add", "添加一项"))}</Button> : null}
       </div>
     </ArrayDragContext.Provider>;
+}
+
+export function moveScalarArrayItem(items: ArrayFieldTemplateProps["items"], source: number, target: number): number | undefined {
+  const item = items[source];
+  const itemProps = item?.props as ArrayFieldItemTemplateProps | undefined;
+  const buttons = itemProps?.buttonsProps;
+  if (buttons === undefined) return undefined;
+  if (source < target && buttons.hasMoveDown) { buttons.onMoveDownItem(); return source + 1; }
+  if (source > target && buttons.hasMoveUp) { buttons.onMoveUpItem(); return source - 1; }
+  return undefined;
 }
 
 function CompactScalarArrayItem(props: ArrayFieldItemTemplateProps) {
