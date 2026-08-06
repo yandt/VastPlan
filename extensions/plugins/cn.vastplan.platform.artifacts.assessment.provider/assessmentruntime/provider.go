@@ -1,5 +1,9 @@
 package assessmentruntime
 
+// vastplan:local-file-boundary provider-private
+// The work root is an isolated assessment workspace. Durable assessment
+// decisions are published through the repository workflow, not read from it.
+
 import (
 	"bytes"
 	"context"

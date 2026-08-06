@@ -1,5 +1,9 @@
 package assessmentruntime
 
+// vastplan:local-file-boundary provider-private
+// Extracted packages live only in the assessment Provider's bounded workspace;
+// they are not a governance truth source and are removed after each scan.
+
 import (
 	"archive/tar"
 	"bytes"
