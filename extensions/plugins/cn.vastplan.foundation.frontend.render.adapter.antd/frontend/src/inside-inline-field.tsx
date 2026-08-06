@@ -7,18 +7,20 @@ import { AntdFieldTemplate } from "./safe-rjsf-theme";
 
 export function PresentedField(props: FieldTemplateProps & { placement?: FormLabelPlacement }) {
   if (props.hidden || props.schema.type === "object") return <AntdFieldTemplate {...props} />;
-  const label = props.displayLabel === false ? "" : props.label;
+  const arrayField = props.schema.type === "array";
+  // RJSF suppresses array labels by default; only the generated item labels should be hidden.
+  const label = arrayField ? props.label : props.displayLabel === false ? "" : props.label;
   const booleanField = props.schema.type === "boolean";
   const labelColumnWidth = "min(var(--vp-form-label-width,var(--vp-form-label-min-width,112px)),48%)";
-  if (props.schema.type === "array") return <Form.Item
+  if (arrayField) return <Form.Item
     className="vp-antd-form-field-value vp-antd-form-field-array"
     label={label === "" ? undefined : label}
     required={props.required}
     extra={props.rawHelp ?? props.rawDescription}
     validateStatus={(props.rawErrors?.length ?? 0) > 0 ? "error" : undefined}
     help={null}
-    labelCol={{ flex: `0 0 ${labelColumnWidth}` }}
-    wrapperCol={{ flex: "1 1 0", style: { minWidth: 0 } }}
+    labelCol={props.placement === "stacked" ? undefined : { flex: "0 0 112px" }}
+    wrapperCol={props.placement === "stacked" ? undefined : { flex: "1 1 0", style: { minWidth: 0 } }}
     colon={false}
     style={{ marginBottom: "var(--vp-form-item-margin-bottom, 16px)" }}
   ><FieldControl errors={props.rawErrors}>{props.children}</FieldControl></Form.Item>;
