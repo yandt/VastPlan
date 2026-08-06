@@ -114,7 +114,7 @@ func (r *runtime) writeAuthorizationBootstrap(repository *artifactrepository.Rep
 		return err
 	}
 	statePath, snapshotPath := filepath.Join(root, "policy-state.json"), filepath.Join(root, "policy-snapshot.json")
-	store := &policy.FileStore{Path: statePath}
+	store := &developmentPolicyStateStore{path: statePath}
 	if _, err := os.Stat(statePath); errors.Is(err, os.ErrNotExist) {
 		state, buildErr := policy.BuildBootstrapState(catalog, profile, []authorizationv1.PolicyDomain{domain}, grants, time.Now().UTC())
 		if buildErr != nil {
@@ -188,7 +188,7 @@ func (r *runtime) writeAuthorizationBootstrap(repository *artifactrepository.Rep
 // catalog transition. User-created or subsequently revised roles retain the
 // production fail-closed behavior and still block removal of permissions they
 // actively use.
-func reconcileDevelopmentGrantsBeforeCatalogUpdate(store *policy.FileStore, catalog pluginv1.PermissionCatalog, grants []policy.BootstrapGrant, now time.Time) error {
+func reconcileDevelopmentGrantsBeforeCatalogUpdate(store policy.Store, catalog pluginv1.PermissionCatalog, grants []policy.BootstrapGrant, now time.Time) error {
 	state, err := store.Load()
 	if err != nil {
 		return err
@@ -336,4 +336,68 @@ func writeOwnerJSON(path string, value any) error {
 		return err
 	}
 	return os.WriteFile(path, append(raw, '\n'), 0o600)
+}
+
+// developmentPolicyStateStore owns platformdev's Bootstrap document mutation.
+// It deliberately reuses the plugin's load-only reader for validation while
+// keeping the production Authorization Policy Store Shared State-backed.
+type developmentPolicyStateStore struct{ path string }
+
+func (s *developmentPolicyStateStore) Load() (policy.State, error) {
+	return (&policy.FileBootstrapStateReader{Path: s.path}).Load()
+}
+
+func (s *developmentPolicyStateStore) CompareAndSwap(expected uint64, next policy.State) (policy.State, error) {
+	current, err := s.Load()
+	if err != nil {
+		return policy.State{}, err
+	}
+	if current.Generation != expected || next.Generation != expected+1 {
+		return policy.State{}, fmt.Errorf("Authorization Policy CAS 冲突: expected=%d actual=%d next=%d", expected, current.Generation, next.Generation)
+	}
+	raw, err := json.MarshalIndent(next, "", "  ")
+	if err != nil {
+		return policy.State{}, err
+	}
+	if err := s.write(append(raw, '\n')); err != nil {
+		return policy.State{}, err
+	}
+	return next, nil
+}
+
+func (s *developmentPolicyStateStore) write(raw []byte) error {
+	directory := filepath.Dir(s.path)
+	temporary, err := os.CreateTemp(directory, ".authorization-policy-*.json")
+	if err != nil {
+		return err
+	}
+	temporaryPath := temporary.Name()
+	committed := false
+	defer func() {
+		_ = temporary.Close()
+		if !committed {
+			_ = os.Remove(temporaryPath)
+		}
+	}()
+	if err := temporary.Chmod(0o600); err != nil {
+		return err
+	}
+	if _, err := temporary.Write(raw); err != nil {
+		return err
+	}
+	if err := errors.Join(temporary.Sync(), temporary.Close()); err != nil {
+		return err
+	}
+	if _, err := (&policy.FileBootstrapStateReader{Path: temporaryPath}).Load(); err != nil {
+		return err
+	}
+	if err := os.Rename(temporaryPath, s.path); err != nil {
+		return err
+	}
+	committed = true
+	dir, err := os.Open(directory)
+	if err != nil {
+		return err
+	}
+	return errors.Join(dir.Sync(), dir.Close())
 }

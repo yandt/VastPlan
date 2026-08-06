@@ -70,7 +70,7 @@ func loadBootstrapState(path string) (*policy.State, error) {
 	if strings.TrimSpace(path) == "" {
 		return nil, nil
 	}
-	state, err := (&policy.FileStore{Path: path}).Load()
+	state, err := (&policy.FileBootstrapStateReader{Path: path}).Load()
 	if err != nil {
 		return nil, err
 	}

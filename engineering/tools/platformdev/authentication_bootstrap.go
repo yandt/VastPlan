@@ -4,10 +4,12 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"time"
 
 	authenticationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authentication/v1"
@@ -110,8 +112,8 @@ func ensurePrivate32ByteKey(path, label string) error {
 }
 
 func ensureDevelopmentProviderState(path string) error {
-	store := &broker.FileManagementStore{Path: path}
-	current, err := store.LoadState()
+	reader := &broker.FileManagementStateReader{Path: path}
+	current, err := reader.LoadState()
 	if err != nil {
 		return err
 	}
@@ -149,10 +151,72 @@ func ensureDevelopmentProviderState(path string) error {
 		}},
 		Catalog: &catalog,
 	}
-	if _, err := store.UpdateState(0, next); err != nil {
+	if _, err := compareAndSwapDevelopmentManagementState(path, 0, next); err != nil {
 		return fmt.Errorf("初始化开发 Authentication Provider Catalog: %w", err)
 	}
 	return nil
+}
+
+// compareAndSwapDevelopmentManagementState owns the development-only file
+// mutation that formerly leaked through the Broker runtime adapter. Reads use
+// the public Bootstrap reader so the persisted document keeps the plugin's
+// validation rules; writes remain limited to platformdev's persistent state.
+func compareAndSwapDevelopmentManagementState(path string, expected uint64, next broker.ManagementState) (broker.ManagementState, error) {
+	current, err := (&broker.FileManagementStateReader{Path: path}).LoadState()
+	if err != nil {
+		return broker.ManagementState{}, err
+	}
+	if current.Generation == next.Generation && reflect.DeepEqual(current, next) {
+		return current, nil
+	}
+	if current.Generation != expected || next.Generation != expected+1 {
+		return broker.ManagementState{}, fmt.Errorf("开发 Authentication Provider Catalog CAS 冲突: expected=%d actual=%d next=%d", expected, current.Generation, next.Generation)
+	}
+	raw, err := json.MarshalIndent(next, "", "  ")
+	if err != nil {
+		return broker.ManagementState{}, err
+	}
+	if err := writeDevelopmentManagementState(path, append(raw, '\n')); err != nil {
+		return broker.ManagementState{}, err
+	}
+	return next, nil
+}
+
+func writeDevelopmentManagementState(path string, raw []byte) error {
+	directory := filepath.Dir(path)
+	temporary, err := os.CreateTemp(directory, ".authentication-providers-*.json")
+	if err != nil {
+		return err
+	}
+	temporaryPath := temporary.Name()
+	committed := false
+	defer func() {
+		_ = temporary.Close()
+		if !committed {
+			_ = os.Remove(temporaryPath)
+		}
+	}()
+	if err := temporary.Chmod(0o600); err != nil {
+		return err
+	}
+	if _, err := temporary.Write(raw); err != nil {
+		return err
+	}
+	if err := errors.Join(temporary.Sync(), temporary.Close()); err != nil {
+		return err
+	}
+	if _, err := (&broker.FileManagementStateReader{Path: temporaryPath}).LoadState(); err != nil {
+		return err
+	}
+	if err := os.Rename(temporaryPath, path); err != nil {
+		return err
+	}
+	committed = true
+	dir, err := os.Open(directory)
+	if err != nil {
+		return err
+	}
+	return errors.Join(dir.Sync(), dir.Close())
 }
 
 func (r *runtime) developmentSeedSubjectID() (string, error) {

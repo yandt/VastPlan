@@ -1,9 +1,13 @@
 package arch
 
 import (
-	"encoding/json"
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -17,15 +21,14 @@ var allowedLocalFileBoundaries = map[string]struct{}{
 	"recovery-root":      {},
 }
 
-// External Shared State plugins must not silently regain a local writable
-// truth source. A narrow Bootstrap/Recovery/Provider boundary or derived
-// projection is allowed only when the owning file declares the audited class.
-func TestExternalSharedStatePluginsHaveNoUnclassifiedLocalWrites(t *testing.T) {
+// Plugins whose durable truth is external must not silently regain a local
+// writable truth source. Runtime topology does not decide storage ownership.
+func TestExternallyOwnedDurableTruthHasNoUnclassifiedLocalWrites(t *testing.T) {
 	root := repoRoot(t)
 	inventory := readStateOwnershipInventory(t, root)
-	auditedBoundaries := make(map[string]map[string]struct{}, len(inventory.StateOwnership))
+	ownershipByID := make(map[string]stateOwnershipRecord, len(inventory.StateOwnership))
 	for _, ownership := range inventory.StateOwnership {
-		auditedBoundaries[ownership.ID] = stringSet(ownership.LocalBoundaries...)
+		ownershipByID[ownership.ID] = ownership
 	}
 	pluginsRoot := filepath.Join(root, "extensions", "plugins")
 	entries, err := os.ReadDir(pluginsRoot)
@@ -37,7 +40,8 @@ func TestExternalSharedStatePluginsHaveNoUnclassifiedLocalWrites(t *testing.T) {
 			continue
 		}
 		pluginRoot := filepath.Join(pluginsRoot, entry.Name())
-		if !externalSharedStateManifest(t, filepath.Join(pluginRoot, "vastplan.plugin.json")) {
+		ownership, found := ownershipByID[entry.Name()]
+		if !found || !hasExternallyOwnedDurableTruth(ownership.DurableTruth) {
 			continue
 		}
 		err := filepath.WalkDir(pluginRoot, func(path string, item os.DirEntry, walkErr error) error {
@@ -51,15 +55,8 @@ func TestExternalSharedStatePluginsHaveNoUnclassifiedLocalWrites(t *testing.T) {
 			if readErr != nil {
 				return readErr
 			}
-			source := string(raw)
-			if !containsLocalWrite(source) {
-				return nil
-			}
-			boundary := declaredLocalFileBoundary(source)
-			if _, allowed := allowedLocalFileBoundaries[boundary]; !allowed {
-				t.Errorf("external-shared 插件存在未分类本机写入: %s", filepath.ToSlash(strings.TrimPrefix(path, root+string(filepath.Separator))))
-			} else if _, audited := auditedBoundaries[entry.Name()][boundary]; !audited {
-				t.Errorf("external-shared 插件的本机写入未进入状态归属清单: plugin=%s boundary=%s", entry.Name(), boundary)
+			if err := validateProductionLocalWrites(path, raw, ownership); err != nil {
+				t.Errorf("%s: %v", filepath.ToSlash(strings.TrimPrefix(path, root+string(filepath.Separator))), err)
 			}
 			return nil
 		})
@@ -69,48 +66,168 @@ func TestExternalSharedStatePluginsHaveNoUnclassifiedLocalWrites(t *testing.T) {
 	}
 }
 
-func externalSharedStateManifest(t *testing.T, path string) bool {
-	t.Helper()
-	raw, err := os.ReadFile(path)
-	if errorsIsNotExist(err) {
-		return false
+func TestExternalDurableTruthSelectionIgnoresRuntimeStateModel(t *testing.T) {
+	tests := []struct {
+		name    string
+		model   string
+		durable []string
+		want    bool
+	}{
+		{name: "leader owned shared state", model: "leader-owned", durable: []string{"shared-state"}, want: true},
+		{name: "external topology without durable truth", model: "external-shared", durable: nil, want: false},
+		{name: "record store", model: "leader-owned", durable: []string{"record-store"}, want: true},
+		{name: "platform control sql", model: "none", durable: []string{"platform-control-sql"}, want: true},
+		{name: "bootstrap file only", model: "external-shared", durable: []string{"bootstrap-file"}, want: false},
 	}
-	if err != nil {
-		t.Fatal(err)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := hasExternallyOwnedDurableTruth(test.durable); got != test.want {
+				t.Fatalf("model=%q durable=%v: got %t want %t", test.model, test.durable, got, test.want)
+			}
+		})
 	}
-	var manifest struct {
-		Runtime struct {
-			StateModel string `json:"stateModel"`
-		} `json:"runtime"`
-	}
-	if err := json.Unmarshal(raw, &manifest); err != nil {
-		t.Fatalf("解析 %s: %v", path, err)
-	}
-	return manifest.Runtime.StateModel == "external-shared"
 }
 
-func containsLocalWrite(source string) bool {
-	for _, call := range []string{
-		"os.WriteFile(", "os.Create(", "os.CreateTemp(", "os.OpenFile(",
-		"os.Rename(", "os.Remove(", "os.RemoveAll(", "os.MkdirAll(",
-	} {
-		if strings.Contains(source, call) {
+func TestProductionLocalWriteBoundaryValidation(t *testing.T) {
+	writeSource := []byte("package plugin\nimport \"os\"\nfunc persist() { _ = os.WriteFile(\"state.json\", nil, 0o600) }\n")
+	aliasedWriteSource := []byte("package plugin\nimport filesystem \"os\"\nfunc persist() { _ = filesystem.WriteFile(\"state.json\", nil, 0o600) }\n")
+	dotImportedWriteSource := []byte("package plugin\nimport . \"os\"\nfunc persist() { _ = WriteFile(\"state.json\", nil, 0o600) }\n")
+	tests := []struct {
+		name      string
+		ownership stateOwnershipRecord
+		source    []byte
+		want      string
+	}{
+		{name: "standard os import write fails", ownership: stateOwnershipRecord{ID: "plugin", DurableTruth: []string{"shared-state"}}, source: writeSource, want: "未分类本机写入"},
+		{name: "aliased os import write fails", ownership: stateOwnershipRecord{ID: "plugin", DurableTruth: []string{"shared-state"}}, source: aliasedWriteSource, want: "未分类本机写入"},
+		{name: "dot imported os is rejected", ownership: stateOwnershipRecord{ID: "plugin", DurableTruth: []string{"shared-state"}}, source: dotImportedWriteSource, want: "禁止 dot-import os"},
+		{name: "declared boundary missing from inventory fails", ownership: stateOwnershipRecord{ID: "plugin", DurableTruth: []string{"shared-state"}}, source: append([]byte("// vastplan:local-file-boundary provider-private\n"), writeSource...), want: "未进入状态归属清单"},
+		{name: "bootstrap write requires bootstrap durable truth", ownership: stateOwnershipRecord{ID: "plugin", DurableTruth: []string{"shared-state"}, LocalBoundaries: []string{"bootstrap-root"}}, source: append([]byte("// vastplan:local-file-boundary bootstrap-root\n"), writeSource...), want: "未声明 bootstrap-file"},
+		{name: "declared bootstrap boundary is accepted", ownership: stateOwnershipRecord{ID: "plugin", DurableTruth: []string{"shared-state", "bootstrap-file"}, LocalBoundaries: []string{"bootstrap-root"}}, source: append([]byte("// vastplan:local-file-boundary bootstrap-root\n"), writeSource...), want: ""},
+		{name: "declared provider private boundary is accepted", ownership: stateOwnershipRecord{ID: "plugin", DurableTruth: []string{"shared-state"}, LocalBoundaries: []string{"provider-private"}}, source: append([]byte("// vastplan:local-file-boundary provider-private\n"), writeSource...), want: ""},
+		{name: "declared derived projection boundary is accepted", ownership: stateOwnershipRecord{ID: "plugin", DurableTruth: []string{"shared-state"}, LocalBoundaries: []string{"derived-projection"}}, source: append([]byte("// vastplan:local-file-boundary derived-projection\n"), writeSource...), want: ""},
+		{name: "declared recovery root boundary is accepted", ownership: stateOwnershipRecord{ID: "plugin", DurableTruth: []string{"shared-state"}, LocalBoundaries: []string{"recovery-root"}}, source: append([]byte("// vastplan:local-file-boundary recovery-root\n"), writeSource...), want: ""},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := validateProductionLocalWrites("plugin.go", test.source, test.ownership)
+			if test.want == "" && err != nil {
+				t.Fatal(err)
+			}
+			if test.want != "" && (err == nil || !strings.Contains(err.Error(), test.want)) {
+				t.Fatalf("err=%v, want containing %q", err, test.want)
+			}
+		})
+	}
+}
+
+func hasExternallyOwnedDurableTruth(durableTruth []string) bool {
+	for _, durable := range durableTruth {
+		switch durable {
+		case "shared-state", "record-store", "platform-control-sql":
 			return true
 		}
 	}
 	return false
 }
 
-func declaredLocalFileBoundary(source string) string {
-	index := strings.Index(source, localFileBoundaryMarker)
-	if index < 0 {
-		return ""
+func validateProductionLocalWrites(path string, source []byte, ownership stateOwnershipRecord) error {
+	file, err := parser.ParseFile(token.NewFileSet(), path, source, parser.ParseComments)
+	if err != nil {
+		return fmt.Errorf("解析 Go 源码: %w", err)
 	}
-	value := source[index+len(localFileBoundaryMarker):]
-	if end := strings.IndexAny(value, " \t\r\n"); end >= 0 {
-		value = value[:end]
+	hasWrite, err := hasLocalWriteCall(file)
+	if err != nil {
+		return err
 	}
-	return value
+	if !hasWrite {
+		return nil
+	}
+	boundary := declaredLocalFileBoundary(file)
+	if _, allowed := allowedLocalFileBoundaries[boundary]; !allowed {
+		return fmt.Errorf("存在未分类本机写入")
+	}
+	if !containsString(ownership.LocalBoundaries, boundary) {
+		return fmt.Errorf("本机写入未进入状态归属清单: plugin=%s boundary=%s", ownership.ID, boundary)
+	}
+	if boundary == "bootstrap-root" && !containsString(ownership.DurableTruth, "bootstrap-file") {
+		return fmt.Errorf("bootstrap-root 本机写入未声明 bootstrap-file durableTruth: plugin=%s", ownership.ID)
+	}
+	return nil
 }
 
-func errorsIsNotExist(err error) bool { return err != nil && os.IsNotExist(err) }
+func hasLocalWriteCall(file *ast.File) (bool, error) {
+	osImportNames, dotImportedOS := osImportNames(file)
+	if dotImportedOS {
+		return false, fmt.Errorf("禁止 dot-import os，无法安全审计本机写入")
+	}
+	if len(osImportNames) == 0 {
+		return false, nil
+	}
+	found := false
+	ast.Inspect(file, func(node ast.Node) bool {
+		call, ok := node.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		selector, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		packageName, ok := selector.X.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		if _, imported := osImportNames[packageName.Name]; !imported {
+			return true
+		}
+		switch selector.Sel.Name {
+		case "WriteFile", "Create", "CreateTemp", "OpenFile", "Rename", "Remove", "RemoveAll", "MkdirAll":
+			found = true
+			return false
+		default:
+			return true
+		}
+	})
+	return found, nil
+}
+
+func osImportNames(file *ast.File) (map[string]struct{}, bool) {
+	names := map[string]struct{}{}
+	dotImported := false
+	for _, spec := range file.Imports {
+		path, err := strconv.Unquote(spec.Path.Value)
+		if err != nil || path != "os" {
+			continue
+		}
+		if spec.Name == nil {
+			names["os"] = struct{}{}
+			continue
+		}
+		switch spec.Name.Name {
+		case "_":
+			continue
+		case ".":
+			dotImported = true
+		default:
+			names[spec.Name.Name] = struct{}{}
+		}
+	}
+	return names, dotImported
+}
+
+func declaredLocalFileBoundary(file *ast.File) string {
+	for _, group := range file.Comments {
+		for _, comment := range group.List {
+			_, value, found := strings.Cut(comment.Text, localFileBoundaryMarker)
+			if !found {
+				continue
+			}
+			fields := strings.Fields(value)
+			if len(fields) > 0 {
+				return fields[0]
+			}
+		}
+	}
+	return ""
+}

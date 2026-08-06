@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"sync"
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	authenticationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authentication/v1"
@@ -26,6 +25,13 @@ const (
 type ManagementStore interface {
 	LoadState() (ManagementState, error)
 	UpdateState(expected uint64, next ManagementState) (ManagementState, error)
+}
+
+// ManagementStateReader is the load-only port used by Bootstrap Catalog
+// fallback. Management workflows keep depending on ManagementStore so only
+// Shared State can advance durable Provider management state.
+type ManagementStateReader interface {
+	LoadState() (ManagementState, error)
 }
 
 type contextualManagementStore interface {
@@ -137,12 +143,11 @@ func (s *boundSharedManagementStore) UpdateState(expected uint64, next Managemen
 	return next, nil
 }
 
-type FileManagementStore struct {
-	Path string
-	mu   sync.Mutex
-}
+// FileManagementStateReader reads the owner-controlled Bootstrap Catalog. It
+// intentionally has no UpdateState method: this file is not durable truth.
+type FileManagementStateReader struct{ Path string }
 
-func (s *FileManagementStore) LoadState() (ManagementState, error) {
+func (s *FileManagementStateReader) LoadState() (ManagementState, error) {
 	if err := validateManagementPath(s.Path); err != nil {
 		return ManagementState{}, err
 	}
@@ -158,59 +163,6 @@ func (s *FileManagementStore) LoadState() (ManagementState, error) {
 		return ManagementState{}, errors.New("Provider Management 状态必须是 owner-only 普通文件")
 	}
 	return decodeManagementState(raw)
-}
-
-func (s *FileManagementStore) UpdateState(expected uint64, next ManagementState) (ManagementState, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	current, err := s.LoadState()
-	if err != nil {
-		return ManagementState{}, err
-	}
-	if current.Generation == next.Generation && reflect.DeepEqual(current, next) {
-		return current, nil
-	}
-	if current.Generation != expected || next.Generation != expected+1 || next.Version != managementStateVersion {
-		return ManagementState{}, fmt.Errorf("Provider Management CAS 冲突: expected=%d actual=%d next=%d", expected, current.Generation, next.Generation)
-	}
-	raw, err := json.MarshalIndent(next, "", "  ")
-	if err != nil {
-		return ManagementState{}, err
-	}
-	dir := filepath.Dir(s.Path)
-	file, err := os.CreateTemp(dir, ".authentication-providers-*")
-	if err != nil {
-		return ManagementState{}, err
-	}
-	temporary := file.Name()
-	committed := false
-	defer func() {
-		_ = file.Close()
-		if !committed {
-			_ = os.Remove(temporary)
-		}
-	}()
-	if err := file.Chmod(0o600); err != nil {
-		return ManagementState{}, err
-	}
-	if _, err := file.Write(append(raw, '\n')); err != nil {
-		return ManagementState{}, err
-	}
-	if err := errors.Join(file.Sync(), file.Close()); err != nil {
-		return ManagementState{}, err
-	}
-	if err := os.Rename(temporary, s.Path); err != nil {
-		return ManagementState{}, err
-	}
-	committed = true
-	directory, err := os.Open(dir)
-	if err != nil {
-		return ManagementState{}, err
-	}
-	if err := errors.Join(directory.Sync(), directory.Close()); err != nil {
-		return ManagementState{}, err
-	}
-	return next, nil
 }
 
 func emptyManagementState() ManagementState {
@@ -244,10 +196,13 @@ func validateManagementPath(path string) error {
 	return nil
 }
 
-type StateCatalog struct{ Store ManagementStore }
+type StateCatalog struct{ Store ManagementStateReader }
 
 func (c StateCatalog) Bind(ctx context.Context, host sdk.Host, call *contractv1.CallContext) Catalog {
-	return StateCatalog{Store: bindManagementStore(ctx, c.Store, host, call)}
+	if contextual, ok := c.Store.(contextualManagementStore); ok {
+		return StateCatalog{Store: contextual.Bind(ctx, host, call)}
+	}
+	return c
 }
 
 func (c StateCatalog) Load() (authenticationv1.AuthenticationProviderCatalog, error) {

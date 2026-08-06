@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -110,7 +111,7 @@ func TestReconcileDevelopmentGrantsBeforeCatalogUpdateUsesTargetCatalog(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	store := &policy.FileStore{Path: filepath.Join(t.TempDir(), "policy-state.json")}
+	store := &developmentPolicyStateStore{path: filepath.Join(t.TempDir(), "policy-state.json")}
 	if _, err := store.CompareAndSwap(0, state); err != nil {
 		t.Fatal(err)
 	}
@@ -127,6 +128,39 @@ func TestReconcileDevelopmentGrantsBeforeCatalogUpdateUsesTargetCatalog(t *testi
 	}
 	if got := reconciled.Roles[0].Statements[0].Permissions; !equalStrings(got, []string{"platform.database.read"}) {
 		t.Fatalf("Seed Role 必须按目标 Catalog 收敛: %v", got)
+	}
+}
+
+func TestDevelopmentPolicyStateStoreWritesOwnerOnlyAndRejectsInvalidStateAtomically(t *testing.T) {
+	now := time.Date(2026, 8, 6, 8, 0, 0, 0, time.UTC)
+	catalog := developmentAuthorizationCatalog(t)
+	profile := policy.NativeProviderProfile(catalog)
+	root, err := policy.RootDomain(catalog, profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, err := policy.BuildBootstrapState(catalog, profile, []authorizationv1.PolicyDomain{root}, developmentGrants(catalog, ""), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "policy-state.json")
+	store := &developmentPolicyStateStore{path: path}
+	if _, err := store.CompareAndSwap(0, state); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 {
+		t.Fatalf("开发 Policy 状态必须作为 owner-only 普通文件提交: info=%v err=%v", info, err)
+	}
+	invalid := state
+	invalid.Generation++
+	invalid.Version = 0
+	if _, err := store.CompareAndSwap(state.Generation, invalid); err == nil {
+		t.Fatal("无效 State 不得提交")
+	}
+	reloaded, err := store.Load()
+	if err != nil || reloaded.Generation != state.Generation {
+		t.Fatalf("无效写入不得替换已提交 State: %+v err=%v", reloaded, err)
 	}
 }
 

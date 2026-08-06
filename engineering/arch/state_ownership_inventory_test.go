@@ -10,18 +10,23 @@ import (
 )
 
 type stateOwnershipInventory struct {
-	Version        int `json:"version"`
-	StateOwnership []struct {
-		ID                string   `json:"id"`
-		RuntimeStateModel string   `json:"runtimeStateModel"`
-		DurableTruth      []string `json:"durableTruth"`
-		TransientState    []string `json:"transientState"`
-		LocalBoundaries   []string `json:"localBoundaries"`
-	} `json:"stateOwnership"`
+	Version                      int                    `json:"version"`
+	StateOwnership               []stateOwnershipRecord `json:"stateOwnership"`
 	RetiredDevelopmentStateFiles []struct {
 		Path        string `json:"path"`
 		Replacement string `json:"replacement"`
 	} `json:"retiredDevelopmentStateFiles"`
+}
+
+// stateOwnershipRecord is shared by inventory validation and architecture
+// gates. Runtime topology remains recorded here but storage gates must make
+// their decision from DurableTruth.
+type stateOwnershipRecord struct {
+	ID                string   `json:"id"`
+	RuntimeStateModel string   `json:"runtimeStateModel"`
+	DurableTruth      []string `json:"durableTruth"`
+	TransientState    []string `json:"transientState"`
+	LocalBoundaries   []string `json:"localBoundaries"`
 }
 
 type auditedPluginManifest struct {
