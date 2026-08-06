@@ -1,6 +1,4 @@
 import { DeleteOutlined, HolderOutlined, PlusOutlined } from "@ant-design/icons";
-import { DragDropProvider } from "@dnd-kit/react";
-import { useSortable } from "@dnd-kit/react/sortable";
 import { Button, Input, InputNumber, Tooltip, Typography } from "antd";
 import type { ArrayFieldItemTemplateProps, ArrayFieldTemplateProps, BaseInputTemplateProps, DescriptionFieldProps, FieldHelpProps, TemplatesType } from "@rjsf/utils";
 import { ariaDescribedByIds, getInputProps, helpId } from "@rjsf/utils";
@@ -16,7 +14,7 @@ import MultiSchemaFieldTemplate from "@rjsf/antd/lib/templates/MultiSchemaFieldT
 import OptionalDataControlsTemplate from "@rjsf/antd/lib/templates/OptionalDataControlsTemplate/index.js";
 import TitleFieldTemplate from "@rjsf/antd/lib/templates/TitleField/index.js";
 import WrapIfAdditionalTemplate from "@rjsf/antd/lib/templates/WrapIfAdditionalTemplate/index.js";
-import { createContext, useContext, useId, useRef } from "react";
+import { createContext, useContext, useEffect, useRef, type PointerEvent as ReactPointerEvent } from "react";
 import { message, usePortalI18n } from "@vastplan/ui-primitives";
 import { namespace } from "./theme";
 
@@ -41,21 +39,30 @@ export const safeAntdTemplates: Partial<TemplatesType> = {
 export { AntdFieldTemplate };
 
 interface ArrayDragControls {
-  group: string;
-  reorder(source: number, target: number): void;
+  start(event: ReactPointerEvent<HTMLButtonElement>, source: number, element: HTMLElement): void;
 }
 
-const inactiveArrayDragControls: ArrayDragControls = { group: "", reorder() {} };
+interface ArrayPointerSession {
+  pointerID: number;
+  source: number;
+  target: number;
+  sourceElement: HTMLElement;
+  targetElement?: HTMLElement;
+  cleanup(): void;
+}
+
+const inactiveArrayDragControls: ArrayDragControls = { start() {} };
 const ArrayDragContext = createContext<ArrayDragControls>(inactiveArrayDragControls);
 
 /** Keeps scalar list values visually lightweight while preserving RJSF's schema-owned array behavior. */
 function CompactScalarArray(props: ArrayFieldTemplateProps) {
   const i18n = usePortalI18n();
-  const group = useId();
   const itemsRef = useRef(props.items);
   const dragRef = useRef<{ source: number }>();
   const moveRef = useRef<(target: number) => void>();
+  const pointerRef = useRef<ArrayPointerSession>();
   itemsRef.current = props.items;
+  useEffect(() => () => pointerRef.current?.cleanup(), []);
 
   moveRef.current = (target) => {
     const source = dragRef.current?.source;
@@ -79,16 +86,57 @@ function CompactScalarArray(props: ArrayFieldTemplateProps) {
 
   if (!isScalarArray(props)) return <ArrayFieldTemplate {...props} />;
   const controls: ArrayDragControls = {
-    group,
-    reorder(source, target) { dragRef.current = { source }; moveRef.current?.(target); },
+    start(event, source, sourceElement) {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      sourceElement.dataset.dragging = "true";
+      const pointer: ArrayPointerSession = {
+        pointerID: event.pointerId,
+        source,
+        target: source,
+        sourceElement,
+        cleanup() {
+          sourceElement.removeAttribute("data-dragging");
+          pointer.targetElement?.removeAttribute("data-drop-target");
+          window.removeEventListener("pointermove", move);
+          window.removeEventListener("pointerup", finish);
+          window.removeEventListener("pointercancel", cancel);
+          if (pointerRef.current === pointer) pointerRef.current = undefined;
+        },
+      };
+      const updateTarget = (clientX: number, clientY: number) => {
+        const candidate = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>(".vp-antd-form-array-item") ?? undefined;
+        const target = candidate === undefined ? undefined : arrayIndex(candidate.dataset.arrayIndex);
+        if (target === undefined) return;
+        if (pointer.targetElement !== candidate) {
+          pointer.targetElement?.removeAttribute("data-drop-target");
+          pointer.targetElement = candidate === sourceElement ? undefined : candidate;
+          pointer.targetElement?.setAttribute("data-drop-target", "true");
+        }
+        pointer.target = target;
+      };
+      const move = (moveEvent: PointerEvent) => {
+        if (moveEvent.pointerId === pointer.pointerID) updateTarget(moveEvent.clientX, moveEvent.clientY);
+      };
+      const finish = (finishEvent: PointerEvent) => {
+        if (finishEvent.pointerId !== pointer.pointerID) return;
+        updateTarget(finishEvent.clientX, finishEvent.clientY);
+        pointer.cleanup();
+        dragRef.current = { source: pointer.source };
+        moveRef.current?.(pointer.target);
+      };
+      const cancel = (cancelEvent: PointerEvent) => {
+        if (cancelEvent.pointerId === pointer.pointerID) pointer.cleanup();
+      };
+      pointerRef.current?.cleanup();
+      pointerRef.current = pointer;
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", finish);
+      window.addEventListener("pointercancel", cancel);
+    },
   };
   const disabled = props.disabled || props.readonly || !props.canAdd;
-  return <DragDropProvider onDragEnd={(event) => {
-    if (event.canceled) return;
-    const source = arrayIndex(event.operation.source?.id);
-    const target = arrayIndex(event.operation.target?.id);
-    if (source !== undefined && target !== undefined) controls.reorder(source, target);
-  }}><ArrayDragContext.Provider value={controls}>
+  return <ArrayDragContext.Provider value={controls}>
       <div className="vp-antd-form-array" data-form-array="scalar">
         <div className="vp-antd-form-array-list">{props.items}</div>
         {props.canAdd ? <Button
@@ -100,7 +148,7 @@ function CompactScalarArray(props: ArrayFieldTemplateProps) {
           onClick={props.onAddClick}
         >{i18n.text(message(namespace, "form.list.add", "添加一项"))}</Button> : null}
       </div>
-    </ArrayDragContext.Provider></DragDropProvider>;
+    </ArrayDragContext.Provider>;
 }
 
 function CompactScalarArrayItem(props: ArrayFieldItemTemplateProps) {
@@ -113,15 +161,11 @@ function SortableScalarArrayItem(props: ArrayFieldItemTemplateProps) {
   const drag = useContext(ArrayDragContext);
   const buttons = props.buttonsProps;
   const reorderable = !props.disabled && !props.readonly && (buttons.hasMoveUp || buttons.hasMoveDown);
-  const sortable = useSortable({ id: String(props.index), index: props.index, group: drag.group, disabled: !reorderable });
   const removeLabel = i18n.text(message(namespace, "form.list.remove", "删除此项"));
   const reorderLabel = i18n.text(message(namespace, "form.list.reorder", "拖拽排序"));
   return <div
     className="vp-antd-form-array-item"
     data-array-index={props.index}
-    data-dragging={sortable.isDragging || undefined}
-    data-drop-target={sortable.isDropTarget || undefined}
-    ref={sortable.ref}
   >
     <Tooltip title={reorderLabel}><button
       className="vp-antd-form-array-drag"
@@ -130,7 +174,10 @@ function SortableScalarArrayItem(props: ArrayFieldItemTemplateProps) {
       aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
       disabled={!reorderable}
       data-array-drag-handle
-      ref={sortable.handleRef}
+      onPointerDown={(event) => {
+        const item = event.currentTarget.closest<HTMLElement>(".vp-antd-form-array-item");
+        if (item !== null) drag.start(event, props.index, item);
+      }}
       onKeyDown={(event) => {
         if (!event.altKey) return;
         if (event.key === "ArrowUp" && buttons.hasMoveUp) { event.preventDefault(); buttons.onMoveUpItem(); }
