@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.platform.data.relational.connection-manager`
 能力：`tool.package/platform.database`
-当前制品版本：`0.16.2`
+当前制品版本：`0.16.3`
 
 ## 边界
 
@@ -58,6 +58,8 @@
 0.16.1 在首次 Platform Control 表单增加默认选中的“数据库不存在时创建”。测试连接仍保持只读：目标库缺失时只提示初始化阶段会创建；用户提交后由可信宿主按 `Test -> Provision -> Test -> Initialize -> Commit -> Bind` 执行。该选项只存在于一次性 ChangeRequest，不进入 Profile；已有配置代不显示也不接受自动建库，插件本身不执行 SQL。
 
 0.16.2 统一最小 Bootstrap 与 Workbench 首次配置默认值：逻辑数据库为 `vastplan`，PostgreSQL 专用 Schema 为 `platform`；MySQL 隐藏独立 Schema 并在请求边界派生 `schema=database`。默认值仅属于可编辑的前端候选，不改变 Profile 或 Runtime 的自由配置边界。
+
+0.16.3 将首次自动建库候选的 `database_not_found` 统一呈现为“连接测试成功”。测试请求仍保持只读，只有随后执行“初始化并启用”才允许进入 Provision。
 
 0.11.1 将既有 `probe` 数据链产品化为“测试连接”。列表行动作复用已保存定义与托管凭证；FormDialog 的 `footer.start` 动作使用当前表单值：编辑且密码留空时复用现有托管引用，新建或输入新密码时通过随机资源名创建短期托管凭证。凭证仍处于 Preparing 时就先耐久记录 `stageId + ref` 清理意图，再执行激活；测试完成立即终止候选或退役 Active，进程在任意步骤中断后由 reconcile 流程继续清理。两条路径都由 Database Runtime 创建短生命周期池并执行 Provider `Probe`，不保存表单定义、不发布 revision，也不污染正式连接池。Workbench 复用统一校验、等待和通知；成功提示实际 Provider 和握手耗时，失败仅给出安全的本地化排查建议，不向浏览器透传驱动、地址、账号或凭证诊断。
 

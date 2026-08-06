@@ -80,7 +80,7 @@ describe("database connections Workbench page", () => {
     expect(result?.fieldErrors).toMatchObject({ "/host": expect.objectContaining({ key: "platformControl.validation.profile.connection.endpoint.host_port_required" }) });
   });
 
-  it("keeps connection tests read-only and explains first-time database creation", async () => {
+  it("treats a missing first-time database as a successful read-only connection test", async () => {
     const client = {
       platformControlStatus: vi.fn(async () => ({ phase: "unconfigured" as const })),
       testPlatformControl: vi.fn(async () => { throw new PlatformAdminError(422, "database_not_found"); }),
@@ -94,7 +94,7 @@ describe("database connections Workbench page", () => {
       value: { ...loaded, host: "db.internal", username: "vastplan", serverName: "db.internal", password: "secret" },
       selected: [],
     }, new AbortController().signal);
-    expect(outcome?.notify).toMatchObject({ kind: "warning", title: expect.objectContaining({ key: "platformControl.notice.databaseWillBeCreated" }) });
+    expect(outcome?.notify).toMatchObject({ kind: "success", title: expect.objectContaining({ key: "platformControl.notice.testSucceeded" }) });
   });
 
   it("requires one-time material on create but never loads it for edit", async () => {

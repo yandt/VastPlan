@@ -49,6 +49,8 @@ describe("Platform Control bootstrap surface", () => {
       expect(pageHTML).toContain("schema:provider==='mysql'?database");
       expect(pageHTML).toContain("form.providerId.addEventListener('change',syncProvider)");
       expect(pageHTML).toContain("createDatabaseIfMissing:data.get('createDatabaseIfMissing')==='on'");
+      expect(pageHTML).toContain("if(error.code==='database_not_found'&&request.createDatabaseIfMissing)succeeded()");
+      expect(pageHTML).not.toContain("目标数据库尚不存在；初始化并启用时将自动创建");
       expect(pageHTML).toContain("跟踪编号：");
       expect(pageHTML).not.toContain("body:JSON.stringify(payload())");
       const pageHead = await fetch(`${origin}/bootstrap/platform-control`, { method: "HEAD", headers: { Cookie: cookie } });

@@ -46,7 +46,7 @@ Configure
          → Provision → Test → Initialize → Profile CAS Commit → Bind → ready
 ```
 
-状态只有 `unconfigured / testing / provisioning / initializing / ready / recovery` 和稳定错误码。`TestCandidate` 始终只读，即使页面勾选自动创建也只返回“初始化时将创建”的提示；只有 `Configure` 可以触发 Provision，且 `createDatabaseIfMissing` 只允许 generation 0。启动 `Open`、恢复、普通数据库连接和已有 Platform Control Profile 更新均不会创建或删除逻辑数据库。尚无已提交 Profile 时，Shared State 返回稳定的 `state.unconfigured`；首次候选在提交前失败仍保持该状态，使 Seed 登录可以继续进入数据库配置页。已有 Ready generation 的替换候选失败时保留旧 Store 和旧 generation，只投影候选错误码。Profile 已提交但绑定异常属于不应发生的信任边界故障，必须 recovery，不能继续把旧 Store 冒充当前 Profile。
+状态只有 `unconfigured / testing / provisioning / initializing / ready / recovery` 和稳定错误码。`TestCandidate` 始终只读；首次配置已允许自动建库时，Runtime 返回 `database_not_found` 表示服务器连接检查已到达建库前置边界，页面按“连接测试成功”呈现，但仍不创建数据库。只有 `Configure` 可以触发 Provision，且 `createDatabaseIfMissing` 只允许 generation 0。启动 `Open`、恢复、普通数据库连接和已有 Platform Control Profile 更新均不会创建或删除逻辑数据库。尚无已提交 Profile 时，Shared State 返回稳定的 `state.unconfigured`；首次候选在提交前失败仍保持该状态，使 Seed 登录可以继续进入数据库配置页。已有 Ready generation 的替换候选失败时保留旧 Store 和旧 generation，只投影候选错误码。Profile 已提交但绑定异常属于不应发生的信任边界故障，必须 recovery，不能继续把旧 Store 冒充当前 Profile。
 
 数据库候选失败沿单一诊断协议返回。Database Runtime 是分类真源，负责把 Provider/驱动错误归一为稳定、无敏感值的 `database.runtime.*`；Remote Bootstrapper、Controller 和 Backend Kernel 只能保留该类别及 retryable 属性，不能再次压缩成通用 `database_unavailable`。Portal BFF 把类别映射为本地化公开码，并把本次调用的 32 位十六进制 `traceId` 返回页面；Bootstrap 内部跳转沿可信上下文继承同一 trace，因此页面编号能够直接关联 Runtime 日志。原始驱动消息只留在 Runtime 进程内，日志仅记录 SQLSTATE/MySQL 错误号或 DNS、网络、TLS 等脱敏诊断。
 

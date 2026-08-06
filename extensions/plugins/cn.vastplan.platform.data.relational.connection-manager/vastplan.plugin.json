@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.data.relational.connection-manager",
   "name": "VastPlan 数据库连接服务",
-  "version": "0.16.2",
+  "version": "0.16.3",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",

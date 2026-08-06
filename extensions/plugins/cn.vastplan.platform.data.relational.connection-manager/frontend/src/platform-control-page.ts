@@ -134,7 +134,7 @@ export function createPlatformControlPage(client: PlatformAdminClient, serviceID
         } catch (error) {
           if (error instanceof PlatformAdminError && error.validation !== undefined) return { fieldErrors: platformControlValidationErrors(error.validation) };
           if (error instanceof PlatformAdminError && error.code === "database_not_found" && (value as PlatformControlForm).createDatabaseIfMissing === true) {
-            return { notify: { title: message(namespace, "platformControl.notice.databaseWillBeCreated", "目标数据库尚不存在；初始化并启用时将自动创建"), kind: "warning" } };
+            return { notify: { title: message(namespace, "platformControl.notice.testSucceeded", "平台控制数据库连接测试成功"), kind: "success" } };
           }
           throw error;
         }
