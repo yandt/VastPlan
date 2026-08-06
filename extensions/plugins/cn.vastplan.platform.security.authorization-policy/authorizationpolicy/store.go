@@ -1,8 +1,8 @@
 package authorizationpolicy
 
 // vastplan:local-file-boundary bootstrap-root
-// FileStore is read only by the one-time Bootstrap import path. Runtime policy
-// state is owned by the fenced Shared State Store.
+// FileBootstrapStateReader is read only by the one-time Bootstrap import path.
+// Runtime policy state is owned by the fenced Shared State Store.
 
 import (
 	"bytes"
@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
 
 	authorizationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authorization/v1"
 )
@@ -21,14 +20,19 @@ type Store interface {
 	CompareAndSwap(expected uint64, next State) (State, error)
 }
 
-var ErrStoreUnavailable = errors.New("Authorization Policy Store 不可用")
-
-type FileStore struct {
-	Path string
-	mu   sync.Mutex
+// BootstrapStateReader loads owner-controlled initial policy state. Runtime
+// policy mutations remain confined to the Shared State-backed Store port.
+type BootstrapStateReader interface {
+	Load() (State, error)
 }
 
-func (s *FileStore) Load() (State, error) {
+var ErrStoreUnavailable = errors.New("Authorization Policy Store 不可用")
+
+// FileBootstrapStateReader is intentionally load-only. Bootstrap files are
+// import input, never a writable Authorization Policy runtime Store.
+type FileBootstrapStateReader struct{ Path string }
+
+func (s *FileBootstrapStateReader) Load() (State, error) {
 	if err := validateStatePath(s.Path); err != nil {
 		return State{}, err
 	}
@@ -53,56 +57,6 @@ func (s *FileStore) Load() (State, error) {
 		return State{}, errors.New("Authorization Policy 状态版本无效")
 	}
 	return state, nil
-}
-
-func (s *FileStore) CompareAndSwap(expected uint64, next State) (State, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	current, err := s.Load()
-	if err != nil {
-		return State{}, err
-	}
-	if current.Generation != expected || next.Generation != expected+1 || next.Version != stateVersion {
-		return State{}, fmt.Errorf("Authorization Policy CAS 冲突: expected=%d actual=%d next=%d", expected, current.Generation, next.Generation)
-	}
-	raw, err := json.MarshalIndent(next, "", "  ")
-	if err != nil {
-		return State{}, err
-	}
-	directory := filepath.Dir(s.Path)
-	temporary, err := os.CreateTemp(directory, ".authorization-policy-*")
-	if err != nil {
-		return State{}, err
-	}
-	temporaryPath := temporary.Name()
-	committed := false
-	defer func() {
-		_ = temporary.Close()
-		if !committed {
-			_ = os.Remove(temporaryPath)
-		}
-	}()
-	if err := temporary.Chmod(0o600); err != nil {
-		return State{}, err
-	}
-	if _, err := temporary.Write(append(raw, '\n')); err != nil {
-		return State{}, err
-	}
-	if err := errors.Join(temporary.Sync(), temporary.Close()); err != nil {
-		return State{}, err
-	}
-	if err := os.Rename(temporaryPath, s.Path); err != nil {
-		return State{}, err
-	}
-	committed = true
-	dir, err := os.Open(directory)
-	if err != nil {
-		return State{}, err
-	}
-	if err := errors.Join(dir.Sync(), dir.Close()); err != nil {
-		return State{}, err
-	}
-	return next, nil
 }
 
 func validateStatePath(path string) error {

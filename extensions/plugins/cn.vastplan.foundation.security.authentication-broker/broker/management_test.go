@@ -1,14 +1,50 @@
 package broker
 
 import (
-	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	authenticationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authentication/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 )
+
+// memoryManagementStore is test-only mutable state. Production management
+// state must use SharedManagementStore; Bootstrap files stay load-only.
+type memoryManagementStore struct {
+	mu    sync.Mutex
+	state ManagementState
+}
+
+func (s *memoryManagementStore) LoadState() (ManagementState, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.state, nil
+}
+
+func (s *memoryManagementStore) UpdateState(expected uint64, next ManagementState) (ManagementState, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.state.Generation != expected {
+		return ManagementState{}, errManagementCAS
+	}
+	s.state = next
+	return next, nil
+}
+
+var errManagementCAS = &managementTestError{}
+
+type managementTestError struct{}
+
+func (*managementTestError) Error() string { return "cas" }
+
+func TestFileManagementStateReaderIsLoadOnly(t *testing.T) {
+	reader := &FileManagementStateReader{Path: "/var/lib/vastplan/providers.json"}
+	if _, mutable := any(reader).(ManagementStore); mutable {
+		t.Fatal("Bootstrap 文件读取器不得实现可写 ManagementStore")
+	}
+}
 
 func managedProfile() authenticationv1.AuthenticationProviderProfile {
 	return authenticationv1.AuthenticationProviderProfile{
@@ -19,7 +55,7 @@ func managedProfile() authenticationv1.AuthenticationProviderProfile {
 }
 
 func TestManagementPublishesOnlyTestedAndSeparatelyApprovedProvider(t *testing.T) {
-	store := &FileManagementStore{Path: filepath.Join(t.TempDir(), "providers.json")}
+	store := &memoryManagementStore{state: emptyManagementState()}
 	assertions, _ := GenerateAssertionKey("test-key")
 	service, _ := NewManagementService(store, assertions)
 	now := time.Date(2026, 7, 23, 0, 0, 0, 0, time.UTC)
@@ -59,7 +95,7 @@ func TestManagementPublishesOnlyTestedAndSeparatelyApprovedProvider(t *testing.T
 }
 
 func TestManagementKeepsBlockedDatabaseProviderOutOfCatalog(t *testing.T) {
-	store := &FileManagementStore{Path: filepath.Join(t.TempDir(), "providers.json")}
+	store := &memoryManagementStore{state: emptyManagementState()}
 	service, _ := NewManagementService(store)
 	profile := managedProfile()
 	profile.ID = "database-users"

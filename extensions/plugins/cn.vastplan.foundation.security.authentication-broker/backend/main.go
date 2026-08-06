@@ -11,7 +11,7 @@ import (
 
 func main() {
 	stateStore := &broker.SharedManagementStore{}
-	bootstrapStore := &broker.FileManagementStore{Path: os.Getenv("VASTPLAN_AUTHENTICATION_PROVIDER_STATE")}
+	bootstrapStore := &broker.FileManagementStateReader{Path: os.Getenv("VASTPLAN_AUTHENTICATION_PROVIDER_STATE")}
 	assertions, err := broker.LoadAssertionKey(os.Getenv("VASTPLAN_AUTHENTICATION_ASSERTION_KEY_FILE"))
 	if err != nil {
 		log.Fatalf("加载 Authentication Assertion key: %v", err)

@@ -68,7 +68,7 @@ func TestDevelopmentAuthenticationMaterialAndSeedSubject(t *testing.T) {
 	if err := (brokerIdentityProtocol{}).prepare(r); err != nil {
 		t.Fatal(err)
 	}
-	state, err := (&broker.FileManagementStore{Path: r.authenticationProviderStatePath()}).LoadState()
+	state, err := (&broker.FileManagementStateReader{Path: r.authenticationProviderStatePath()}).LoadState()
 	if err != nil {
 		t.Fatal(err)
 	}
