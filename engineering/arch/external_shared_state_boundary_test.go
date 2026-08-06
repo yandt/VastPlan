@@ -22,6 +22,11 @@ var allowedLocalFileBoundaries = map[string]struct{}{
 // projection is allowed only when the owning file declares the audited class.
 func TestExternalSharedStatePluginsHaveNoUnclassifiedLocalWrites(t *testing.T) {
 	root := repoRoot(t)
+	inventory := readStateOwnershipInventory(t, root)
+	auditedBoundaries := make(map[string]map[string]struct{}, len(inventory.StateOwnership))
+	for _, ownership := range inventory.StateOwnership {
+		auditedBoundaries[ownership.ID] = stringSet(ownership.LocalBoundaries...)
+	}
 	pluginsRoot := filepath.Join(root, "extensions", "plugins")
 	entries, err := os.ReadDir(pluginsRoot)
 	if err != nil {
@@ -53,6 +58,8 @@ func TestExternalSharedStatePluginsHaveNoUnclassifiedLocalWrites(t *testing.T) {
 			boundary := declaredLocalFileBoundary(source)
 			if _, allowed := allowedLocalFileBoundaries[boundary]; !allowed {
 				t.Errorf("external-shared 插件存在未分类本机写入: %s", filepath.ToSlash(strings.TrimPrefix(path, root+string(filepath.Separator))))
+			} else if _, audited := auditedBoundaries[entry.Name()][boundary]; !audited {
+				t.Errorf("external-shared 插件的本机写入未进入状态归属清单: plugin=%s boundary=%s", entry.Name(), boundary)
 			}
 			return nil
 		})
@@ -83,7 +90,10 @@ func externalSharedStateManifest(t *testing.T, path string) bool {
 }
 
 func containsLocalWrite(source string) bool {
-	for _, call := range []string{"os.WriteFile(", "os.Create(", "os.CreateTemp(", "os.Rename("} {
+	for _, call := range []string{
+		"os.WriteFile(", "os.Create(", "os.CreateTemp(", "os.OpenFile(",
+		"os.Rename(", "os.Remove(", "os.RemoveAll(", "os.MkdirAll(",
+	} {
 		if strings.Contains(source, call) {
 			return true
 		}

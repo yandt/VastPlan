@@ -129,6 +129,13 @@ func run(opts options) error {
 		return err
 	}
 	defer releasePID()
+	quarantined, err := quarantineRetiredDevelopmentStateFiles(opts.stateRoot, time.Now())
+	if err != nil {
+		return fmt.Errorf("清理退役开发状态: %w", err)
+	}
+	if len(quarantined) > 0 {
+		log.Printf("已将 %d 个退役本地状态文件隔离到 state/quarantine/retired-local-truth", len(quarantined))
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
