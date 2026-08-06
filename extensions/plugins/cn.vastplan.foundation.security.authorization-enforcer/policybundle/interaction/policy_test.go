@@ -35,6 +35,21 @@ func TestInteractionPolicyRestrictsBrokerHostConfig(t *testing.T) {
 	}
 }
 
+func TestInteractionPolicyAbstainsFromUnrelatedCapabilitiesWithoutInspectingTheirContext(t *testing.T) {
+	request := extpoint.PermissionRequest{Capability: "foundation.state.shared.sql.bootstrap", Operation: "test"}
+	for name, callCtx := range map[string]*contractv1.CallContext{
+		"nil context":     nil,
+		"global system":   {Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: "platform-control-bootstrap/primary"}},
+		"anonymous global": {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if decision, _ := decide(callCtx, request); decision != extpoint.DecisionAbstain {
+				t.Fatalf("交互策略不得检查或拒绝无关能力: %s", decision)
+			}
+		})
+	}
+}
+
 func contextFor(kind contractv1.CallerKind, id string) *contractv1.CallContext {
 	return &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: kind, Id: id}}
 }

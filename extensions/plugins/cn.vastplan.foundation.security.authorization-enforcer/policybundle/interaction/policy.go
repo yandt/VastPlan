@@ -29,6 +29,12 @@ func Check(_ context.Context, callCtx *contractv1.CallContext, payload []byte) (
 }
 
 func decide(callCtx *contractv1.CallContext, request extpoint.PermissionRequest) (extpoint.Decision, string) {
+	// Permission checkers share one chain. An Interaction checker must establish
+	// ownership before validating context, otherwise it can deny unrelated
+	// platform-level capabilities whose system calls intentionally have no tenant.
+	if request.Capability != interactionapi.Capability && request.Capability != "kernel.config.get" {
+		return extpoint.DecisionAbstain, "非交互能力"
+	}
 	if callCtx == nil || callCtx.Caller == nil || callCtx.Caller.Id == "" || callCtx.TenantId == "" {
 		return extpoint.DecisionDeny, "缺少经验证调用身份或租户"
 	}
