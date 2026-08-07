@@ -45,7 +45,7 @@ function catalogQuery(url: string | undefined): Record<string, unknown> | undefi
     if (value !== undefined && (value.length > 160 || /[\u0000\r\n]/.test(value))) return undefined;
   }
   const target = values.get("target");
-  if (target !== undefined && target !== "" && !["backend", "frontend", "runner", "mobile"].includes(target)) return undefined;
+  if (target !== undefined && target !== "" && !["backend", "frontend", "desktop", "mobile"].includes(target)) return undefined;
   const lifecycle = values.get("lifecycle");
   if (lifecycle !== undefined && lifecycle !== "" && !["active", "deprecated", "yanked", "revoked"].includes(lifecycle)) return undefined;
   return Object.fromEntries([...values].filter(([key, value]) => key !== "page" && key !== "pageSize" && value !== "").concat([["page", String(page)], ["pageSize", String(pageSize)]]).map(([key, value]) => [key, key === "page" || key === "pageSize" ? Number(value) : value]));

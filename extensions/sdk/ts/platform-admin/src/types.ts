@@ -218,7 +218,7 @@ export interface DataPlaneTicketGrant { endpoint: string; leaseId: string; ticke
 export interface ArtifactAssessmentReportGrant { sha256: string; resource: string; }
 export interface ArtifactCatalogQuery {
   pluginId?: string; pluginPrefix?: string; namespace?: string; publisher?: string; version?: string;
-  channel?: string; target?: "backend" | "frontend" | "runner" | "mobile";
+  channel?: string; target?: "backend" | "frontend" | "desktop" | "mobile";
   lifecycle?: "active" | "deprecated" | "yanked" | "revoked"; page?: number; pageSize?: number;
 }
 export interface ArtifactCatalogEntry {

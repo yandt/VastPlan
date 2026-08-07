@@ -58,7 +58,7 @@ func main() {
 	flag.StringVar(&opts.PluginID, "plugin", "", "精确插件 ID")
 	flag.StringVar(&opts.Version, "version", "", "精确 SemVer")
 	flag.StringVar(&opts.Channel, "channel", "stable", "精确 channel")
-	flag.StringVar(&opts.Target, "target", "", "目标内核：backend、frontend、runner 或 mobile")
+	flag.StringVar(&opts.Target, "target", "", "目标内核：backend、frontend、desktop 或 mobile")
 	flag.StringVar(&opts.KernelVersion, "kernel-version", "0.1.0", "目标内核版本")
 	flag.StringVar(&opts.Platform, "platform", "", "可选目标平台，例如 linux/amd64")
 	flag.StringVar(&opts.AllowedPublishers, "allowed-publishers", "vastplan", "逗号分隔的允许发布者")

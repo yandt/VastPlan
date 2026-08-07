@@ -13,8 +13,8 @@ func TestInteractionPolicySeparatesSourceAndRendererEntry(t *testing.T) {
 	if decision, _ := decide(contextFor(contractv1.CallerKind_CALLER_KIND_USER, "alice"), request); decision != extpoint.DecisionDeny {
 		t.Fatalf("用户不得创建交互: %s", decision)
 	}
-	if decision, _ := decide(contextFor(contractv1.CallerKind_CALLER_KIND_RUNNER, "cn.vastplan.runner.workflow"), request); decision != extpoint.DecisionAllow {
-		t.Fatalf("Runner 应可创建交互: %s", decision)
+	if decision, _ := decide(contextFor(contractv1.CallerKind_CALLER_KIND_RUNNER, "cn.vastplan.desktop.workflow"), request); decision != extpoint.DecisionAllow {
+		t.Fatalf("Desktop 应可创建交互: %s", decision)
 	}
 	request.Operation = "respond"
 	if decision, _ := decide(contextFor(contractv1.CallerKind_CALLER_KIND_USER, "alice"), request); decision != extpoint.DecisionAllow {
@@ -38,8 +38,8 @@ func TestInteractionPolicyRestrictsBrokerHostConfig(t *testing.T) {
 func TestInteractionPolicyAbstainsFromUnrelatedCapabilitiesWithoutInspectingTheirContext(t *testing.T) {
 	request := extpoint.PermissionRequest{Capability: "foundation.state.shared.sql.bootstrap", Operation: "test"}
 	for name, callCtx := range map[string]*contractv1.CallContext{
-		"nil context":     nil,
-		"global system":   {Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: "platform-control-bootstrap/primary"}},
+		"nil context":      nil,
+		"global system":    {Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: "platform-control-bootstrap/primary"}},
 		"anonymous global": {},
 	} {
 		t.Run(name, func(t *testing.T) {

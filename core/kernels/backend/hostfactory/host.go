@@ -72,7 +72,7 @@ func backendRegistry() *registry.Registry {
 		{Name: extpoint.PermissionChecker, Dispatch: registry.DispatchSelect},
 		{Name: extpoint.EventSink, Dispatch: registry.DispatchFanout},
 		{Name: extpoint.Hook, Dispatch: registry.DispatchFanout},
-		{Name: extpoint.RunnerCapability, Dispatch: registry.DispatchSingle},
+		{Name: extpoint.DesktopCapability, Dispatch: registry.DispatchSingle},
 		{Name: extpoint.KernelService, Dispatch: registry.DispatchSingle},
 	} {
 		reg.DefinePoint(point)

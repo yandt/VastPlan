@@ -7,15 +7,15 @@ import (
 	"fmt"
 	"time"
 
-	uiv1 "cdsoft.com.cn/VastPlan/contracts/schemas/ui/v1"
-	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	uiv1 "cdsoft.com.cn/VastPlan/contracts/schemas/ui/v1"
+	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/interactionapi"
 )
 
 // Invoker is satisfied by the local protocol host and the remote addressing
-// router. Runner profiles can choose either without changing workflow code.
+// router. Desktop profiles can choose either without changing workflow code.
 type Invoker interface {
 	Invoke(context.Context, *contractv1.CallTarget, *contractv1.CallContext, []byte) (*contractv1.CallResult, []byte, error)
 }
@@ -24,7 +24,7 @@ type ProtocolBroker struct{ invoker Invoker }
 
 func NewProtocolBroker(invoker Invoker) (*ProtocolBroker, error) {
 	if invoker == nil {
-		return nil, errors.New("Runner Broker transport 不能为空")
+		return nil, errors.New("Desktop Broker transport 不能为空")
 	}
 	return &ProtocolBroker{invoker: invoker}, nil
 }
@@ -47,17 +47,17 @@ func (b *ProtocolBroker) Cancel(ctx context.Context, source interactionapi.Subje
 func invoke[T any](ctx context.Context, invoker Invoker, source interactionapi.Subject, operation string, request any) (T, error) {
 	var zero T
 	if source.ID == "" || source.TenantID == "" {
-		return zero, errors.New("Runner Broker 调用缺少来源或 tenant")
+		return zero, errors.New("Desktop Broker 调用缺少来源或 tenant")
 	}
 	payload, err := json.Marshal(request)
 	if err != nil {
 		return zero, err
 	}
 	op := operation
-	wire := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_RUNNER, Id: source.ID}, TenantId: source.TenantID, Scene: "runner.interaction"}
-	trusted, err := callcontext.ValidateIngress(wire, callcontext.Provenance{Source: "runner.interaction", AuthenticatedBy: "runner-kernel"})
+	wire := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_RUNNER, Id: source.ID}, TenantId: source.TenantID, Scene: "desktop.interaction"}
+	trusted, err := callcontext.ValidateIngress(wire, callcontext.Provenance{Source: "desktop.interaction", AuthenticatedBy: "desktop-kernel"})
 	if err != nil {
-		return zero, fmt.Errorf("构造可信 Runner 调用上下文: %w", err)
+		return zero, fmt.Errorf("构造可信 Desktop 调用上下文: %w", err)
 	}
 	ctx = callcontext.WithTrusted(ctx, trusted)
 	result, raw, err := invoker.Invoke(ctx, &contractv1.CallTarget{ExtensionPoint: extpoint.ToolPackage, Capability: interactionapi.Capability, Operation: &op}, trusted.Wire(), payload)

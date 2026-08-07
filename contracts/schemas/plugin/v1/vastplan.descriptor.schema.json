@@ -14,7 +14,7 @@
         "permission.checker",
         "event.sink",
         "hook",
-        "runner.capability",
+        "desktop.capability",
         "authentication.provider",
         "configuration.controller", "configuration.resource-controller", "configuration.scoped-resolver"
       ]
@@ -176,7 +176,7 @@
       }
     },
     {
-      "if": { "properties": { "extensionPoint": { "const": "runner.capability" } } },
+      "if": { "properties": { "extensionPoint": { "const": "desktop.capability" } } },
       "then": {
         "properties": {
           "descriptor": {
@@ -210,7 +210,7 @@
               "protocol": { "const": "authentication.method.v1" },
               "purposes": {
                 "type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true,
-                "items": { "enum": ["portal-login", "mobile-token", "runner-token", "token-verification", "directory", "provisioning"] }
+                "items": { "enum": ["portal-login", "mobile-token", "desktop-token", "token-verification", "directory", "provisioning"] }
               },
               "methods": {
                 "type": "array", "minItems": 1, "maxItems": 32,

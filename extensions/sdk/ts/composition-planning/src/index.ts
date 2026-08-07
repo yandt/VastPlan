@@ -84,7 +84,7 @@ export interface ArtifactLockPackage {
 export interface ArtifactLock {
   schemaVersion: "v1";
   repositoryRevision: number;
-  target: "backend" | "frontend" | "runner" | "mobile";
+  target: "backend" | "frontend" | "desktop" | "mobile";
   kernelVersion: string;
   platform?: string;
   roots: ArtifactRequirement[];

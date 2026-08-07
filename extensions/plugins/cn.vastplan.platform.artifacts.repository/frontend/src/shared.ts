@@ -4,7 +4,7 @@ export const namespace = "cn.vastplan.platform.artifacts.repository";
 export type Row = Record<string, unknown>;
 
 export const text = (key: string, fallback: string) => message(namespace, key, fallback);
-export const targetOptions = ["backend", "frontend", "runner", "mobile"].map((value) => ({ value, label: text(`target.${value}`, value) }));
+export const targetOptions = ["backend", "frontend", "desktop", "mobile"].map((value) => ({ value, label: text(`target.${value}`, value) }));
 export const lifecycleOptions = ["active", "deprecated", "yanked", "revoked"].map((value) => ({ value, label: text(`lifecycle.${value}`, value) }));
 
 export function filterString(query: CollectionQuery, key: string): string {

@@ -26,7 +26,7 @@ ADR-0088 统一了执行驱动接口，但首版 Node Worker 和 Python 子解�
 8. 关闭插件先完成逐 session lifecycle，再停止逻辑执行单元和释放 lease。最后一个 lease 释放后异步回收物理 Host；回收不能阻塞拥有 gRPC stream 的 teardown，否则会形成“stream 等进程、进程等 stream”的循环等待。
 9. 物理 Host 崩溃时，同池 session 会各自得到真实死亡信号、撤销贡献并触发既有 Reconciler 恢复。内核不自动把可疑插件升级为独立进程；是否 dedicated 仍由明确策略决定。
 10. dynamic-go 迁入 Go Runtime Provider，Backend 不再直接 `plugin.Open`。Go Provider 按服务、完整 ABI/构建指纹和目标组合 generation 分池；升级创建新 Go Host generation，完全加载和校验后原子切路由，再排空旧 Host。第三方仍禁止 dynamic-go。
-11. 四类内核共享 Provider、Pool key、实例/执行单元/Host、健康和代际切换语义，但不强求同一物理机制。Frontend 的 dedicated 可映射为 Worker/iframe，Mobile 受 OS 进程模型约束，Runner 编译型插件继续遵守整体签名 Bundle 决策。
+11. 四类内核共享 Provider、Pool key、实例/执行单元/Host、健康和代际切换语义，但不强求同一物理机制。Frontend 的 dedicated 可映射为 Worker/iframe，Mobile 受 OS 进程模型约束，Desktop 编译型插件继续遵守整体签名 Bundle 决策。
 
 ## 当前实现
 

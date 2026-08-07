@@ -17,7 +17,7 @@ Backend 微内核的注册表、协议总线、跨服务寻址、持久事件、
 
 Backend Kernel 1.0 只覆盖 Backend 微内核及其共享运行基础：插件生命周期、扩展点注册与分发、插件协议总线、跨服务寻址与事件、控制面装配、核心横切契约和发布运维门禁。
 
-以下不作为 Backend Kernel 1.0 的完成条件：Agent/Workflow/用户系统/LLM 等应用实现，Frontend/Runner/Mobile 三套内核，具体权限策略、审计后端和可观测后端插件。测试夹具可以实现最小参考插件，但不得把具体业务实现固化进内核。
+以下不作为 Backend Kernel 1.0 的完成条件：Agent/Workflow/用户系统/LLM 等应用实现，Frontend/Desktop/Mobile 三套内核，具体权限策略、审计后端和可观测后端插件。测试夹具可以实现最小参考插件，但不得把具体业务实现固化进内核。
 
 ### 2. 公共扩展点目录封闭
 
@@ -29,13 +29,13 @@ Backend 1.0 允许插件贡献且必须具有完整 descriptor Schema 的扩展�
 - `permission.checker`
 - `event.sink`
 - `hook`
-- `runner.capability`
+- `desktop.capability`
 
 `kernel.service` 是宿主内部能力命名空间。插件只能在 `capabilities.kernelServices` 声明依赖并通过 HostCall 调用，不得注册 `kernel.service` contribution。未知、尚未发布或内部扩展点一律 fail-closed；不能再以“任意 JSON 对象”兼容未来扩展点。新增扩展点属于 Backend `MINOR` 版本变更，必须同时更新 Schema、目录常量、文档和契约测试。
 
 跨扩展点引用 `capabilityRef` 固定为与 `CallTarget` 同构的对象：`{extensionPoint, capability, version?, operation?}`，不使用难以无歧义解析的拼接字符串。`when` 条件表达式不进入 Backend 1.0 descriptor；在语法、求值上下文和安全边界形成单独 ADR 前，不接受一个“可写但不会执行”的伪契约。
 
-每条 Backend manifest contribution 必须显式声明 `service_role`，不以缺省值猜测它属于 backend/workspace/rs；`runner.capability` 只能声明为 `rs`。运行态 descriptor 位于已经确定角色的插件单元内，除 `api.route` 和 `runner.capability` 等路由必需场景外不强制重复该字段。
+每条 Backend manifest contribution 必须显式声明 `service_role`，不以缺省值猜测它属于 backend/workspace/rs；`desktop.capability` 只能声明为 `rs`。运行态 descriptor 位于已经确定角色的插件单元内，除 `api.route` 和 `desktop.capability` 等路由必需场景外不强制重复该字段。
 
 ### 3. 生命周期和升级是显式状态机
 

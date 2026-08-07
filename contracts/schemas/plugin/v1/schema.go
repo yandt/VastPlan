@@ -370,7 +370,7 @@ var backendContributionPoints = map[string]string{
 	"permissionCheckers":           "permission.checker",
 	"eventSinks":                   "event.sink",
 	"hooks":                        "hook",
-	"runnerCapabilities":           "runner.capability",
+	"desktopCapabilities":          "desktop.capability",
 	"authenticationProviders":      "authentication.provider",
 	"configurationScopedResolvers": ConfigurationScopedResolverExtensionPoint,
 }

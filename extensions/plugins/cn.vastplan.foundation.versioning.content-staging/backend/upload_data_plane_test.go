@@ -160,12 +160,12 @@ func TestUploadCORSAllowsOnlyConfiguredPortalOrigin(t *testing.T) {
 }
 
 func TestPrivateUploadRequiresAllowedSPIFFEClient(t *testing.T) {
-	allowed, _ := url.Parse("spiffe://vastplan/runner/runner-a")
+	allowed, _ := url.Parse("spiffe://vastplan/desktop/desktop-a")
 	state := &tls.ConnectionState{VerifiedChains: [][]*x509.Certificate{{{URIs: []*url.URL{allowed}}}}}
-	if !verifiedSPIFFEClient(state, []string{"spiffe://vastplan/runner/"}) {
-		t.Fatal("受信 Runner SPIFFE 身份被拒绝")
+	if !verifiedSPIFFEClient(state, []string{"spiffe://vastplan/desktop/"}) {
+		t.Fatal("受信 Desktop SPIFFE 身份被拒绝")
 	}
-	if verifiedSPIFFEClient(state, []string{"spiffe://vastplan/backend/"}) || verifiedSPIFFEClient(&tls.ConnectionState{}, []string{"spiffe://vastplan/runner/"}) {
+	if verifiedSPIFFEClient(state, []string{"spiffe://vastplan/backend/"}) || verifiedSPIFFEClient(&tls.ConnectionState{}, []string{"spiffe://vastplan/desktop/"}) {
 		t.Fatal("未批准或未验证的 mTLS 身份被放行")
 	}
 }

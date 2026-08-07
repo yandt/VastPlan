@@ -26,18 +26,18 @@ func (*brokerStub) Cancel(context.Context, interactionapi.Subject, string) (inte
 	return interactionapi.Record{}, nil
 }
 
-func TestClientUsesBoundRunnerSourceAndBrokerOnly(t *testing.T) {
+func TestClientUsesBoundDesktopSourceAndBrokerOnly(t *testing.T) {
 	broker := &brokerStub{}
-	source := interactionapi.Subject{ID: "cn.vastplan.runner.workflow", TenantID: "tenant-a"}
+	source := interactionapi.Subject{ID: "cn.vastplan.desktop.workflow", TenantID: "tenant-a"}
 	client, err := New(broker, source)
 	if err != nil {
 		t.Fatal(err)
 	}
 	response, err := client.Request(context.Background(), uiv1.InteractionRequest{ID: "interaction-0001", Source: uiv1.InteractionSource{Capability: source.ID}, TenantID: source.TenantID})
 	if err != nil || response.Decision != uiv1.DecisionAnswered || broker.opened.ID != source.ID || broker.opened.TenantID != source.TenantID {
-		t.Fatalf("Runner 应仅通过绑定 Broker 等待结果: response=%+v opened=%+v err=%v", response, broker.opened, err)
+		t.Fatalf("Desktop 应仅通过绑定 Broker 等待结果: response=%+v opened=%+v err=%v", response, broker.opened, err)
 	}
 	if _, err := client.Request(context.Background(), uiv1.InteractionRequest{ID: "interaction-0002", Source: uiv1.InteractionSource{Capability: "other"}, TenantID: source.TenantID}); err == nil {
-		t.Fatal("Runner 不得伪造来源 capability")
+		t.Fatal("Desktop 不得伪造来源 capability")
 	}
 }

@@ -63,7 +63,7 @@
     "service_role": "backend",
     "title": "企业 OIDC Provider",
     "protocol": "authentication.method.v1",
-    "purposes": ["portal-login", "mobile-token", "runner-token", "token-verification"],
+    "purposes": ["portal-login", "mobile-token", "desktop-token", "token-verification"],
     "methods": [{ "id": "oidc", "kind": "redirect", "interaction": "redirect" }],
     "subjectNamespace": "enterprise.identity.oidc",
     "requiredCapabilities": []

@@ -19,17 +19,17 @@ func (s *invokeStub) Invoke(_ context.Context, target *contractv1.CallTarget, ca
 	raw, _ := json.Marshal(interactionapi.Record{})
 	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
 }
-func TestProtocolBrokerBuildsRunnerBoundCallContext(t *testing.T) {
+func TestProtocolBrokerBuildsDesktopBoundCallContext(t *testing.T) {
 	stub := &invokeStub{}
 	broker, err := NewProtocolBroker(stub)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = broker.Cancel(context.Background(), interactionapi.Subject{ID: "runner-a", TenantID: "tenant-a"}, "interaction-0001")
+	_, err = broker.Cancel(context.Background(), interactionapi.Subject{ID: "desktop-a", TenantID: "tenant-a"}, "interaction-0001")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stub.target.GetCapability() != interactionapi.Capability || stub.target.GetOperation() != "cancel" || stub.call.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_RUNNER || stub.call.GetTenantId() != "tenant-a" || stub.call.GetScene() != "runner.interaction" {
-		t.Fatalf("Runner 调用上下文错误: target=%+v context=%+v", stub.target, stub.call)
+	if stub.target.GetCapability() != interactionapi.Capability || stub.target.GetOperation() != "cancel" || stub.call.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_RUNNER || stub.call.GetTenantId() != "tenant-a" || stub.call.GetScene() != "desktop.interaction" {
+		t.Fatalf("Desktop 调用上下文错误: target=%+v context=%+v", stub.target, stub.call)
 	}
 }

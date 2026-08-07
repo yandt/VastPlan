@@ -27,7 +27,7 @@ func (c *grantCaller) Call(_ context.Context, target *contractv1.CallTarget, cal
 
 func TestIssuePrivateGrantUsesTrustedCapability(t *testing.T) {
 	caller := &grantCaller{}
-	call := &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_RUNNER, Id: "runner-a"}, Principal: &contractv1.Principal{UserId: "alice"}}
+	call := &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_RUNNER, Id: "desktop-a"}, Principal: &contractv1.Principal{UserId: "alice"}}
 	request := TicketRequest{DataPlaneExposureID: "dpx_aaaaaaaaaaaaaaaaaaaa", Method: "PUT", Resource: "/v1/uploads/stg_abcdefghijklmnop", ContentSHA256: strings.Repeat("d", 64)}
 	grant, err := IssuePrivateGrant(context.Background(), caller, call, request)
 	if err != nil || grant.Endpoint == "" || caller.call != call || caller.req != request {

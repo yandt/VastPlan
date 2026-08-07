@@ -70,7 +70,7 @@ func ValidateArtifactMetadata(raw []byte) error {
 }
 
 // ValidateArtifactLock validates the immutable lock shared by Backend, Portal,
-// Runner, Mobile and offline Bundle importers.
+// Desktop, Mobile and offline Bundle importers.
 func ValidateArtifactLock(raw []byte) error {
 	if err := schemas(); err != nil {
 		return err

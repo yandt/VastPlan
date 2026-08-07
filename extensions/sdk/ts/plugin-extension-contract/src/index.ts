@@ -1,4 +1,4 @@
-export type PluginExtensionSurface = "backend" | "frontend" | "runner" | "mobile";
+export type PluginExtensionSurface = "backend" | "frontend" | "desktop" | "mobile";
 export type PluginExtensionDispatch = "single" | "select" | "fanout" | "mount";
 
 /** Trusted projection of one signed extension-point declaration. */
@@ -74,7 +74,7 @@ export function parsePortalExtensionGraph(value: unknown): PortalExtensionGraph 
 }
 
 function parsePoint(value: unknown): PortalExtensionPoint {
-  if (!isRecord(value) || !name(value.id) || !name(value.ownerPluginId) || !["backend", "frontend", "runner", "mobile"].includes(String(value.surface)) ||
+  if (!isRecord(value) || !name(value.id) || !name(value.ownerPluginId) || !["backend", "frontend", "desktop", "mobile"].includes(String(value.surface)) ||
       typeof value.contract !== "string" || !name(value.kind) || !["single", "select", "fanout", "mount"].includes(String(value.dispatch)) ||
       (value.targets !== undefined && (!Array.isArray(value.targets) || value.targets.some((target) => !name(target))))) {
     throw new PluginExtensionContractError("Portal 插件扩展点无效");

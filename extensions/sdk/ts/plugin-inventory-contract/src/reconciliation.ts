@@ -1,6 +1,6 @@
 import type { PluginArtifactIdentity } from "./index.js";
 
-export type PluginTarget = "backend" | "frontend" | "runner" | "mobile";
+export type PluginTarget = "backend" | "frontend" | "desktop" | "mobile";
 
 export interface ActivationSelection {
   readonly schemaVersion: 1;
@@ -43,7 +43,7 @@ function parseAction(value: unknown): PluginReconciliationAction {
   return Object.freeze({ pluginId: value.pluginId, operation: value.operation, strategy: value.strategy, ...(value.current === undefined ? {} : { current: value.current }), ...(value.candidate === undefined ? {} : { candidate: value.candidate }) }) as PluginReconciliationAction;
 }
 
-function target(value: unknown): value is PluginTarget { return value === "backend" || value === "frontend" || value === "runner" || value === "mobile"; }
+function target(value: unknown): value is PluginTarget { return value === "backend" || value === "frontend" || value === "desktop" || value === "mobile"; }
 function positive(value: unknown): value is number { return Number.isSafeInteger(value) && Number(value) > 0; }
 function digest(value: unknown): value is string { return typeof value === "string" && /^[a-f0-9]{64}$/.test(value); }
 function record(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }

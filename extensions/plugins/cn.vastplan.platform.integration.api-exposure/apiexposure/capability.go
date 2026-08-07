@@ -246,7 +246,7 @@ func projectPrivatePrincipal(callCtx *contractv1.CallContext) (Principal, error)
 	switch callCtx.Caller.Kind {
 	case contractv1.CallerKind_CALLER_KIND_PLUGIN, contractv1.CallerKind_CALLER_KIND_RUNNER, contractv1.CallerKind_CALLER_KIND_SYSTEM:
 	default:
-		return Principal{}, errors.New("Private Data Plane 只接受 Backend、Runner 或可信系统调用")
+		return Principal{}, errors.New("Private Data Plane 只接受 Backend、Desktop 或可信系统调用")
 	}
 	return projectPrincipal(callCtx)
 }

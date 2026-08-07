@@ -24,7 +24,7 @@ type ServiceRecord = Record<string, unknown> & {
 let services: ServiceRecord[] = [
   { id: "svc-auth", name: "身份服务", kind: "Foundation", status: "运行中", tone: "success", owner: "安全平台组", description: "负责企业身份接入与会话签发。", updatedAt: "2026-07-23T08:30:00Z", active: true },
   { id: "svc-artifact", name: "制品仓库", kind: "Platform", status: "运行中", tone: "success", owner: "平台工程组", description: "保存签名插件制品和发布流水账。", updatedAt: "2026-07-23T07:20:00Z", active: true },
-  { id: "svc-runner", name: "Runner 网关", kind: "Product", status: "规划中", tone: "warning", owner: "客户端组", description: "向桌面 Runner 签发任务与执行租约。", updatedAt: "2026-07-22T15:10:00Z", active: false },
+  { id: "svc-desktop", name: "Desktop 网关", kind: "Product", status: "规划中", tone: "warning", owner: "客户端组", description: "向桌面 Desktop 签发任务与执行租约。", updatedAt: "2026-07-22T15:10:00Z", active: false },
   { id: "svc-mobile", name: "Mobile Gateway", kind: "Product", status: "待实施", tone: "neutral", owner: "移动端组", description: "移动 Companion 的身份与交互入口。", updatedAt: "2026-07-22T11:00:00Z", active: false },
 ];
 

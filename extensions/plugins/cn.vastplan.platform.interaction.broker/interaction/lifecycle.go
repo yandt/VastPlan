@@ -258,7 +258,7 @@ func stopTimer(timer *time.Timer) {
 }
 
 func validSurface(surface uiv1.InteractionSurface) bool {
-	return surface == uiv1.SurfaceFrontend || surface == uiv1.SurfaceMobile || surface == uiv1.SurfaceRunnerLocal
+	return surface == uiv1.SurfaceFrontend || surface == uiv1.SurfaceMobile || surface == uiv1.SurfaceDesktopLocal
 }
 
 func allowsSurface(request uiv1.InteractionRequest, surface uiv1.InteractionSurface) bool {

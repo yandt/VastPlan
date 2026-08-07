@@ -47,7 +47,7 @@ func TestParseClusterReplicas(t *testing.T) {
 }
 
 func TestParseAppProfileReferencesWithoutServiceUnits(t *testing.T) {
-	deployment, err := Parse(resolvedDeployment(t, `{"version":2,"revision":1,"metadata":{"name":"runner-fleet"},"units":[],"app_profiles":[{"id":"collector","revision":3,"digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}`))
+	deployment, err := Parse(resolvedDeployment(t, `{"version":2,"revision":1,"metadata":{"name":"desktop-fleet"},"units":[],"app_profiles":[{"id":"collector","revision":3,"digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,8 +72,8 @@ func TestParseRequiresResolvedArtifactDigest(t *testing.T) {
 
 func TestParseRejectsInvalidAppProfileReferences(t *testing.T) {
 	for name, raw := range map[string]string{
-		"invalid digest": `{"version":2,"revision":1,"metadata":{"name":"runner-fleet"},"units":[],"app_profiles":[{"id":"collector","revision":1,"digest":"not-a-digest"}]}`,
-		"duplicate id":   `{"version":2,"revision":1,"metadata":{"name":"runner-fleet"},"units":[],"app_profiles":[{"id":"collector","revision":1,"digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"id":"collector","revision":2,"digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]}`,
+		"invalid digest": `{"version":2,"revision":1,"metadata":{"name":"desktop-fleet"},"units":[],"app_profiles":[{"id":"collector","revision":1,"digest":"not-a-digest"}]}`,
+		"duplicate id":   `{"version":2,"revision":1,"metadata":{"name":"desktop-fleet"},"units":[],"app_profiles":[{"id":"collector","revision":1,"digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"id":"collector","revision":2,"digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := Parse([]byte(raw)); err == nil {

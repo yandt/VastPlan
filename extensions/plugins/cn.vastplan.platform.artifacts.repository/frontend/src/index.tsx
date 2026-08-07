@@ -60,7 +60,7 @@ function capacityPage(client: PlatformAdminClient, id: string, path: string): Co
 }
 
 function referencesPage(client: PlatformAdminClient, id: string, path: string): CollectionPageDefinition<Row> {
-  const ownerKinds = ["deployment-active", "assignment-active", "portal-activation", "artifact-lock", "rollback-history", "seed", "last-known-good", "runner-install", "mobile-install"];
+  const ownerKinds = ["deployment-active", "assignment-active", "portal-activation", "artifact-lock", "rollback-history", "seed", "last-known-good", "desktop-install", "mobile-install"];
   return defineCollectionPage<Row>({
     id, path, title: text("page.references.title", "制品引用"), description: text("page.references.description", "查看阻止垃圾回收的消费者完整快照"),
     navigation: { id, label: text("page.references.navigation", "制品引用"), parentMenuRef: { pluginID: "cn.vastplan.platform.artifacts.repository", nodeID: "artifacts" }, order: 52 },

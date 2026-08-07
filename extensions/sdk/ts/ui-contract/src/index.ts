@@ -135,7 +135,7 @@ export type { SemanticIconName } from "./icons.js";
 
 /**
  * Serializable collection presentation. Runtime loaders and action handlers live
- * in @vastplan/workbench-sdk so this contract remains portable to Mobile/Runner.
+ * in @vastplan/workbench-sdk so this contract remains portable to Mobile/Desktop.
  */
 export type CollectionView = "table" | "cards";
 export type CollectionQueryMode = "page" | "cursor";
@@ -146,7 +146,7 @@ export type CollectionActionPlacement = "collection.toolbar" | "collection.bulk"
 export type PageActionDisplay = "icon" | "icon-label" | "label";
 export type PageActionOverflow = "auto" | "always" | "never";
 export type DataValueFormat = "text" | "number" | "date" | "datetime" | "boolean" | "status";
-/** 可跨 Portal、Runner 和 Mobile 使用的受治理响应式列数。 */
+/** 可跨 Portal、Desktop 和 Mobile 使用的受治理响应式列数。 */
 export type ResponsiveColumnCount = number | { xs?: number; sm?: number; md?: number; lg?: number; xl?: number };
 
 export interface FilterOption { value: string; label: import("./i18n.js").LocalizedText; }
@@ -295,7 +295,7 @@ export interface RecordTreeSpec extends SizeableProps {
 }
 
 export type InteractionKind = "confirm" | "form" | "approval" | "notification" | "progress";
-export type InteractionSurface = "frontend" | "mobile" | "runner.local";
+export type InteractionSurface = "frontend" | "mobile" | "desktop.local";
 export interface InteractionSource { workflowRunId?: string; capability: string; operation?: string; }
 export interface InteractionRequest {
   id: string;
@@ -305,7 +305,7 @@ export interface InteractionRequest {
   tenantId: string;
   eligibleSubjects: string[];
   allowedSurfaces: InteractionSurface[];
-  fallback?: "expire" | "runner.local-if-allowed";
+  fallback?: "expire" | "desktop.local-if-allowed";
   expiresAt: string;
   title?: string;
   message?: string;

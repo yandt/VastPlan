@@ -97,7 +97,7 @@ func validateDevelopmentTargets(plugin plugindev.Spec, request ReleasePluginRequ
 	if plugin.FrontendEntry != "" && strings.TrimSpace(request.FrontendTarget) == "" && strings.TrimSpace(request.FrontendBinding) == "" {
 		return fmt.Errorf("插件 %s 包含 Frontend，Release Spec 必须提供 frontendTarget 或 frontendBinding", plugin.ID)
 	}
-	for _, face := range []string{"runner", "mobile"} {
+	for _, face := range []string{"desktop", "mobile"} {
 		if strings.TrimSpace(plugin.Manifest.Entry[face]) != "" {
 			return fmt.Errorf("插件 %s 的 %s 候选执行尚未接入统一 Test Release", plugin.ID, face)
 		}

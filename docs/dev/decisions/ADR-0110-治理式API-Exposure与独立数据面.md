@@ -33,4 +33,4 @@
 - 插件开发者需定义 bounded JSON Schema 和稳定错误码，但无需管理公网路径、认证 Token 或服务发现。
 - Route Key 与插件无关，插件替换或重构不会破坏客户端地址。
 - 控制面必须维护 Exposure 生命周期、Route Key tombstone、职责分离审批、Catalog generation 和 Endpoint Lease。
-- Portal、Mobile、Runner 与服务客户端使用相同 Token/身份验证原则；不同入口只负责载体校验，最终权限仍由统一 Authorization Policy 与 Backend PEP 裁决。
+- Portal、Mobile、Desktop 与服务客户端使用相同 Token/身份验证原则；不同入口只负责载体校验，最终权限仍由统一 Authorization Policy 与 Backend PEP 裁决。

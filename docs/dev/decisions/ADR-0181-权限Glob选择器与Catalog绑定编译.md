@@ -13,7 +13,7 @@ Authorization Policy 的角色治理输入增加带类型的权限选择器：`e
 
 角色创建或更新时，Policy 服务只在当前签名 Permission Catalog、当前 Domain delegation ceiling、风险上限和 `assignable=true` 的交集中展开选择器。每个选择器必须至少匹配一个权限，结果去重并稳定排序，同时保存选择器、Catalog digest 与展开后的精确权限。
 
-已发布 Role revision、Authorization IR、Policy Snapshot、Native/第三方 Engine、Authorization Session、Portal BFF 和 Runner/Mobile 投影只消费展开后的精确权限码。Catalog 后续新增权限不会改变旧 Role revision；需要扩大授权时必须形成新的角色 revision，重新审批并发布。显式 deny、撤权和领域状态规则继续优先。
+已发布 Role revision、Authorization IR、Policy Snapshot、Native/第三方 Engine、Authorization Session、Portal BFF 和 Desktop/Mobile 投影只消费展开后的精确权限码。Catalog 后续新增权限不会改变旧 Role revision；需要扩大授权时必须形成新的角色 revision，重新审批并发布。显式 deny、撤权和领域状态规则继续优先。
 
 开发 Seed Owner 使用受信 Glob 选择器生成当前 Catalog 的管理权限。显式 `bootstrap` 由组合根选择一次性 `seed-owned` 协调策略，将本地 Bootstrap State 中的 Seed Authority 对象原子同步进权威 Shared State；它可以补建缺失 Role/Binding、收敛旧 Seed 权限并删除不再属于当前基线的 Seed 对象。协调提交时必须从完整 Shared State 重新编译和签发 Snapshot，不能让本地 Seed 文件覆盖在线创建的用户角色。同名 ID 被非受信定义占用、revision 异常或 Binding 失去精确 Role 引用时必须失败。普通 `up/restart` 注入禁用策略，不创建新授权对象。
 
