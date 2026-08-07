@@ -23,7 +23,7 @@
 
 当前不包含 Overlay、Git、生产级 Session 恢复或 Portal 迁移。Leader 重启后未提交 Session 会丢失，因此调用方必须把 Workspace 当成临时编辑区，不能把它当作领域事实存储。生产级跨实例 Session 持久化要等真实故障恢复需求出现后再设计，避免提前建立第二套版本真相源。
 
-真实文件字节不进入 Workspace JSON 调用。P2.4d1 已通过平台通用 Ticket BFF 与 Content Staging HTTPS 数据面接通浏览器上传；Workspace 仍只管理 begin/status/renew/complete/abort 和 Ready Manifest。Backend/Runner 的受信 `private-direct` streaming SDK 属于 P2.4d2。
+真实文件字节不进入 Workspace JSON 调用。P2.4d1 已通过平台通用 Ticket BFF 与 Content Staging HTTPS 数据面接通浏览器上传；Workspace 仍只管理 begin/status/renew/complete/abort 和 Ready Manifest。Backend/Desktop 的受信 `private-direct` streaming SDK 属于 P2.4d2。
 
 ## 配置示例
 

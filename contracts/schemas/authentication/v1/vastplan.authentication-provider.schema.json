@@ -3,7 +3,7 @@
   "$id": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-provider.schema.json",
   "title": "VastPlan Enterprise Authentication Provider v1",
   "$defs": {
-    "providerPurpose": { "enum": ["portal-login", "mobile-token", "runner-token", "token-verification", "directory", "provisioning"] },
+    "providerPurpose": { "enum": ["portal-login", "mobile-token", "desktop-token", "token-verification", "directory", "provisioning"] },
     "capability": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 160 },
     "subjectNamespace": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 160 },
     "providerProfile": {

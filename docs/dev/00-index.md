@@ -5,7 +5,7 @@
 
 ## 一句话定位
 
-VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户，支持在线 Agent 开发、远程连接任务客户端在本地运行脚本/工作流。系统采用**微内核 + 全层扩展点**架构：内核只提供最小骨架，绝大多数功能（审计、可观测、用户系统扩展、Studio 可开发模块等）都是骨架之上的**第一方插件**。内核分**四套**——Backend / Frontend / Runner（桌面客户端执行器）/ Mobile（手机 Companion），规范 ID `backend/frontend/runner/mobile`；后端内核可灵活组合出 backend/workspace/rs 等服务。
+VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户，支持在线 Agent 开发、远程连接任务客户端在本地运行脚本/工作流。系统采用**微内核 + 全层扩展点**架构：内核只提供最小骨架，绝大多数功能（审计、可观测、用户系统扩展、Studio 可开发模块等）都是骨架之上的**第一方插件**。内核分**四套**——Backend / Frontend / Desktop（桌面客户端执行器）/ Mobile（手机 Companion），规范 ID `backend/frontend/desktop/mobile`；后端内核可灵活组合出 backend/workspace/rs 等服务。
 
 > 插件当前**全部由本方开发（第一方、可信）**，暂不开放第三方。清单、运行驱动 SPI 与发布者运行策略已预留第三方扩展；生产默认要求未知发布者至少 `process-sandbox`，内核使用者可用全局三态和发布者级优先规则决定信任边界（ADR-0048）。
 
@@ -73,7 +73,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [**服务部署控制台**](architecture/服务部署控制台.md)
   - Linux SSH 首次引导、systemd Node Agent 接管、插件化 Application Intent 规划、在线服务组合与副本配置边界
 - [**跨端体验与交互契约**](architecture/跨端体验与交互契约.md)
-  - Portal、Mobile、Runner 的声明式 UI 语义、交互 Broker 与安全边界
+  - Portal、Mobile、Desktop 的声明式 UI 语义、交互 Broker 与安全边界
 
 ### 设计系统
 - [**Portal 设计系统**](design/DESIGN.md)
@@ -89,13 +89,13 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [ADR-0006 内核分区与后端服务灵活组合（见 0014 扩为四内核）](decisions/ADR-0006-内核分区与后端组合.md)
 - [ADR-0007 内核间与服务间通信模型](decisions/ADR-0007-内核间通信模型.md)
 - [ADR-0008 骨架技术选型对比：go-plugin / Dapr / NATS](decisions/ADR-0008-骨架技术选型对比.md)
-- [ADR-0009 内核技术栈选型（后端 Go / Runner Go / 前端 React / 移动 gomobile）](decisions/ADR-0009-内核技术栈选型.md)
+- [ADR-0009 内核技术栈选型（后端 Go / Desktop Go / 前端 React / 移动 gomobile）](decisions/ADR-0009-内核技术栈选型.md)
 - [ADR-0010 插件服务与部署编排](decisions/ADR-0010-插件服务与部署编排.md)
 - [ADR-0011 组合是通用内核能力（服务/门户/客户端App）](decisions/ADR-0011-组合是通用内核能力.md)
-- [ADR-0012 Runner（原 APP）内核运行模型：预编译 + 整体热升级](decisions/ADR-0012-APP内核运行模型.md)
-- [ADR-0013 客户端多档能力：桌面完整 runner + 手机 Companion](decisions/ADR-0013-APP多档能力与手机Companion.md)
-- [ADR-0014 四内核结构：拆出 Runner 内核与移动 Companion 内核](decisions/ADR-0014-四内核结构.md)
-- [ADR-0015 内核与贡献面命名规范（backend/frontend/runner/mobile）](decisions/ADR-0015-内核与贡献面命名规范.md)
+- [ADR-0012 Desktop（原 APP）内核运行模型：预编译 + 整体热升级](decisions/ADR-0012-APP内核运行模型.md)
+- [ADR-0013 客户端多档能力：桌面完整 desktop + 手机 Companion](decisions/ADR-0013-APP多档能力与手机Companion.md)
+- [ADR-0014 四内核结构：拆出 Desktop 内核与移动 Companion 内核](decisions/ADR-0014-四内核结构.md)
+- [ADR-0015 内核与贡献面命名规范（backend/frontend/desktop/mobile）](decisions/ADR-0015-内核与贡献面命名规范.md)
 - [ADR-0016 单仓（monorepo）与代码目录布局](decisions/ADR-0016-单仓与代码目录布局.md)
 - [ADR-0017 版本定义与兼容性机制](decisions/ADR-0017-版本定义与兼容性机制.md)
 - [ADR-0018 测试布局与分层](decisions/ADR-0018-测试布局与分层.md)
@@ -186,7 +186,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [ADR-0103 Node Portal Kernel 渐进替代 Go Portal Edge](decisions/ADR-0103-Node-Portal-Kernel渐进替代Go-Edge.md)
 - [ADR-0104 Frontend Runtime Engine 与 React 单实现](decisions/ADR-0104-Frontend-Runtime-Engine与React单实现.md)
 - [ADR-0105 可信多文件前端模块图与双端 Generation](decisions/ADR-0105-可信多文件前端模块图与双端Generation.md)
-- [ADR-0106 多端统一身份授权与 Runner 执行租约](decisions/ADR-0106-多端统一身份授权与Runner执行租约.md)
+- [ADR-0106 多端统一身份授权与 Desktop 执行租约](decisions/ADR-0106-多端统一身份授权与Runner执行租约.md)
 - [ADR-0107 插件权限目录与系统管理授权治理](decisions/ADR-0107-插件权限目录与系统管理授权治理.md)
 - [ADR-0108 会话前 Access Profile 与认证方法协议](decisions/ADR-0108-会话前Access-Profile与认证方法协议.md)
 - [ADR-0109 种子访问与企业身份 Provider 分离](decisions/ADR-0109-种子访问与企业身份Provider分离.md)
@@ -276,6 +276,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [ADR-0193 第一方插件边界与 Capability 契约版本](decisions/ADR-0193-第一方插件边界与Capability契约版本.md)
 - [ADR-0194 平台控制数据库与声明式数据分层](decisions/ADR-0194-平台控制数据库与声明式数据分层.md)
 - [ADR-0195 插件升级前 DataModel 迁移门禁](decisions/ADR-0195-插件升级前DataModel迁移门禁.md)
+- [ADR-0196 Desktop 内核规范 ID 改名（runner → desktop）](decisions/ADR-0196-Desktop内核规范ID改名.md)
 
 ### 通用版本账本
 

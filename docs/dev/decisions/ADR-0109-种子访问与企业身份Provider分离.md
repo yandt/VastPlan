@@ -33,7 +33,7 @@
 - `authentication.method.v1` 继续作为交互协议；新增 Provider Profile/Catalog 和 Manifest `authenticationProviders` 贡献，不重写已有 Access Profile。
 - Authentication Broker、Provider Catalog 和 Seed Authority 属于 Foundation 能力，不是内核用户系统；它们仍可作为插件独立升级和替换实现。
 - 在线角色插件只汇总签名权限目录并绑定稳定主体，不创建或校验企业用户。
-- Portal、Mobile 和 Runner 可使用不同认证载体，但必须汇聚到同一稳定主体和 Authorization Policy；外部 Token 验证将以 Provider 能力接入，不能让各内核自行解析 claim 授权。
+- Portal、Mobile 和 Desktop 可使用不同认证载体，但必须汇聚到同一稳定主体和 Authorization Policy；外部 Token 验证将以 Provider 能力接入，不能让各内核自行解析 claim 授权。
 
 ## 实施记录（2026-07-23）
 

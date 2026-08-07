@@ -25,7 +25,7 @@
 5. 凭证字段使用 `type: string + format: vastplan-credential-ref + writeOnly: true`；Web 可用 `ui:widget: secretRef` 呈现。Broker 只信任数据 Schema 中两项安全标记，只接受 `credential://` 引用，不因 UI widget 名称而放行明文。
 6. 表单信封进入 Broker 前同时执行 VastPlan 外层契约校验和内嵌 JSON Schema 编译。只允许本地 `#...` 引用，禁止远程 `$ref`；文档限制为 256 KiB、32 层和 4096 个节点，避免 SSRF 与资源耗尽。浏览器 AJV 不配置异步 Schema loader。
 7. 异步服务端校验继续通过 `FormRenderer.validate` 注入，采用去抖与 `AbortSignal` 取消；函数和服务地址不进入 Schema。同步 AJV 错误、异步错误和宿主错误统一为稳定字段路径。
-8. Mobile/Runner/非 React 工具消费相同 Draft 7 数据 Schema，可以忽略 Web 专用 `uiSchema` 提示并使用本端默认呈现。若未来升级 Draft 2020-12，必须通过明确的契约版本/方言协商，不能静默改变解释器。
+8. Mobile/Desktop/非 React 工具消费相同 Draft 7 数据 Schema，可以忽略 Web 专用 `uiSchema` 提示并使用本端默认呈现。若未来升级 Draft 2020-12，必须通过明确的契约版本/方言协商，不能静默改变解释器。
 9. 不提供旧 `FormField[]` 兼容适配器：代码、协议样例和测试一次性迁移，删除旧运行时，避免永久维护双模型。
 
 ## 依赖与许可

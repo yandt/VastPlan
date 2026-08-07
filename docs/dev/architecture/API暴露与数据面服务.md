@@ -71,7 +71,7 @@
 
 Gateway 固定执行：规范化 Host 与路径 → 解析当前 Catalog generation → 建立可信身份 → 校验 tenant/Portal/认证 Profile → 权限与速率预检 → 请求大小与 JSON Schema 校验 → 生成受限 `GatewayInvocation` → 调用内部 capability → Backend 最终 PEP 再校验 → 映射允许公开的错误 → 响应大小与 Schema 校验。
 
-Cookie 会话的非 GET 请求必须通过双提交 CSRF；经受信认证 Provider 校验的 Bearer/PoP Token 主体可显式标记为不需要 CSRF。Portal、Mobile 与 Runner 因而共用 Token 权限语义，而不是要求非浏览器客户端伪造 Cookie。
+Cookie 会话的非 GET 请求必须通过双提交 CSRF；经受信认证 Provider 校验的 Bearer/PoP Token 主体可显式标记为不需要 CSRF。Portal、Mobile 与 Desktop 因而共用 Token 权限语义，而不是要求非浏览器客户端伪造 Cookie。
 
 客户端不能提交 plugin ID、目标 capability、逻辑服务、路由域、tenant 或可信身份字段。Gateway 不透出内部堆栈、节点、插件、capability、NATS subject 或 gRPC 地址。
 
@@ -87,9 +87,9 @@ Endpoint 不得携带 userinfo、query 或 fragment，并且其 HTTPS origin 与
 
 Portal 对 Ticket 请求先执行 Host、tenant、认证 Profile、权限、CSRF 和有界 JSON 校验，再调用 API Exposure leader。控制面选择带 `ticket-redirect` 模式的有效 Lease，并通过当前可信委托主动调用清单声明的 `ticketTarget`，把 30 秒一次性 Ticket 安装到精确数据面实例；安装失败会撤销 Ticket。随后客户端携带 `vp_ticket` 访问数据面，Ticket 在数据面本地按租户、主体、实例、方法与资源原子消费一次。这样不会要求独立 HTTP 数据面从公网请求反向伪造插件 CallContext。
 
-Version Content Staging 是第二个正式消费者。浏览器先通过上述同站入口申请绑定 `PUT /v1/uploads/{uploadId}` 和 `contentSha256` 的 Ticket，再把请求体直接流向 Content Staging HTTPS 实例；数据面消费 Ticket 后仍复核 Upload Lease 所有者、摘要、声明大小和 Lease 到期时间。接收字节与完成上传是两个显式步骤，数据面不代替 Workspace 执行 `completeContentUpload`。P2.4d2 另为携带可信用户委托的 Backend/Runner 启用 `private-direct`。
+Version Content Staging 是第二个正式消费者。浏览器先通过上述同站入口申请绑定 `PUT /v1/uploads/{uploadId}` 和 `contentSha256` 的 Ticket，再把请求体直接流向 Content Staging HTTPS 实例；数据面消费 Ticket 后仍复核 Upload Lease 所有者、摘要、声明大小和 Lease 到期时间。接收字节与完成上传是两个显式步骤，数据面不代替 Workspace 执行 `completeContentUpload`。P2.4d2 另为携带可信用户委托的 Backend/Desktop 启用 `private-direct`。
 
-`private-direct` 不等于静态内网 token。当前 Version Content Staging 首个实现要求 TLS 1.3 mTLS、经 CA 验证的 SPIFFE 客户端身份以及 API Exposure 安装的一次性资源 Ticket；只支持携带可信用户委托的 Backend/Runner。后台 workload 必须等 Exposure 增加独立 allowlist 后再开放。
+`private-direct` 不等于静态内网 token。当前 Version Content Staging 首个实现要求 TLS 1.3 mTLS、经 CA 验证的 SPIFFE 客户端身份以及 API Exposure 安装的一次性资源 Ticket；只支持携带可信用户委托的 Backend/Desktop。后台 workload 必须等 Exposure 增加独立 allowlist 后再开放。
 
 ## 6. 发布与演进
 

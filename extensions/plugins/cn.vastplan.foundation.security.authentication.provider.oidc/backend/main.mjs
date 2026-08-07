@@ -20,7 +20,7 @@ const descriptor = {
   purposes: [
     "portal-login",
     "mobile-token",
-    "runner-token",
+    "desktop-token",
     "token-verification",
   ],
   methods: [{ id: "oidc", kind: "redirect", interaction: "redirect" }],

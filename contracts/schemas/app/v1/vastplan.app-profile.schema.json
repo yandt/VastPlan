@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.cdsoft.com.cn/vastplan/app/v1/vastplan.app-profile.schema.json",
-  "title": "VastPlan Runner App Profile v1",
+  "title": "VastPlan Desktop App Profile v1",
   "type": "object",
   "additionalProperties": false,
   "required": ["version", "revision", "id", "tenantId", "runtime", "targets", "distribution", "assignedTo", "plugins"],
@@ -10,7 +10,7 @@
     "revision": { "type": "integer", "minimum": 1 },
     "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$" },
     "tenantId": { "type": "string", "minLength": 1, "maxLength": 160 },
-    "runtime": { "const": "runner" },
+    "runtime": { "const": "desktop" },
     "targets": {
       "type": "array",
       "minItems": 1,

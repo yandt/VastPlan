@@ -1,4 +1,4 @@
-// Package interaction is the Runner-side, UI-free interaction coordinator.
+// Package interaction is the Desktop-side, UI-free interaction coordinator.
 package interaction
 
 import (
@@ -17,8 +17,8 @@ var (
 	ErrExpired   = errors.New("交互已过期")
 )
 
-// Broker is the Runner's sole dependency. A profile-specific transport adapts
-// it to authenticated Backend addressing; Runner never imports Portal/Mobile.
+// Broker is the Desktop's sole dependency. A profile-specific transport adapts
+// it to authenticated Backend addressing; Desktop never imports Portal/Mobile.
 type Broker interface {
 	Open(context.Context, interactionapi.Subject, uiv1.InteractionRequest) (interactionapi.Record, error)
 	Watch(context.Context, interactionapi.Subject, string, time.Time) (interactionapi.Record, error)
@@ -32,7 +32,7 @@ type Client struct {
 
 func New(broker Broker, source interactionapi.Subject) (*Client, error) {
 	if broker == nil || source.ID == "" || source.TenantID == "" {
-		return nil, errors.New("Runner interaction client 必须配置 Broker、来源 capability 和 tenant")
+		return nil, errors.New("Desktop interaction client 必须配置 Broker、来源 capability 和 tenant")
 	}
 	return &Client{broker: broker, source: source}, nil
 }
@@ -41,7 +41,7 @@ func New(broker Broker, source interactionapi.Subject) (*Client, error) {
 // a terminal Broker decision. It does not consume a Portal or renderer API.
 func (c *Client) Request(ctx context.Context, request uiv1.InteractionRequest) (uiv1.InteractionResponse, error) {
 	if request.Source.Capability != c.source.ID || request.TenantID != c.source.TenantID {
-		return uiv1.InteractionResponse{}, errors.New("Runner 交互请求的来源 capability 和 tenant 必须由当前 Runner 绑定")
+		return uiv1.InteractionResponse{}, errors.New("Desktop 交互请求的来源 capability 和 tenant 必须由当前 Desktop 绑定")
 	}
 	record, err := c.broker.Open(ctx, c.source, request)
 	if err != nil {

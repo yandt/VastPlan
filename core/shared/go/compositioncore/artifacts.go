@@ -1,6 +1,6 @@
 // Package compositioncore contains cross-kernel composition policy that can be
 // shared by Go kernels. It does not know about Backend service units, Frontend
-// modules, Runner profiles or Mobile bundles.
+// modules, Desktop profiles or Mobile bundles.
 package compositioncore
 
 import (

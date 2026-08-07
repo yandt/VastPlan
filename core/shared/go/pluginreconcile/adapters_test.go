@@ -18,10 +18,10 @@ func TestTargetAdaptersKeepRuntimeSemanticsSeparate(t *testing.T) {
 		t.Fatalf("Renderer 必须使用 Host Epoch: %s %v", frontend, err)
 	}
 	backend, _ := BackendAdapter().Transition(pluginv1.ReconciliationTransition{Operation: pluginv1.ReconcileDeactivate, Current: &owner})
-	runner, _ := RunnerAdapter().Transition(pluginv1.ReconciliationTransition{Operation: pluginv1.ReconcileReplace, Candidate: &owner})
+	desktop, _ := DesktopAdapter().Transition(pluginv1.ReconciliationTransition{Operation: pluginv1.ReconcileReplace, Candidate: &owner})
 	mobile, _ := MobileAdapter().Transition(pluginv1.ReconciliationTransition{Operation: pluginv1.ReconcileReplace, Candidate: &owner})
-	if backend != "backend.drain-stop" || runner != "runner.app-profile" || mobile != "mobile.bundle-publication" {
-		t.Fatalf("各内核运行产物策略串线: %s %s %s", backend, runner, mobile)
+	if backend != "backend.drain-stop" || desktop != "desktop.app-profile" || mobile != "mobile.bundle-publication" {
+		t.Fatalf("各内核运行产物策略串线: %s %s %s", backend, desktop, mobile)
 	}
 }
 
@@ -36,10 +36,10 @@ func TestPlansMaterializeIntoEachKernelArtifact(t *testing.T) {
 	if err != nil || len(activation.Plugins) != 1 {
 		t.Fatalf("Frontend Activation 投影失败: %+v %v", activation, err)
 	}
-	runner := targetPlan(t, pluginv1.PluginTargetRunner, RunnerAdapter())
-	profile, err := ApplyRunnerProfile(runner, appv1.Profile{Version: 1, ID: "runner", TenantID: "tenant-a", Runtime: "runner", Targets: []string{"linux/amd64"}, Distribution: "self-update", AssignedTo: []string{"runner-a"}})
+	desktop := targetPlan(t, pluginv1.PluginTargetDesktop, DesktopAdapter())
+	profile, err := ApplyDesktopProfile(desktop, appv1.Profile{Version: 1, ID: "desktop", TenantID: "tenant-a", Runtime: "desktop", Targets: []string{"linux/amd64"}, Distribution: "self-update", AssignedTo: []string{"desktop-a"}})
 	if err != nil || len(profile.Plugins) != 1 {
-		t.Fatalf("Runner Profile 投影失败: %+v %v", profile, err)
+		t.Fatalf("Desktop Profile 投影失败: %+v %v", profile, err)
 	}
 	mobile := targetPlan(t, pluginv1.PluginTargetMobile, MobileAdapter())
 	bundle, err := BuildMobileBundle(mobile)

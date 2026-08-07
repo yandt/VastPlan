@@ -217,7 +217,7 @@ func (p *PluginInstance) Alive() bool {
 
 // Host 插件宿主：接入插件实例、把贡献接入扩展点注册表、路由调用并管理生命周期。
 type Host struct {
-	// KernelName 本内核的规范 ID（backend/frontend/runner/mobile，ADR-0015）。
+	// KernelName 本内核的规范 ID（backend/frontend/desktop/mobile，ADR-0015）。
 	KernelName string
 	// KernelVersion 本内核 SemVer 版本，单一真源 = core/kernels/<name>/VERSION（ADR-0017 §1）。
 	KernelVersion string

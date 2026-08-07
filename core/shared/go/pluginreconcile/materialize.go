@@ -56,9 +56,9 @@ func BuildFrontendActivation(plan pluginv1.ReconciliationPlan) (FrontendActivati
 	return result, nil
 }
 
-func ApplyRunnerProfile(plan pluginv1.ReconciliationPlan, profile appv1.Profile) (appv1.Profile, error) {
-	if plan.Target != pluginv1.PluginTargetRunner {
-		return appv1.Profile{}, errors.New("Runner Profile 不能消费其他内核计划")
+func ApplyDesktopProfile(plan pluginv1.ReconciliationPlan, profile appv1.Profile) (appv1.Profile, error) {
+	if plan.Target != pluginv1.PluginTargetDesktop {
+		return appv1.Profile{}, errors.New("Desktop Profile 不能消费其他内核计划")
 	}
 	artifacts, err := desiredArtifacts(plan)
 	if err != nil {

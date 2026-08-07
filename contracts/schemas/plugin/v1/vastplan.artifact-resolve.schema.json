@@ -21,7 +21,7 @@
         }
       }
     },
-    "target": { "enum": ["backend", "frontend", "runner", "mobile"] },
+    "target": { "enum": ["backend", "frontend", "desktop", "mobile"] },
     "kernelVersion": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/semver" },
     "platform": { "type": "string", "pattern": "^[a-z0-9]+/[a-z0-9_]+$", "maxLength": 40 },
     "allowedChannels": {

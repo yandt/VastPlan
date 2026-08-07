@@ -15,7 +15,7 @@ flowchart TB
   W --> C["@vastplan/ui-contract\n可序列化规则与纯运行时"]
   P --> D["ui.render.adapter\nAnt Design / 未来 Renderer"]
   D --> E["ui.runtime.engine\n当前 React"]
-  C --> X["Mobile / Runner\n复用数据与交互语义"]
+  C --> X["Mobile / Desktop\n复用数据与交互语义"]
   L["ui.structure.layout\n位置、尺寸、样式"] -. 不参与业务行为 .-> W
 ```
 

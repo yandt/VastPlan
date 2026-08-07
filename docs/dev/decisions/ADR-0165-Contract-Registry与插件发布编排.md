@@ -19,7 +19,7 @@
 5. `pluginrelease` 读取一份 Release Spec，构造全工作区依赖图、检查循环和版本范围、计算反向影响、按依赖顺序生成确定性 Release Plan，并同步机械派生文件。
 6. 开发 `execute` 复用现有 `pluginpackage -> artifact.repository.local-test.v1/workspace -> Test Release -> Service/Portal Generation` 链路。它不直连 Runtime，不让仓库取得激活权限，也不在内核启动时执行。
 7. 生产 `execute` 只准备并输出待审批计划，不构建、上传或激活制品。正式发布继续使用远端仓库、供应链证据、异人审批和发布控制器。
-8. Release Spec 不接受任意 shell 命令；构建器按 Manifest 自动发现 Backend/Frontend 入口及语言驱动。Runner/Mobile 尚未接入统一 Test Release 时明确阻断，不静默跳过。
+8. Release Spec 不接受任意 shell 命令；构建器按 Manifest 自动发现 Backend/Frontend 入口及语言驱动。Desktop/Mobile 尚未接入统一 Test Release 时明确阻断，不静默跳过。
 
 ## 工具语言与运行位置
 

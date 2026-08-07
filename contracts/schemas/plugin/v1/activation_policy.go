@@ -9,7 +9,7 @@ import (
 const (
 	PluginTargetBackend  = "backend"
 	PluginTargetFrontend = "frontend"
-	PluginTargetRunner   = "runner"
+	PluginTargetDesktop  = "desktop"
 	PluginTargetMobile   = "mobile"
 )
 
@@ -182,5 +182,5 @@ func normalizeArtifactRef(ref ArtifactRef) ArtifactRef {
 	return ref
 }
 func validPluginTarget(value string) bool {
-	return value == PluginTargetBackend || value == PluginTargetFrontend || value == PluginTargetRunner || value == PluginTargetMobile
+	return value == PluginTargetBackend || value == PluginTargetFrontend || value == PluginTargetDesktop || value == PluginTargetMobile
 }

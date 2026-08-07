@@ -25,7 +25,7 @@
 
 P2.4d1 已把真实字节流接到浏览器：Node Portal Kernel 复用通用 `/api/d/{routeKey}/ticket` BFF，Content Staging 提供受 EndpointLease 管理的 HTTPS 流式入口。它不是普通 JSON API，也没有 `writeChunk`；Node 不代理文件内容。
 
-P2.4d2 已提供携带可信用户委托的 Backend/Runner `private-direct` Go SDK 和独立 mTLS 入口。无用户委托的后台 workload grant、Node/Python SDK、对象存储 Provider、恶意内容/DLP 扫描和完整跨节点故障矩阵仍未实现；它们不能回退为静态共享 token。
+P2.4d2 已提供携带可信用户委托的 Backend/Desktop `private-direct` Go SDK 和独立 mTLS 入口。无用户委托的后台 workload grant、Node/Python SDK、对象存储 Provider、恶意内容/DLP 扫描和完整跨节点故障矩阵仍未实现；它们不能回退为静态共享 token。
 
 内置 `IntegrityAdmission` 会再次顺序读取暂存内容，并配合 Manager 完成大小、SHA-256、mediaType 声明和 tenant/Lease 校验；它不是恶意软件扫描器。要求内容扫描的生产环境必须等待或配置 P2.4d 的 Admission Provider，不能把完整性校验误称为安全扫描。
 
@@ -64,7 +64,7 @@ P2.4d2 已提供携带可信用户委托的 Backend/Runner `private-direct` Go S
       "endpoint": "https://content-private.internal:9445",
       "instanceId": "content-staging-private-1",
       "tlsIdentity": "spiffe://vastplan/content/content-staging-private-1",
-      "clientIdentityPrefixes": ["spiffe://vastplan/backend/", "spiffe://vastplan/runner/"]
+      "clientIdentityPrefixes": ["spiffe://vastplan/backend/", "spiffe://vastplan/desktop/"]
     }
   }
 }

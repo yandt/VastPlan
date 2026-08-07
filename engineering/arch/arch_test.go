@@ -201,8 +201,8 @@ func TestArch_PluginsMustNotImportEachOther(t *testing.T) {
 	}
 }
 
-// clientcore 只服务 Runner 与 Mobile（ADR-0014），后端不得使用。
-func TestArch_ClientCoreOnlyForRunnerAndMobile(t *testing.T) {
+// clientcore 只服务 Desktop 与 Mobile（ADR-0014），后端不得使用。
+func TestArch_ClientCoreOnlyForDesktopAndMobile(t *testing.T) {
 	files := collectGoFiles(t)
 	cc := modulePath + "/core/shared/go/clientcore"
 	for _, f := range files {
@@ -210,11 +210,11 @@ func TestArch_ClientCoreOnlyForRunnerAndMobile(t *testing.T) {
 			if !strings.HasPrefix(imp, cc) {
 				continue
 			}
-			allowed := strings.HasPrefix(f.relPath, "core/kernels/runner/") ||
+			allowed := strings.HasPrefix(f.relPath, "core/kernels/desktop/") ||
 				strings.HasPrefix(f.relPath, "core/kernels/mobile/") ||
 				strings.HasPrefix(f.relPath, "core/shared/go/clientcore/")
 			if !allowed {
-				t.Errorf("clientcore 使用越界：%s 不得 import clientcore\n  原因: clientcore 只放 Runner 与 Mobile 共用的东西（ADR-0014）",
+				t.Errorf("clientcore 使用越界：%s 不得 import clientcore\n  原因: clientcore 只放 Desktop 与 Mobile 共用的东西（ADR-0014）",
 					f.relPath)
 			}
 		}

@@ -31,7 +31,7 @@ func SyncSelectedPluginPackageVersions(repositoryRoot string, workspace PluginWo
 		if !ok {
 			return nil, fmt.Errorf("package version 投影引用不存在的插件 %s", pluginID)
 		}
-		for _, face := range []string{"backend", "frontend", "runner", "mobile"} {
+		for _, face := range []string{"backend", "frontend", "desktop", "mobile"} {
 			relative := filepath.ToSlash(filepath.Join(plugin.Path, face, "package.json"))
 			path := filepath.Join(repositoryRoot, filepath.FromSlash(relative))
 			raw, err := os.ReadFile(path)

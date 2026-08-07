@@ -310,9 +310,9 @@ func frontendGraphManifest(t *testing.T, graph FrontendModuleGraph) []byte {
 func TestParseManifest_CrossPlatformInteractionContributions(t *testing.T) {
 	base := `{
   "id":"cn.vastplan.foundation.mobile.native-shell","name":"native shell","description":"cross-platform interaction fixture","version":"1.0.0","publisher":"vastplan",
-  "engines":{"runner":"^1.0","mobile":"^1.0"},"activation":["onStartup"],"entry":{"runner":"runner/main","mobile":"mobile/main"},
+  "engines":{"desktop":"^1.0","mobile":"^1.0"},"activation":["onStartup"],"entry":{"desktop":"desktop/main","mobile":"mobile/main"},
   "contributes":{
-    "runner":{"interactions":[{"id":"foundation.runner.interaction","interactionContract":"^1.0.0","kinds":["approval","form"],"allowedSurfaces":["frontend","mobile"]}]},
+    "desktop":{"interactions":[{"id":"foundation.desktop.interaction","interactionContract":"^1.0.0","kinds":["approval","form"],"allowedSurfaces":["frontend","mobile"]}]},
     "mobile":{"uiAdapters":[%s]}
   }
 }`
@@ -341,7 +341,7 @@ func TestValidateDescriptor_BackendPublicCatalog(t *testing.T) {
 		"permission.checker":                `{"applies":{"caller":"CALLER_KIND_*"}}`,
 		"event.sink":                        `{"subscribe":["task.*"]}`,
 		"hook":                              `{"point":"invoke","phase":"before"}`,
-		"runner.capability":                 `{"service_role":"rs","kind":"process.exec","params":{"sandbox":true}}`,
+		"desktop.capability":                `{"service_role":"rs","kind":"process.exec","params":{"sandbox":true}}`,
 		"authentication.provider":           `{"protocol":"authentication.method.v1","purposes":["portal-login"],"methods":[{"id":"corporate-sso","kind":"redirect","interaction":"redirect"}],"subjectNamespace":"enterprise.identity.corporate","requiredCapabilities":[]}`,
 		"configuration.controller":          `{"protocol":"configuration.v1"}`,
 		"configuration.resource-controller": `{"protocol":"configuration.resource.v1"}`,
@@ -381,11 +381,11 @@ func TestValidateDescriptor_RejectsUnpublishedOrInvalidPoint(t *testing.T) {
 		point      string
 		descriptor string
 	}{
-		"未知扩展点":       {point: "future.point", descriptor: `{"vendorField":"kept"}`},
-		"内核内部能力":      {point: "kernel.service", descriptor: `{"title":"伪造服务"}`},
-		"agent 缺系统提示": {point: "agent", descriptor: `{}`},
-		"API 路径非法":    {point: "api.route", descriptor: `{"service_role":"backend","method":"GET","path":"relative","auth":"session"}`},
-		"Runner 角色非法": {point: "runner.capability", descriptor: `{"service_role":"backend","kind":"process.exec"}`},
+		"未知扩展点":        {point: "future.point", descriptor: `{"vendorField":"kept"}`},
+		"内核内部能力":       {point: "kernel.service", descriptor: `{"title":"伪造服务"}`},
+		"agent 缺系统提示":  {point: "agent", descriptor: `{}`},
+		"API 路径非法":     {point: "api.route", descriptor: `{"service_role":"backend","method":"GET","path":"relative","auth":"session"}`},
+		"Desktop 角色非法": {point: "desktop.capability", descriptor: `{"service_role":"backend","kind":"process.exec"}`},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -404,7 +404,7 @@ func TestParseManifest_BackendDescriptorsAreClosed(t *testing.T) {
 		"contributes":{"backend":{
 			"agents":[{"id":"demo.agent","service_role":"backend","systemPrompt":"你是助手","tools":[{"extensionPoint":"tool.package","capability":"demo.tool"}]}],
 			"apiRoutes":[{"id":"demo.api","service_role":"backend","method":"GET","path":"/v1/demo","auth":"session"}],
-			"runnerCapabilities":[{"id":"demo.exec","service_role":"rs","kind":"process.exec"}]
+			"desktopCapabilities":[{"id":"demo.exec","service_role":"rs","kind":"process.exec"}]
 		}}
 	}`)
 	if _, err := ParseManifest(valid); err != nil {

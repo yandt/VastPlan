@@ -1,6 +1,6 @@
 // Package pluginreconcile owns the small target-specific strategy adapters for
 // the shared plugin reconciliation contract. It does not perform scheduling,
-// deployment, Portal assembly, Runner claiming or Mobile distribution.
+// deployment, Portal assembly, Desktop claiming or Mobile distribution.
 package pluginreconcile
 
 import (
@@ -15,8 +15,8 @@ func BackendAdapter() pluginv1.ReconciliationAdapter {
 func FrontendAdapter() pluginv1.ReconciliationAdapter {
 	return adapter{target: pluginv1.PluginTargetFrontend, transition: frontendTransition}
 }
-func RunnerAdapter() pluginv1.ReconciliationAdapter {
-	return adapter{target: pluginv1.PluginTargetRunner, transition: profileTransition("runner.app-profile")}
+func DesktopAdapter() pluginv1.ReconciliationAdapter {
+	return adapter{target: pluginv1.PluginTargetDesktop, transition: profileTransition("desktop.app-profile")}
 }
 func MobileAdapter() pluginv1.ReconciliationAdapter {
 	return adapter{target: pluginv1.PluginTargetMobile, transition: profileTransition("mobile.bundle-publication")}

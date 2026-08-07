@@ -18,7 +18,7 @@
 4. 门户内核始终提供不依赖设计系统插件的最小加载、错误、恢复与“切回最后可用设计系统”页面。设计系统插件由签名种子/制品仓库取得；首期只加载已签名第一方插件。升级按候选校验、原子资产切换、浏览器刷新或回退完成，不尝试卸载已执行的 React 远程模块。
 5. 在线门户组合和系统配置使用版本化的 `Draft → PendingApproval → Approved → Published` 流程。提交人不得审批自己的变更；紧急 `system` 身份可 break-glass 发布，但必须给出原因并产生不可变审计事件。发布生成可回滚 revision，失败或未就绪的候选不得替换当前发布版本。
 6. Portal 与 Backend 的交互只能经稳定 Edge/BFF。BFF 验证会话、执行 CSRF 防护、向后端投影最小 Principal/角色，并调用已授权 capability；浏览器和前端远程插件不直接接触 NATS、内部服务地址或服务凭据。
-7. 本 ADR 以现行规范 ID `frontend/runner/mobile` 解释 Portal；ADR-0011 中遗留的 `webui/rc` 名称仅保留历史记录，不得进入新的清单、Schema、目录或实现。
+7. 本 ADR 以现行规范 ID `frontend/desktop/mobile` 解释 Portal；ADR-0011 中遗留的 `webui/rc` 名称仅保留历史记录，不得进入新的清单、Schema、目录或实现。
 
 ## 备选方案
 

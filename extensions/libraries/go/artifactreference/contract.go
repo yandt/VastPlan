@@ -27,7 +27,7 @@ const (
 	OwnerRollbackHistory  = "rollback-history"
 	OwnerSeed             = "seed"
 	OwnerLastKnownGood    = "last-known-good"
-	OwnerRunnerInstall    = "runner-install"
+	OwnerDesktopInstall   = "desktop-install"
 	OwnerMobileInstall    = "mobile-install"
 )
 
@@ -116,7 +116,7 @@ func referenceKey(reference pluginv1.ArtifactReference) string {
 
 func validOwnerKind(kind string) bool {
 	switch kind {
-	case OwnerDeploymentActive, OwnerAssignmentActive, OwnerPortalActivation, OwnerArtifactLock, OwnerRollbackHistory, OwnerSeed, OwnerLastKnownGood, OwnerRunnerInstall, OwnerMobileInstall:
+	case OwnerDeploymentActive, OwnerAssignmentActive, OwnerPortalActivation, OwnerArtifactLock, OwnerRollbackHistory, OwnerSeed, OwnerLastKnownGood, OwnerDesktopInstall, OwnerMobileInstall:
 		return true
 	default:
 		return false

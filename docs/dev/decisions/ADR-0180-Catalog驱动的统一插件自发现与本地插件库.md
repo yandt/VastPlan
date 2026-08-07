@@ -6,7 +6,7 @@
 
 ## 背景
 
-VastPlan 已具备 Manifest 扫描、local-test/remote 双仓库协议、不可变制品、Catalog Journal、精确运行锁、Node Agent 安装验证和 Frontend Generation，但这些能力尚未形成一条覆盖 Backend、Frontend、Runner、Mobile 的统一插件发现链。开发源码增删由工程工具感知，Renderer/Shell 等 Foundation Library 仍存在构建期精确版本投影，local-test 仓库也还不能作为可由远端仓库扩充的本地插件库。
+VastPlan 已具备 Manifest 扫描、local-test/remote 双仓库协议、不可变制品、Catalog Journal、精确运行锁、Node Agent 安装验证和 Frontend Generation，但这些能力尚未形成一条覆盖 Backend、Frontend、Desktop、Mobile 的统一插件发现链。开发源码增删由工程工具感知，Renderer/Shell 等 Foundation Library 仍存在构建期精确版本投影，local-test 仓库也还不能作为可由远端仓库扩充的本地插件库。
 
 如果继续为 Renderer、Runtime Provider、数据库 Provider、认证协议等逐类维护候选清单，内核和工程工具会不断积累插件家族特例；如果让各内核直接扫描源码目录或远端仓库，又会复制版本求解、信任、缓存和恢复逻辑。
 
@@ -45,7 +45,7 @@ Renderer、Shell Library、Runtime Provider、数据库 Provider、认证/授权
 
 - Backend 生成 Deployment/Assignment；
 - Frontend 生成 Portal Activation/Generation/Host Epoch；
-- Runner 生成签名 App Profile/运行锁；
+- Desktop 生成签名 App Profile/运行锁；
 - Mobile 生成受发布渠道约束的 App Profile/Bundle 计划。
 
 所有插件都能在线发现和下载安装，不代表所有插件都可无刷新热替换。功能插件使用候选代切换；Renderer family、共享 ABI 或宿主变化使用 Host Epoch/受控刷新；有状态 Backend 使用 Drain/迁移/滚动升级；Kernel/Bootstrap 仍使用重启升级。
@@ -94,6 +94,6 @@ Renderer、Shell Library、Runtime Provider、数据库 Provider、认证/授权
 - 2026-08-01（P1）：local-test Profile 可把 `candidate/stable` 作为只读/导入 channel，但普通发布仍由独立校验限制为 `workspace/testing`。新增 remote HTTPS Adapter/Resolver、Remote → Local Artifact Lock 同步器、Unix Socket 导入操作和 `platform-dev.sh plugin-library install`；安装先锁定远端 Catalog revision，再逐项下载完整依赖闭包，由共享契约校验锁的根、SemVer、闭包与依赖环，并由本地信任根复验证明、摘要、来源和安全状态。安全准入/复扫引用的原始报告先按摘要同步到本地私有归档，之后才允许制品入库。Catalog 以 `artifact.imported` Journal 事件持久保存上游 Receipt。相同远端来源幂等，跨来源、Catalog/Lock/Object 漂移、yanked/revoked 和直接本地 stable 发布均拒绝。导入不修改 Deployment 或 Portal Activation。
 - 2026-08-01（P2）：默认热开发模式启动独立的源码输入适配器，扫描 `extensions/plugins` 与 `examples/plugins` 的直接子目录并持久保存源状态。新增或修改在防抖后构建内容寻址的 workspace 候选，只发布到 Local Plugin Library，不自动激活；更新遵循“发布新候选 → 持久记录待撤回引用 → 撤回旧候选”，重启可继续未完成撤回。目录删除产生单调 `artifact.withdrawn` Journal 事件；新 Catalog 快照与 Resolver 排除该候选，但活动 lease 的精确读取和引用保护继续有效，之后才进入普通 GC。同一内容的目录重新出现时会以受控生命周期事务恢复原不可变 ref，不需要伪造新版本。首次启用只建立现有源码基线并接管已经存在的 workspace 候选，不批量重建全部插件；stable/Seed 候选纳入统一 Inventory 由 P3 完成。
 - 2026-08-01（P3）：新增语言中立的 `PluginInventorySnapshot` 与 `ContributionIndexSnapshot`。投影器遍历已验证 Manifest 的全部 `contributes.<surface>.<group>[]`，未知 kind 也进入不可变索引，但在没有兼容消费者时保持不可激活；每项贡献绑定精确 ref、包摘要和发布者。Portal 物化把该索引与 Module Graph 放入同一密封 RuntimeSpec，Go Catalog、Node Portal Host 和 Browser Kernel 分别复核所有者与已交付模块的精确包摘要。Render Adapter 与 Shell 只保留语义、默认值和本地化，Renderer/Shell Library 候选由索引按 kind、adapter/shell、engine family、UI contract 和 Platform Profile 来源生成；构建期精确版本源码文件及 Shell Manifest 中的重复模块目录已删除。开发 HMR 在同一候选代内从当前 Manifest 重投影活动模块贡献，不再形成“新模块、旧索引”。
-- 2026-08-01（P4）：新增统一 `ActivationPolicy -> ActivationSelection -> ReconciliationPlan` 协议。生产使用精确 Profile/Application 根策略，开发策略只自动选择当前 Inventory 中无歧义的 workspace 候选；两者共用依赖闭包、目标内核校验、摘要与失败语义，后续层不再接收 development 布尔值自行分支。通用 Planner 只比较当前/目标精确制品并生成 activate/replace/deactivate/retain；Backend、Frontend、Runner、Mobile 的注入式 Adapter 分别把动作解释为 rolling/drain、Portal Generation/Host Epoch、Runner App Profile 和 Mobile Bundle Publication。现有 Backend/Frontend 可直接消费具体运行产物；Runner 已可生成并复验 App Profile，尚未建立完整 Mobile 内核，因此当前只交付带精确摘要的 Bundle Plan，不伪装成已经上线的 Mobile 分发器。
+- 2026-08-01（P4）：新增统一 `ActivationPolicy -> ActivationSelection -> ReconciliationPlan` 协议。生产使用精确 Profile/Application 根策略，开发策略只自动选择当前 Inventory 中无歧义的 workspace 候选；两者共用依赖闭包、目标内核校验、摘要与失败语义，后续层不再接收 development 布尔值自行分支。通用 Planner 只比较当前/目标精确制品并生成 activate/replace/deactivate/retain；Backend、Frontend、Desktop、Mobile 的注入式 Adapter 分别把动作解释为 rolling/drain、Portal Generation/Host Epoch、Desktop App Profile 和 Mobile Bundle Publication。现有 Backend/Frontend 可直接消费具体运行产物；Desktop 已可生成并复验 App Profile，尚未建立完整 Mobile 内核，因此当前只交付带精确摘要的 Bundle Plan，不伪装成已经上线的 Mobile 分发器。
 - 2026-08-01（P5）：增加统一生命周期 E2E，连续验证首次发现产生 activate、版本更新产生 rolling replace、目录撤销产生 drain-stop、旧精确版本回退、相同快照重启恢复相同 plan digest、workspace 同 ID 多候选拒绝静默选择，以及 remote.v1 制品保持原 ref/摘要导入 local-test.v1。源码 Controller 原有测试继续验证“先发布新候选、再撤回旧候选”和删除恢复；Portal 单元/治理测试继续验证 Contribution Index 按需选择、未选模块不加载和所有者摘要绑定。
 - 2026-08-01（P5 补充）：Local Plugin Library 与 Seed LKG 都可能持有当前代码之前已经签名的不可变 Manifest v1 制品。v1 Schema 因此继续以 deprecated 只读字段接受旧 Shell `libraries` 描述，保证历史制品可复验；新的 Manifest 不再生成该字段，运行时也不得把它作为模块选择来源，Shell Library 仍只从当前已验证 Inventory/Contribution Index 与 Profile 选择派生。契约升级不得用“修改当前解析器”追溯性地使既有不可变制品失效。

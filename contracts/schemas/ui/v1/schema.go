@@ -1,5 +1,5 @@
 // Package uiv1 defines the serializable UI and interaction contracts shared by
-// Web, Mobile, Runner and Backend. It deliberately contains no renderer API.
+// Web, Mobile, Desktop and Backend. It deliberately contains no renderer API.
 package uiv1
 
 import (
@@ -64,9 +64,9 @@ const (
 type InteractionSurface string
 
 const (
-	SurfaceFrontend    InteractionSurface = "frontend"
-	SurfaceMobile      InteractionSurface = "mobile"
-	SurfaceRunnerLocal InteractionSurface = "runner.local"
+	SurfaceFrontend     InteractionSurface = "frontend"
+	SurfaceMobile       InteractionSurface = "mobile"
+	SurfaceDesktopLocal InteractionSurface = "desktop.local"
 )
 
 type InteractionSource struct {

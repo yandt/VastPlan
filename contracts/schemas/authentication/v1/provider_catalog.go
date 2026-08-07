@@ -14,7 +14,7 @@ type ProviderPurpose string
 const (
 	PurposePortalLogin       ProviderPurpose = "portal-login"
 	PurposeMobileToken       ProviderPurpose = "mobile-token"
-	PurposeRunnerToken       ProviderPurpose = "runner-token"
+	PurposeDesktopToken      ProviderPurpose = "desktop-token"
 	PurposeTokenVerification ProviderPurpose = "token-verification"
 	PurposeDirectory         ProviderPurpose = "directory"
 	PurposeProvisioning      ProviderPurpose = "provisioning"

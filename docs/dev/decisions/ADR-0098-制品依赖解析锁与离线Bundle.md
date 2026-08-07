@@ -6,7 +6,7 @@
 
 ## 背景
 
-当前仓库已能保存不可变、已签名的精确制品，并提供 Catalog 和单调 Publish Journal，但消费方仍需自行选择版本。若 Node Agent、Portal、Runner 和 Mobile 分别实现 `latest` 和依赖选择，同一组输入会因时间、channel 或算法不同产生不同部署，气隙环境也无法重现在线解析结果。
+当前仓库已能保存不可变、已签名的精确制品，并提供 Catalog 和单调 Publish Journal，但消费方仍需自行选择版本。若 Node Agent、Portal、Desktop 和 Mobile 分别实现 `latest` 和依赖选择，同一组输入会因时间、channel 或算法不同产生不同部署，气隙环境也无法重现在线解析结果。
 
 ## 决策
 
@@ -26,7 +26,7 @@
 
 ## 影响
 
-- 正面：Backend、Portal、Runner 和 Mobile 可共用一份精确锁；在线与气隙环境可重现同一输入。
+- 正面：Backend、Portal、Desktop 和 Mobile 可共用一份精确锁；在线与气隙环境可重现同一输入。
 - 正面：仓库保持内容/元数据领域，内核只执行精确验证和安装，不获得包市场逻辑。
 - 代价：需维护确定性回溯、冲突诊断、锁契约和 Bundle 导入验证。
 - 边界：yank/deprecate/revoke、多仓库联合求解、可选依赖和市场排名不在首个实现中，但锁文件保留状态和来源扩展位。

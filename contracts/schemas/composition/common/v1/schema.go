@@ -19,7 +19,7 @@ const (
 
 	KernelBackend  = "backend"
 	KernelFrontend = "frontend"
-	KernelRunner   = "runner"
+	KernelDesktop  = "desktop"
 	KernelMobile   = "mobile"
 
 	OriginPlatformProfile = "platform-profile"
@@ -73,7 +73,7 @@ func ValidateTarget(target Target, expectedKernel string) error {
 
 func ValidateKernel(kernel string) error {
 	switch kernel {
-	case KernelBackend, KernelFrontend, KernelRunner, KernelMobile:
+	case KernelBackend, KernelFrontend, KernelDesktop, KernelMobile:
 		return nil
 	default:
 		return fmt.Errorf("未知组合目标 kernel %q", kernel)

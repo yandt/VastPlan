@@ -5,7 +5,7 @@
 
 ## 背景
 
-Portal 功能插件必须能在 Arco、MUI 以及未来的 Runner/Mobile Renderer 之间复用。Arco 通过 `ConfigProvider.locale` 管理组件文案，MUI 通过 Theme locale 管理组件文案，日期组件可能另有 Provider，RJSF/AJV 又独立产生 Schema 标题和校验消息。若功能插件直接依赖任一框架或 React i18n 库，语言、回退和格式化就会形成多套真相源。
+Portal 功能插件必须能在 Arco、MUI 以及未来的 Desktop/Mobile Renderer 之间复用。Arco 通过 `ConfigProvider.locale` 管理组件文案，MUI 通过 Theme locale 管理组件文案，日期组件可能另有 Provider，RJSF/AJV 又独立产生 Schema 标题和校验消息。若功能插件直接依赖任一框架或 React i18n 库，语言、回退和格式化就会形成多套真相源。
 
 ## 决策
 

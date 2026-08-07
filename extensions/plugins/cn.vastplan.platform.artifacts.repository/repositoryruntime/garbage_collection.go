@@ -118,9 +118,9 @@ func (m *Manager) SweepGarbageCollection(now time.Time) (GCStatus, error) {
 		if !ok {
 			return m.gcStatusLocked(), errors.New("隔离制品生命周期不再允许 GC sweep")
 		}
-		if (containsTarget(entry.Targets, "runner") && !m.active.refs.HasOwnerKind(artifactreference.OwnerRunnerInstall)) ||
+		if (containsTarget(entry.Targets, "desktop") && !m.active.refs.HasOwnerKind(artifactreference.OwnerDesktopInstall)) ||
 			(containsTarget(entry.Targets, "mobile") && !m.active.refs.HasOwnerKind(artifactreference.OwnerMobileInstall)) {
-			return m.gcStatusLocked(), errors.New("Runner 或 Mobile 安装引用源尚未接入，GC sweep 已停止")
+			return m.gcStatusLocked(), errors.New("Desktop 或 Mobile 安装引用源尚未接入，GC sweep 已停止")
 		}
 		if err := m.active.gc.BeginSweep(record.Ref, record.SHA256); err != nil {
 			return m.gcStatusLocked(), err
@@ -172,9 +172,9 @@ func (m *Manager) planGarbageCollectionLocked(now time.Time) GCPlan {
 		if m.active.refs.IsProtected(entry.Ref, entry.SHA256) || m.active.gc.IsRetired(entry.Ref, entry.SHA256) {
 			continue
 		}
-		if containsTarget(entry.Targets, "runner") && !m.active.refs.HasOwnerKind(artifactreference.OwnerRunnerInstall) {
+		if containsTarget(entry.Targets, "desktop") && !m.active.refs.HasOwnerKind(artifactreference.OwnerDesktopInstall) {
 			plan.Ready = false
-			plan.Blockers = appendUniqueGCBlocker(plan.Blockers, GCBlocker{Code: "runner_reference_source_missing", Message: "Runner 安装引用源尚未接入"})
+			plan.Blockers = appendUniqueGCBlocker(plan.Blockers, GCBlocker{Code: "desktop_reference_source_missing", Message: "Desktop 安装引用源尚未接入"})
 			continue
 		}
 		if containsTarget(entry.Targets, "mobile") && !m.active.refs.HasOwnerKind(artifactreference.OwnerMobileInstall) {

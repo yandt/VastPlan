@@ -173,7 +173,7 @@ func TestSchedulerDoesNotTurnAppProfilesIntoServiceAssignments(t *testing.T) {
 	ctx := context.Background()
 	options := testNodeLeaseOptions()
 	options.TenantID = "tenant-a"
-	options.Deployment = "runner-fleet"
+	options.Deployment = "desktop-fleet"
 	lease, err := controlplane.StartNodeLease(ctx, buckets.Nodes, "node-a", map[string]string{"region": "cn"}, options)
 	if err != nil {
 		t.Fatal(err)
@@ -182,7 +182,7 @@ func TestSchedulerDoesNotTurnAppProfilesIntoServiceAssignments(t *testing.T) {
 
 	deployment := deploymentv2.Deployment{
 		Version: 2, Revision: 1,
-		Metadata:    deploymentv1.Metadata{Name: "runner-fleet", Tenant: "tenant-a"},
+		Metadata:    deploymentv1.Metadata{Name: "desktop-fleet", Tenant: "tenant-a"},
 		Units:       []deploymentv2.ServiceUnit{},
 		AppProfiles: []deploymentv2.AppProfileRef{{ID: "collector", Revision: 3, Digest: strings.Repeat("a", 64)}},
 	}

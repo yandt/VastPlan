@@ -26,7 +26,7 @@
       "properties": {
         "backend": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/versionRange" },
         "frontend": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/versionRange" },
-        "runner": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/versionRange" },
+        "desktop": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/versionRange" },
         "mobile": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/versionRange" }
       }
     },
@@ -77,7 +77,7 @@
         "backend": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/entryPath" },
         "frontend": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/entryPath" },
         "frontendServer": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/entryPath" },
-        "runner": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/entryPath" },
+        "desktop": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/entryPath" },
         "mobile": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/entryPath" }
       }
     },
@@ -90,7 +90,7 @@
       "properties": {
         "backend": { "$ref": "#/$defs/backendContributes" },
         "frontend": { "$ref": "#/$defs/frontendContributes" },
-        "runner": { "$ref": "#/$defs/runnerContributes" },
+        "desktop": { "$ref": "#/$defs/desktopContributes" },
         "mobile": { "$ref": "#/$defs/mobileContributes" }
       }
     }
@@ -107,7 +107,7 @@
       "required": ["id", "surface", "contract", "kind", "dispatch", "descriptorSchema"],
       "properties": {
         "id": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
-        "surface": { "enum": ["backend", "frontend", "runner", "mobile"] },
+        "surface": { "enum": ["backend", "frontend", "desktop", "mobile"] },
         "contract": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/semver" },
         "kind": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 160 },
         "dispatch": { "enum": ["single", "select", "fanout", "mount"] },
@@ -133,7 +133,7 @@
       "required": ["point", "surface", "contract", "id", "descriptor"],
       "properties": {
         "point": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
-        "surface": { "enum": ["backend", "frontend", "runner", "mobile"] },
+        "surface": { "enum": ["backend", "frontend", "desktop", "mobile"] },
         "contract": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/versionRange" },
         "id": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
         "order": { "type": "integer", "minimum": -1000000, "maximum": 1000000 },
@@ -786,7 +786,7 @@
         }
       ]
     },
-    "runnerCapability": {
+    "desktopCapability": {
       "allOf": [
         { "$ref": "#/$defs/baseContribution" },
         {
@@ -827,7 +827,7 @@
             "protocol": { "const": "authentication.method.v1" },
             "purposes": {
               "type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true,
-              "items": { "enum": ["portal-login", "mobile-token", "runner-token", "token-verification", "directory", "provisioning"] }
+              "items": { "enum": ["portal-login", "mobile-token", "desktop-token", "token-verification", "directory", "provisioning"] }
             },
             "methods": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "$ref": "#/$defs/authenticationProviderMethod" } },
             "subjectNamespace": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 160 },
@@ -871,7 +871,7 @@
         "permissionCheckers": { "type": "array", "items": { "$ref": "#/$defs/permissionChecker" } },
         "eventSinks": { "type": "array", "items": { "$ref": "#/$defs/eventSink" } },
         "hooks": { "type": "array", "items": { "$ref": "#/$defs/hook" } },
-        "runnerCapabilities": { "type": "array", "items": { "$ref": "#/$defs/runnerCapability" } },
+        "desktopCapabilities": { "type": "array", "items": { "$ref": "#/$defs/desktopCapability" } },
         "authenticationProviders": { "type": "array", "items": { "$ref": "#/$defs/authenticationProvider" } },
         "configurationScopedResolvers": { "type": "array", "maxItems": 1, "items": { "$ref": "#/$defs/configurationScopedResolver" } },
         "dataModels": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/dataModelReference" } },
@@ -1166,16 +1166,16 @@
         "uiContract": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/versionRange" }
       }
     },
-    "runnerContributes": {
+    "desktopContributes": {
       "type": "object", "minProperties": 1, "additionalProperties": false,
       "properties": {
         "scripts": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
         "workflows": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
-        "interactions": { "type": "array", "items": { "$ref": "#/$defs/runnerInteractionContribution" } },
+        "interactions": { "type": "array", "items": { "$ref": "#/$defs/desktopInteractionContribution" } },
         "runtimeRequirements": { "$ref": "#/$defs/stringList" }
       }
     },
-    "runnerInteractionContribution": {
+    "desktopInteractionContribution": {
       "type": "object", "additionalProperties": false,
       "required": ["id", "interactionContract", "kinds", "allowedSurfaces"],
       "properties": {
@@ -1189,7 +1189,7 @@
         },
         "allowedSurfaces": {
           "type": "array", "minItems": 1, "uniqueItems": true,
-          "items": { "enum": ["frontend", "mobile", "runner.local"] }
+          "items": { "enum": ["frontend", "mobile", "desktop.local"] }
         },
         "experience": { "type": "string", "minLength": 1, "maxLength": 160 }
       }

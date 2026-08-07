@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.interaction.broker",
   "name": "VastPlan Interaction Broker",
-  "description": "通过声明式 Record Store 持久化、授权并协调跨 Portal、Mobile 与 Runner 的人机交互",
+  "description": "通过声明式 Record Store 持久化、授权并协调跨 Portal、Mobile 与 Desktop 的人机交互",
   "version": "0.2.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",

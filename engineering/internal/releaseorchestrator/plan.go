@@ -219,7 +219,7 @@ func BuildReleasePlanWithBaseline(repositoryRoot string, spec ReleaseSpec, basel
 		plugin := workspace.Plugins[id]
 		request := requests[id]
 		faces := make([]string, 0, len(plugin.Manifest.Entry))
-		for _, face := range []string{"backend", "frontend", "runner", "mobile"} {
+		for _, face := range []string{"backend", "frontend", "desktop", "mobile"} {
 			if strings.TrimSpace(plugin.Manifest.Entry[face]) != "" {
 				faces = append(faces, face)
 			}

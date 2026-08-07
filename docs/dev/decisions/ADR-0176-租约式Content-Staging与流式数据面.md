@@ -14,7 +14,7 @@ Text、Blob 和 Files Adapter 都使用 `ContentFiles` 清单，但真实文件�
 
 1. 建立中立控制契约 `version.staging.v1`。控制面只有 `beginUpload/uploadStatus/renewUpload/completeUpload/abortUpload`，不提供 `writeChunk`，也不携带文件字节、物理路径、Provider、endpoint、凭证、bearer token 或上传 URL。
 2. `beginUpload` 只能由可信 Workspace 在解析 Environment/Resource 后发起。请求绑定精确 Workspace Session revision、Environment digest、Resource、逻辑相对路径、规范 mediaType、预期 SHA-256、大小和 Lease；tenant 与 actor 只来自可信 `CallContext`。
-3. 文件字节使用独立流式数据面。浏览器经过同站认证 BFF，Backend/Runner 经过可信 Host streaming API；两者都以原调用身份和 Upload Lease ID 鉴权。插件不得监听任意上传端口或自带数据面 token。
+3. 文件字节使用独立流式数据面。浏览器经过同站认证 BFF，Backend/Desktop 经过可信 Host streaming API；两者都以原调用身份和 Upload Lease ID 鉴权。插件不得监听任意上传端口或自带数据面 token。
 4. Lease 状态为 `Pending/Uploading/Verifying/Ready/Rejected/Aborted/Expired`。revision 只围栏 renew、complete、abort 等控制转换，不按 chunk 增长；流式进度由 `receivedSize` 投影。complete 封闭输入并触发摘要、大小和安全准入，只有 Ready 才返回精确 ContentDescriptor。
 5. Files Manifest 的每个 FileEntry 固定包含逻辑 path、SHA-256、size、mode 和规范 mediaType。它不保存 Upload Lease ID；同样内容在版本历史中的身份不受某次临时上传会话影响。
 6. Workspace 接受 Files Manifest 前必须确认每个内容均属于同 tenant、Environment/Resource/Session 且已 Ready，摘要、大小和 mediaType 完全一致。文件名和 mediaType 只是声明，不能替代内容检测、安全扫描或压缩炸弹检查。
@@ -48,7 +48,7 @@ Go 适合首个 Manager/File Provider：流式 I/O、SHA-256、文件权限、�
 1. **P2.4a（已完成）**：冻结 `version.staging.v1` Go DTO、JSON Schema、严格 Wire、错误码、Lease 状态和 FileEntry mediaType。
 2. **P2.4b（已完成）**：实现 Go Staging Manager、本地内容寻址 File Provider、`io.Reader` 流式写入、原子完成、启动/周期租约回收和文件/tenant/服务/并发容量配额。控制面只接受可信 Workspace，begin 通过 `CallContext.idempotencyKey` 防止响应丢失后重复预留；本地 Provider 使用 tenant 哈希分区、私有权限、严格持久状态、CAS 硬链接发布和 Ready 启动复核。内置 Admission 只提供完整性基线，不冒充恶意软件扫描。
 3. **P2.4c**：Workspace 接入 begin/complete/manifest 验证、临时保护转版本引用 outbox，并实现 Text/Blob/Files Adapter。
-4. **P2.4d**：增加浏览器 BFF 与 Backend/Runner streaming SDK、对象存储 Provider、安全扫描准入和跨节点故障矩阵。
+4. **P2.4d**：增加浏览器 BFF 与 Backend/Desktop streaming SDK、对象存储 Provider、安全扫描准入和跨节点故障矩阵。
 
 ## 实施记录：P2.4c1（2026-07-31）
 
@@ -80,10 +80,10 @@ P2.4d 按传输入口、可信客户端直连、存储 Provider 和安全准入�
 
 上传入口固定为 `PUT /v1/uploads/{uploadId}?vp_ticket=...`。它要求 TLS，跨 Origin 浏览器只允许服务配置中的精确 Origin 白名单并以最小 `OPTIONS` 预检响应放行 `PUT/Content-Type`，不使用通配 CORS。入口按 Upload Lease 到期时间约束流持续时间，直接把请求体交给 Manager 的有界 `io.Reader` 单一写入边界，不设置会误杀大文件的固定 30 秒响应超时。声明 Content-Length 时必须精确等于 begin 中的 expectedSize；chunked 流超量会进入可审计 `Rejected/size_mismatch`。上传成功只表示字节流已接收，调用方仍必须通过 Workspace 执行 `completeContentUpload`，由既有摘要、大小与 Admission 流程决定 Ready。
 
-EndpointLease 在任一成功的可信 Staging 控制调用后注册或续租，并按显式 `tenant → Exposure` 绑定分别维护，不能让 leader 的首个租户垄断单一 Lease。未配置绑定或 API Exposure 不可用时，控制面上传 Lease 仍可建立，但 Ticket 签发失败关闭，不回退为公开静态 token 或绕过认证的端口。本阶段只声明 `ticket-redirect`，不谎称已支持 Backend/Runner 的 `private-direct`、对象存储 Provider、企业恶意内容/DLP 扫描或跨节点传输接管；这些属于 P2.4d2 之后的独立交付。
+EndpointLease 在任一成功的可信 Staging 控制调用后注册或续租，并按显式 `tenant → Exposure` 绑定分别维护，不能让 leader 的首个租户垄断单一 Lease。未配置绑定或 API Exposure 不可用时，控制面上传 Lease 仍可建立，但 Ticket 签发失败关闭，不回退为公开静态 token 或绕过认证的端口。本阶段只声明 `ticket-redirect`，不谎称已支持 Backend/Desktop 的 `private-direct`、对象存储 Provider、企业恶意内容/DLP 扫描或跨节点传输接管；这些属于 P2.4d2 之后的独立交付。
 
 ## 实施记录：P2.4d2（2026-07-31）
 
-Backend/Runner 不复用浏览器 CORS 入口，也不把大字节塞入 Capability Bus 或共享 PluginHost 通道。API Exposure 新增受控 `issuePrivateDataPlaneTicket`：只接受 Plugin、Runner 或 System 工作负载，并强制同时携带可信 Principal；Exposure 权限、`private-direct` 模式和健康 EndpointLease 全部满足后，才向精确实例安装 30 秒一次性 Ticket。无用户委托的后台工作负载失败关闭，未来必须增加单独的 workload allowlist，不能自动继承用户权限。
+Backend/Desktop 不复用浏览器 CORS 入口，也不把大字节塞入 Capability Bus 或共享 PluginHost 通道。API Exposure 新增受控 `issuePrivateDataPlaneTicket`：只接受 Plugin、Desktop 或 System 工作负载，并强制同时携带可信 Principal；Exposure 权限、`private-direct` 模式和健康 EndpointLease 全部满足后，才向精确实例安装 30 秒一次性 Ticket。无用户委托的后台工作负载失败关闭，未来必须增加单独的 workload allowlist，不能自动继承用户权限。
 
-Content Staging 可选启动第二个 TLS 1.3 mTLS 监听，与浏览器监听使用不同 instance ID 和 EndpointLease。客户端证书必须由配置 CA 验证且 URI SAN 命中显式 SPIFFE 前缀；Ticket 还绑定 tenant、用户、模式、实例、方法、Upload ID 和摘要。Go `dataplane` SDK 只依赖最小 Capability Caller 接口，因此插件 Host、Backend 与 Runner 可共用；它负责申请 Private Grant、强制客户端 mTLS 并流式 PUT，不暴露静态共享 token。
+Content Staging 可选启动第二个 TLS 1.3 mTLS 监听，与浏览器监听使用不同 instance ID 和 EndpointLease。客户端证书必须由配置 CA 验证且 URI SAN 命中显式 SPIFFE 前缀；Ticket 还绑定 tenant、用户、模式、实例、方法、Upload ID 和摘要。Go `dataplane` SDK 只依赖最小 Capability Caller 接口，因此插件 Host、Backend 与 Desktop 可共用；它负责申请 Private Grant、强制客户端 mTLS 并流式 PUT，不暴露静态共享 token。

@@ -138,8 +138,8 @@ func validateResolveRequest(current uint64, request pluginv1.ArtifactResolveRequ
 	if len(request.Roots) == 0 || len(request.Roots) > 256 {
 		return 0, nil, nil, nil, nil, nil, resolutionError("REQUEST_INVALID", "根依赖数量必须为 1..256")
 	}
-	if request.Target != "backend" && request.Target != "frontend" && request.Target != "runner" && request.Target != "mobile" {
-		return 0, nil, nil, nil, nil, nil, resolutionError("REQUEST_INVALID", "目标内核必须为 backend/frontend/runner/mobile")
+	if request.Target != "backend" && request.Target != "frontend" && request.Target != "desktop" && request.Target != "mobile" {
+		return 0, nil, nil, nil, nil, nil, resolutionError("REQUEST_INVALID", "目标内核必须为 backend/frontend/desktop/mobile")
 	}
 	kernelVersion, err := semver.NewVersion(request.KernelVersion)
 	if err != nil {

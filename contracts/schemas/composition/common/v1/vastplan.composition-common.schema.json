@@ -6,7 +6,7 @@
     "version": { "const": 1 },
     "revision": { "type": "integer", "minimum": 1 },
     "compositionId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$" },
-    "kernel": { "enum": ["backend", "frontend", "runner", "mobile"] },
+    "kernel": { "enum": ["backend", "frontend", "desktop", "mobile"] },
     "target": {
       "type": "object",
       "additionalProperties": false,

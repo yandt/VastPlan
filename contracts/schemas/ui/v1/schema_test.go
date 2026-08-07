@@ -45,7 +45,7 @@ func TestValidateFormData(t *testing.T) {
 func TestValidateInteractionRequest(t *testing.T) {
 	request := InteractionRequest{
 		ID: "interaction_20260718_0001", ContractVersion: InteractionContractVersion, Kind: InteractionForm,
-		Source: InteractionSource{Capability: "platform.runner.deploy", WorkflowRunID: "run-1"}, TenantID: "acme",
+		Source: InteractionSource{Capability: "platform.desktop.deploy", WorkflowRunID: "run-1"}, TenantID: "acme",
 		EligibleSubjects: []string{"user:alice"}, AllowedSurfaces: []InteractionSurface{SurfaceFrontend, SurfaceMobile},
 		ExpiresAt: time.Now().Add(time.Minute), Form: formPointer(validForm()),
 	}

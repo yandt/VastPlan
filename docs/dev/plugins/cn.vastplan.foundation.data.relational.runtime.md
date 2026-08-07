@@ -59,7 +59,7 @@ Kernel 只允许当前认证会话调用，并只为首方 Database Runtime、�
 
 connection-manager 以持久化 outbox 发布完整的非敏感 `ConnectionSpec` 和托管 CredentialRef。queue 路由的一次主动发布只保证一个 Runtime 副本收敛；其他副本在首次收到指定 revision 的执行请求时，反向调用受限 `platform.database/resolveRuntime` 并幂等激活本地池。Runtime 对成功确认只缓存 1 秒，并按 tenant + connection 合并并发验证；管理面删除或 revision 不一致会在该有界 lease 内触发本副本所有 project 池排空，未收到主动 retire 的副本不会无限继续服务。管理面不可达且 lease 已过期时 fail-closed。
 
-用户不能直接调用 SQL。插件、Agent 和 Runner 除可信 caller 外，还必须在宿主投影上下文中持有名为 `database.connection/<resourceId>`、scope 为 tenant/project 的连接 grant；Runtime 不接受 payload 自报授权。SYSTEM 调用仅用于可信平台内部执行。
+用户不能直接调用 SQL。插件、Agent 和 Desktop 除可信 caller 外，还必须在宿主投影上下文中持有名为 `database.connection/<resourceId>`、scope 为 tenant/project 的连接 grant；Runtime 不接受 payload 自报授权。SYSTEM 调用仅用于可信平台内部执行。
 
 ## 事务亲和与故障语义
 

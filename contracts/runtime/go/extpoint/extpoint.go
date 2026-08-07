@@ -18,7 +18,7 @@ const (
 	PermissionChecker      = "permission.checker"
 	EventSink              = "event.sink"
 	Hook                   = "hook"
-	RunnerCapability       = "runner.capability"
+	DesktopCapability      = "desktop.capability"
 	AuthenticationProvider = "authentication.provider"
 	// ConfigurationController is the plugin-owned, language-neutral control
 	// port for service-scoped hot configuration. Its capability is an opaque,
@@ -45,7 +45,7 @@ var backendPluginPoints = []string{
 	PermissionChecker,
 	EventSink,
 	Hook,
-	RunnerCapability,
+	DesktopCapability,
 	AuthenticationProvider,
 	ConfigurationController,
 	ConfigurationResourceController,

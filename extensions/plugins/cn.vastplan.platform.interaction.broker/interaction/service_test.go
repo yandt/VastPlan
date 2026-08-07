@@ -15,7 +15,7 @@ func TestService_CompetesForOneTerminalResponseAndPersists(t *testing.T) {
 	now := time.Date(2026, 7, 18, 9, 0, 0, 0, time.UTC)
 	service, repository := newTestWorkflow()
 	service.service.now = func() time.Time { return now }
-	source := interactionapi.Subject{ID: "cn.vastplan.runner.workflow", TenantID: "tenant-a"}
+	source := interactionapi.Subject{ID: "cn.vastplan.desktop.workflow", TenantID: "tenant-a"}
 	alice := interactionapi.Subject{ID: "alice", TenantID: "tenant-a", Roles: []string{"approver"}}
 	bob := interactionapi.Subject{ID: "bob", TenantID: "tenant-a", Roles: []string{"approver"}}
 	request := testRequest(now)
@@ -58,7 +58,7 @@ func TestService_RejectsCrossTenantAndSecretPlaintext(t *testing.T) {
 	now := time.Date(2026, 7, 18, 9, 0, 0, 0, time.UTC)
 	service, _ := newTestWorkflow()
 	service.service.now = func() time.Time { return now }
-	source := interactionapi.Subject{ID: "cn.vastplan.runner.workflow", TenantID: "tenant-a"}
+	source := interactionapi.Subject{ID: "cn.vastplan.desktop.workflow", TenantID: "tenant-a"}
 	alice := interactionapi.Subject{ID: "alice", TenantID: "tenant-a", Roles: []string{"approver"}}
 	request := testRequest(now)
 	if _, err := service.Open(context.Background(), source, request); err != nil {
@@ -134,7 +134,7 @@ func TestService_ExpiresFailClosed(t *testing.T) {
 	now := time.Date(2026, 7, 18, 9, 0, 0, 0, time.UTC)
 	service, repository := newTestWorkflow()
 	service.service.now = func() time.Time { return now }
-	source := interactionapi.Subject{ID: "cn.vastplan.runner.workflow", TenantID: "tenant-a"}
+	source := interactionapi.Subject{ID: "cn.vastplan.desktop.workflow", TenantID: "tenant-a"}
 	alice := interactionapi.Subject{ID: "alice", TenantID: "tenant-a", Roles: []string{"approver"}}
 	request := testRequest(now)
 	if _, err := service.Open(context.Background(), source, request); err != nil {
@@ -156,7 +156,7 @@ func TestService_WatchResumesFromCursorAfterRendererResponse(t *testing.T) {
 	now := time.Date(2026, 7, 18, 9, 0, 0, 0, time.UTC)
 	service, repository := newTestWorkflow()
 	service.service.now = func() time.Time { return now }
-	source := interactionapi.Subject{ID: "cn.vastplan.runner.workflow", TenantID: "tenant-a"}
+	source := interactionapi.Subject{ID: "cn.vastplan.desktop.workflow", TenantID: "tenant-a"}
 	alice := interactionapi.Subject{ID: "alice", TenantID: "tenant-a", Roles: []string{"approver"}}
 	created, err := service.Open(context.Background(), source, testRequest(now))
 	if err != nil {
@@ -202,7 +202,7 @@ func testRequest(now time.Time) uiv1.InteractionRequest {
 		ID:              "interaction-0001",
 		ContractVersion: uiv1.InteractionContractVersion,
 		Kind:            uiv1.InteractionForm,
-		Source:          uiv1.InteractionSource{Capability: "cn.vastplan.runner.workflow", Operation: "run"},
+		Source:          uiv1.InteractionSource{Capability: "cn.vastplan.desktop.workflow", Operation: "run"},
 		TenantID:        "tenant-a",
 		EligibleSubjects: []string{
 			"role:approver",

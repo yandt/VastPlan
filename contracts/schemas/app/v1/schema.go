@@ -1,4 +1,4 @@
-// Package appv1 defines the immutable Runner App Profile contract.
+// Package appv1 defines the immutable Desktop App Profile contract.
 //
 // App Profiles describe prebuilt client applications. They are referenced by
 // deployment/v2, but deliberately do not enter the backend service scheduler.

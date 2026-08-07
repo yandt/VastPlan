@@ -16,7 +16,7 @@ describe("plugin inventory contract", () => {
   });
 
   it("parses the same target-neutral reconciliation plan for every kernel", () => {
-    for (const target of ["backend", "frontend", "runner", "mobile"] as const) {
+    for (const target of ["backend", "frontend", "desktop", "mobile"] as const) {
       expect(parsePluginReconciliationPlan({ schemaVersion: 1, target, generation: 1, selectionDigest: digest, contributionDigest: digest, digest, actions: [{ pluginId: "cn.vastplan.test", operation: "activate", strategy: `${target}.test` }] }).target).toBe(target);
     }
   });
