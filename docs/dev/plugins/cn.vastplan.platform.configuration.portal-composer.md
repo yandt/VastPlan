@@ -22,7 +22,7 @@
 
 静态 `portal-platform-catalog.json` 仅为首个 Portal WorkingCopy 提供种子配置，不再形成可在线编辑的 Platform Profile 或 PortalBinding。治理读取会返回可信 `creationTemplate`，因此租户尚无 Portal 时也能创建第一条记录；空上线历史统一编码为 `[]`。内核 Recovery Baseline 继续独立于 Portal，确保错误配置不能破坏最小管理与恢复入口。
 
-管理中心只注册 `/settings/portals` 一个 Workbench Collection。一行代表一个 Portal；编辑表单一次修改完整配置，版本历史、上线历史、审计和完整配置通过该行的子视图打开。页面顶部直接使用无标题、无装饰外框的响应式两列 Descriptions 摘要，避免重复说明当前页面语境；独立 Profile、Binding 和 Activation 菜单及浏览器 API 已删除。
+管理中心只注册 `/settings/portals` 一个 Workbench Collection。一行代表一个 Portal；编辑表单一次修改完整配置，版本历史、上线历史、审计和完整配置通过该行的子视图打开。页面顶部直接使用无标题、无装饰外框的响应式两列 Descriptions 摘要，避免重复说明当前页面语境；独立 Profile、Binding 和 Activation 菜单及浏览器 API 已删除。访问权限字段通过当前 Portal 绑定的 `platform.authorization` 服务读取已验证、可分配的权限目录，动态生成权限代码选项；表单打开时校验既有值，持久化前重新读取目录并拒绝已退役、不存在或不可分配的权限代码，不允许退回自由文本输入。
 
 可信 BFF API：
 

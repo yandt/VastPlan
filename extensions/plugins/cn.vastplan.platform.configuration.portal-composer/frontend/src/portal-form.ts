@@ -4,6 +4,7 @@ import { jsonSchemaDialect, message, type FormSchema, type JSONValue } from "@va
 const namespace = "cn.vastplan.platform.configuration.portal-composer";
 const rendererChoices = [{ const: "antd", title: "Ant Design" }] as const;
 type KnownRenderer = (typeof rendererChoices)[number]["const"];
+export interface PortalPermissionChoice { readonly code: string; readonly title: string }
 
 export const portalConfigurationSchema: FormSchema = {
   id: "portal-configuration.v2",
@@ -17,7 +18,13 @@ export const portalConfigurationSchema: FormSchema = {
       portalId: { type: "string", title: "Portal ID", pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$" },
       route: { type: "string", title: "访问路径", pattern: "^/" },
       domains: { type: "array", title: "绑定域名", uniqueItems: true, items: { type: "string", minLength: 1 } },
-      audience: { type: "array", title: "目标受众", uniqueItems: true, items: { type: "string", minLength: 1 } },
+      audience: {
+        type: "array",
+        title: "访问权限",
+        description: "限制可进入此 Portal 的权限代码；用户拥有任意一项即可访问，留空则不额外限制。",
+        uniqueItems: true,
+        items: { type: "string", minLength: 1 },
+      },
       defaultRenderer: { type: "string", title: "默认 UI 框架", oneOf: rendererChoices },
       allowedRenderers: { type: "array", title: "允许的 UI 框架", minItems: 1, uniqueItems: true, items: { type: "string", oneOf: rendererChoices } },
       userSelectableRenderer: { type: "boolean", title: "允许用户切换 UI 框架" },
@@ -54,6 +61,8 @@ export const portalConfigurationSchema: FormSchema = {
   localization: {
     "/properties/portalId/title": message(namespace, "form.portalId", "Portal ID"),
     "/properties/route/title": message(namespace, "form.route", "访问路径"),
+    "/properties/audience/title": message(namespace, "form.audience", "访问权限"),
+    "/properties/audience/description": message(namespace, "form.audience.description", "限制可进入此 Portal 的权限代码；用户拥有任意一项即可访问，留空则不额外限制。"),
     "/properties/defaultRenderer/title": message(namespace, "form.renderer", "默认 UI 框架"),
     "/properties/defaultTemplate/title": message(namespace, "form.layout", "默认布局"),
     "/properties/navigationOverrides/title": message(namespace, "form.navigationOverrides", "导航显示覆盖"),
@@ -61,6 +70,34 @@ export const portalConfigurationSchema: FormSchema = {
     "/properties/services/title": message(namespace, "form.services", "管理服务绑定"),
   },
 };
+
+export function portalConfigurationSchemaWithPermissions(permissions: readonly PortalPermissionChoice[]): FormSchema {
+  const root = portalConfigurationSchema.schema;
+  const properties = objectValue(root.properties);
+  const audience = objectValue(properties.audience);
+  const items = objectValue(audience.items);
+  const choices = [...new Map(permissions
+    .filter((permission) => permission.code.trim() !== "")
+    .map((permission) => [permission.code, permission] as const)).values()]
+    .sort((left, right) => left.code.localeCompare(right.code))
+    .map((permission) => ({ const: permission.code, title: permission.title.trim() === "" ? permission.code : `${permission.title} (${permission.code})` }));
+  return {
+    ...portalConfigurationSchema,
+    schema: { ...root, properties: { ...properties, audience: { ...audience, items: { ...items, oneOf: choices } } } },
+    uiSchema: {
+      ...portalConfigurationSchema.uiSchema,
+      audience: { items: { "ui:title": "", "ui:widget": "select" } },
+    },
+  };
+}
+
+function objectValue(value: JSONValue | undefined): Readonly<Record<string, JSONValue>> {
+  return isJSONObject(value) ? value : {};
+}
+
+function isJSONObject(value: JSONValue | undefined): value is Readonly<Record<string, JSONValue>> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 export function configurationToForm(portalId: string, configuration: PortalConfiguration): Record<string, unknown> {
   const template = configuration.platform.shell.config.defaultTemplate;

@@ -140,6 +140,8 @@ function PresentedObject({ presentation, activeSection, onSectionChange, ...prop
   const size = useComponentSize();
   const compactRoot = props.fieldPathId.path.length === 0 && presentation?.layout === "compact";
   if (props.fieldPathId.path.length !== 0) {
+    const arrayItemObject = typeof props.fieldPathId.path[props.fieldPathId.path.length - 1] === "number";
+    const generatedArrayItemTitle = arrayItemObject && props.schema.title === undefined;
     const rootField = String(props.fieldPathId.path[0] ?? "");
     const directPointer = formPropertyPointer([], rootField);
     const owningSection = presentation?.navigation === "sections" && props.fieldPathId.path.length === 1
@@ -151,7 +153,7 @@ function PresentedObject({ presentation, activeSection, onSectionChange, ...prop
       const span = formFieldSpan(presentation, pointer, columns);
       return <div key={property.name} style={owningSection === undefined ? undefined : { gridColumn: `span ${span}` }}>{property.content}</div>;
     });
-    return <section className="vp-antd-form-object">{owningSection !== undefined || props.title === "" ? null : <Typography.Title level={5}>{props.title}</Typography.Title>}{props.description}{owningSection === undefined ? properties : <div className={formGridClassName} style={formGridStyle(presentation, owningSection)}>{properties}</div>}</section>;
+    return <section className={`vp-antd-form-object${arrayItemObject ? " vp-antd-form-array-object" : ""}`}>{owningSection !== undefined || props.title === "" || generatedArrayItemTitle ? null : <Typography.Title level={5}>{props.title}</Typography.Title>}{props.description}{owningSection === undefined ? properties : <div className={formGridClassName} style={formGridStyle(presentation, owningSection)}>{properties}</div>}</section>;
   }
   if (presentation?.sections === undefined || presentation.sections.length === 0) {
     const columns = formGridColumns(presentation);

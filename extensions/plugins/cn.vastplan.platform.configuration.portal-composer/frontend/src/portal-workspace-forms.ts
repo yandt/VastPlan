@@ -1,10 +1,14 @@
 import { type PortalApprovalEvidenceRequirement, type PortalConfiguration, type PortalControlClient } from "@vastplan/ui-primitives";
-import { jsonSchemaDialect, type FormPresentation, type FormSchema, type JSONValue, type WorkbenchFormDefinition } from "@vastplan/workbench-sdk";
-import { buildPortalConfiguration, configurationToForm, portalConfigurationSchema } from "./portal-form";
+import type { PlatformAdminClient } from "@vastplan/platform-admin";
+import { jsonSchemaDialect, message, type FormPresentation, type FormSchema, type JSONValue, type WorkbenchFormDefinition, type WorkbenchFormFieldErrors } from "@vastplan/workbench-sdk";
+import { buildPortalConfiguration, configurationToForm, type PortalPermissionChoice, portalConfigurationSchema, portalConfigurationSchemaWithPermissions } from "./portal-form";
 import type { PortalRow } from "./portal-model";
 
-export function portalForms(client: PortalControlClient): WorkbenchFormDefinition<PortalRow>[] {
-  return [configurationForm(client, "create"), configurationForm(client, "edit"), configurationForm(client, "new-working-copy"), approvalReviewForm(client), restoreForm(client)];
+const namespace = "cn.vastplan.platform.configuration.portal-composer";
+export type PortalPermissionCatalogClient = Pick<PlatformAdminClient, "getAuthorizationPolicy">;
+
+export function portalForms(client: PortalControlClient, permissionCatalog: PortalPermissionCatalogClient): WorkbenchFormDefinition<PortalRow>[] {
+  return [configurationForm(client, permissionCatalog, "create"), configurationForm(client, permissionCatalog, "edit"), configurationForm(client, permissionCatalog, "new-working-copy"), approvalReviewForm(client), restoreForm(client)];
 }
 
 function approvalReviewForm(client: PortalControlClient): WorkbenchFormDefinition<PortalRow> {
@@ -76,7 +80,7 @@ function approvalEvidenceDefinition(requirements: readonly PortalApprovalEvidenc
   };
 }
 
-function configurationForm(client: PortalControlClient, kind: "create" | "edit" | "new-working-copy"): WorkbenchFormDefinition<PortalRow> {
+function configurationForm(client: PortalControlClient, permissionCatalog: PortalPermissionCatalogClient, kind: "create" | "edit" | "new-working-copy"): WorkbenchFormDefinition<PortalRow> {
   return {
     id: kind,
     schema: portalConfigurationSchema,
@@ -93,9 +97,26 @@ function configurationForm(client: PortalControlClient, kind: "create" | "edit" 
     },
     async prepare(selected, signal) {
       const row = selected[0];
-      if (row !== undefined) return { initialValue: configurationToForm(row.id, row.configuration) };
-      const source = await creationTemplate(client, signal);
-      return { initialValue: { ...configurationToForm("", source), portalId: "", route: "/" } };
+      const [snapshot, source] = await Promise.all([
+        permissionCatalogSnapshot(permissionCatalog, signal),
+        row === undefined ? creationTemplate(client, signal) : Promise.resolve(undefined),
+      ]);
+      const initialValue = row === undefined
+        ? { ...configurationToForm("", source!), portalId: "", route: "/" }
+        : configurationToForm(row.id, row.configuration);
+      return {
+        schema: portalConfigurationSchemaWithPermissions(snapshot.permissions),
+        context: { permissionCatalogDigest: snapshot.digest, permissionCodes: snapshot.permissions.map((permission) => permission.code) },
+        initialValue,
+      };
+    },
+    async validate({ value, context }) {
+      return audiencePermissionErrors(value.audience, stringValues(context.permissionCodes));
+    },
+    async beforeSubmit({ value }, signal) {
+      const snapshot = await permissionCatalogSnapshot(permissionCatalog, signal);
+      const fieldErrors = audiencePermissionErrors(value.audience, snapshot.permissions.map((permission) => permission.code));
+      return Object.keys(fieldErrors).length === 0 ? undefined : { fieldErrors };
     },
     async submit({ value, selected }) {
       const row = selected[0];
@@ -108,6 +129,29 @@ function configurationForm(client: PortalControlClient, kind: "create" | "edit" 
       else if (row !== undefined) await client.savePortalWorkingCopy(row.id, row.workingRevision, configuration);
     },
   };
+}
+
+async function permissionCatalogSnapshot(client: PortalPermissionCatalogClient, signal: AbortSignal): Promise<{ digest: string; permissions: PortalPermissionChoice[] }> {
+  const state = await client.getAuthorizationPolicy();
+  if (signal.aborted) throw new DOMException("Permission catalog request cancelled", "AbortError");
+  const permissions = [...new Map(state.catalog.permissions
+    .filter((permission) => permission.assignable === true && permission.code.trim() !== "")
+    .map((permission) => [permission.code, { code: permission.code, title: permission.title } satisfies PortalPermissionChoice] as const)).values()]
+    .sort((left, right) => left.code.localeCompare(right.code));
+  return { digest: state.catalog.digest, permissions };
+}
+
+function audiencePermissionErrors(value: unknown, available: readonly string[]): WorkbenchFormFieldErrors {
+  const known = new Set(available);
+  const selected = stringValues(value).filter((candidate) => candidate !== "");
+  const missing = [...new Set(selected.filter((permission) => !known.has(permission)))].sort();
+  return missing.length === 0 ? {} : {
+    "/audience": message(namespace, "form.audience.missing", "以下访问权限已不存在或不可分配：{permissions}", { permissions: missing.join("、") }),
+  };
+}
+
+function stringValues(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((candidate): candidate is string => typeof candidate === "string") : [];
 }
 
 const restorePlaceholder: FormSchema = {

@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
+import type { AuthorizationPermission, AuthorizationPolicyState, PlatformAdminClient } from "@vastplan/platform-admin";
 import { PortalControlClient, PortalControlError, type Portal, type PortalConfiguration } from "@vastplan/ui-primitives";
 import { buildPortalConfiguration, createPortalPage, portalConfigurationSchema } from "./index";
 import { toPortalRow } from "./portal-model";
 
 describe("Portal aggregate workspace", () => {
   it("registers one Portal page instead of four independent governance domains", () => {
-    const page = createPortalPage(new PortalControlClient({ fetch: async () => response({ portals: [] }) }));
+    const page = createPortalPage(new PortalControlClient({ fetch: async () => response({ portals: [] }) }), permissionCatalog());
     expect(page.path).toBe("/settings/portals");
     expect(page.pageActions?.map((action) => action.id)).toEqual(["portal.create"]);
     expect(page.collection.actions?.map((action) => action.id)).toEqual(expect.arrayContaining([
@@ -21,6 +22,7 @@ describe("Portal aggregate workspace", () => {
   it("edits platform, application and services as one data-driven configuration", () => {
     const properties = portalConfigurationSchema.schema.properties as Record<string, unknown>;
     expect(Object.keys(properties)).toEqual(expect.arrayContaining(["defaultRenderer", "defaultTemplate", "navigationOverrides", "applicationPlugins", "services"]));
+    expect(properties.audience).toMatchObject({ title: "访问权限", description: expect.stringContaining("权限代码") });
     expect(portalConfigurationSchema.uiSchema).toMatchObject({ domains: { items: { "ui:title": "" } }, audience: { items: { "ui:title": "" } } });
     const updated = buildPortalConfiguration(configuration(), {
       route: "/new", defaultRenderer: "antd", allowedRenderers: ["antd"], defaultTemplate: "top-navigation",
@@ -51,7 +53,7 @@ describe("Portal aggregate workspace", () => {
 
   it("can prepare the first Portal from the trusted creation template", async () => {
     const template = configuration();
-    const page = createPortalPage(new PortalControlClient({ fetch: async () => response({ portals: [], creationTemplate: template }) }));
+    const page = createPortalPage(new PortalControlClient({ fetch: async () => response({ portals: [], creationTemplate: template }) }), permissionCatalog());
     const form = page.forms?.find((candidate) => candidate.id === "create");
     const prepared = await form?.prepare?.([], new AbortController().signal);
     expect(prepared?.initialValue).toMatchObject({ portalId: "", route: "/", defaultRenderer: "antd" });
@@ -60,13 +62,13 @@ describe("Portal aggregate workspace", () => {
   it("projects one Portal row from its working copy without a compatibility versions array", async () => {
     const workingCopy = { tenantId: "tenant-a", portalId: "operations", revision: 2, configuration: configuration(), digest: "a".repeat(64), createdAt: "2026-07-30T00:00:00Z", updatedAt: "2026-07-30T00:00:00Z" };
     const portal = { id: "operations", tenantId: "tenant-a", workingCopy, versionControl: { enabled: false, availability: "disabled", capabilities: [] }, releases: [], createdAt: workingCopy.createdAt, updatedAt: workingCopy.updatedAt };
-    const page = createPortalPage(new PortalControlClient({ fetch: async () => response({ portals: [portal] }) }));
+    const page = createPortalPage(new PortalControlClient({ fetch: async () => response({ portals: [portal] }) }), permissionCatalog());
     const result = await page.load({ mode: "page", page: 1, pageSize: 20, filters: {} }, new AbortController().signal);
     expect(result).toMatchObject({ total: 1, items: [{ id: "operations", workingRevision: 2, status: "Draft", releaseAvailable: false }] });
   });
 
   it("defines the Portal status as a plain responsive two-column summary", async () => {
-    const page = createPortalPage(new PortalControlClient({ fetch: async () => response({ portals: [] }) }));
+    const page = createPortalPage(new PortalControlClient({ fetch: async () => response({ portals: [] }) }), permissionCatalog());
     const summary = await page.loadSummary?.(new AbortController().signal);
     expect(summary).toMatchObject({
       appearance: "plain",
@@ -99,12 +101,65 @@ describe("Portal aggregate workspace", () => {
 		const publication: NonNullable<Portal["pendingPublication"]> = { id: 7, tenantId: "tenant-a", portalId: "operations", workingRevision: 2, status: "PendingApproval", digest: "a".repeat(64), source, resolved: {} as never, submittedBy: "seed-operator", createdAt: "2026-08-02T00:00:00Z", updatedAt: "2026-08-02T00:00:00Z", approval: { status: "review-required", profile, requirements, message: "需复验" } };
 		const portal: Portal = { id: "operations", tenantId: "tenant-a", pendingPublication: publication, versionControl: { enabled: false, availability: "disabled", capabilities: [] }, releases: [], createdAt: publication.createdAt, updatedAt: publication.updatedAt };
 		expect(toPortalRow(portal)[0]).toMatchObject({ canApproveDirect: false, canApproveWithReview: true, approvalLabel: "需复验", approvalReason: "需复验" });
-		const page = createPortalPage(new PortalControlClient({ fetch: async () => response({}) }));
+		const page = createPortalPage(new PortalControlClient({ fetch: async () => response({}) }), permissionCatalog());
 		const form = page.forms?.find((candidate) => candidate.id === "approval-review");
 		const prepared = await form?.prepare?.(toPortalRow(portal), new AbortController().signal);
 		expect(prepared?.schema?.schema).toMatchObject({ required: ["expectedDigest", "reason"], properties: { reason: { minLength: 4, maxLength: 512 } } });
 		publication.approval = { status: "denied", profile, message: "需要其他审批人" };
 		expect(toPortalRow(portal)[0]).toMatchObject({ canApproveDirect: false, canApproveWithReview: false, approvalLabel: "需要其他审批人" });
+  });
+
+  it("uses the authoritative assignable permission catalog for audience choices", async () => {
+    const catalog = permissionCatalog([permission("platform.portal.compose", "编排 Portal"), permission("platform.portal.read", ""), permission("platform.portal.retired", "已退役", false)]);
+    const page = createPortalPage(new PortalControlClient({ fetch: async () => response({}) }), catalog);
+    const form = page.forms?.find((candidate) => candidate.id === "edit");
+    const prepared = await form?.prepare?.(portalRowWithAudience([]), new AbortController().signal);
+
+    expect(prepared?.schema?.schema).toMatchObject({
+      properties: {
+        audience: {
+          items: {
+            oneOf: [
+              { const: "platform.portal.compose", title: "编排 Portal (platform.portal.compose)" },
+              { const: "platform.portal.read", title: "platform.portal.read" },
+            ],
+          },
+        },
+      },
+    });
+    expect(prepared?.schema?.uiSchema).toMatchObject({ audience: { items: { "ui:widget": "select" } } });
+    expect(catalog.getAuthorizationPolicy).toHaveBeenCalledOnce();
+  });
+
+  it("reports stored audience permissions absent from the prepared catalog", async () => {
+    const page = createPortalPage(new PortalControlClient({ fetch: async () => response({}) }), permissionCatalog([permission("platform.portal.compose", "编排 Portal")]));
+    const form = page.forms?.find((candidate) => candidate.id === "edit");
+    const prepared = await form?.prepare?.(portalRowWithAudience(["platform.portal.retired"]), new AbortController().signal);
+    const errors = await form?.validate?.({
+      value: prepared?.initialValue ?? {},
+      context: prepared?.context ?? {},
+      signal: new AbortController().signal,
+    });
+
+    expect(errors).toMatchObject({ "/audience": { key: "form.audience.missing", values: { permissions: "platform.portal.retired" } } });
+  });
+
+  it("refreshes the permission catalog before persistence and rejects retired choices", async () => {
+    const catalog = permissionCatalog(
+      [permission("platform.portal.compose", "编排 Portal")],
+      [],
+    );
+    const page = createPortalPage(new PortalControlClient({ fetch: async () => response({}) }), catalog);
+    const form = page.forms?.find((candidate) => candidate.id === "edit");
+    const prepared = await form?.prepare?.(portalRowWithAudience(["platform.portal.compose"]), new AbortController().signal);
+    const result = await form?.beforeSubmit?.({
+      value: { audience: ["platform.portal.compose"] },
+      selected: portalRowWithAudience(["platform.portal.compose"]),
+      context: prepared?.context,
+    }, new AbortController().signal);
+
+    expect(result).toMatchObject({ fieldErrors: { "/audience": { key: "form.audience.missing", values: { permissions: "platform.portal.compose" } } } });
+    expect(catalog.getAuthorizationPolicy).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -170,6 +225,34 @@ function configuration(): PortalConfiguration {
     application: { version: 1, revision: 1, id: "operations", target: { kernel: "frontend" }, route: "/operations", plugins: [], config: {} },
     services: [{ id: "backend", logicalService: "backend", routingDomain: "platform", capabilities: [{ capability: "health", read: ["get"] }] }],
   };
+}
+
+function portalRowWithAudience(audience: string[]) {
+  const current = configuration();
+  current.application = { ...current.application, audience };
+  const workingCopy = { tenantId: "tenant-a", portalId: "operations", revision: 2, configuration: current, digest: "a".repeat(64), createdAt: "2026-07-30T00:00:00Z", updatedAt: "2026-07-30T00:00:00Z" };
+  return toPortalRow({ id: "operations", tenantId: "tenant-a", workingCopy, versionControl: { enabled: false, availability: "disabled", capabilities: [] }, releases: [], createdAt: workingCopy.createdAt, updatedAt: workingCopy.updatedAt });
+}
+
+function permission(code: string, title: string, assignable = true): AuthorizationPermission {
+  return {
+    code, title, assignable, scope: "platform", risk: "low", offlineAllowed: false,
+    pluginId: "cn.vastplan.test.permission-catalog", pluginVersion: "1.0.0", publisher: "vastplan", artifactSha256: "a".repeat(64),
+  };
+}
+
+function permissionCatalog(...snapshots: readonly AuthorizationPermission[][]): Pick<PlatformAdminClient, "getAuthorizationPolicy"> {
+  let index = 0;
+  const getAuthorizationPolicy = vi.fn(async (): Promise<AuthorizationPolicyState> => {
+    const permissions = snapshots[Math.min(index, Math.max(0, snapshots.length - 1))] ?? [];
+    index += 1;
+    return {
+      version: 1, generation: 1, policyRevision: 1, revocationRevision: 1,
+      catalog: { schemaVersion: "authorization.catalog.v1", permissions, operations: [], digest: `catalog-${index}` },
+      roles: [], bindings: [], revocations: [], audit: [],
+    };
+  });
+  return { getAuthorizationPolicy };
 }
 
 function response(value: unknown, status = 200) { return { ok: status >= 200 && status < 300, status, async json() { return value; } }; }

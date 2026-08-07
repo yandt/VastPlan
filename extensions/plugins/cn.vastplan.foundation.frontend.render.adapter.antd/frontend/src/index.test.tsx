@@ -155,7 +155,7 @@ describe("Ant Design portal UI renderer", () => {
   it("renders JSON Schema through the Ant Design RJSF theme", () => {
     const Form = antdPortalUIComponents.FormRenderer;
     const markup = renderToStaticMarkup(<PortalI18nProvider policy={{ defaultLocale: "en-US", supportedLocales: ["en-US"] }} catalogs={{}} candidates={["en-US"]}><Form
-      schema={{ id: "node", schema: { $schema: "http://json-schema.org/draft-07/schema#", type: "object", properties: { name: { type: "string", title: "Name" }, credential: { type: "string", title: "Credential", format: "vastplan-credential-ref", writeOnly: true } }, required: ["name"] }, uiSchema: { credential: { "ui:widget": "secretRef" } } }}
+      schema={{ id: "node", schema: { $schema: "http://json-schema.org/draft-07/schema#", type: "object", properties: { name: { type: "string", title: "Name", description: "Shown in the field help tooltip" }, credential: { type: "string", title: "Credential", format: "vastplan-credential-ref", writeOnly: true } }, required: ["name"] }, uiSchema: { credential: { "ui:widget": "secretRef", "ui:help": "Select a stored credential" } } }}
       value={{}}
       onChange={() => undefined}
       presentation={{ navigation: "sections", sections: [{ id: "identity", title: "Identity", columns: 2, columnWidths: [35, 65], fields: ["/name", "/credential"] }] }}
@@ -167,6 +167,10 @@ describe("Ant Design portal UI renderer", () => {
     expect(markup).toContain('class="vp-antd-form-object vp-antd-form-sections"');
     expect(markup).not.toContain("ant-card");
     expect(markup).toContain("Name");
+    expect(markup).toContain("anticon-question-circle");
+    expect(markup).toContain('aria-label="Shown in the field help tooltip"');
+    expect(markup.match(/Shown in the field help tooltip/g)).toHaveLength(1);
+    expect(markup).toContain("Select a stored credential");
     expect(markup).toContain("credential://");
     expect(markup).toContain("minmax(0, 35fr) minmax(0, 65fr)");
     expect(markup).toContain("Name is already used");
@@ -192,7 +196,7 @@ describe("Ant Design portal UI renderer", () => {
       onChange={() => undefined}
     /></PortalI18nProvider>);
     expect(markup).toContain("vp-antd-form-field-array");
-    expect(markup).toContain(">绑定域名</label>");
+    expect(markup).toContain('<span class="vp-antd-form-label-text">绑定域名</span>');
     expect(markup).toContain('data-form-array="scalar"');
     expect(markup).toContain("vp-antd-form-array-list");
     expect(markup).toContain("vp-antd-form-array-add");
@@ -200,12 +204,57 @@ describe("Ant Design portal UI renderer", () => {
     expect(markup).toContain('aria-label="拖拽排序"');
     expect(markup).toContain('aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"');
     expect(markup).toContain("data-array-drag-handle");
+    expect(markup).toContain('data-dnd-overlay="true"');
+    expect(markup).toContain("vp-antd-form-array-overlay");
+    expect(markup).toContain(".vp-antd-form-array-overlay{position:fixed;top:0;left:0");
+    expect(markup).not.toContain(".vp-antd-form-array-item[data-drop-target=true]{outline");
+    expect(markup).not.toContain(".vp-antd-form-array-overlay-preview{border:");
     const dragHandles = markup.match(/<button[^>]*data-array-drag-handle[^>]*>/g) ?? [];
     expect(dragHandles).toHaveLength(2);
     expect(dragHandles.every((handle) => !handle.includes("disabled"))).toBe(true);
     expect(markup).toContain('aria-label="删除此项"');
-    expect(markup).toContain(".vp-antd-form-array-item .ant-form-item-label{display:none!important}");
+    expect(markup).toContain(".vp-antd-form-array-item[data-array-item-kind=scalar] .ant-form-item-label{display:none!important}");
     expect(markup).toContain("flex:0 0 112px");
+    expect(markup).not.toContain("ant-card");
+  });
+
+  it("renders object lists with the same compact shell and preserved field labels", () => {
+    const Form = antdPortalUIComponents.FormRenderer;
+    const markup = renderToStaticMarkup(<PortalI18nProvider policy={{ defaultLocale: "zh-CN", supportedLocales: ["zh-CN"] }} catalogs={{}} candidates={["zh-CN"]}><Form
+      schema={{
+        id: "portal-navigation-overrides",
+        schema: {
+          type: "object",
+          properties: {
+            navigationOverrides: {
+              type: "array",
+              title: "导航显示覆盖",
+              items: {
+                type: "object",
+                required: ["target"],
+                properties: {
+                  target: { type: "string", title: "插件菜单节点" },
+                  order: { type: "integer", title: "排序" },
+                },
+              },
+            },
+          },
+        },
+      }}
+      value={{ navigationOverrides: [{ target: "cn.example.dashboard/main", order: 10 }, { target: "cn.example.settings/main", order: 20 }] }}
+      onChange={() => undefined}
+    /></PortalI18nProvider>);
+    expect(markup).toContain('data-form-array="object"');
+    expect(markup.match(/data-array-item-kind="object"/g)).toHaveLength(2);
+    expect(markup).toContain("vp-antd-form-array-object");
+    expect(markup).toContain('<span class="vp-antd-form-label-text">插件菜单节点</span>');
+    expect(markup).toContain('<span class="vp-antd-form-label-text">排序</span>');
+    expect(markup).not.toContain("导航显示覆盖-1");
+    expect(markup).not.toContain("导航显示覆盖-2");
+    expect(markup).not.toContain("array-item-list");
+    expect(markup.match(/<button[^>]*data-array-drag-handle[^>]*>/g)).toHaveLength(2);
+    expect(markup).toContain("ant-btn-block");
+    expect(markup).toContain("flex:0 0 min(var(--vp-form-label-width,var(--vp-form-label-min-width,112px)),48%)");
     expect(markup).not.toContain("ant-card");
   });
 

@@ -143,6 +143,9 @@ importers:
       '@ant-design/icons':
         specifier: ^6.1.0
         version: 6.3.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@dnd-kit/react':
+        specifier: 0.5.0
+        version: 0.5.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@rjsf/antd':
         specifier: ^6.7.1
         version: 6.7.1(@ant-design/icons@6.3.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@rjsf/core@6.7.1(@rjsf/utils@6.7.1(react@18.3.1))(react@18.3.1))(@rjsf/utils@6.7.1(react@18.3.1))(antd@6.5.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(dayjs@1.11.21)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -422,6 +425,9 @@ importers:
 
   extensions/plugins/cn.vastplan.platform.configuration.portal-composer/frontend:
     dependencies:
+      '@vastplan/platform-admin':
+        specifier: workspace:*
+        version: link:../../../sdk/ts/platform-admin
       '@vastplan/ui-primitives':
         specifier: workspace:*
         version: link:../../../sdk/ts/ui-primitives

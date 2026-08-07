@@ -1,12 +1,12 @@
 import { type PortalControlClient, type PortalRelease } from "@vastplan/ui-primitives";
 import { defineCollectionPage, message, type CollectionPageDefinition, type CollectionQuery } from "@vastplan/workbench-sdk";
-import { portalForms } from "./portal-workspace-forms";
+import { portalForms, type PortalPermissionCatalogClient } from "./portal-workspace-forms";
 import { type PortalRow, statusLabels, toPortalRow, versionControlLabels } from "./portal-model";
 import { portalOverlays } from "./portal-overlays";
 
 const namespace = "cn.vastplan.platform.configuration.portal-composer";
 
-export function createPortalPage(client: PortalControlClient): CollectionPageDefinition<PortalRow> {
+export function createPortalPage(client: PortalControlClient, permissionCatalog: PortalPermissionCatalogClient): CollectionPageDefinition<PortalRow> {
   return defineCollectionPage<PortalRow>({
     id: "platform.portal-composer",
     path: "/settings/portals",
@@ -36,7 +36,7 @@ export function createPortalPage(client: PortalControlClient): CollectionPageDef
       actions: portalActions(),
     },
     pageActions: [{ id: "portal.create", label: message(namespace, "action.createPortal", "新建 Portal"), icon: "add", tone: "primary", form: "create" }],
-    forms: portalForms(client),
+    forms: portalForms(client, permissionCatalog),
     overlays: portalOverlays(client),
     async load(query, signal) { return loadPortals(client, query, signal); },
     async loadSummary() {
