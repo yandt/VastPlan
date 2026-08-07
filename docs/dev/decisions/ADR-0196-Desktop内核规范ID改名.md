@@ -41,6 +41,7 @@ ADR-0014 拆出第三个内核时命名为 `runner`，取"执行器"之意。实
 ## 影响
 
 - 正面：四内核规范 ID 按运行环境齐整命名，`desktop`/`mobile` 对称；内核名与"任务执行器"通义不再同形；`clientcore` 作为 desktop+mobile 共享层的语义变清晰。
-- **已知遗留不一致**：wire 契约 `contract.proto` 的 `CALLER_KIND_RUNNER = 5` **未改**。三个原因叠加：该文件明确标注"不可变契约"；`engineering/arch/compatibility_test.go` 把该枚举冻结进 V1 兼容矩阵；本地 protoc 与 CI 官方构建对 Python `pb2` 序列化描述符的转义表示不同（字节相同、文本表示不同），本地无法产出与 CI 一致的生成物，提交任何本地生成物都会让 `codegen` job 出现反向 diff。因此当前状态是"内核叫 `desktop`，caller kind 仍叫 `CALLER_KIND_RUNNER`"。
-- 消除该遗留的正确做法是 protobuf 的加法式演进：新增 `CALLER_KIND_DESKTOP = 6` 并弃用 `= 5`，而非原地改名；这需要单独 ADR 与能复现 CI 生成物的环境，不在本 ADR 范围。
+- **已知遗留不一致**：wire 契约 `contract.proto` 的 `CALLER_KIND_RUNNER = 5` **未改**。两个原因：该文件明确标注"不可变契约"；`engineering/arch/compatibility_test.go` 把该枚举冻结进 V1 兼容矩阵。因此当前状态是"内核叫 `desktop`，caller kind 仍叫 `CALLER_KIND_RUNNER`"。
+- 消除该遗留的正确做法是 protobuf 的加法式演进：新增 `CALLER_KIND_DESKTOP = 6` 并弃用 `= 5`，而非原地改名；这需要单独 ADR，不在本 ADR 范围。
+- **与之无关的既有 codegen 漂移**：`extensions/sdk/python/contract/v1/contract_pb2.py` 已提交版本落后于 `gen-proto.sh` 的当前产物（序列化描述符里 `BFZ` 对 `B\x46Z`，字节相同、文本转义不同），`codegen 与 proto 同步` job 因此在本分支与 `main` 上以同样方式失败。这是本次改名之前就存在的问题，与 caller kind 是否改名无关；本地 protoc 与 CI 产物一致，修复方式是重新生成并提交该文件。
 - 需同步：已完成 140 个文件的代码/契约/文档改名，Go 构建、全量 Go 测试、架构门禁（含文档死链）、前端 typecheck 与前端测试均通过。
