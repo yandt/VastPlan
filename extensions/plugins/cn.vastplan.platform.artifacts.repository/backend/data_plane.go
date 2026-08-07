@@ -12,10 +12,10 @@ import (
 	"sync"
 	"time"
 
-	apiv1 "cdsoft.com.cn/VastPlan/contracts/schemas/api/v1"
-	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	apiv1 "cdsoft.com.cn/VastPlan/contracts/schemas/api/v1"
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 

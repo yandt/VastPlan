@@ -12,8 +12,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 	"cdsoft.com.cn/VastPlan/engineering/internal/provenanceprovider"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
 
 func main() {

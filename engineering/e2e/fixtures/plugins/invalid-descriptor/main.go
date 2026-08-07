@@ -5,8 +5,8 @@ package main
 import (
 	"log"
 
-	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
 func main() {

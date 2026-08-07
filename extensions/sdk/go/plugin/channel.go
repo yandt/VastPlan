@@ -8,8 +8,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"cdsoft.com.cn/VastPlan/contracts/runtime/go/errorcode"
 	pluginhostv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/pluginhost/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/errorcode"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocol"
 )
 

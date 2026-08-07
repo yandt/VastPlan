@@ -18,8 +18,8 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 
 	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
-	sharedauthority "cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationauthority"
 	sharedcontrolplane "cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
+	sharedauthority "cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationauthority"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfiguration"
 )
 

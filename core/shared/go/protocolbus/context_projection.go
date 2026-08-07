@@ -3,9 +3,9 @@ package protocolbus
 import (
 	"fmt"
 
-	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
 )
 
 var allContextFields = callcontext.MustAccess(

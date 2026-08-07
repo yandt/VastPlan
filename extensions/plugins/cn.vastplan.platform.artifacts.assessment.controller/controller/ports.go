@@ -6,9 +6,9 @@ import (
 	"errors"
 	"fmt"
 
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )

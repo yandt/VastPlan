@@ -32,7 +32,7 @@ type CollectionPreference struct {
 }
 
 type PortalPreferenceValues struct {
-	Collections     map[string]CollectionPreference `json:"collections,omitempty"`
+	Collections map[string]CollectionPreference `json:"collections,omitempty"`
 }
 
 type PortalPreference struct {

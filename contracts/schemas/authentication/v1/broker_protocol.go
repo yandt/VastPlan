@@ -14,11 +14,11 @@ type BrokerContinueResult struct {
 }
 
 type ConsumeAssertionRequest struct {
-	Assertion    SignedAuthenticationAssertion `json:"assertion"`
-	Audience     string                        `json:"audience"`
-	TenantID     string                        `json:"tenantId"`
-	PortalID     string                        `json:"portalId"`
-	TransactionID string                       `json:"transactionId"`
+	Assertion     SignedAuthenticationAssertion `json:"assertion"`
+	Audience      string                        `json:"audience"`
+	TenantID      string                        `json:"tenantId"`
+	PortalID      string                        `json:"portalId"`
+	TransactionID string                        `json:"transactionId"`
 }
 
 type ConsumeAssertionResult struct {

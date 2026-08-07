@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationauthority"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationauthority"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfig"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )

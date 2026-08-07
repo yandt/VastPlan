@@ -12,8 +12,8 @@ import (
 	"os"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
 
 // Config is the fully resolved, non-interactive artifact server launch

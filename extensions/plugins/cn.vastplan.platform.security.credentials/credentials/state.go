@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"strings"
 
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationauthority"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationauthority"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 

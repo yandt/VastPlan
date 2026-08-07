@@ -9,9 +9,9 @@ import (
 	"io"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactstorage"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactstorage"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/repositoryruntime"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
