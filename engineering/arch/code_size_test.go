@@ -29,9 +29,10 @@ type sizeException struct {
 // once a file falls under the default limit this entry must be deleted.
 var productionFileSizeExceptions = map[string]sizeException{}
 
-// Package exceptions freeze existing oversized packages while they are split
-// along real ownership boundaries. The key is the repository-relative package
-// directory, not the declared package name.
+// Package size is measured per repository directory; it does not cap a plugin,
+// module, or artifact. Exceptions freeze a reviewed cohesive package or an
+// existing package awaiting real ownership-boundary extraction. They are not
+// permission to raise a plugin-wide limit or split code mechanically.
 var goPackageSizeExceptions = map[string]sizeException{
 	"engineering/tools/platformdev": {
 		Maximum: 8602,
@@ -136,7 +137,7 @@ func TestArch_GoPackagesDoNotAccumulateResponsibilities(t *testing.T) {
 			continue
 		}
 		if lines > maximumGoPackageLines {
-			t.Errorf("Go 包职责过度集中: %s 为 %d 行，默认上限 %d；请按领域边界物理拆包", packagePath, lines, maximumGoPackageLines)
+			t.Errorf("Go 单目录包职责需复核: %s 为 %d 行，默认上限 %d；此门禁不限制插件总规模，请仅在存在真实领域/工作流/端口边界时物理拆包，否则说明高内聚理由并冻结当前上限", packagePath, lines, maximumGoPackageLines)
 		}
 	}
 	for packagePath := range goPackageSizeExceptions {
