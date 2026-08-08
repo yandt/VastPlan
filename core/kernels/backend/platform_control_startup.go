@@ -56,9 +56,6 @@ func configurePlatformControlStartup(options reconcileOptions, plane *nodeContro
 	if err != nil {
 		return nil, err
 	}
-	// Replace the optional NATS implementation exactly once at the composition
-	// root. Downstream host services continue to depend only on Store.
-	runtime.Dependencies.SharedState = binding
 	runtime.Dependencies.PlatformControl = coordinator.controller
 	runtime.ReplacementReadiness = coordinator
 	return coordinator, nil

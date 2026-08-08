@@ -251,6 +251,11 @@ func runReconcile(args []string) (runErr error) {
 	if err != nil {
 		return err
 	}
+	sharedState, err := buildSharedStateDependency(plane, platformControl)
+	if err != nil {
+		return err
+	}
+	runtime.Dependencies.SharedState = sharedState
 	defer func() { runErr = errors.Join(runErr, runtime.Close()) }()
 	if plane.router != nil {
 		if err := runtime.AttachRouter(plane.router); err != nil {

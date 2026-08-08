@@ -20,7 +20,6 @@ import (
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/recoverycontroller"
 	"cdsoft.com.cn/VastPlan/core/shared/go/bootstrapinventory"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
 )
 
 type reconcilePreparation struct {
@@ -80,13 +79,6 @@ func buildReconcileRuntime(options reconcileOptions, artifacts artifactResolutio
 	runtime.HostingPolicy = options.hostingPolicy
 	runtime.Identity = options.nodeID
 	runtime.LeaderKV = plane.buckets.Controllers
-	if plane.buckets.SharedState != nil {
-		stateStore, err := sharedstate.NewNATSStore(plane.buckets.SharedState)
-		if err != nil {
-			return nil, err
-		}
-		runtime.Dependencies.SharedState = stateStore
-	}
 	if err := configurePortalHostServices(options, artifacts, plane, runtime, logf); err != nil {
 		return nil, err
 	}

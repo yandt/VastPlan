@@ -53,4 +53,5 @@ rename 边界的选择遵循「不可回退点只应有一个」。rename 成功
 - 新增稳定码 `platform_control.profile_unsynced`。它出现在 Ready 状态上，表示配置成功但目录项未 fsync，属于告警而非故障。
 - 新增回归测试 `controller_durability_test.go` 覆盖三条此前无测试的路径：权限放宽的已提交 Profile 必须 fail-closed、无法解析的已提交 Profile 必须 fail-closed、rename 后 fsync 失败必须按已提交处理且不删除密码文件。已通过反向验证：临时还原旧 `Start()` 实现后，前两个测试如期失败。
 - 未改动 `BindingStore.required` 仍为进程内存字段这一事实。它现在是正确的：进程内不可逆，重启后由磁盘存在性重新确立。文档中「永久」的表述已按此澄清。
+- Backend 组合根在 Platform Control 与 NATS 候选都已确定后，只写入一次 `Dependencies.SharedState`。SQL 模式选择 `BindingStore`，否则选择 NATS Store；不再由装配函数的调用顺序覆盖前一个 Provider。架构门禁对 Backend 组合根的全部 `Dependencies.<field>` 写点执行单一所有者检查。
 - 本 ADR 不涉及审计发现的其余缺陷（`Snapshot()` 就绪信号不反映当前可用性、`coordinator.Run` 订阅关闭后无兜底重试、bootstrap 层单元换版的发布路径成环、远端候选连接池泄漏）。它们根因不同，需各自单独处理。
