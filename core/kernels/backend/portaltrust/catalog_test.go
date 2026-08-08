@@ -73,6 +73,16 @@ func TestTrustedCatalogFallsBackOnlyWhenExactSeedRefIsAbsent(t *testing.T) {
 	if remote.calls != 0 {
 		t.Fatal("非 not-found 错误不得切换制品源")
 	}
+
+	rawFilesystemMiss := &failingCatalogSource{err: os.ErrNotExist}
+	remote.calls = 0
+	catalog, err = NewTrustedCatalog([]ArtifactSource{rawFilesystemMiss, remote}, contentVerifier{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := catalog.verifiedManifest(context.Background(), ref); err == nil || remote.calls != 0 {
+		t.Fatalf("未经 Source 适配器规范化的文件错误不得驱动 Portal 回退: remote=%d err=%v", remote.calls, err)
+	}
 }
 
 type contentVerifier struct{}

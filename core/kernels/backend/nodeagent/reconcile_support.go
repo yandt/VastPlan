@@ -111,33 +111,28 @@ func (r *Reconciler) prepare(ctx context.Context, unit deploymentv1.Unit) ([]Ins
 }
 
 func (r *Reconciler) resolveArtifact(ctx context.Context, ref pluginv1.ArtifactRef, expectedSHA256 string) (VerifiedArtifact, error) {
-	var notFound error
-	for _, source := range r.Sources {
-		if source == nil {
-			return VerifiedArtifact{}, errors.New("制品源不能为空")
-		}
-		envelope, err := source.Fetch(ctx, ref)
-		if errors.Is(err, artifacttrust.ErrNotFound) {
-			notFound = errors.Join(notFound, fmt.Errorf("%s: %w", sourceName(source), err))
-			continue
-		}
-		if err != nil {
-			return VerifiedArtifact{}, fmt.Errorf("制品源 %s 失败: %w", sourceName(source), err)
-		}
-		verified, err := r.Verifier.Verify(ref, envelope)
-		if err != nil {
-			// 来源一旦返回内容，任何格式、摘要或证明失败都是安全事件；不得换源掩盖。
-			return VerifiedArtifact{}, fmt.Errorf("制品源 %s 返回不可信内容: %w", sourceName(source), err)
-		}
-		if verified.Artifact().SHA256 != expectedSHA256 {
-			return VerifiedArtifact{}, fmt.Errorf("制品源 %s 返回摘要 %s，与 Assignment 锁定摘要 %s 不一致", sourceName(source), verified.Artifact().SHA256, expectedSHA256)
-		}
-		return verified, nil
-	}
-	if notFound != nil {
-		return VerifiedArtifact{}, fmt.Errorf("所有制品源均无此制品: %w", notFound)
-	}
-	return VerifiedArtifact{}, errors.New("没有可用制品源")
+	return artifacttrust.ResolveExact(ctx, ref, r.Sources,
+		func(source ArtifactSource) string {
+			if source == nil {
+				return ""
+			}
+			return sourceName(source)
+		},
+		func(ctx context.Context, source ArtifactSource, ref pluginv1.ArtifactRef) (VerifiedArtifact, error) {
+			envelope, err := source.Fetch(ctx, ref)
+			if err != nil {
+				return VerifiedArtifact{}, err
+			}
+			verified, err := r.Verifier.Verify(ref, envelope)
+			if err != nil {
+				// 来源一旦返回内容，任何格式、摘要或证明失败都是安全事件；不得换源掩盖。
+				return VerifiedArtifact{}, fmt.Errorf("返回不可信内容: %w", err)
+			}
+			if verified.Artifact().SHA256 != expectedSHA256 {
+				return VerifiedArtifact{}, fmt.Errorf("返回摘要 %s，与 Assignment 锁定摘要 %s 不一致", verified.Artifact().SHA256, expectedSHA256)
+			}
+			return verified, nil
+		})
 }
 
 func (r *Reconciler) validate() error {

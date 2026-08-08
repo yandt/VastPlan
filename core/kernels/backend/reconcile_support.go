@@ -26,6 +26,11 @@ type artifactResolution struct {
 	bootstrap *artifactrepository.SignedRepository
 }
 
+type resolvedArtifactContent struct {
+	artifact pluginv1.Artifact
+	raw      []byte
+}
+
 func (r artifactResolution) VerifyBootstrapInventory(ctx context.Context, inventory bootstrapinventory.Inventory) error {
 	if r.bootstrap == nil {
 		return errors.New("Bootstrap Inventory 已配置但 Seed 仓库源不存在")
@@ -51,29 +56,28 @@ func (r artifactResolution) VerifyBootstrapInventory(ctx context.Context, invent
 // source that returns untrusted bytes is a hard failure and cannot be hidden by
 // trying the next source.
 func (r artifactResolution) Read(ref pluginv1.ArtifactRef) (pluginv1.Artifact, []byte, error) {
-	var notFound error
-	for _, source := range r.sources {
-		if source == nil {
-			return pluginv1.Artifact{}, nil, errors.New("制品源不能为空")
-		}
-		envelope, err := source.Fetch(context.Background(), ref)
-		if errors.Is(err, artifacttrust.ErrNotFound) {
-			notFound = errors.Join(notFound, err)
-			continue
-		}
-		if err != nil {
-			return pluginv1.Artifact{}, nil, fmt.Errorf("制品源 %T 失败: %w", source, err)
-		}
-		verified, err := r.verifier.Verify(ref, envelope)
-		if err != nil {
-			return pluginv1.Artifact{}, nil, fmt.Errorf("制品源 %T 返回不可信内容: %w", source, err)
-		}
-		return verified.Artifact(), verified.PackageBytes(), nil
+	resolved, err := artifacttrust.ResolveExact(context.Background(), ref, r.sources,
+		func(source nodeagent.ArtifactSource) string {
+			if source == nil {
+				return ""
+			}
+			return fmt.Sprintf("%T", source)
+		},
+		func(ctx context.Context, source nodeagent.ArtifactSource, ref pluginv1.ArtifactRef) (resolvedArtifactContent, error) {
+			envelope, err := source.Fetch(ctx, ref)
+			if err != nil {
+				return resolvedArtifactContent{}, err
+			}
+			verified, err := r.verifier.Verify(ref, envelope)
+			if err != nil {
+				return resolvedArtifactContent{}, fmt.Errorf("返回不可信内容: %w", err)
+			}
+			return resolvedArtifactContent{artifact: verified.Artifact(), raw: verified.PackageBytes()}, nil
+		})
+	if err != nil {
+		return pluginv1.Artifact{}, nil, err
 	}
-	if notFound != nil {
-		return pluginv1.Artifact{}, nil, fmt.Errorf("所有制品源均无此制品: %w", notFound)
-	}
-	return pluginv1.Artifact{}, nil, errors.New("没有可用制品源")
+	return resolved.artifact, resolved.raw, nil
 }
 
 func buildArtifactResolution(options reconcileOptions) (artifactResolution, error) {

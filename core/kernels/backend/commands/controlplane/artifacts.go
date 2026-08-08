@@ -23,23 +23,36 @@ type fallbackArtifactReader struct {
 	readers []deploymentcontroller.ArtifactReader
 }
 
+type artifactReadResult struct {
+	artifact     pluginv1.Artifact
+	packageBytes []byte
+}
+
 func (r fallbackArtifactReader) Read(ref pluginv1.ArtifactRef) (pluginv1.Artifact, []byte, error) {
-	var notFound error
-	for _, reader := range r.readers {
-		if reader == nil {
-			return pluginv1.Artifact{}, nil, errors.New("controller 制品源不能为空")
-		}
-		artifact, packageBytes, err := reader.Read(ref)
-		if errors.Is(err, artifacttrust.ErrNotFound) || errors.Is(err, os.ErrNotExist) {
-			notFound = errors.Join(notFound, err)
-			continue
-		}
-		if err != nil {
-			return pluginv1.Artifact{}, nil, err
-		}
-		return artifact, packageBytes, nil
+	resolved, err := artifacttrust.ResolveExact(context.Background(), ref, r.readers,
+		func(reader deploymentcontroller.ArtifactReader) string {
+			if reader == nil {
+				return ""
+			}
+			return fmt.Sprintf("%T", reader)
+		},
+		func(_ context.Context, reader deploymentcontroller.ArtifactReader, ref pluginv1.ArtifactRef) (artifactReadResult, error) {
+			artifact, packageBytes, err := reader.Read(ref)
+			return artifactReadResult{artifact: artifact, packageBytes: packageBytes}, err
+		})
+	if err != nil {
+		return pluginv1.Artifact{}, nil, fmt.Errorf("controller 解析精确制品: %w", err)
 	}
-	return pluginv1.Artifact{}, nil, fmt.Errorf("controller 所有制品源均无精确引用 %s@%s/%s: %w", ref.PluginID, ref.Version, ref.Channel, coalesceArtifactError(notFound, artifacttrust.ErrNotFound))
+	return resolved.artifact, resolved.packageBytes, nil
+}
+
+type controllerLocalArtifactReader struct {
+	repository *artifactrepository.Repository
+}
+
+func (r controllerLocalArtifactReader) Read(ref pluginv1.ArtifactRef) (pluginv1.Artifact, []byte, error) {
+	envelope, err := r.repository.Fetch(context.Background(), ref)
+	return envelope.Artifact, envelope.PackageBytes, err
 }
 
 type controllerRepositoryOptions struct {
@@ -50,6 +63,7 @@ func buildControllerArtifactReader(local *artifactrepository.Repository, options
 	if local == nil {
 		return nil, errors.New("controller 本地 Seed 制品源不能为空")
 	}
+	localReader := controllerLocalArtifactReader{repository: local}
 	if options.URL != "" && options.ProfileFile != "" {
 		return nil, errors.New("controller repository URL 与 Profile 不能同时配置")
 	}
@@ -57,7 +71,7 @@ func buildControllerArtifactReader(local *artifactrepository.Repository, options
 		if options.TrustFile != "" || options.Token != "" || options.TokenFile != "" || options.CAFile != "" {
 			return nil, errors.New("controller 仓库凭证参数必须与 URL 或 Profile 一起配置")
 		}
-		return local, nil
+		return localReader, nil
 	}
 	if strings.TrimSpace(options.TrustFile) == "" {
 		return nil, errors.New("controller 托管仓库必须配置 trust")
@@ -89,7 +103,7 @@ func buildControllerArtifactReader(local *artifactrepository.Repository, options
 		if err != nil {
 			return nil, err
 		}
-		return fallbackArtifactReader{readers: []deploymentcontroller.ArtifactReader{local, trustedProtocolReader{adapter: adapter, trust: trust}}}, nil
+		return fallbackArtifactReader{readers: []deploymentcontroller.ArtifactReader{localReader, trustedProtocolReader{adapter: adapter, trust: trust}}}, nil
 	}
 	if options.Token == "" || options.TokenFile != "" {
 		return nil, errors.New("controller remote 仓库必须只配置读 token")
@@ -99,7 +113,7 @@ func buildControllerArtifactReader(local *artifactrepository.Repository, options
 		return nil, err
 	}
 	remote := &artifactrepository.RemoteRepository{BaseURL: options.URL, Token: options.Token, Trust: trust, Client: client}
-	return fallbackArtifactReader{readers: []deploymentcontroller.ArtifactReader{local, remote}}, nil
+	return fallbackArtifactReader{readers: []deploymentcontroller.ArtifactReader{localReader, remote}}, nil
 }
 
 type trustedProtocolReader struct {
@@ -138,11 +152,4 @@ func controllerArtifactHTTPClient(caFile string) (*http.Client, error) {
 		transport.TLSClientConfig = &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}
 	}
 	return &http.Client{Transport: transport, Timeout: 2 * time.Minute}, nil
-}
-
-func coalesceArtifactError(primary, fallback error) error {
-	if primary != nil {
-		return primary
-	}
-	return fallback
 }

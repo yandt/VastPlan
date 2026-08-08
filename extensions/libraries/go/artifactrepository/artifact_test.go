@@ -2,9 +2,11 @@ package artifactrepository
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -135,6 +137,35 @@ func TestRepository_ReadFailsClosedOnCorruption(t *testing.T) {
 	}
 	if _, _, err := repo.Read(Ref{PluginID: manifest.ID, Version: manifest.Version, Channel: "stable"}); err == nil {
 		t.Fatal("对象 SHA 不匹配必须 fail-closed")
+	}
+}
+
+func TestRepositoryFetchDistinguishesAbsentRefFromMissingObject(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "repository")
+	repo, err := NewRepository(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	missingRef := Ref{PluginID: "com.example.missing", Version: "1.0.0", Channel: "stable"}
+	if _, err := repo.Fetch(context.Background(), missingRef); !errors.Is(err, artifacttrust.ErrNotFound) {
+		t.Fatalf("缺少精确索引必须规范化为制品不存在: %v", err)
+	}
+
+	packageBytes, manifest, err := PackageDirectory(writeTestPlugin(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact, err := repo.Publish("stable", packageBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := Ref{PluginID: manifest.ID, Version: manifest.Version, Channel: "stable"}
+	object := filepath.Join(root, "artifacts", ref.PluginID, ref.Version, ref.Channel, artifact.Object)
+	if err := os.Remove(object); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.Fetch(context.Background(), ref); err == nil || errors.Is(err, artifacttrust.ErrNotFound) {
+		t.Fatalf("索引存在但对象丢失必须作为仓库损坏 fail-closed: %v", err)
 	}
 }
 

@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
@@ -412,27 +411,32 @@ func validCompositionRef(ref compositioncommonv1.Ref) bool {
 
 func (c *TrustedCatalog) verifiedManifest(ctx context.Context, ref portalapi.PluginRef) (pluginv1.Artifact, []byte, pluginv1.Manifest, error) {
 	artifactRef := pluginv1.ArtifactRef{PluginID: ref.ID, Version: ref.Version, Channel: channel(ref.Channel)}
-	var last error
-	for _, source := range c.sources {
-		envelope, err := source.Fetch(ctx, artifactRef)
-		if err != nil {
-			if errors.Is(err, artifacttrust.ErrNotFound) || errors.Is(err, os.ErrNotExist) {
-				last = err
-				continue
+	resolved, err := artifacttrust.ResolveExact(ctx, artifactRef, c.sources,
+		func(source ArtifactSource) string {
+			if source == nil {
+				return ""
 			}
-			return pluginv1.Artifact{}, nil, pluginv1.Manifest{}, fmt.Errorf("读取 %s@%s 制品源失败: %w", ref.ID, ref.Version, err)
-		}
-		artifact, err := c.verifier.Verify(ctx, artifactRef, envelope)
-		if err != nil {
-			return pluginv1.Artifact{}, nil, pluginv1.Manifest{}, fmt.Errorf("验证 %s@%s 制品失败: %w", ref.ID, ref.Version, err)
-		}
-		manifest, err := pluginv1.ParseManifest(artifact.Manifest)
-		if err != nil {
-			return pluginv1.Artifact{}, nil, pluginv1.Manifest{}, fmt.Errorf("已验证制品清单无效: %w", err)
-		}
-		return artifact, envelope.PackageBytes, manifest, nil
+			return fmt.Sprintf("%T", source)
+		},
+		func(ctx context.Context, source ArtifactSource, artifactRef pluginv1.ArtifactRef) (verifiedPortalPlugin, error) {
+			envelope, err := source.Fetch(ctx, artifactRef)
+			if err != nil {
+				return verifiedPortalPlugin{}, err
+			}
+			artifact, err := c.verifier.Verify(ctx, artifactRef, envelope)
+			if err != nil {
+				return verifiedPortalPlugin{}, fmt.Errorf("验证制品失败: %w", err)
+			}
+			manifest, err := pluginv1.ParseManifest(artifact.Manifest)
+			if err != nil {
+				return verifiedPortalPlugin{}, fmt.Errorf("已验证制品清单无效: %w", err)
+			}
+			return verifiedPortalPlugin{ref: ref, artifact: artifact, packageBytes: envelope.PackageBytes, manifest: manifest}, nil
+		})
+	if err != nil {
+		return pluginv1.Artifact{}, nil, pluginv1.Manifest{}, fmt.Errorf("无法取得并验证 %s@%s: %w", ref.ID, ref.Version, err)
 	}
-	return pluginv1.Artifact{}, nil, pluginv1.Manifest{}, fmt.Errorf("无法取得并验证 %s@%s: %w", ref.ID, ref.Version, last)
+	return resolved.artifact, resolved.packageBytes, resolved.manifest, nil
 }
 
 func channel(value string) string {

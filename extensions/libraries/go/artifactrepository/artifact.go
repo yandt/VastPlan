@@ -231,6 +231,10 @@ func (r *Repository) Read(ref Ref) (Artifact, []byte, error) {
 	if err != nil {
 		return Artifact{}, nil, err
 	}
+	return r.readPackage(ref, artifact)
+}
+
+func (r *Repository) readPackage(ref Ref, artifact Artifact) (Artifact, []byte, error) {
 	dir, err := r.artifactDir(ref)
 	if err != nil {
 		return Artifact{}, nil, err
@@ -318,11 +322,15 @@ func (r *Repository) ListRefs() ([]Ref, error) {
 // Fetch 实现内核 ArtifactSource。返回值仍被视为未信任 Envelope；本地仓库的
 // Read 校验只是纵深防御，不能替代 Node Agent 的统一验证强制点。
 func (r *Repository) Fetch(_ context.Context, ref Ref) (artifacttrust.Envelope, error) {
-	artifact, packageBytes, err := r.Read(ref)
+	artifact, err := r.ReadMetadata(ref)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return artifacttrust.Envelope{}, fmt.Errorf("%w: %s@%s/%s", artifacttrust.ErrNotFound, ref.PluginID, ref.Version, ref.Channel)
 		}
+		return artifacttrust.Envelope{}, err
+	}
+	artifact, packageBytes, err := r.readPackage(ref, artifact)
+	if err != nil {
 		return artifacttrust.Envelope{}, err
 	}
 	return artifacttrust.Envelope{Artifact: artifact, PackageBytes: packageBytes}, nil

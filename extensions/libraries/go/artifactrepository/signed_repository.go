@@ -408,17 +408,15 @@ func (a HTTPRepositoryAdapter) ReadWithSupplyChain(ref Ref) (Artifact, []byte, [
 
 // Fetch 返回带原始证明的未信任 Envelope，供 Node Agent 在自己的强制点复验。
 // SignedRepository.Read 的服务端预验证只是纵深防御。
-func (r *SignedRepository) Fetch(_ context.Context, ref Ref) (artifacttrust.Envelope, error) {
+func (r *SignedRepository) Fetch(ctx context.Context, ref Ref) (artifacttrust.Envelope, error) {
 	if r == nil || r.Local == nil || r.Trust == nil {
 		return artifacttrust.Envelope{}, errors.New("签名制品仓库未完整配置")
 	}
-	artifact, packageBytes, err := r.Local.Read(ref)
+	localEnvelope, err := r.Local.Fetch(ctx, ref)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return artifacttrust.Envelope{}, fmt.Errorf("%w: %s@%s/%s", artifacttrust.ErrNotFound, ref.PluginID, ref.Version, ref.Channel)
-		}
 		return artifacttrust.Envelope{}, err
 	}
+	artifact, packageBytes := localEnvelope.Artifact, localEnvelope.PackageBytes
 	dir, err := r.Local.artifactDir(ref)
 	if err != nil {
 		return artifacttrust.Envelope{}, err
