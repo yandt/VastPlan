@@ -234,3 +234,4 @@
 - [ADR-0201 Desktop CallerKind 加法式演进](ADR-0201-Desktop-CallerKind加法式演进.md)
 - [ADR-0202 服务可选导航编排与展示文件夹](ADR-0202-服务可选导航编排与展示文件夹.md)
 - [ADR-0203 受治理默认 UI Provider 替换](ADR-0203-受治理默认UI-Provider替换.md)
+- [ADR-0204 ActualState 生产兼容基线与连续迁移](ADR-0204-ActualState生产兼容基线与连续迁移.md)

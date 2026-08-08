@@ -84,8 +84,8 @@ chmod 0755 backend-kernel-linux-amd64
 ```
 
 - 本地 Node Agent 可使用 DesiredState v1 进行开发；集群服务配置必须同时具备 Platform Profile 与 Application Composition。显式 bootstrap 的文件是 `seed-file` 配置源，在线入口由共享账本读取应用输入并通过 Backend Platform Catalog 固定 Profile；两者统一经过 `deploymentpublisher` 的预览摘要锁、Resolver、Deployment CAS 和 Configuration Catalog，不接受人工提交 Deployment v2。普通进程启动不读取任一配置源产生发布。
-- actual-state v1 在预检中只于内存转换为 v2，不修改源文件。正式进程加载后，下一次成功保存只写 v2。
-- 未知 actual-state 版本、未知 v1 status、Schema 错误或同 revision 内容冲突必须先处理，不得跳过预检启动。
+- 首次生产兼容基线是 actual-state v4；开发期 v1-v3 不再作为启动、预检或回滚输入。当前预检只读验证 v4，不修改源文件。
+- 未知或已退役 actual-state 版本、Schema 错误或同 revision 内容冲突必须先处理，不得跳过预检启动。未来格式升级按 [ADR-0204](../decisions/ADR-0204-ActualState生产兼容基线与连续迁移.md) 在上线前演练连续迁移链，并由目标二进制首次启动时原子执行。
 - 所有待运行插件的 `engines.backend` 必须显式包含目标 Backend 1.0；`^0.1` 不会被 1.0 宿主默认为兼容。
 - 升级插件状态格式时，候选插件必须声明 `state.backend.migration`；内核不会猜测、复制或修改插件私有数据。
 

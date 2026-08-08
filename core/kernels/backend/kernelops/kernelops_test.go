@@ -30,16 +30,16 @@ func TestPrintVersionJSON(t *testing.T) {
 	}
 }
 
-func TestRunValidateMigratesActualStateV1WithoutWriting(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "actual-state-v1.json")
+func TestRunValidateAcceptsProductionActualStateWithoutWriting(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "actual-state-v4.json")
 	raw := []byte(`{
-  "version": 1,
+  "version": 4,
   "node_id": "node-a",
   "observed_revision": 7,
   "observed_digest": "digest",
   "applied_revision": 6,
   "units": {
-    "api": {"fingerprint":"fp","applied_revision":6,"status":"running","plugins":[],"restart_count":0}
+    "api": {"fingerprint":"fp","applied_revision":6,"phase":"active","phase_changed_at":"2026-07-16T00:00:00Z","plugins":[],"restart_count":0}
   },
   "updated_at": "2026-07-16T00:00:00Z"
 }`)
@@ -59,6 +59,25 @@ func TestRunValidateMigratesActualStateV1WithoutWriting(t *testing.T) {
 	}
 	if !bytes.Equal(raw, after) {
 		t.Fatal("预检不应写回实际态文件")
+	}
+}
+
+func TestRunValidateRejectsPreProductionActualState(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "actual-state-v3.json")
+	raw := []byte(`{"version":3,"units":{}}`)
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	if err := RunValidate(&output, []string{"-kind", ConfigKindActualState, "-file", path}); err == nil {
+		t.Fatal("预生产 actual-state 版本不得通过上线预检")
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(raw, after) {
+		t.Fatal("失败预检不应修改旧实际态文件")
 	}
 }
 

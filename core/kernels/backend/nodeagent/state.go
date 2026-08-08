@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"time"
 )
 
 const actualStateVersion = 4
@@ -108,30 +107,8 @@ func cloneState(state ActualState) ActualState {
 	return clone
 }
 
-type legacyActualStateV1 struct {
-	Version          int                          `json:"version"`
-	NodeID           string                       `json:"node_id"`
-	ObservedRevision uint64                       `json:"observed_revision"`
-	ObservedDigest   string                       `json:"observed_digest"`
-	AppliedRevision  uint64                       `json:"applied_revision"`
-	Units            map[string]legacyUnitStateV1 `json:"units"`
-	Errors           []OperationError             `json:"errors,omitempty"`
-	UpdatedAt        time.Time                    `json:"updated_at"`
-}
-
-type legacyUnitStateV1 struct {
-	Fingerprint     string            `json:"fingerprint"`
-	AppliedRevision uint64            `json:"applied_revision"`
-	Status          string            `json:"status"`
-	Plugins         []InstalledPlugin `json:"plugins"`
-	PIDs            []int             `json:"pids,omitempty"`
-	StartedAt       *time.Time        `json:"started_at,omitempty"`
-	RestartCount    uint64            `json:"restart_count"`
-	LastError       string            `json:"last_error,omitempty"`
-}
-
-// decodeActualState 是所有持久化后端共享的版本入口。v1 的自由字符串 status 会在
-// 读取时迁移为当前封闭 Phase；写回始终只产生当前版本，避免双写两套语义。
+// decodeActualState 是所有持久化后端共享的版本入口。v4 是首个生产兼容
+// 基线；开发期 v1-v3 不构成升级承诺，未知或已退役版本一律 fail-closed。
 func decodeActualState(raw []byte) (ActualState, error) {
 	var header struct {
 		Version int `json:"version"`
@@ -139,57 +116,17 @@ func decodeActualState(raw []byte) (ActualState, error) {
 	if err := json.Unmarshal(raw, &header); err != nil {
 		return ActualState{}, err
 	}
-	switch header.Version {
-	case 1:
-		var legacy legacyActualStateV1
-		if err := json.Unmarshal(raw, &legacy); err != nil {
-			return ActualState{}, err
-		}
-		state := ActualState{
-			Version: actualStateVersion, NodeID: legacy.NodeID,
-			ObservedRevision: legacy.ObservedRevision, ObservedDigest: legacy.ObservedDigest,
-			AppliedRevision: legacy.AppliedRevision, Units: make(map[string]UnitState, len(legacy.Units)),
-			Errors: legacy.Errors, UpdatedAt: legacy.UpdatedAt,
-		}
-		for id, old := range legacy.Units {
-			phase, err := legacyPhase(old.Status)
-			if err != nil {
-				return ActualState{}, fmt.Errorf("unit %s: %w", id, err)
-			}
-			state.Units[id] = UnitState{
-				Fingerprint: old.Fingerprint, AppliedRevision: old.AppliedRevision,
-				Phase: phase, PhaseChangedAt: legacy.UpdatedAt, Plugins: old.Plugins,
-				PIDs: old.PIDs, StartedAt: old.StartedAt, RestartCount: old.RestartCount,
-				LastError: old.LastError,
-			}
-		}
-		return state, validateActualState(state)
-	case 2, 3, actualStateVersion:
-		var state ActualState
-		if err := json.Unmarshal(raw, &state); err != nil {
-			return ActualState{}, err
-		}
-		if state.Units == nil {
-			state.Units = map[string]UnitState{}
-		}
-		state.Version = actualStateVersion
-		return state, validateActualState(state)
-	default:
-		return ActualState{}, fmt.Errorf("不支持的实际态版本 %d", header.Version)
+	if header.Version != actualStateVersion {
+		return ActualState{}, fmt.Errorf("不支持的实际态版本 %d，当前生产基线为 %d", header.Version, actualStateVersion)
 	}
-}
-
-func legacyPhase(status string) (UnitPhase, error) {
-	switch status {
-	case "running":
-		return PhaseActive, nil
-	case "stopped":
-		return PhaseInstalledInactive, nil
-	case "degraded":
-		return PhaseFailed, nil
-	default:
-		return "", fmt.Errorf("不支持的 v1 status %q", status)
+	var state ActualState
+	if err := json.Unmarshal(raw, &state); err != nil {
+		return ActualState{}, err
 	}
+	if state.Units == nil {
+		state.Units = map[string]UnitState{}
+	}
+	return state, validateActualState(state)
 }
 
 func validateActualState(state ActualState) error {

@@ -1,16 +1,18 @@
 package nodeagent
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
 
-func TestFileStateStoreMigratesV1ToCurrent(t *testing.T) {
+func TestFileStateStoreLoadsProductionBaseline(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "actual.json")
 	raw := []byte(`{
-  "version": 1,
+  "version": 4,
   "node_id": "node-1",
   "observed_revision": 7,
   "applied_revision": 6,
@@ -19,7 +21,8 @@ func TestFileStateStoreMigratesV1ToCurrent(t *testing.T) {
     "backend-main": {
       "fingerprint": "old",
       "applied_revision": 6,
-      "status": "running",
+      "phase": "active",
+      "phase_changed_at": "2026-07-16T00:00:00Z",
       "plugins": [],
       "restart_count": 2
     }
@@ -35,10 +38,10 @@ func TestFileStateStoreMigratesV1ToCurrent(t *testing.T) {
 	}
 	unit := state.Units["backend-main"]
 	if state.Version != actualStateVersion || unit.Phase != PhaseActive || unit.RestartCount != 2 {
-		t.Fatalf("v1 迁移结果不正确: %+v", state)
+		t.Fatalf("v4 实际态读取结果不正确: %+v", state)
 	}
 	if want := time.Date(2026, 7, 16, 0, 0, 0, 0, time.UTC); !unit.PhaseChangedAt.Equal(want) {
-		t.Fatalf("迁移状态时间 = %s，期望 %s", unit.PhaseChangedAt, want)
+		t.Fatalf("状态时间 = %s，期望 %s", unit.PhaseChangedAt, want)
 	}
 	if err := store.Save(state); err != nil {
 		t.Fatal(err)
@@ -48,17 +51,16 @@ func TestFileStateStoreMigratesV1ToCurrent(t *testing.T) {
 		t.Fatal(err)
 	}
 	if reloaded.Version != actualStateVersion || reloaded.Units["backend-main"].Phase != PhaseActive {
-		t.Fatalf("当前版本回写后不可重读: %+v", reloaded)
+		t.Fatalf("生产基线回写后不可重读: %+v", reloaded)
 	}
 }
 
-func TestDecodeActualStateMigratesV3ToV4(t *testing.T) {
-	state, err := decodeActualState([]byte(`{"version":3,"node_id":"node-1","units":{},"updated_at":"2026-07-21T00:00:00Z"}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if state.Version != actualStateVersion || state.BootstrapGeneration != 0 || !state.BootstrapPublishedAt.IsZero() {
-		t.Fatalf("v3 实际态未安全迁移到 v4: %+v", state)
+func TestDecodeActualStateRejectsUnsupportedVersions(t *testing.T) {
+	for _, version := range []int{0, 1, 2, 3, 5, 99} {
+		_, err := decodeActualState([]byte(fmt.Sprintf(`{"version":%d,"units":{}}`, version)))
+		if err == nil || !strings.Contains(err.Error(), fmt.Sprintf("版本 %d", version)) {
+			t.Fatalf("非生产基线 v%d 实际态必须拒绝，err=%v", version, err)
+		}
 	}
 }
 
