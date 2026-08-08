@@ -1,5 +1,7 @@
 package snapshot
 
+// vastplan:local-file-boundary provider-private
+
 import (
 	"errors"
 	"fmt"

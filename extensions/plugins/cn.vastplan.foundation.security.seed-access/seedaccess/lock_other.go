@@ -2,6 +2,8 @@
 
 package seedaccess
 
+// vastplan:local-file-boundary bootstrap-root
+
 import (
 	"errors"
 	"os"

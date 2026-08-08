@@ -3,6 +3,8 @@
 // physical quarantining/sweeping state machine.
 package garbagecollection
 
+// vastplan:local-file-boundary provider-private
+
 import (
 	"bytes"
 	"encoding/json"

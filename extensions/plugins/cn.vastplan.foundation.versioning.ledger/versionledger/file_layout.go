@@ -1,5 +1,7 @@
 package versionledger
 
+// vastplan:local-file-boundary provider-private
+
 import (
 	"bytes"
 	"crypto/sha256"

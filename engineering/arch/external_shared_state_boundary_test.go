@@ -21,9 +21,9 @@ var allowedLocalFileBoundaries = map[string]struct{}{
 	"recovery-root":      {},
 }
 
-// Plugins whose durable truth is external must not silently regain a local
-// writable truth source. Runtime topology does not decide storage ownership.
-func TestExternallyOwnedDurableTruthHasNoUnclassifiedLocalWrites(t *testing.T) {
+// Every production plugin must classify local writes. Selecting the scan from
+// declared durable truth would let an empty or stale declaration bypass it.
+func TestProductionPluginsHaveNoUnclassifiedLocalWrites(t *testing.T) {
 	root := repoRoot(t)
 	inventory := readStateOwnershipInventory(t, root)
 	ownershipByID := make(map[string]stateOwnershipRecord, len(inventory.StateOwnership))
@@ -41,7 +41,7 @@ func TestExternallyOwnedDurableTruthHasNoUnclassifiedLocalWrites(t *testing.T) {
 		}
 		pluginRoot := filepath.Join(pluginsRoot, entry.Name())
 		ownership, found := ownershipByID[entry.Name()]
-		if !found || !hasExternallyOwnedDurableTruth(ownership.DurableTruth) {
+		if !found {
 			continue
 		}
 		err := filepath.WalkDir(pluginRoot, func(path string, item os.DirEntry, walkErr error) error {
@@ -66,28 +66,6 @@ func TestExternallyOwnedDurableTruthHasNoUnclassifiedLocalWrites(t *testing.T) {
 	}
 }
 
-func TestExternalDurableTruthSelectionIgnoresRuntimeStateModel(t *testing.T) {
-	tests := []struct {
-		name    string
-		model   string
-		durable []string
-		want    bool
-	}{
-		{name: "leader owned shared state", model: "leader-owned", durable: []string{"shared-state"}, want: true},
-		{name: "external topology without durable truth", model: "external-shared", durable: nil, want: false},
-		{name: "record store", model: "leader-owned", durable: []string{"record-store"}, want: true},
-		{name: "platform control sql", model: "none", durable: []string{"platform-control-sql"}, want: true},
-		{name: "bootstrap file only", model: "external-shared", durable: []string{"bootstrap-file"}, want: false},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if got := hasExternallyOwnedDurableTruth(test.durable); got != test.want {
-				t.Fatalf("model=%q durable=%v: got %t want %t", test.model, test.durable, got, test.want)
-			}
-		})
-	}
-}
-
 func TestProductionLocalWriteBoundaryValidation(t *testing.T) {
 	writeSource := []byte("package plugin\nimport \"os\"\nfunc persist() { _ = os.WriteFile(\"state.json\", nil, 0o600) }\n")
 	aliasedWriteSource := []byte("package plugin\nimport filesystem \"os\"\nfunc persist() { _ = filesystem.WriteFile(\"state.json\", nil, 0o600) }\n")
@@ -98,13 +76,14 @@ func TestProductionLocalWriteBoundaryValidation(t *testing.T) {
 		source    []byte
 		want      string
 	}{
-		{name: "standard os import write fails", ownership: stateOwnershipRecord{ID: "plugin", DurableTruth: []string{"shared-state"}}, source: writeSource, want: "未分类本机写入"},
+		{name: "empty durable truth cannot bypass write gate", ownership: stateOwnershipRecord{ID: "plugin"}, source: writeSource, want: "未分类本机写入"},
 		{name: "aliased os import write fails", ownership: stateOwnershipRecord{ID: "plugin", DurableTruth: []string{"shared-state"}}, source: aliasedWriteSource, want: "未分类本机写入"},
 		{name: "dot imported os is rejected", ownership: stateOwnershipRecord{ID: "plugin", DurableTruth: []string{"shared-state"}}, source: dotImportedWriteSource, want: "禁止 dot-import os"},
 		{name: "declared boundary missing from inventory fails", ownership: stateOwnershipRecord{ID: "plugin", DurableTruth: []string{"shared-state"}}, source: append([]byte("// vastplan:local-file-boundary provider-private\n"), writeSource...), want: "未进入状态归属清单"},
 		{name: "bootstrap write requires bootstrap durable truth", ownership: stateOwnershipRecord{ID: "plugin", DurableTruth: []string{"shared-state"}, LocalBoundaries: []string{"bootstrap-root"}}, source: append([]byte("// vastplan:local-file-boundary bootstrap-root\n"), writeSource...), want: "未声明 bootstrap-file"},
 		{name: "declared bootstrap boundary is accepted", ownership: stateOwnershipRecord{ID: "plugin", DurableTruth: []string{"shared-state", "bootstrap-file"}, LocalBoundaries: []string{"bootstrap-root"}}, source: append([]byte("// vastplan:local-file-boundary bootstrap-root\n"), writeSource...), want: ""},
-		{name: "declared provider private boundary is accepted", ownership: stateOwnershipRecord{ID: "plugin", DurableTruth: []string{"shared-state"}, LocalBoundaries: []string{"provider-private"}}, source: append([]byte("// vastplan:local-file-boundary provider-private\n"), writeSource...), want: ""},
+		{name: "provider private write requires durable truth", ownership: stateOwnershipRecord{ID: "plugin", LocalBoundaries: []string{"provider-private"}}, source: append([]byte("// vastplan:local-file-boundary provider-private\n"), writeSource...), want: "未声明 provider-private-file"},
+		{name: "declared provider private boundary is accepted", ownership: stateOwnershipRecord{ID: "plugin", DurableTruth: []string{"provider-private-file"}, LocalBoundaries: []string{"provider-private"}}, source: append([]byte("// vastplan:local-file-boundary provider-private\n"), writeSource...), want: ""},
 		{name: "declared derived projection boundary is accepted", ownership: stateOwnershipRecord{ID: "plugin", DurableTruth: []string{"shared-state"}, LocalBoundaries: []string{"derived-projection"}}, source: append([]byte("// vastplan:local-file-boundary derived-projection\n"), writeSource...), want: ""},
 		{name: "declared recovery root boundary is accepted", ownership: stateOwnershipRecord{ID: "plugin", DurableTruth: []string{"shared-state"}, LocalBoundaries: []string{"recovery-root"}}, source: append([]byte("// vastplan:local-file-boundary recovery-root\n"), writeSource...), want: ""},
 	}
@@ -119,16 +98,6 @@ func TestProductionLocalWriteBoundaryValidation(t *testing.T) {
 			}
 		})
 	}
-}
-
-func hasExternallyOwnedDurableTruth(durableTruth []string) bool {
-	for _, durable := range durableTruth {
-		switch durable {
-		case "shared-state", "record-store", "platform-control-sql":
-			return true
-		}
-	}
-	return false
 }
 
 func validateProductionLocalWrites(path string, source []byte, ownership stateOwnershipRecord) error {
@@ -152,6 +121,9 @@ func validateProductionLocalWrites(path string, source []byte, ownership stateOw
 	}
 	if boundary == "bootstrap-root" && !containsString(ownership.DurableTruth, "bootstrap-file") {
 		return fmt.Errorf("bootstrap-root 本机写入未声明 bootstrap-file durableTruth: plugin=%s", ownership.ID)
+	}
+	if boundary == "provider-private" && !containsString(ownership.DurableTruth, "provider-private-file") {
+		return fmt.Errorf("provider-private 本机写入未声明 provider-private-file durableTruth: plugin=%s", ownership.ID)
 	}
 	return nil
 }

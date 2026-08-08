@@ -15,10 +15,6 @@ import (
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
 )
 
-func kernelSharedState(store sharedstate.Store, operation string) protocolbus.HostService {
-	return kernelSharedStateWithMetrics(store, operation, nil)
-}
-
 func kernelSharedStateWithMetrics(store sharedstate.Store, operation string, metrics observability.MetricSink) protocolbus.HostService {
 	return kernelSharedStateService(store, operation, metrics, false)
 }

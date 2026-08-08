@@ -96,7 +96,7 @@
     { "id": "cn.vastplan.platform.security.authentication.method.otp", "runtimeStateModel": "external-shared", "durableTruth": ["shared-state"], "transientState": ["process-memory"], "localBoundaries": [] },
     { "id": "cn.vastplan.platform.security.authorization-policy", "runtimeStateModel": "external-shared", "durableTruth": ["shared-state"], "transientState": ["process-memory"], "localBoundaries": ["bootstrap-root", "derived-projection"] },
     { "id": "cn.vastplan.platform.security.credentials", "runtimeStateModel": "external-shared", "durableTruth": ["shared-state"], "transientState": ["process-memory"], "localBoundaries": [] },
-    { "id": "cn.vastplan.product.portal.navigation-organizer", "runtimeStateModel": "external-shared", "durableTruth": [], "transientState": ["browser-memory", "process-memory"], "localBoundaries": [] }
+    { "id": "cn.vastplan.product.portal.navigation-organizer", "runtimeStateModel": "external-shared", "durableTruth": [], "delegatedDurableTruth": [{ "capability": "platform.portal-composer", "logicalService": "platform.portal-composer" }], "transientState": ["browser-memory", "process-memory"], "localBoundaries": [] }
   ],
   "retiredDevelopmentStateFiles": [
     { "path": "state/api-exposure.json", "replacement": "kernel.state.shared/api-exposure.control" },

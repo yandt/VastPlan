@@ -39,8 +39,8 @@ func TestKernelSharedStateDerivesIdentityAndKeepsTenantsIsolated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	create := kernelSharedState(store, sharedstatev1.OperationCreate)
-	get := kernelSharedState(store, sharedstatev1.OperationGet)
+	create := kernelSharedStateWithMetrics(store, sharedstatev1.OperationCreate, nil)
+	get := kernelSharedStateWithMetrics(store, sharedstatev1.OperationGet, nil)
 	identity := runtimeidentity.Identity{
 		PluginID: "cn.vastplan.demo", Publisher: "vastplan", Version: "1.0.0", ArtifactSHA256: strings.Repeat("a", 64),
 		NodeID: "node-a", RuntimeScope: "service-a", InstanceID: "instance-a",
@@ -80,7 +80,7 @@ func TestKernelSharedStateDerivesIdentityAndKeepsTenantsIsolated(t *testing.T) {
 
 func TestKernelSharedStateRejectsMissingRuntimeIdentity(t *testing.T) {
 	store, _ := sharedstate.OpenFileStore(filepath.Join(t.TempDir(), "state.json"))
-	service := kernelSharedState(store, sharedstatev1.OperationGet)
+	service := kernelSharedStateWithMetrics(store, sharedstatev1.OperationGet, nil)
 	payload := []byte(`{"scope":"tenant","namespace":"settings","key":"active"}`)
 	result, _, err := service(context.Background(), &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.vastplan.demo"}}, payload)
 	if err != nil || result.GetError().GetCode() != "state.identity_invalid" {

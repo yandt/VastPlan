@@ -15,6 +15,7 @@ export * from "./appearance-mode-selector.js";
 export * from "./appearance-template-select.js";
 export * from "./portal-account-pages.js";
 export * from "./portal-personalization.js";
+export { PortalBrand } from "./portal-brand.js";
 export type { PortalI18n, PortalI18nProviderProps, PortalMessageCatalogs } from "./i18n.js";
 export { PortalInteractionClient, PortalInteractionError } from "./interaction-client.js";
 export type { PortalFetch, PortalFetchResponse, PortalInteractionClientOptions } from "./interaction-client.js";

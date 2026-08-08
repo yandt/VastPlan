@@ -3,6 +3,8 @@
 // the plugin bus; the repository accesses the provisioned mount directly.
 package provider
 
+// vastplan:local-file-boundary provider-private
+
 import (
 	"context"
 	"crypto/sha256"

@@ -51,6 +51,12 @@ describe("top navigation shell layout", () => {
     expect(topNavigationShellCSS).toContain(".vp-top-center{flex:0 1 auto;justify-content:flex-end;overflow:hidden}");
   });
 
+  it("expands the Portal identity above page context on hover or keyboard focus", () => {
+    expect(topNavigationShellCSS).toContain(".vp-top-brand:hover strong,.vp-top-brand:focus-visible strong{border-color:var(--vp-top-border);opacity:1;transform:translateX(0)}");
+    expect(topNavigationShellCSS).toContain(".vp-top-brand strong{position:absolute;top:0;left:0;z-index:0");
+    expect(topNavigationShellCSS).toContain("@media (max-width:767px){.vp-top-bar");
+  });
+
   it("uses the renderer surface token for the page body", () => {
     expect(topNavigationShellCSS).toContain(".vp-top-page-scroller{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;background:var(--vp-top-surface)}");
     expect(topNavigationShellCSS).toContain("padding:var(--vp-page-content-start) 24px 24px");

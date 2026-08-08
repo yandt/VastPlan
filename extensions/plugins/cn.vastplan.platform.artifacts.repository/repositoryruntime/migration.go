@@ -1,5 +1,7 @@
 package repositoryruntime
 
+// vastplan:local-file-boundary provider-private
+
 import (
 	"bytes"
 	"context"

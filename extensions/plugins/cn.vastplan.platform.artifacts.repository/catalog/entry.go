@@ -1,5 +1,7 @@
 package catalog
 
+// vastplan:local-file-boundary provider-private
+
 import (
 	"bytes"
 	"encoding/hex"

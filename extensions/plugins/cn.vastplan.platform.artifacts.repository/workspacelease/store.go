@@ -4,6 +4,8 @@
 // lease lifecycle metadata.
 package workspacelease
 
+// vastplan:local-file-boundary provider-private
+
 import (
 	"bytes"
 	"crypto/rand"

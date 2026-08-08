@@ -1,5 +1,7 @@
 package seedaccess
 
+// vastplan:local-file-boundary bootstrap-root
+
 import (
 	"bytes"
 	"encoding/json"

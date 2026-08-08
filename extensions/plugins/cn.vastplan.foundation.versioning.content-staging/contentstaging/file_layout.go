@@ -1,5 +1,7 @@
 package contentstaging
 
+// vastplan:local-file-boundary provider-private
+
 import (
 	"crypto/sha256"
 	"encoding/hex"

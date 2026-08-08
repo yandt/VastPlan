@@ -2,6 +2,8 @@
 // by trusted consumers. Expiry makes GC unhealthy; it never removes protection.
 package references
 
+// vastplan:local-file-boundary provider-private
+
 import (
 	"bytes"
 	"encoding/json"

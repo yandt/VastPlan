@@ -60,6 +60,13 @@ describe("standard shell layout", () => {
     expect(standardShellCSS).toContain(".vp-page-header{box-sizing:border-box;height:var(--vp-shell-bar-height);min-height:var(--vp-shell-bar-height);flex:0 0 var(--vp-shell-bar-height)");
   });
 
+  it("expands the compact portal identity over the second-level title without resizing navigation", () => {
+    expect(standardShellCSS).toContain(".vp-navigation-start{box-sizing:border-box;height:var(--vp-shell-bar-height);min-height:var(--vp-shell-bar-height);justify-content:center;overflow:visible");
+    expect(standardShellCSS).toContain(".vp-brand-compact strong{position:absolute;top:calc((var(--vp-shell-touch-minimum) - var(--vp-shell-bar-height))/2);left:calc((var(--vp-shell-touch-minimum) - var(--vp-shell-rail-width))/2)");
+    expect(standardShellCSS).toContain("width:calc(var(--vp-shell-rail-width) + var(--vp-shell-navigation-width))");
+    expect(standardShellCSS).toContain(".vp-brand-compact:hover strong,.vp-brand-compact:focus-visible strong{opacity:1;transform:translateX(0)}");
+  });
+
   it("delegates the persistent child navigation tree to the shared renderer Menu", () => {
     expect(standardShellCSS).not.toContain(".vp-navigation-child-trigger");
     expect(standardShellCSS).not.toContain(".vp-navigation-link[aria-current=page]");

@@ -1,5 +1,7 @@
 package provider
 
+// vastplan:local-file-boundary provider-private
+
 import (
 	"context"
 	"crypto/sha256"
