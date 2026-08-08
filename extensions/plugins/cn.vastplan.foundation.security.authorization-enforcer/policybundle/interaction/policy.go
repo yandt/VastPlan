@@ -47,7 +47,7 @@ func decide(callCtx *contractv1.CallContext, request extpoint.PermissionRequest)
 	switch request.Operation {
 	case "open", "watch", "cancel":
 		switch callCtx.Caller.Kind {
-		case contractv1.CallerKind_CALLER_KIND_PLUGIN, contractv1.CallerKind_CALLER_KIND_RUNNER, contractv1.CallerKind_CALLER_KIND_SYSTEM:
+		case contractv1.CallerKind_CALLER_KIND_PLUGIN, contractv1.CallerKind_CALLER_KIND_RUNNER, contractv1.CallerKind_CALLER_KIND_DESKTOP, contractv1.CallerKind_CALLER_KIND_SYSTEM:
 			return extpoint.DecisionAllow, "受信来源可管理交互"
 		default:
 			return extpoint.DecisionDeny, "仅受信来源可创建或取消交互"

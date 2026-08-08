@@ -281,6 +281,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [ADR-0198 激活门禁活跃性与引导重试](decisions/ADR-0198-激活门禁活跃性与引导重试.md)
 - [ADR-0199 跨进程候选连接池释放](decisions/ADR-0199-跨进程候选连接池释放.md)
 - [ADR-0200 Bootstrap 单元可信换版与双代 Open 屏障](decisions/ADR-0200-Bootstrap单元可信换版与双代Open屏障.md)
+- [ADR-0201 Desktop CallerKind 加法式演进](decisions/ADR-0201-Desktop-CallerKind加法式演进.md)
 
 ### 通用版本账本
 

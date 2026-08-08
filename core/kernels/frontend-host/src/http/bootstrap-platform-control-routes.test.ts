@@ -40,8 +40,11 @@ describe("Platform Control bootstrap surface", () => {
       expect(rootResponse.headers.get("location")).toBe("/bootstrap/platform-control");
       const page = await fetch(`${origin}/bootstrap/platform-control`, { headers: { Cookie: cookie } });
       expect(page.status).toBe(200);
+      expect(bootstrapPlatformControlPageContract).toMatch(/^[a-f0-9]{64}$/);
       expect(page.headers.get(bootstrapPlatformControlPageContractHeader)).toBe(bootstrapPlatformControlPageContract);
       const pageHTML = await page.text();
+      expect(pageHTML).toContain(`pageContract='${bootstrapPlatformControlPageContract}'`);
+      expect(pageHTML).not.toContain("__VASTPLAN_BOOTSTRAP_");
       expect(pageHTML).toContain("配置平台控制数据库");
       expect(pageHTML).toContain("ensureCurrentPage");
       expect(pageHTML).toContain("配置页面已更新，正在重新加载");

@@ -64,6 +64,38 @@ func TestReconcilePlatformPortalReleasesNewVersionWhenPlatformProfileChanges(t *
 	}
 }
 
+func TestReconcilePlatformPortalRecoversCommittedCreateAfterFailedResponse(t *testing.T) {
+	desired := reconcileTestConfiguration("/operations")
+	fixture := &portalReconcileFixture{failAfterWrite: map[string]int{"create": http.StatusServiceUnavailable}}
+	server := httptest.NewServer(fixture)
+	defer server.Close()
+
+	if err := reconcilePlatformPortal(server.Client(), server.URL, desired); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := fixture.writes, []string{"create", "submit", "approve", "publish", "release"}; !equalStrings(got, want) {
+		t.Fatalf("首次创建已落库但响应失败时应在本次发布内对账续跑: got=%v want=%v", got, want)
+	}
+}
+
+func TestReconcilePlatformPortalRecoversCommittedWorkingCopyAfterFailedResponse(t *testing.T) {
+	current := reconcileTestConfiguration("/operations")
+	desired := reconcileTestConfiguration("/operations-v2")
+	fixture := newPortalReconcileFixture(current, portalapi.StatusPublished)
+	fixture.portal.CurrentReleaseID = 9
+	fixture.portal.Releases = []portalapi.PortalRelease{{ID: 9, PortalID: current.Application.ID, PublicationID: 7, Status: portalapi.ActivationCurrent}}
+	fixture.failAfterWrite["working-copy"] = http.StatusServiceUnavailable
+	server := httptest.NewServer(fixture)
+	defer server.Close()
+
+	if err := reconcilePlatformPortal(server.Client(), server.URL, desired); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := fixture.writes, []string{"working-copy", "submit", "approve", "publish", "release"}; !equalStrings(got, want) {
+		t.Fatalf("WorkingCopy 已落库但响应失败时应在本次发布内对账续跑: got=%v want=%v", got, want)
+	}
+}
+
 func TestReconcilePlatformPortalDoesNotOverwriteDifferentWorkingCopy(t *testing.T) {
 	desired := reconcileTestConfiguration("/operations")
 	fixture := newPortalReconcileFixture(reconcileTestConfiguration("/other"), portalapi.StatusDraft)
@@ -80,8 +112,10 @@ func TestReconcilePlatformPortalDoesNotOverwriteDifferentWorkingCopy(t *testing.
 }
 
 type portalReconcileFixture struct {
-	portal portalapi.Portal
-	writes []string
+	portal         portalapi.Portal
+	exists         bool
+	writes         []string
+	failAfterWrite map[string]int
 }
 
 func newPortalReconcileFixture(configuration portalapi.PortalConfiguration, status portalapi.Status) *portalReconcileFixture {
@@ -104,7 +138,7 @@ func newPortalReconcileFixture(configuration portalapi.PortalConfiguration, stat
 			portal.PendingPublication = &publication
 		}
 	}
-	return &portalReconcileFixture{portal: portal}
+	return &portalReconcileFixture{portal: portal, exists: true, failAfterWrite: map[string]int{}}
 }
 
 func (f *portalReconcileFixture) ServeHTTP(response http.ResponseWriter, request *http.Request) {
@@ -114,10 +148,27 @@ func (f *portalReconcileFixture) ServeHTTP(response http.ResponseWriter, request
 		return
 	}
 	if request.Method == http.MethodGet && request.URL.Path == "/v1/portals" {
-		_ = json.NewEncoder(response).Encode(portalapi.PortalGovernanceSnapshot{Portals: []portalapi.Portal{f.portal}})
+		portals := []portalapi.Portal{}
+		if f.exists {
+			portals = append(portals, f.portal)
+		}
+		_ = json.NewEncoder(response).Encode(portalapi.PortalGovernanceSnapshot{Portals: portals})
 		return
 	}
 	switch {
+	case request.Method == http.MethodPost && request.URL.Path == "/v1/portals":
+		var payload portalapi.CreatePortalRequest
+		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+			http.Error(response, "invalid body", http.StatusBadRequest)
+			return
+		}
+		created := newPortalReconcileFixture(payload.Configuration, portalapi.StatusDraft)
+		f.portal, f.exists = created.portal, true
+		f.writes = append(f.writes, "create")
+		if f.failWrittenResponse(response, "create") {
+			return
+		}
+		_ = json.NewEncoder(response).Encode(f.portal)
 	case request.Method == http.MethodPost && strings.HasSuffix(request.URL.Path, "/working-copy"):
 		var payload struct {
 			Configuration portalapi.PortalConfiguration `json:"configuration"`
@@ -128,6 +179,9 @@ func (f *portalReconcileFixture) ServeHTTP(response http.ResponseWriter, request
 		}
 		f.writes = append(f.writes, "working-copy")
 		f.portal.WorkingCopy = &portalapi.PortalWorkingCopy{TenantID: "local", PortalID: f.portal.ID, Revision: 2, Configuration: payload.Configuration}
+		if f.failWrittenResponse(response, "working-copy") {
+			return
+		}
 		_ = json.NewEncoder(response).Encode(f.portal.WorkingCopy)
 	case request.Method == http.MethodPost && strings.HasSuffix(request.URL.Path, "/publications"):
 		f.writes = append(f.writes, "submit")
@@ -156,6 +210,16 @@ func (f *portalReconcileFixture) ServeHTTP(response http.ResponseWriter, request
 	default:
 		http.Error(response, "unexpected request", http.StatusNotFound)
 	}
+}
+
+func (f *portalReconcileFixture) failWrittenResponse(response http.ResponseWriter, operation string) bool {
+	status := f.failAfterWrite[operation]
+	if status == 0 {
+		return false
+	}
+	delete(f.failAfterWrite, operation)
+	http.Error(response, "response lost after durable write", status)
+	return true
 }
 
 func reconcileTestApplication(route string) frontendcompositionv1.ApplicationComposition {

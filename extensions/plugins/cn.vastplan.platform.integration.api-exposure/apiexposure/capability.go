@@ -244,7 +244,7 @@ func projectPrivatePrincipal(callCtx *contractv1.CallContext) (Principal, error)
 		return Principal{}, errors.New("Private Data Plane 必须携带可信工作负载与用户委托")
 	}
 	switch callCtx.Caller.Kind {
-	case contractv1.CallerKind_CALLER_KIND_PLUGIN, contractv1.CallerKind_CALLER_KIND_RUNNER, contractv1.CallerKind_CALLER_KIND_SYSTEM:
+	case contractv1.CallerKind_CALLER_KIND_PLUGIN, contractv1.CallerKind_CALLER_KIND_RUNNER, contractv1.CallerKind_CALLER_KIND_DESKTOP, contractv1.CallerKind_CALLER_KIND_SYSTEM:
 	default:
 		return Principal{}, errors.New("Private Data Plane 只接受 Backend、Desktop 或可信系统调用")
 	}

@@ -31,7 +31,8 @@ enum CallerKind {
   CALLER_KIND_AGENT = 2;
   CALLER_KIND_PLUGIN = 3;
   CALLER_KIND_SYSTEM = 4;
-  CALLER_KIND_RUNNER = 5;
+  CALLER_KIND_RUNNER = 5 [deprecated = true];
+  CALLER_KIND_DESKTOP = 6;
 }
 
 message Caller {

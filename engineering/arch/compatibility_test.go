@@ -107,6 +107,7 @@ func assertContractV1(t *testing.T) {
 	assertEnum(t, fd.Enums().ByName("CallerKind"), map[string]protoreflect.EnumNumber{
 		"CALLER_KIND_UNSPECIFIED": 0, "CALLER_KIND_USER": 1, "CALLER_KIND_AGENT": 2,
 		"CALLER_KIND_PLUGIN": 3, "CALLER_KIND_SYSTEM": 4, "CALLER_KIND_RUNNER": 5,
+		"CALLER_KIND_DESKTOP": 6,
 	})
 	callResult := fd.Messages().ByName("CallResult")
 	assertEnum(t, callResult.Enums().ByName("Status"), map[string]protoreflect.EnumNumber{

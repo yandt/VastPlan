@@ -281,7 +281,7 @@ func databaseRuntimeAllowed(c *v1.CallContext, request extpoint.PermissionReques
 		return false
 	}
 	switch c.GetCaller().GetKind() {
-	case v1.CallerKind_CALLER_KIND_PLUGIN, v1.CallerKind_CALLER_KIND_AGENT, v1.CallerKind_CALLER_KIND_RUNNER, v1.CallerKind_CALLER_KIND_SYSTEM:
+	case v1.CallerKind_CALLER_KIND_PLUGIN, v1.CallerKind_CALLER_KIND_AGENT, v1.CallerKind_CALLER_KIND_RUNNER, v1.CallerKind_CALLER_KIND_DESKTOP, v1.CallerKind_CALLER_KIND_SYSTEM:
 		return true
 	default:
 		return false
@@ -294,7 +294,7 @@ func apiExposureRuntimeAllowed(c *v1.CallContext, request extpoint.PermissionReq
 	}
 	if request.Operation == "issuePrivateDataPlaneTicket" {
 		kind := c.GetCaller().GetKind()
-		return c.GetPrincipal().GetUserId() != "" && (kind == v1.CallerKind_CALLER_KIND_PLUGIN || kind == v1.CallerKind_CALLER_KIND_RUNNER || kind == v1.CallerKind_CALLER_KIND_SYSTEM)
+		return c.GetPrincipal().GetUserId() != "" && (kind == v1.CallerKind_CALLER_KIND_PLUGIN || kind == v1.CallerKind_CALLER_KIND_RUNNER || kind == v1.CallerKind_CALLER_KIND_DESKTOP || kind == v1.CallerKind_CALLER_KIND_SYSTEM)
 	}
 	if c.GetCaller().GetKind() != v1.CallerKind_CALLER_KIND_PLUGIN {
 		return false

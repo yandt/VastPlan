@@ -137,7 +137,7 @@ func requireExecutor(call *contractv1.CallContext, ref databasev1.ConnectionRef)
 		return nil
 	}
 	switch call.GetCaller().GetKind() {
-	case contractv1.CallerKind_CALLER_KIND_PLUGIN, contractv1.CallerKind_CALLER_KIND_AGENT, contractv1.CallerKind_CALLER_KIND_RUNNER:
+	case contractv1.CallerKind_CALLER_KIND_PLUGIN, contractv1.CallerKind_CALLER_KIND_AGENT, contractv1.CallerKind_CALLER_KIND_RUNNER, contractv1.CallerKind_CALLER_KIND_DESKTOP:
 		grant := "database.connection/" + ref.ResourceID
 		for _, credential := range call.GetCredentials() {
 			if credential.GetName() == grant && (credential.GetScope() == "" || credential.GetScope() == "tenant" || credential.GetScope() == "project") {
@@ -158,7 +158,7 @@ func requireTransactionCaller(call *contractv1.CallContext) error {
 		return nil
 	}
 	switch call.GetCaller().GetKind() {
-	case contractv1.CallerKind_CALLER_KIND_PLUGIN, contractv1.CallerKind_CALLER_KIND_AGENT, contractv1.CallerKind_CALLER_KIND_RUNNER:
+	case contractv1.CallerKind_CALLER_KIND_PLUGIN, contractv1.CallerKind_CALLER_KIND_AGENT, contractv1.CallerKind_CALLER_KIND_RUNNER, contractv1.CallerKind_CALLER_KIND_DESKTOP:
 		return nil
 	default:
 		return errors.New("用户不能直接调用底层数据库事务能力")

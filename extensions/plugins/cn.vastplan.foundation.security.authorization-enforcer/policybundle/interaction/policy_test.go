@@ -13,8 +13,10 @@ func TestInteractionPolicySeparatesSourceAndRendererEntry(t *testing.T) {
 	if decision, _ := decide(contextFor(contractv1.CallerKind_CALLER_KIND_USER, "alice"), request); decision != extpoint.DecisionDeny {
 		t.Fatalf("用户不得创建交互: %s", decision)
 	}
-	if decision, _ := decide(contextFor(contractv1.CallerKind_CALLER_KIND_RUNNER, "cn.vastplan.desktop.workflow"), request); decision != extpoint.DecisionAllow {
-		t.Fatalf("Desktop 应可创建交互: %s", decision)
+	for _, kind := range []contractv1.CallerKind{contractv1.CallerKind_CALLER_KIND_DESKTOP, contractv1.CallerKind_CALLER_KIND_RUNNER} {
+		if decision, _ := decide(contextFor(kind, "cn.vastplan.desktop.workflow"), request); decision != extpoint.DecisionAllow {
+			t.Fatalf("Desktop caller kind %s 应可创建交互: %s", kind, decision)
+		}
 	}
 	request.Operation = "respond"
 	if decision, _ := decide(contextFor(contractv1.CallerKind_CALLER_KIND_USER, "alice"), request); decision != extpoint.DecisionAllow {

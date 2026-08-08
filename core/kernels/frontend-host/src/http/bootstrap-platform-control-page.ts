@@ -1,10 +1,14 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { setIndexSecurityHeaders } from "./security-headers";
 
 export const bootstrapPlatformControlPath = "/bootstrap/platform-control";
-export const bootstrapPlatformControlPageContract = "5";
 export const bootstrapPlatformControlPageContractHeader = "X-VastPlan-Bootstrap-Page-Contract";
+const bootstrapNoncePlaceholder = "__VASTPLAN_BOOTSTRAP_NONCE__";
+const bootstrapContractPlaceholder = "__VASTPLAN_BOOTSTRAP_PAGE_CONTRACT__";
+export const bootstrapPlatformControlPageContract = createHash("sha256")
+  .update(documentTemplate(bootstrapNoncePlaceholder, bootstrapContractPlaceholder))
+  .digest("hex");
 
 export function serveBootstrapPlatformControlPage(request: IncomingMessage, response: ServerResponse, head: boolean): void {
   const nonce = randomBytes(18).toString("base64url");
@@ -19,6 +23,10 @@ export function serveBootstrapPlatformControlPage(request: IncomingMessage, resp
 }
 
 function document(nonce: string): string {
+  return documentTemplate(nonce, bootstrapPlatformControlPageContract);
+}
+
+function documentTemplate(nonce: string, pageContract: string): string {
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>配置平台控制数据库 · VastPlan</title>
@@ -60,7 +68,7 @@ input,select{width:100%;min-width:0;height:38px;border:1px solid #d1d5db;border-
 <div class="actions"><button id="test" type="button">测试连接</button><button id="commit" class="primary" type="submit">初始化并启用</button></div>
 </form></main>
 <script nonce="${nonce}">
-const form=document.querySelector('#form'),state=document.querySelector('#state'),test=document.querySelector('#test'),commit=document.querySelector('#commit'),pageContract='${bootstrapPlatformControlPageContract}';let status={phase:'unconfigured',generation:0},csrf='',portalWaitMs=800;
+const form=document.querySelector('#form'),state=document.querySelector('#state'),test=document.querySelector('#test'),commit=document.querySelector('#commit'),pageContract='${pageContract}';let status={phase:'unconfigured',generation:0},csrf='',portalWaitMs=800;
 const message=(text,error=false)=>{state.textContent=text;state.className='state'+(error?' error':'');state.style.display=text?'block':'none'};
 const busy=value=>{for(const element of form.elements)element.disabled=value};
 const failure=(code,text)=>{const error=new Error(text);error.code=code;return error};

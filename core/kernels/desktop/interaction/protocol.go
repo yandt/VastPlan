@@ -54,7 +54,7 @@ func invoke[T any](ctx context.Context, invoker Invoker, source interactionapi.S
 		return zero, err
 	}
 	op := operation
-	wire := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_RUNNER, Id: source.ID}, TenantId: source.TenantID, Scene: "desktop.interaction"}
+	wire := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_DESKTOP, Id: source.ID}, TenantId: source.TenantID, Scene: "desktop.interaction"}
 	trusted, err := callcontext.ValidateIngress(wire, callcontext.Provenance{Source: "desktop.interaction", AuthenticatedBy: "desktop-kernel"})
 	if err != nil {
 		return zero, fmt.Errorf("构造可信 Desktop 调用上下文: %w", err)

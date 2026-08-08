@@ -230,3 +230,5 @@
 - [ADR-0197 平台控制 Profile 存在性作为 Provider 必需的真相源](ADR-0197-平台控制Profile存在性作为必需真相源.md)
 - [ADR-0198 激活门禁活跃性与引导重试](ADR-0198-激活门禁活跃性与引导重试.md)
 - [ADR-0199 跨进程候选连接池释放](ADR-0199-跨进程候选连接池释放.md)
+- [ADR-0200 Bootstrap 单元可信换版与双代 Open 屏障](ADR-0200-Bootstrap单元可信换版与双代Open屏障.md)
+- [ADR-0201 Desktop CallerKind 加法式演进](ADR-0201-Desktop-CallerKind加法式演进.md)

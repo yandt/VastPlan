@@ -66,11 +66,15 @@ func selectPlatformPortal(client *http.Client, baseURL string, portal *portalapi
 	if portal == nil {
 		status, raw, err := portalRequest(client, baseURL, authorToken, http.MethodPost, "/v1/portals", portalapi.CreatePortalRequest{PortalID: desired.Application.ID, Configuration: desired}, true)
 		if err != nil || status != http.StatusOK {
-			return nil, fmt.Errorf("create Portal status=%d body=%s: %w", status, raw, err)
+			mutationErr := portalMutationError("create Portal", status, raw, err)
+			if portalMutationMayHaveCommitted(status, err) {
+				return reconcilePortalMutation(client, baseURL, desired, mutationErr)
+			}
+			return nil, mutationErr
 		}
 		var created portalapi.Portal
 		if err := json.Unmarshal(raw, &created); err != nil || created.WorkingCopy == nil {
-			return nil, fmt.Errorf("Composer 未返回有效 Portal WorkingCopy: %w", err)
+			return reconcilePortalMutation(client, baseURL, desired, invalidPortalResponse("Portal WorkingCopy", err))
 		}
 		return &created, nil
 	}
@@ -89,14 +93,55 @@ func selectPlatformPortal(client *http.Client, baseURL string, portal *portalapi
 	}
 	statusCode, raw, err := portalRequest(client, baseURL, authorToken, http.MethodPost, fmt.Sprintf("/v1/portals/%s/working-copy", desired.Application.ID), map[string]any{"configuration": desired}, true)
 	if err != nil || statusCode != http.StatusOK {
-		return nil, fmt.Errorf("create WorkingCopy status=%d body=%s: %w", statusCode, raw, err)
+		mutationErr := portalMutationError("create WorkingCopy", statusCode, raw, err)
+		if portalMutationMayHaveCommitted(statusCode, err) {
+			return reconcilePortalMutation(client, baseURL, desired, mutationErr)
+		}
+		return nil, mutationErr
 	}
 	var working portalapi.PortalWorkingCopy
 	if err := json.Unmarshal(raw, &working); err != nil || working.Revision == 0 {
-		return nil, fmt.Errorf("Composer 未返回有效 WorkingCopy: %w", err)
+		return reconcilePortalMutation(client, baseURL, desired, invalidPortalResponse("WorkingCopy", err))
 	}
 	portal.WorkingCopy = &working
 	return portal, nil
+}
+
+func reconcilePortalMutation(client *http.Client, baseURL string, desired portalapi.PortalConfiguration, mutationErr error) (*portalapi.Portal, error) {
+	governance, err := readPortalGovernance(client, baseURL)
+	if err != nil {
+		return nil, fmt.Errorf("%w; 写后对账失败: %v", mutationErr, err)
+	}
+	portal := findPortal(governance.Portals, desired.Application.ID)
+	if portal == nil {
+		return nil, mutationErr
+	}
+	configuration, status := currentPortalConfiguration(portal)
+	if configuration != nil && samePortalConfiguration(*configuration, desired) {
+		return portal, nil
+	}
+	if portal.WorkingCopy != nil || portal.PendingPublication != nil {
+		return nil, fmt.Errorf("%w; Portal 已有内容不同的未完成 %s，拒绝自动覆盖", mutationErr, status)
+	}
+	return nil, mutationErr
+}
+
+func portalMutationError(action string, status int, raw []byte, err error) error {
+	if err != nil {
+		return fmt.Errorf("%s status=%d body=%s: %w", action, status, raw, err)
+	}
+	return fmt.Errorf("%s status=%d body=%s", action, status, raw)
+}
+
+func portalMutationMayHaveCommitted(status int, err error) bool {
+	return err != nil || status == http.StatusConflict || status >= http.StatusInternalServerError
+}
+
+func invalidPortalResponse(entity string, err error) error {
+	if err != nil {
+		return fmt.Errorf("Composer 未返回有效 %s: %w", entity, err)
+	}
+	return fmt.Errorf("Composer 未返回有效 %s", entity)
 }
 
 func resumePortalPublication(client *http.Client, baseURL string, portal *portalapi.Portal) (portalapi.PortalPublication, error) {

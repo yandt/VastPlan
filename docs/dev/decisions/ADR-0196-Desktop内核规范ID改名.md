@@ -45,3 +45,7 @@ ADR-0014 拆出第三个内核时命名为 `runner`，取"执行器"之意。实
 - 消除该遗留的正确做法是 protobuf 的加法式演进：新增 `CALLER_KIND_DESKTOP = 6` 并弃用 `= 5`，而非原地改名；这需要单独 ADR，不在本 ADR 范围。
 - **与之无关的既有 codegen 漂移**：`extensions/sdk/python/contract/v1/contract_pb2.py` 已提交版本落后于 `gen-proto.sh` 的当前产物（序列化描述符里 `BFZ` 对 `B\x46Z`，字节相同、文本转义不同），`codegen 与 proto 同步` job 因此在本分支与 `main` 上以同样方式失败。这是本次改名之前就存在的问题，与 caller kind 是否改名无关；本地 protoc 与 CI 产物一致，修复方式是重新生成并提交该文件。
 - 需同步：已完成 140 个文件的代码/契约/文档改名，Go 构建、全量 Go 测试、架构门禁（含文档死链）、前端 typecheck 与前端测试均通过。
+
+## 后续决策
+
+2026-08-08：[ADR-0201](ADR-0201-Desktop-CallerKind加法式演进.md) 已以加法式演进新增 `CALLER_KIND_DESKTOP = 6`。`CALLER_KIND_RUNNER = 5` 保留为弃用兼容值；新 Desktop 写端发送 6，迁移期读取端同时接受 5 和 6。

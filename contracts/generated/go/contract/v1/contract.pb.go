@@ -34,7 +34,9 @@ const (
 	CallerKind_CALLER_KIND_AGENT       CallerKind = 2
 	CallerKind_CALLER_KIND_PLUGIN      CallerKind = 3
 	CallerKind_CALLER_KIND_SYSTEM      CallerKind = 4
-	CallerKind_CALLER_KIND_RUNNER      CallerKind = 5
+	// Deprecated: Marked as deprecated in contract/v1/contract.proto.
+	CallerKind_CALLER_KIND_RUNNER  CallerKind = 5
+	CallerKind_CALLER_KIND_DESKTOP CallerKind = 6
 )
 
 // Enum value maps for CallerKind.
@@ -46,6 +48,7 @@ var (
 		3: "CALLER_KIND_PLUGIN",
 		4: "CALLER_KIND_SYSTEM",
 		5: "CALLER_KIND_RUNNER",
+		6: "CALLER_KIND_DESKTOP",
 	}
 	CallerKind_value = map[string]int32{
 		"CALLER_KIND_UNSPECIFIED": 0,
@@ -54,6 +57,7 @@ var (
 		"CALLER_KIND_PLUGIN":      3,
 		"CALLER_KIND_SYSTEM":      4,
 		"CALLER_KIND_RUNNER":      5,
+		"CALLER_KIND_DESKTOP":     6,
 	}
 )
 
@@ -1122,15 +1126,16 @@ const file_contract_v1_contract_proto_rawDesc = "" +
 	"\n" +
 	"\b_subjectB\b\n" +
 	"\x06_traceB\x10\n" +
-	"\x0e_principal_ref*\x9e\x01\n" +
+	"\x0e_principal_ref*\xbb\x01\n" +
 	"\n" +
 	"CallerKind\x12\x1b\n" +
 	"\x17CALLER_KIND_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10CALLER_KIND_USER\x10\x01\x12\x15\n" +
 	"\x11CALLER_KIND_AGENT\x10\x02\x12\x16\n" +
 	"\x12CALLER_KIND_PLUGIN\x10\x03\x12\x16\n" +
-	"\x12CALLER_KIND_SYSTEM\x10\x04\x12\x16\n" +
-	"\x12CALLER_KIND_RUNNER\x10\x05BFZDcdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1;contractv1b\x06proto3"
+	"\x12CALLER_KIND_SYSTEM\x10\x04\x12\x1a\n" +
+	"\x12CALLER_KIND_RUNNER\x10\x05\x1a\x02\b\x01\x12\x17\n" +
+	"\x13CALLER_KIND_DESKTOP\x10\x06BFZDcdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1;contractv1b\x06proto3"
 
 var (
 	file_contract_v1_contract_proto_rawDescOnce sync.Once

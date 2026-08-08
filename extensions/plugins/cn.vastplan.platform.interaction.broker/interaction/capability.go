@@ -159,7 +159,7 @@ func sourceSubject(callCtx *contractv1.CallContext) (interactionapi.Subject, err
 	if err != nil {
 		return interactionapi.Subject{}, err
 	}
-	if callCtx.Caller.Kind != contractv1.CallerKind_CALLER_KIND_PLUGIN && callCtx.Caller.Kind != contractv1.CallerKind_CALLER_KIND_RUNNER && callCtx.Caller.Kind != contractv1.CallerKind_CALLER_KIND_SYSTEM {
+	if callCtx.Caller.Kind != contractv1.CallerKind_CALLER_KIND_PLUGIN && callCtx.Caller.Kind != contractv1.CallerKind_CALLER_KIND_RUNNER && callCtx.Caller.Kind != contractv1.CallerKind_CALLER_KIND_DESKTOP && callCtx.Caller.Kind != contractv1.CallerKind_CALLER_KIND_SYSTEM {
 		return interactionapi.Subject{}, ErrForbidden
 	}
 	return subject, nil

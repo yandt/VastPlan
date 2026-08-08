@@ -29,7 +29,7 @@ func TestProtocolBrokerBuildsDesktopBoundCallContext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stub.target.GetCapability() != interactionapi.Capability || stub.target.GetOperation() != "cancel" || stub.call.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_RUNNER || stub.call.GetTenantId() != "tenant-a" || stub.call.GetScene() != "desktop.interaction" {
+	if stub.target.GetCapability() != interactionapi.Capability || stub.target.GetOperation() != "cancel" || stub.call.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_DESKTOP || stub.call.GetTenantId() != "tenant-a" || stub.call.GetScene() != "desktop.interaction" {
 		t.Fatalf("Desktop 调用上下文错误: target=%+v context=%+v", stub.target, stub.call)
 	}
 }

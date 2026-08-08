@@ -332,9 +332,13 @@ func TestAPIExposureManagementAndRuntimeBoundaries(t *testing.T) {
 	if got, _ := decide(exposure, extpoint.PermissionRequest{Capability: stagingv1.UploadDataPlaneCapability, Operation: stagingv1.OperationInstallDataPlaneTicket}); got != extpoint.DecisionAllow {
 		t.Fatalf("Exposure 控制面应能安装版本内容上传 Ticket: %s", got)
 	}
-	delegated := &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_RUNNER, Id: "desktop-a"}, Principal: &contractv1.Principal{UserId: "alice"}}
+	delegated := &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_DESKTOP, Id: "desktop-a"}, Principal: &contractv1.Principal{UserId: "alice"}}
 	if got, _ := decide(delegated, extpoint.PermissionRequest{Capability: "platform.api-exposure", Operation: "issuePrivateDataPlaneTicket"}); got != extpoint.DecisionAllow {
 		t.Fatalf("携带可信用户委托的 Desktop 应能申请 Private Ticket: %s", got)
+	}
+	delegated.Caller.Kind = contractv1.CallerKind_CALLER_KIND_RUNNER
+	if got, _ := decide(delegated, extpoint.PermissionRequest{Capability: "platform.api-exposure", Operation: "issuePrivateDataPlaneTicket"}); got != extpoint.DecisionAllow {
+		t.Fatalf("迁移期必须兼容旧 Runner caller kind: %s", got)
 	}
 	delegated.Principal = nil
 	if got, _ := decide(delegated, extpoint.PermissionRequest{Capability: "platform.api-exposure", Operation: "issuePrivateDataPlaneTicket"}); got != extpoint.DecisionDeny {
