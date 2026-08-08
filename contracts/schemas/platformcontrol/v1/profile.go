@@ -22,6 +22,7 @@ const (
 	// generation to avoid closing a newer pool that replaced the candidate.
 	OperationClose            = "close"
 	TrustedBootstrapSystemID  = "platform-control-bootstrap/primary"
+	TrustedBootstrapScene     = "platform.control.bootstrap"
 	ErrorInvalid              = "platform.control.invalid"
 	ErrorUnavailable          = "platform.control.unavailable"
 	ErrorConflict             = "platform.control.conflict"

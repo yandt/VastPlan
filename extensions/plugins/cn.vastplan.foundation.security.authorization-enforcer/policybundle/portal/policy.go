@@ -8,6 +8,7 @@ import (
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	authenticationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authentication/v1"
 	workspacev1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionworkspace/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
@@ -15,9 +16,9 @@ import (
 const Capability = "foundation.security.portal-access-policy"
 
 const (
-	authenticationBrokerCapability = "foundation.security.authentication.broker"
+	authenticationBrokerCapability = authenticationv1.BrokerCapability
 	authorizationSessionCapability = "foundation.security.authorization-session"
-	authenticationBrokerPluginID   = "cn.vastplan.foundation.security.authentication-broker"
+	authenticationBrokerPluginID   = authenticationv1.BrokerPluginID
 )
 
 var authenticationBrokerOperations = map[string]struct{}{

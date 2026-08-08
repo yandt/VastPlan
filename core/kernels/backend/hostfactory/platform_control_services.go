@@ -12,8 +12,6 @@ import (
 	platformcontrol "cdsoft.com.cn/VastPlan/extensions/libraries/go/platformcontrol"
 )
 
-const databaseConnectionManagerID = "cn.vastplan.platform.data.relational.connection-manager"
-
 func kernelPlatformControl(admin platformcontrol.Administration) map[string]protocolbus.HostService {
 	status := func(_ context.Context, call *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 		if !authenticatedPlatformControlManager(call) {
@@ -57,7 +55,7 @@ func kernelPlatformControl(admin platformcontrol.Administration) map[string]prot
 
 func authenticatedPlatformControlManager(call *contractv1.CallContext) bool {
 	return call != nil && call.GetCaller().GetKind() == contractv1.CallerKind_CALLER_KIND_PLUGIN &&
-		call.GetCaller().GetId() == databaseConnectionManagerID
+		call.GetCaller().GetId() == databasev1.ConnectionManagerPluginID
 }
 
 func platformControlFailure(status platformcontrolv1.Status, err error) (*contractv1.CallResult, []byte, error) {

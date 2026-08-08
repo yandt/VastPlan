@@ -134,7 +134,7 @@ func hasSignedMigrationEvidence(call *contractv1.CallContext, ref databasev1.Con
 }
 
 func hasSchemaControllerEvidence(call *contractv1.CallContext, ref databasev1.ConnectionRef) bool {
-	expected := "database.schema-controller/" + ref.ResourceID
+	expected := recordstorev1.SchemaControllerEvidence(ref.ResourceID)
 	for _, credential := range call.GetCredentials() {
 		if credential.GetName() == expected && credential.GetScope() == "service" {
 			return true

@@ -22,7 +22,7 @@ func TestManagedLeaseOpensOnlyInsideCallbackAndWipes(t *testing.T) {
 		if _, ok := callcontext.FromContext(ctx); !ok {
 			t.Fatal("内核调用必须携带不可上网的 trusted provenance")
 		}
-		if target.GetCapability() != materialLeaseCapability || target.GetOperation() != "issue" || target.GetLogicalService() != materialLeaseLogicalService || target.GetRoutingDomain() != materialLeaseRoutingDomain {
+		if target.GetCapability() != credentiallease.Capability || target.GetOperation() != credentiallease.OperationIssue || target.GetLogicalService() != credentiallease.LogicalService || target.GetRoutingDomain() != credentiallease.RoutingDomain {
 			t.Fatalf("调用目标错误: %+v", target)
 		}
 		if call.GetTenantId() != "tenant-a" || call.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_SYSTEM || call.GetCaller().GetId() != "node-a" {

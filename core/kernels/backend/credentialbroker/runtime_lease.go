@@ -11,9 +11,12 @@ import (
 	"time"
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	authenticationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authentication/v1"
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
 	"cdsoft.com.cn/VastPlan/core/internal/runtimeidentity"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/credentiallease"
 )
 
@@ -21,11 +24,11 @@ const (
 	DatabaseRuntimePluginID     = databasev1.RuntimePluginID
 	DatabaseCredentialOwner     = databasev1.ConnectionManagerPluginID
 	DatabaseCredentialPurpose   = databasev1.CredentialPurpose
-	OIDCProviderPluginID        = "cn.vastplan.foundation.security.authentication.provider.oidc"
+	OIDCProviderPluginID        = authenticationv1.OIDCProviderPluginID
 	OIDCCredentialPurpose       = "oidc.client-secret"
-	WebhookProviderPluginID     = "cn.vastplan.platform.security.authentication.delivery.webhook"
+	WebhookProviderPluginID     = authenticationv1.WebhookDeliveryPluginID
 	WebhookCredentialPurpose    = "authentication.delivery.webhook"
-	AssessmentProviderPluginID  = "cn.vastplan.platform.artifacts.assessment.provider"
+	AssessmentProviderPluginID  = artifactassessment.AssessmentProviderPluginID
 	AssessmentCredentialPurpose = "artifact.assessment.signing-key"
 )
 
@@ -72,9 +75,9 @@ func (b *RuntimeLease) IssueRuntimeLease(ctx context.Context, tenant string, ide
 	if err != nil {
 		return credentiallease.Envelope{}, err
 	}
-	operation, logicalService, routingDomain := "issue", materialLeaseLogicalService, materialLeaseRoutingDomain
+	operation, logicalService, routingDomain := credentiallease.OperationIssue, credentiallease.LogicalService, credentiallease.RoutingDomain
 	target := &contractv1.CallTarget{
-		ExtensionPoint: "tool.package", Capability: materialLeaseCapability, Operation: &operation,
+		ExtensionPoint: extpoint.ToolPackage, Capability: credentiallease.Capability, Operation: &operation,
 		LogicalService: &logicalService, RoutingDomain: &routingDomain,
 	}
 	wire := &contractv1.CallContext{
@@ -84,7 +87,7 @@ func (b *RuntimeLease) IssueRuntimeLease(ctx context.Context, tenant string, ide
 	}
 	trusted := callcontext.MustAdopt(wire, callcontext.Provenance{
 		Source: "credentialbroker.runtime-lease", AuthenticatedBy: "backend-kernel",
-		Audience: materialLeaseLogicalService, IssuedAt: b.now().UTC(),
+		Audience: credentiallease.LogicalService, IssuedAt: b.now().UTC(),
 	})
 	result, response, err := b.invoke(callcontext.WithTrusted(ctx, trusted), target, trusted.Wire(), payload)
 	if err != nil {

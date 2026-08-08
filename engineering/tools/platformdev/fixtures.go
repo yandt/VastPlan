@@ -13,6 +13,7 @@ import (
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
+	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 )
 
@@ -225,7 +226,7 @@ func renderPlatformProfile(template, portalCatalog []byte, runDir, stateDir, art
 			if !ok {
 				return nil, errors.New("开发 Platform Profile 的 platform-database-runtime plugins 配置无效")
 			}
-			databaseRuntime, ok := plugins["cn.vastplan.foundation.data.relational.runtime"].(map[string]any)
+			databaseRuntime, ok := plugins[databasev1.RuntimePluginID].(map[string]any)
 			if !ok {
 				return nil, errors.New("开发 Platform Profile 缺少 Database Runtime 插件配置")
 			}

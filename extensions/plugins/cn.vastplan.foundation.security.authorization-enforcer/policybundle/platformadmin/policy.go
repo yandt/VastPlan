@@ -9,6 +9,7 @@ import (
 
 	v1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	authenticationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authentication/v1"
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	configurationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configuration/v1"
 	configurationresourcev1 "cdsoft.com.cn/VastPlan/contracts/schemas/configurationresource/v1"
@@ -21,6 +22,7 @@ import (
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactstorage"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationactivation"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationauthority"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/credentiallease"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformprofileactivation"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfig"
@@ -30,7 +32,7 @@ import (
 
 const (
 	Capability                   = "foundation.security.platform-admin-access-policy"
-	authenticationBrokerPluginID = "cn.vastplan.foundation.security.authentication-broker"
+	authenticationBrokerPluginID = authenticationv1.BrokerPluginID
 )
 
 func Check(_ context.Context, callCtx *v1.CallContext, payload []byte) (*v1.CallResult, []byte, error) {
@@ -145,7 +147,7 @@ func platformControlRuntimeCapability(capability string) bool {
 func platformControlRuntimeAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {
 	if c.GetCaller().GetKind() != v1.CallerKind_CALLER_KIND_SYSTEM ||
 		c.GetCaller().GetId() != platformcontrolv1.TrustedBootstrapSystemID ||
-		c.GetScene() != "platform.control.bootstrap" || request.ExtensionPoint != extpoint.ToolPackage {
+		c.GetScene() != platformcontrolv1.TrustedBootstrapScene || request.ExtensionPoint != extpoint.ToolPackage {
 		return false
 	}
 	switch request.Capability {
@@ -203,7 +205,7 @@ func artifactReferenceWriteAllowed(c *v1.CallContext, request extpoint.Permissio
 
 func governedCapability(capability string) bool {
 	switch capability {
-	case platformadminapi.SettingsCapability, platformadminapi.CredentialsCapability, "platform.credentials.material-lease", "kernel.credential.material-lease", configurationauthority.KernelIssueService, configurationauthority.KernelConsumeService, platformadminapi.DatabaseCapability, databasev1.Capability, platformadminapi.ArtifactsCapability, pluginmarketplace.Capability, platformadminapi.DeploymentCapability, platformadminapi.PluginConfigurationCapability, backendcompositionv1.PlanningCapability, "platform.api-exposure":
+	case platformadminapi.SettingsCapability, platformadminapi.CredentialsCapability, credentiallease.Capability, credentiallease.RuntimeKernelService, configurationauthority.KernelIssueService, configurationauthority.KernelConsumeService, platformadminapi.DatabaseCapability, databasev1.Capability, platformadminapi.ArtifactsCapability, pluginmarketplace.Capability, platformadminapi.DeploymentCapability, platformadminapi.PluginConfigurationCapability, backendcompositionv1.PlanningCapability, "platform.api-exposure":
 		return true
 	default:
 		return strings.HasPrefix(capability, artifactstorage.CapabilityPrefix) || strings.HasPrefix(capability, "configuration.")
@@ -320,7 +322,7 @@ func apiExposureTicketInstallationAllowed(c *v1.CallContext, request extpoint.Pe
 }
 
 func materialLeaseAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {
-	return c.Caller.Kind == v1.CallerKind_CALLER_KIND_SYSTEM && c.Caller.Id != "" && request.Capability == "platform.credentials.material-lease" && request.Operation == "issue"
+	return c.Caller.Kind == v1.CallerKind_CALLER_KIND_SYSTEM && c.Caller.Id != "" && request.Capability == credentiallease.Capability && request.Operation == credentiallease.OperationIssue
 }
 
 func managedCredentialLifecycleAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {
@@ -381,11 +383,11 @@ func allowedKernelCallback(c *v1.CallContext, request extpoint.PermissionRequest
 	case authenticationBrokerPluginID:
 		return authorizationPolicySharedStateKernelService(request.Capability)
 	case databasev1.RuntimePluginID:
-		return request.Capability == "kernel.credential.material-lease"
+		return request.Capability == credentiallease.RuntimeKernelService
 	case databasev1.ConnectionManagerPluginID:
 		return request.Capability == platformcontrolv1.KernelStatusService || request.Capability == platformcontrolv1.KernelTestService || request.Capability == platformcontrolv1.KernelConfigureService || authorizationPolicySharedStateKernelService(request.Capability)
 	case "cn.vastplan.platform.artifacts.marketplace":
-		return request.Capability == "kernel.credential.material-lease" && request.Operation == "issue"
+		return request.Capability == credentiallease.RuntimeKernelService && request.Operation == credentiallease.OperationIssue
 	case "cn.vastplan.platform.infrastructure.deployment-manager":
 		return request.Capability == "kernel.node.bootstrap" || request.Capability == "kernel.node.readiness" || request.Capability == "kernel.deployment.targets" || request.Capability == "kernel.deployment.preview" || request.Capability == "kernel.deployment.publish" || request.Capability == "kernel.deployment.readiness" || platformProfileKernelService(request.Capability) || sharedStateKernelService(request.Capability)
 	default:

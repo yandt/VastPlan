@@ -13,6 +13,7 @@ import (
 	"os"
 	"strings"
 
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/credentiallease"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.security.credentials/credentialsstate"
 )
 
@@ -20,7 +21,7 @@ const (
 	PluginID                = credentialsstate.PluginID
 	PluginVersion           = "0.14.3"
 	Capability              = "platform.credentials"
-	MaterialLeaseCapability = "platform.credentials.material-lease"
+	MaterialLeaseCapability = credentiallease.Capability
 	vaultAddressKey         = "platform.credentials.vault.address"
 	vaultKeyKey             = "platform.credentials.vault.transitKey"
 	vaultTokenFileKey       = "platform.credentials.vault.tokenFile"

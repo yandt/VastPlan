@@ -21,9 +21,9 @@ import (
 )
 
 const (
-	PluginID                   = "cn.vastplan.foundation.security.authentication-broker"
+	PluginID                   = authenticationv1.BrokerPluginID
 	PluginVersion              = "0.6.1"
-	Capability                 = "foundation.security.authentication.broker"
+	Capability                 = authenticationv1.BrokerCapability
 	OperationConsumeAssertion  = "consumeAssertion"
 	OperationBeginProviderTest = "beginProviderTest"
 )

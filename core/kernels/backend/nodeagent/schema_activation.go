@@ -112,7 +112,7 @@ func schemaEvidence(authorization recordstorev1.SchemaMigrationAuthorization) ([
 	if authorization.Storage.Connection != nil {
 		resourceID = authorization.Storage.Connection.ResourceID
 	}
-	evidence := []string{"database.schema-controller/" + resourceID}
+	evidence := []string{recordstorev1.SchemaControllerEvidence(resourceID)}
 	switch authorization.Kind {
 	case "create", "additive":
 		if !authorization.AllowSafe {

@@ -16,8 +16,9 @@ const (
 	// TrustedInventoryConfigKey is reserved for the controller-projected,
 	// content-bound model inventory. It is injected after user configuration
 	// validation and must never be accepted from a plugin Profile.
-	TrustedInventoryConfigKey = "_hostDataModelInventory"
-	StorageBindingsConfigKey  = "recordStoreBindings"
+	TrustedInventoryConfigKey      = "_hostDataModelInventory"
+	StorageBindingsConfigKey       = "recordStoreBindings"
+	SchemaControllerEvidencePrefix = "database.schema-controller/"
 
 	OperationSyncModels   = "syncModels"
 	OperationCreate       = "create"
@@ -46,6 +47,10 @@ const (
 	ErrorTransactionLost    = "record.store.transaction_lost"
 	ErrorTransactionExpired = "record.store.transaction_expired"
 )
+
+func SchemaControllerEvidence(resourceID string) string {
+	return SchemaControllerEvidencePrefix + resourceID
+}
 
 type ModelRef struct {
 	ID            string `json:"id"`

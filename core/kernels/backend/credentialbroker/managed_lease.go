@@ -11,15 +11,10 @@ import (
 	"time"
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/credentiallease"
-)
-
-const (
-	materialLeaseCapability     = "platform.credentials.material-lease"
-	materialLeaseLogicalService = "platform.credentials"
-	materialLeaseRoutingDomain  = "platform"
 )
 
 // LeaseInvoker is the narrow capability-router surface required by a trusted
@@ -62,18 +57,18 @@ func (b *ManagedLease) WithCredential(ctx context.Context, scope kernelspi.Scope
 	if err != nil {
 		return fmt.Errorf("编码 material lease 请求: %w", err)
 	}
-	operation, logicalService, routingDomain := "issue", materialLeaseLogicalService, materialLeaseRoutingDomain
+	operation, logicalService, routingDomain := credentiallease.OperationIssue, credentiallease.LogicalService, credentiallease.RoutingDomain
 	target := &contractv1.CallTarget{
-		ExtensionPoint: "tool.package", Capability: materialLeaseCapability, Operation: &operation,
+		ExtensionPoint: extpoint.ToolPackage, Capability: credentiallease.Capability, Operation: &operation,
 		LogicalService: &logicalService, RoutingDomain: &routingDomain,
 	}
 	wire := &contractv1.CallContext{
 		TenantId: scope.TenantID,
 		Caller:   &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: b.audience},
-		Scene:    "kernel.credential.material-lease",
+		Scene:    credentiallease.RuntimeKernelService,
 	}
 	trusted := callcontext.MustAdopt(wire, callcontext.Provenance{
-		Source: "credentialbroker.managed-lease", AuthenticatedBy: "backend-kernel", Audience: materialLeaseLogicalService, IssuedAt: b.now().UTC(),
+		Source: "credentialbroker.managed-lease", AuthenticatedBy: "backend-kernel", Audience: credentiallease.LogicalService, IssuedAt: b.now().UTC(),
 	})
 	result, response, err := b.invoke(callcontext.WithTrusted(ctx, trusted), target, trusted.Wire(), payload)
 	if err != nil {

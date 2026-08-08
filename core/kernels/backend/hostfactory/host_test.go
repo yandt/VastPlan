@@ -14,6 +14,7 @@ import (
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
+	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
@@ -65,7 +66,7 @@ var _ platformcontrol.Administration = (*platformControlAdministration)(nil)
 func TestPlatformControlKernelServicesRequireExactConnectionManager(t *testing.T) {
 	admin := &platformControlAdministration{status: platformcontrolv1.Status{Phase: platformcontrolv1.PhaseUnconfigured}}
 	services := kernelPlatformControl(admin)
-	trusted := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: databaseConnectionManagerID}}
+	trusted := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: databasev1.ConnectionManagerPluginID}}
 	if result, raw, err := services[platformcontrolv1.KernelStatusService](context.Background(), trusted, []byte(`{}`)); err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK || !strings.Contains(string(raw), `"phase":"unconfigured"`) {
 		t.Fatalf("可信连接管理插件读取状态失败: result=%+v raw=%s err=%v", result, raw, err)
 	}

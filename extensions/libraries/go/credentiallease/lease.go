@@ -23,6 +23,10 @@ import (
 
 const (
 	Version              = 1
+	Capability           = "platform.credentials.material-lease"
+	LogicalService       = "platform.credentials"
+	RoutingDomain        = "platform"
+	OperationIssue       = "issue"
 	RuntimeKernelService = "kernel.credential.material-lease"
 	DefaultTTL           = 15 * time.Second
 	MaxTTL               = 30 * time.Second

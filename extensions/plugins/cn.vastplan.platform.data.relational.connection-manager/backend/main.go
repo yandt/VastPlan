@@ -7,10 +7,11 @@ import (
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
-const id, version, capability = "cn.vastplan.platform.data.relational.connection-manager", "0.16.3", "platform.database"
+const id, version, capability = databasev1.ConnectionManagerPluginID, "0.16.3", "platform.database"
 
 const credentialCapability = "platform.credentials"
 

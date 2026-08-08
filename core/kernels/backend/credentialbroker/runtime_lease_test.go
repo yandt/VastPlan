@@ -41,7 +41,7 @@ func TestRuntimeLeaseRelaysCiphertextToExactRuntimeAudience(t *testing.T) {
 		if call.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_SYSTEM || call.GetCaller().GetId() != audience || call.GetTenantId() != "tenant-a" {
 			t.Fatalf("runtime audience 未绑定到系统调用: %+v", call)
 		}
-		if target.GetCapability() != materialLeaseCapability || bytes.Contains(payload, secret) {
+		if target.GetCapability() != credentiallease.Capability || bytes.Contains(payload, secret) {
 			t.Fatal("relay 目标错误或请求泄露明文")
 		}
 		var request credentiallease.Request
