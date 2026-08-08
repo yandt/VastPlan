@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
@@ -145,8 +146,11 @@ func (b *RemoteBootstrapper) callInstance(ctx context.Context, operation, instan
 		return platformcontrolv1.Status{}, err
 	}
 	var status platformcontrolv1.Status
-	if err := json.Unmarshal(raw, &status); err != nil || status.Phase == "" {
-		return platformcontrolv1.Status{}, sharedstate.ErrUnavailable
+	if err := json.Unmarshal(raw, &status); err != nil {
+		return platformcontrolv1.Status{}, fmt.Errorf("%w: invalid Platform Control bootstrap status response: %v", sharedstate.ErrInvalid, err)
+	}
+	if status.Phase == "" {
+		return platformcontrolv1.Status{}, fmt.Errorf("%w: Platform Control bootstrap status response missing phase", sharedstate.ErrInvalid)
 	}
 	return status, nil
 }

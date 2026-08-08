@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -88,6 +89,32 @@ func TestRemoteBootstrapperPreservesSafeDatabaseFailure(t *testing.T) {
 	code, retryable, ok := FailureDetails(err)
 	if !ok || code != databasev1.ErrorAuthenticationFailed || retryable {
 		t.Fatalf("跨进程数据库诊断丢失: code=%s retryable=%v ok=%v err=%v", code, retryable, ok, err)
+	}
+}
+
+func TestRemoteBootstrapperRejectsInvalidBootstrapStatusAsProtocolViolation(t *testing.T) {
+	for name, response := range map[string]struct {
+		raw        []byte
+		diagnostic string
+	}{
+		"invalid JSON":  {raw: []byte(`not-json`), diagnostic: "invalid Platform Control bootstrap status response"},
+		"missing phase": {raw: []byte(`{"generation":1}`), diagnostic: "Platform Control bootstrap status response missing phase"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			invoke := &testInvoker{instances: map[string][]RuntimeInstance{
+				platformcontrolv1.BootstrapCapability: {{ID: "runtime-a"}},
+			}, result: func(_, _, _ string) (*contractv1.CallResult, []byte, error) {
+				return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, response.raw, nil
+			}}
+			bootstrapper, err := NewRemoteBootstrapper(invoke)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = bootstrapper.callInstance(context.Background(), platformcontrolv1.OperationOpen, "runtime-a", platformcontrolv1.Profile{SchemaVersion: 1, Generation: 1}, testSecret("secret"))
+			if !errors.Is(err, sharedstate.ErrInvalid) || errors.Is(err, sharedstate.ErrUnavailable) || !strings.Contains(err.Error(), response.diagnostic) {
+				t.Fatalf("非法 Bootstrap 状态必须按协议违约报告: %v", err)
+			}
+		})
 	}
 }
 
