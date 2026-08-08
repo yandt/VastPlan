@@ -11,7 +11,7 @@
   "contextAccess": { "required": ["caller"], "optional": ["scope.tenant", "subject.id", "authorization.roles", "trace", "request.deadline", "propagation.callPath"] },
   "runtime": {
     "instancePolicy": "active-active",
-    "stateModel": "external-shared",
+    "stateModel": "local-ephemeral",
     "visibility": "cluster",
     "routing": "queue",
     "routingDomain": "security",
