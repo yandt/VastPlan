@@ -89,7 +89,7 @@
     { "id": "cn.vastplan.platform.configuration.plugin-settings", "runtimeStateModel": "external-shared", "durableTruth": ["shared-state"], "transientState": ["process-memory"], "localBoundaries": [] },
     { "id": "cn.vastplan.platform.configuration.portal-composer", "runtimeStateModel": "external-shared", "durableTruth": ["shared-state"], "transientState": ["process-memory"], "localBoundaries": [] },
     { "id": "cn.vastplan.platform.data.relational.connection-manager", "runtimeStateModel": "external-shared", "durableTruth": ["shared-state"], "transientState": ["process-memory"], "localBoundaries": [] },
-    { "id": "cn.vastplan.platform.infrastructure.composition-planner", "runtimeStateModel": "external-shared", "durableTruth": [], "transientState": ["process-memory"], "localBoundaries": [] },
+    { "id": "cn.vastplan.platform.infrastructure.composition-planner", "runtimeStateModel": "external-shared", "durableTruth": [], "delegatedDurableTruth": [{ "capability": "platform.artifacts.repository", "logicalService": "platform.artifacts.repository" }], "transientState": ["process-memory"], "localBoundaries": [] },
     { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "runtimeStateModel": "external-shared", "durableTruth": ["shared-state"], "transientState": ["process-memory"], "localBoundaries": [] },
     { "id": "cn.vastplan.platform.integration.api-exposure", "runtimeStateModel": "external-shared", "durableTruth": ["shared-state"], "transientState": ["process-memory"], "localBoundaries": ["derived-projection"] },
     { "id": "cn.vastplan.platform.interaction.broker", "runtimeStateModel": "external-shared", "durableTruth": ["record-store"], "transientState": ["process-memory"], "localBoundaries": [] },
