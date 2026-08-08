@@ -2,6 +2,7 @@ import { PortalControlClient, type PortalFetch } from "@vastplan/ui-primitives";
 import { createBrowserPlatformAdminClient } from "@vastplan/platform-admin";
 import { managementServicesFor, type WorkbenchFrontendPluginContext } from "@vastplan/workbench-sdk";
 import { createPortalPage } from "./portal-workspace";
+import { governedPublicationSubmitter } from "./publication-submitter";
 
 function createDefaultClient(): PortalControlClient {
   const fetcher: PortalFetch = (input, init) => globalThis.fetch(input, init as RequestInit);
@@ -16,7 +17,11 @@ export default {
     const services = managementServicesFor(context.portal, "platform.authorization");
     if (services.length !== 1) throw new Error("Portal 必须绑定唯一的 platform.authorization 服务，无法校验访问权限");
     const service = services[0];
-    context.addCollectionPage(createPortalPage(createDefaultClient(), createBrowserPlatformAdminClient(context.portal.id, service.id)));
+    const workflows = managementServicesFor(context.portal, "platform.workflow.orchestrator");
+    if (workflows.length > 1) throw new Error("Portal 最多只能绑定一个 platform.workflow.orchestrator 服务");
+    const client = createDefaultClient();
+    const submitter = workflows.length === 1 ? governedPublicationSubmitter(context.portal.id, workflows[0].id) : undefined;
+    context.addCollectionPage(createPortalPage(client, createBrowserPlatformAdminClient(context.portal.id, service.id), submitter));
   },
   localization: {
     defaultLocale: "zh-CN",

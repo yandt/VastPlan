@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
+	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.configuration.portal-composer/portalapproval"
 )
 
 func (s *Service) CreatePortalWorkingCopy(ctx context.Context, principal portalapi.Principal, portalID string, configuration portalapi.PortalConfiguration) (portalapi.PortalWorkingCopy, error) {
@@ -118,11 +119,11 @@ func (s *Service) approvePortalPublication(ctx context.Context, principal portal
 	if _, err := transitionStatus(principal, candidate.Status, "approve"); err != nil {
 		return portalapi.PortalPublication{}, err
 	}
-	decision, err := s.approvalDecision(ctx, principal, candidate, request)
+	decision, err := portalapproval.Decision(ctx, principal, candidate, request)
 	if err != nil {
 		return portalapi.PortalPublication{}, err
 	}
-	if err := requireAllowedApproval(decision); err != nil {
+	if err := portalapproval.RequireAllowed(decision); err != nil {
 		return portalapi.PortalPublication{}, err
 	}
 

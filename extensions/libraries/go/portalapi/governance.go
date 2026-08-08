@@ -8,6 +8,14 @@ import (
 	versionresourcev1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionresource/v1"
 )
 
+const (
+	WorkflowPublicationFeatureID       = "platform.portal.publication"
+	WorkflowPublicationResourceKind    = "portal.publication"
+	WorkflowPublicationReleaseActionID = "portal.release"
+	PreparePortalPublicationOperation  = "preparePortalPublication"
+	ExecutePublicationReleaseOperation = "executePublicationRelease"
+)
+
 // PortalConfiguration is the complete editable input of a Portal WorkingCopy
 // and the frozen inline source of a Publication when version control is off.
 type PortalConfiguration struct {

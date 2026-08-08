@@ -10,6 +10,7 @@ import (
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
+	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.configuration.portal-composer/portalapproval"
 )
 
 // CreatePortal creates the stable Portal lineage and its first draft version.
@@ -188,11 +189,11 @@ func (s *Service) transitionPortalVersion(ctx context.Context, principal portala
 		}
 		candidate := s.state.Revisions[index]
 		s.mu.Unlock()
-		decision, err := s.approvalDecision(ctx, principal, candidate, portalapi.PortalApprovalRequest{})
+		decision, err := portalapproval.Decision(ctx, principal, candidate, portalapi.PortalApprovalRequest{})
 		if err != nil {
 			return portalapi.PortalVersion{}, err
 		}
-		if err := requireAllowedApproval(decision); err != nil {
+		if err := portalapproval.RequireAllowed(decision); err != nil {
 			return portalapi.PortalVersion{}, err
 		}
 		approvalCandidate, approvalAudit = &candidate, decision.AuditNote

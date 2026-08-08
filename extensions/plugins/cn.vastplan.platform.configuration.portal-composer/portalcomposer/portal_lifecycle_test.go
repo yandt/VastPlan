@@ -3,10 +3,12 @@ package portalcomposer
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 
 	approvalv2 "cdsoft.com.cn/VastPlan/contracts/schemas/approval/v2"
+	workflowv1 "cdsoft.com.cn/VastPlan/contracts/schemas/workflow/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
@@ -74,6 +76,40 @@ func TestPortalNoVersionLifecycleUsesWorkingCopyPublicationAndRelease(t *testing
 	audit, err := service.Audit(context.Background(), author, portal.ID, publication.ID)
 	if err != nil || len(audit) != 5 || audit[1].Action != "portal.working-copy.saved" || audit[2].Action != "portal.publication.submit" {
 		t.Fatalf("新生命周期审计不完整: %+v err=%v", audit, err)
+	}
+}
+
+func TestWorkflowReleaseActionRevalidatesDigestAndIsIdempotent(t *testing.T) {
+	service := newTestService(t)
+	author := principal("author", "portal.compose")
+	configuration, err := service.configurationFromCatalog(spec("/workflow"), author.TenantID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	portal, err := service.CreatePortal(context.Background(), author, portalapi.CreatePortalRequest{PortalID: "workflow", Configuration: configuration})
+	if err != nil {
+		t.Fatal(err)
+	}
+	publication, err := service.SubmitPortalPublication(context.Background(), author, portal.ID, portalapi.SubmitPortalPublicationRequest{ExpectedWorkingRevision: portal.WorkingCopy.Revision})
+	if err != nil {
+		t.Fatal(err)
+	}
+	workflow := portalapi.Principal{ID: workflowv1.OrchestratorPluginID, TenantID: author.TenantID, System: true}
+	request := workflowv1.ActionRequest{InstanceID: "workflow-instance", FeatureID: portalapi.WorkflowPublicationFeatureID, ActionID: portalapi.WorkflowPublicationReleaseActionID, Resource: workflowv1.ResourceRef{Kind: portalapi.WorkflowPublicationResourceKind, ID: strconv.FormatUint(publication.ID, 10)}, ResourceDigest: strings.Repeat("f", 64), Attempt: 1, IdempotencyKey: "workflow-instance/release/1"}
+	if _, err := service.ExecutePublicationRelease(context.Background(), workflow, request); !errors.Is(err, ErrInvalidState) {
+		t.Fatalf("changed digest must be rejected: %v", err)
+	}
+	request.ResourceDigest = publication.Digest
+	release, err := service.ExecutePublicationRelease(context.Background(), workflow, request)
+	if err != nil || release.Status != portalapi.ActivationCurrent || release.PublicationID != publication.ID {
+		t.Fatalf("release=%+v err=%v", release, err)
+	}
+	duplicate, err := service.ExecutePublicationRelease(context.Background(), workflow, request)
+	if err != nil || duplicate.ID != release.ID {
+		t.Fatalf("idempotent release=%+v err=%v", duplicate, err)
+	}
+	if _, err := service.ExecutePublicationRelease(context.Background(), portalapi.Principal{ID: "other-plugin", TenantID: author.TenantID, System: true}, request); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("untrusted plugin must be rejected: %v", err)
 	}
 }
 

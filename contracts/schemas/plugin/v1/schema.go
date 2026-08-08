@@ -380,6 +380,9 @@ var declarativeBackendContributionGroups = map[string]struct{}{
 	"dataPlaneServices": {},
 	"dataModels":        {},
 	"dataMigrations":    {},
+	"workflowFeatures":  {},
+	"workflowNodeTemplates": {},
+	"workflowNodeProviders": {},
 }
 
 // BackendRuntimeContributions 把已经通过 Schema 的 backend 清单贡献规范化为协议总线

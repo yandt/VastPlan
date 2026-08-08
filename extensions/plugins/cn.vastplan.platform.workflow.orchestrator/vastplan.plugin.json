@@ -1,0 +1,201 @@
+{
+  "id": "cn.vastplan.platform.workflow.orchestrator",
+  "name": "VastPlan Workflow Orchestrator",
+  "description": "以不可变定义修订、耐久任务和受治理领域动作协调服务范围业务流程",
+  "version": "0.1.0",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "engines": { "backend": "^0.1", "frontend": "^1.0" },
+  "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
+  "contextAccess": { "required": ["scope.tenant", "caller"], "optional": ["subject.id", "authorization.roles", "scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
+  "authorization": {
+    "browserExposed": true,
+    "namespace": "platform.workflow",
+    "capabilities": ["platform.workflow.orchestrator"],
+    "permissions": [
+      { "code": "platform.workflow.read", "title": "查看流程定义、实例和任务", "scope": "platform", "risk": "low", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.workflow.manage", "title": "发布和绑定流程定义", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.workflow.execute", "title": "提交受治理操作", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.workflow.task.complete", "title": "处理流程人工任务", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.workflow.cancel", "title": "取消未完成流程实例", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false }
+    ],
+    "operationGuards": [
+      { "extensionPoint": "tool.package", "capability": "platform.workflow.orchestrator", "operation": "publishDefinition", "permissions": ["platform.workflow.manage"], "access": "write", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.workflow.orchestrator", "operation": "bindDefinition", "permissions": ["platform.workflow.manage"], "access": "write", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.workflow.orchestrator", "operation": "govern", "permissions": ["platform.workflow.execute"], "access": "execute", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.workflow.orchestrator", "operation": "getInstance", "permissions": ["platform.workflow.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.workflow.orchestrator", "operation": "listTasks", "permissions": ["platform.workflow.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.workflow.orchestrator", "operation": "completeTask", "permissions": ["platform.workflow.task.complete"], "access": "approve", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.workflow.orchestrator", "operation": "cancel", "permissions": ["platform.workflow.cancel"], "access": "execute", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.workflow.orchestrator", "operation": "apiGovern", "permissions": ["platform.workflow.execute"], "access": "execute", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.workflow.orchestrator", "operation": "apiCatalog", "permissions": ["platform.workflow.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.workflow.orchestrator", "operation": "apiListDefinitions", "permissions": ["platform.workflow.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.workflow.orchestrator", "operation": "apiPublishDefinition", "permissions": ["platform.workflow.manage"], "access": "write", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.workflow.orchestrator", "operation": "apiListBindings", "permissions": ["platform.workflow.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.workflow.orchestrator", "operation": "apiBindDefinition", "permissions": ["platform.workflow.manage"], "access": "write", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.workflow.orchestrator", "operation": "apiListInstances", "permissions": ["platform.workflow.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.workflow.orchestrator", "operation": "apiListTasks", "permissions": ["platform.workflow.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.workflow.orchestrator", "operation": "apiCompleteTask", "permissions": ["platform.workflow.task.complete"], "access": "approve", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.workflow.orchestrator", "operation": "apiCancelInstance", "permissions": ["platform.workflow.cancel"], "access": "execute", "approval": "none" }
+    ]
+  },
+  "runtime": {
+    "instancePolicy": "active-active",
+    "stateModel": "external-shared",
+    "visibility": "cluster",
+    "routing": "queue",
+    "routingDomain": "platform",
+    "requires": [{ "capability": "foundation.data.record-store", "contractRange": "^1.2.0", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "fail", "logicalService": "foundation.data.relational.runtime", "routingDomain": "platform" }],
+    "provides": [{ "extensionPoint": "tool.package", "capability": "platform.workflow.orchestrator", "contractVersion": "1.0.0", "visibility": "cluster", "routing": "queue", "routingDomain": "platform" }]
+  },
+  "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
+  "state": { "backend": { "format": "data.model.v1.platform.workflow.record", "formatVersion": 1 } },
+  "activation": ["onStartup", "onPortalStartup"],
+  "entry": { "backend": "backend/workflow-orchestrator", "frontend": "frontend/dist/index.js" },
+  "extensionPoints": [{
+    "id": "cn.vastplan.platform.workflow.orchestrator.ui-provider",
+    "surface": "frontend",
+    "contract": "1.0.0",
+    "kind": "frontend.page",
+    "dispatch": "single",
+    "targets": ["workflow-management"],
+    "descriptorSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pageId", "groupId"],
+      "properties": {
+        "pageId": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$", "maxLength": 160 },
+        "groupId": { "const": "workflow-management" }
+      }
+    }
+  }],
+  "contributes": {
+    "backend": {
+      "dataModels": [{ "id": "platform.workflow.record", "contractVersion": "1.1.0", "path": "data-models/workflow.json", "sha256": "66df0776d46f27ae471291976da0768d534859b12fc04359a528ee118422f905" }],
+      "tools": [{
+        "id": "platform.workflow.orchestrator",
+        "service_role": "backend",
+        "title": "通用流程编排",
+        "subcommands": [
+          { "name": "registerCatalog", "description": "从可信贡献索引装配流程功能点与节点目录", "audience": "workload" },
+          { "name": "govern", "description": "按签名准备入口冻结资源并透明选择流程或直通", "audience": "user" },
+          { "name": "publishDefinition", "description": "发布不可变流程定义修订", "audience": "user" },
+          { "name": "bindDefinition", "description": "绑定服务功能点与精确定义修订", "audience": "user" },
+          { "name": "getInstance", "description": "读取流程实例", "audience": "user" },
+          { "name": "listTasks", "description": "读取当前主体可处理任务", "audience": "user" },
+          { "name": "completeTask", "description": "以 CAS 完成人工任务", "audience": "user" },
+          { "name": "cancel", "description": "以 CAS 取消未完成流程实例", "audience": "user" },
+          { "name": "apiGovern", "description": "管理 API 提交受治理操作", "audience": "user" },
+          { "name": "apiCatalog", "description": "管理 API 读取流程功能点与节点目录", "audience": "user" },
+          { "name": "apiListDefinitions", "description": "管理 API 列出流程定义", "audience": "user" },
+          { "name": "apiPublishDefinition", "description": "管理 API 发布流程定义", "audience": "user" },
+          { "name": "apiListBindings", "description": "管理 API 列出服务绑定", "audience": "user" },
+          { "name": "apiBindDefinition", "description": "管理 API 以 CAS 保存服务绑定", "audience": "user" },
+          { "name": "apiListInstances", "description": "管理 API 列出流程实例", "audience": "user" },
+          { "name": "apiListTasks", "description": "管理 API 列出当前主体任务", "audience": "user" },
+          { "name": "apiCompleteTask", "description": "管理 API 完成人工任务", "audience": "user" },
+          { "name": "apiCancelInstance", "description": "管理 API 取消流程实例", "audience": "user" }
+        ]
+      }],
+      "apiContracts": [{
+        "id": "management-api",
+        "service_role": "backend",
+        "title": "流程管理 API",
+        "contractId": "platform.workflow.management-api",
+        "contractVersion": "1.0.0",
+        "protocol": "http-json",
+        "routes": [
+          {
+            "id": "workflow.operations.govern", "method": "POST", "path": "/govern",
+            "target": { "capability": "platform.workflow.orchestrator", "operation": "apiGovern" },
+            "requestSchema": { "type": "object", "additionalProperties": false, "required": ["featureId", "preparePayload", "idempotencyKey"], "properties": { "featureId": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$" }, "preparePayload": {}, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": 256 } } },
+            "responseSchema": { "type": "object", "required": ["resource", "instance"], "properties": { "resource": { "type": "object", "required": ["resource", "digest", "revision"] }, "instance": { "type": "object", "required": ["id", "serviceId", "featureId", "mode", "status", "revision"] } } },
+            "successStatus": 200,
+            "errors": [{ "code": "workflow.conflict", "status": 409 }, { "code": "workflow.not_found", "status": 404 }]
+          },
+          {
+            "id": "workflow.catalog.read", "method": "GET", "path": "/catalog",
+            "target": { "capability": "platform.workflow.orchestrator", "operation": "apiCatalog" },
+            "requestSchema": { "type": "object", "maxProperties": 0 },
+            "responseSchema": { "type": "object", "required": ["features", "templates", "providers"], "properties": { "features": { "type": "array" }, "templates": { "type": "array" }, "providers": { "type": "array" } } },
+            "successStatus": 200
+          },
+          {
+            "id": "workflow.definitions.list", "method": "GET", "path": "/definitions",
+            "target": { "capability": "platform.workflow.orchestrator", "operation": "apiListDefinitions" },
+            "requestSchema": { "type": "object", "maxProperties": 0 },
+            "responseSchema": { "type": "array", "items": { "type": "object", "required": ["definition", "ref", "publishedBy", "publishedAt"] } },
+            "successStatus": 200
+          },
+          {
+            "id": "workflow.definitions.publish", "method": "POST", "path": "/definitions",
+            "target": { "capability": "platform.workflow.orchestrator", "operation": "apiPublishDefinition" },
+            "requestSchema": { "type": "object", "additionalProperties": false, "required": ["id", "revision", "featureId", "entryNodeId", "nodes"], "properties": { "id": { "type": "string" }, "revision": { "type": "integer", "minimum": 1 }, "featureId": { "type": "string" }, "entryNodeId": { "type": "string" }, "nodes": { "type": "array", "minItems": 1, "maxItems": 128, "items": { "type": "object" } } } },
+            "responseSchema": { "type": "object", "required": ["id", "revision", "digest"] },
+            "successStatus": 201,
+            "errors": [{ "code": "workflow.conflict", "status": 409 }]
+          },
+          {
+            "id": "workflow.bindings.list", "method": "GET", "path": "/bindings",
+            "target": { "capability": "platform.workflow.orchestrator", "operation": "apiListBindings" },
+            "requestSchema": { "type": "object", "maxProperties": 0 },
+            "responseSchema": { "type": "array", "items": { "type": "object", "required": ["serviceId", "featureId", "definition", "revision", "updatedAt", "updatedBy"] } },
+            "successStatus": 200
+          },
+          {
+            "id": "workflow.bindings.put", "method": "PUT", "path": "/bindings",
+            "target": { "capability": "platform.workflow.orchestrator", "operation": "apiBindDefinition" },
+            "requestSchema": { "type": "object", "additionalProperties": false, "required": ["featureId", "definition", "expectedRevision"], "properties": { "featureId": { "type": "string" }, "definition": { "type": "object", "additionalProperties": false, "required": ["id", "revision", "digest"], "properties": { "id": { "type": "string" }, "revision": { "type": "integer", "minimum": 1 }, "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" } } }, "expectedRevision": { "type": "integer", "minimum": 0 } } },
+            "responseSchema": { "type": "object", "required": ["serviceId", "featureId", "definition", "revision", "updatedAt", "updatedBy"] },
+            "successStatus": 200,
+            "errors": [{ "code": "workflow.conflict", "status": 409 }, { "code": "workflow.not_found", "status": 404 }]
+          },
+          {
+            "id": "workflow.instances.list", "method": "GET", "path": "/instances",
+            "target": { "capability": "platform.workflow.orchestrator", "operation": "apiListInstances" },
+            "requestSchema": { "type": "object", "maxProperties": 0 },
+            "responseSchema": { "type": "array", "items": { "type": "object", "required": ["id", "serviceId", "featureId", "resource", "mode", "status", "revision", "startedBy", "startedAt", "updatedAt", "audit"] } },
+            "successStatus": 200
+          },
+          {
+            "id": "workflow.tasks.list", "method": "GET", "path": "/tasks",
+            "target": { "capability": "platform.workflow.orchestrator", "operation": "apiListTasks" },
+            "requestSchema": { "type": "object", "maxProperties": 0 },
+            "responseSchema": { "type": "array", "items": { "type": "object", "required": ["id", "instanceId", "nodeId", "title", "allowedOutcomes", "status", "revision", "createdAt"] } },
+            "successStatus": 200
+          },
+          {
+            "id": "workflow.tasks.complete", "method": "POST", "path": "/tasks/complete",
+            "target": { "capability": "platform.workflow.orchestrator", "operation": "apiCompleteTask" },
+            "requestSchema": { "type": "object", "additionalProperties": false, "required": ["taskId", "expectedRevision", "outcome"], "properties": { "taskId": { "type": "string" }, "expectedRevision": { "type": "integer", "minimum": 1 }, "outcome": { "type": "string" }, "comment": { "type": "string", "maxLength": 2000 } } },
+            "responseSchema": { "type": "object", "required": ["id", "status", "revision"] },
+            "successStatus": 200,
+            "errors": [{ "code": "workflow.conflict", "status": 409 }]
+          },
+          {
+            "id": "workflow.instances.cancel", "method": "POST", "path": "/instances/cancel",
+            "target": { "capability": "platform.workflow.orchestrator", "operation": "apiCancelInstance" },
+            "requestSchema": { "type": "object", "additionalProperties": false, "required": ["instanceId", "expectedRevision", "reason"], "properties": { "instanceId": { "type": "string" }, "expectedRevision": { "type": "integer", "minimum": 1 }, "reason": { "type": "string", "minLength": 1, "maxLength": 512 } } },
+            "responseSchema": { "type": "object", "required": ["id", "status", "revision"] },
+            "successStatus": 200,
+            "errors": [{ "code": "workflow.conflict", "status": 409 }]
+          }
+        ]
+      }]
+    },
+    "frontend": {
+      "views": [
+        { "id": "platform.workflow.catalog", "title": "流程目录" },
+        { "id": "platform.workflow.definitions", "title": "流程定义" },
+        { "id": "platform.workflow.bindings", "title": "服务绑定" },
+        { "id": "platform.workflow.instances", "title": "流程实例" },
+        { "id": "platform.workflow.tasks", "title": "待办任务" }
+      ],
+      "navigations": [{ "id": "main", "contract": "1.0.0", "nodes": [
+        { "id": "workflow-management", "zone": "settings", "label": { "key": "navigation.title", "fallback": "流程管理" }, "icon": { "kind": "semantic", "name": "workbench" }, "order": 80 }
+      ], "icons": [] }]
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "contract": "data.model.v1",
+  "id": "platform.workflow.record",
+  "schemaVersion": 1,
+  "storage": { "kind": "platform-control", "table": "platform_workflow_records" },
+  "fields": [
+    { "id": "id", "column": "id", "type": "string", "nullable": false, "sensitivity": "internal", "maxLength": 512 },
+    { "id": "tenantId", "column": "tenant_id", "type": "string", "nullable": false, "sensitivity": "confidential", "maxLength": 160 },
+    { "id": "kind", "column": "kind", "type": "string", "nullable": false, "sensitivity": "internal", "maxLength": 32 },
+    { "id": "serviceId", "column": "service_id", "type": "string", "nullable": true, "sensitivity": "internal", "maxLength": 160 },
+    { "id": "featureId", "column": "feature_id", "type": "string", "nullable": true, "sensitivity": "internal", "maxLength": 160 },
+    { "id": "status", "column": "status", "type": "string", "nullable": true, "sensitivity": "internal", "maxLength": 32 },
+    { "id": "record", "column": "record_document", "type": "json", "nullable": false, "sensitivity": "confidential" },
+    { "id": "revision", "column": "revision", "type": "int64", "nullable": false, "sensitivity": "internal" },
+    { "id": "createdAt", "column": "created_at", "type": "timestamp", "nullable": false, "sensitivity": "internal" },
+    { "id": "updatedAt", "column": "updated_at", "type": "timestamp", "nullable": false, "sensitivity": "internal" }
+  ],
+  "primaryKey": ["id"],
+  "indexes": [
+    { "id": "byKindStatus", "fields": ["kind", "status"], "unique": false },
+    { "id": "byServiceFeature", "fields": ["serviceId", "featureId"], "unique": false }
+  ],
+  "uniqueConstraints": [],
+  "scope": { "tenant": "required", "service": "none" },
+  "optimisticLock": { "field": "revision" },
+  "audit": { "createdAt": "createdAt", "updatedAt": "updatedAt" },
+  "deletion": { "mode": "hard" }
+}

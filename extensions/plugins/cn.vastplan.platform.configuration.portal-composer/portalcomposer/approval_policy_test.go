@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	approvalv2 "cdsoft.com.cn/VastPlan/contracts/schemas/approval/v2"
+	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.configuration.portal-composer/portalapproval"
 )
 
 type testApprovalPolicy struct {
@@ -26,7 +27,7 @@ func (p testApprovalPolicy) EvaluateBatch(_ context.Context, inputs []approvalv2
 
 func withDifferentSubjectTestPolicy(ctx context.Context) context.Context {
 	ref := approvalv2.ProfileRef{ID: "test.different-subject", Revision: 1, Digest: strings.Repeat("a", 64)}
-	return withApprovalPolicy(ctx, testApprovalPolicy{evaluate: func(input approvalv2.EvaluationInput) approvalv2.Decision {
+	return portalapproval.WithPolicy(ctx, testApprovalPolicy{evaluate: func(input approvalv2.EvaluationInput) approvalv2.Decision {
 		if input.Actor.ID == input.Resource.SubmittedBy {
 			return approvalv2.Decision{Status: approvalv2.DecisionDenied, Profile: ref, MatchedRuleID: "test.deny-self", Code: "approval.separation_required", Message: "提交人不能审批自己的内容"}
 		}
@@ -61,7 +62,7 @@ func withSeedReviewTestPolicy(ctx context.Context) context.Context {
 		{ID: "test.acknowledged", Field: "review.acknowledged", Kind: approvalv2.EvidenceBooleanTrue},
 		{ID: "test.reason", Field: "review.reason", Kind: approvalv2.EvidenceTextLength, MinLength: 4, MaxLength: 512},
 	}
-	return withApprovalPolicy(ctx, testApprovalPolicy{evaluate: func(input approvalv2.EvaluationInput) approvalv2.Decision {
+	return portalapproval.WithPolicy(ctx, testApprovalPolicy{evaluate: func(input approvalv2.EvaluationInput) approvalv2.Decision {
 		if input.Actor.ID != input.Resource.SubmittedBy {
 			return approvalv2.Decision{Status: approvalv2.DecisionAllowed, Profile: ref, MatchedRuleID: "test.allow-other"}
 		}

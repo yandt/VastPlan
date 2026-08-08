@@ -74,6 +74,8 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
   - Linux SSH 首次引导、systemd Node Agent 接管、插件化 Application Intent 规划、在线服务组合与副本配置边界
 - [**跨端体验与交互契约**](architecture/跨端体验与交互契约.md)
   - Portal、Mobile、Desktop 的声明式 UI 语义、交互 Broker 与安全边界
+- [**通用流程管理**](architecture/通用流程管理.md)
+  - 流程功能点注册、不可变定义修订、耐久实例与领域动作边界
 
 ### 设计系统
 - [**Portal 设计系统**](design/DESIGN.md)
@@ -285,6 +287,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [ADR-0202 服务可选导航编排与展示文件夹](decisions/ADR-0202-服务可选导航编排与展示文件夹.md)
 - [ADR-0203 受治理默认 UI Provider 替换](decisions/ADR-0203-受治理默认UI-Provider替换.md)
 - [ADR-0204 ActualState 生产兼容基线与连续迁移](decisions/ADR-0204-ActualState生产兼容基线与连续迁移.md)
+- [ADR-0205 流程管理插件与领域动作边界](decisions/ADR-0205-流程管理插件与领域动作边界.md)
 
 ### 通用版本账本
 

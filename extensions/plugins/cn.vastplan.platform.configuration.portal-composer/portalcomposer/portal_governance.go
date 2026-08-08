@@ -6,6 +6,7 @@ import (
 
 	approvalv2 "cdsoft.com.cn/VastPlan/contracts/schemas/approval/v2"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
+	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.configuration.portal-composer/portalapproval"
 )
 
 // PortalGovernance projects the hot Portal aggregate and enriches pending
@@ -63,7 +64,7 @@ func (s *Service) projectApprovalDecisions(ctx context.Context, principal portal
 	if len(revisions) == 0 {
 		return
 	}
-	decisions, decisionErr := s.approvalDecisions(ctx, principal, revisions)
+	decisions, decisionErr := portalapproval.Decisions(ctx, principal, revisions)
 	byPortal := make(map[string]approvalv2.Decision, len(portalIDs))
 	for index, portalID := range portalIDs {
 		if decisionErr != nil {

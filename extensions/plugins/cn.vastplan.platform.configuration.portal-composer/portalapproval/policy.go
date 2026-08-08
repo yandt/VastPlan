@@ -1,4 +1,5 @@
-package portalcomposer
+// Package portalapproval adapts Portal publication facts to approval.policy.v2.
+package portalapproval
 
 import (
 	"context"
@@ -10,41 +11,38 @@ import (
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
-var ErrApprovalProviderUnavailable = errors.New("Approval Provider 暂不可用")
+var ErrProviderUnavailable = errors.New("Approval Provider 暂不可用")
 
-type ApprovalPolicy interface {
+type Policy interface {
 	Evaluate(context.Context, approvalv2.EvaluationInput) (approvalv2.Decision, error)
 	EvaluateBatch(context.Context, []approvalv2.EvaluationInput) ([]approvalv2.Decision, error)
 }
 
-type approvalPolicyContextKey struct{}
+type policyContextKey struct{}
 
-func withApprovalPolicy(ctx context.Context, policy ApprovalPolicy) context.Context {
-	return context.WithValue(ctx, approvalPolicyContextKey{}, policy)
+func WithPolicy(ctx context.Context, policy Policy) context.Context {
+	return context.WithValue(ctx, policyContextKey{}, policy)
 }
 
-func approvalPolicyFromContext(ctx context.Context) (ApprovalPolicy, error) {
-	policy, _ := ctx.Value(approvalPolicyContextKey{}).(ApprovalPolicy)
+func fromContext(ctx context.Context) (Policy, error) {
+	policy, _ := ctx.Value(policyContextKey{}).(Policy)
 	if policy == nil {
-		return nil, ErrApprovalProviderUnavailable
+		return nil, ErrProviderUnavailable
 	}
 	return policy, nil
 }
 
-type ApprovalError struct {
-	Decision approvalv2.Decision
-}
+type ApprovalError struct{ Decision approvalv2.Decision }
 
 func (e *ApprovalError) Error() string { return e.Decision.Message }
-
 func (e *ApprovalError) Unwrap() error {
 	if e.Decision.Code == "approval.separation_required" {
-		return ErrSelfApproval
+		return portalapi.ErrSelfApproval
 	}
 	return nil
 }
 
-func (s *Service) approvalInput(principal portalapi.Principal, revision portalapi.Revision, review portalapi.PortalApprovalRequest) (approvalv2.EvaluationInput, error) {
+func Input(principal portalapi.Principal, revision portalapi.Revision, review portalapi.PortalApprovalRequest) (approvalv2.EvaluationInput, error) {
 	evidence := map[string]json.RawMessage{}
 	if review.Review.ExpectedDigest != "" {
 		evidence["review.expected-digest"], _ = json.Marshal(review.Review.ExpectedDigest)
@@ -57,10 +55,8 @@ func (s *Service) approvalInput(principal portalapi.Principal, revision portalap
 	}
 	input := approvalv2.EvaluationInput{
 		Operation: "portal.publication.approve", TenantID: principal.TenantID,
-		Actor: approvalv2.ActorFacts{ID: principal.ID, Roles: append([]string(nil), principal.Roles...)},
-		Resource: approvalv2.ResourceFacts{
-			ID: fmt.Sprintf("%s/%d", revision.PortalID, revision.ID), Digest: revision.ConfigurationDigest, SubmittedBy: revision.SubmittedBy,
-		},
+		Actor:    approvalv2.ActorFacts{ID: principal.ID, Roles: append([]string(nil), principal.Roles...)},
+		Resource: approvalv2.ResourceFacts{ID: fmt.Sprintf("%s/%d", revision.PortalID, revision.ID), Digest: revision.ConfigurationDigest, SubmittedBy: revision.SubmittedBy},
 		Evidence: evidence,
 	}
 	if err := approvalv2.ValidateInput(input); err != nil {
@@ -69,30 +65,30 @@ func (s *Service) approvalInput(principal portalapi.Principal, revision portalap
 	return input, nil
 }
 
-func (s *Service) approvalDecision(ctx context.Context, principal portalapi.Principal, revision portalapi.Revision, review portalapi.PortalApprovalRequest) (approvalv2.Decision, error) {
-	policy, err := approvalPolicyFromContext(ctx)
+func Decision(ctx context.Context, principal portalapi.Principal, revision portalapi.Revision, review portalapi.PortalApprovalRequest) (approvalv2.Decision, error) {
+	policy, err := fromContext(ctx)
 	if err != nil {
 		return approvalv2.Decision{}, err
 	}
-	input, err := s.approvalInput(principal, revision, review)
+	input, err := Input(principal, revision, review)
 	if err != nil {
 		return approvalv2.Decision{}, err
 	}
 	decision, err := policy.Evaluate(ctx, input)
 	if err != nil {
-		return approvalv2.Decision{}, fmt.Errorf("%w: %v", ErrApprovalProviderUnavailable, err)
+		return approvalv2.Decision{}, fmt.Errorf("%w: %v", ErrProviderUnavailable, err)
 	}
 	return decision, nil
 }
 
-func (s *Service) approvalDecisions(ctx context.Context, principal portalapi.Principal, revisions []portalapi.Revision) ([]approvalv2.Decision, error) {
-	policy, err := approvalPolicyFromContext(ctx)
+func Decisions(ctx context.Context, principal portalapi.Principal, revisions []portalapi.Revision) ([]approvalv2.Decision, error) {
+	policy, err := fromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 	inputs := make([]approvalv2.EvaluationInput, 0, len(revisions))
 	for _, revision := range revisions {
-		input, err := s.approvalInput(principal, revision, portalapi.PortalApprovalRequest{})
+		input, err := Input(principal, revision, portalapi.PortalApprovalRequest{})
 		if err != nil {
 			return nil, err
 		}
@@ -100,19 +96,19 @@ func (s *Service) approvalDecisions(ctx context.Context, principal portalapi.Pri
 	}
 	decisions, err := policy.EvaluateBatch(ctx, inputs)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrApprovalProviderUnavailable, err)
+		return nil, fmt.Errorf("%w: %v", ErrProviderUnavailable, err)
 	}
 	return decisions, nil
 }
 
-func requireAllowedApproval(decision approvalv2.Decision) error {
+func RequireAllowed(decision approvalv2.Decision) error {
 	if decision.Status == approvalv2.DecisionAllowed {
 		return nil
 	}
 	return &ApprovalError{Decision: decision}
 }
 
-func approvalError(err error) (*ApprovalError, bool) {
+func AsError(err error) (*ApprovalError, bool) {
 	var target *ApprovalError
 	ok := errors.As(err, &target)
 	return target, ok

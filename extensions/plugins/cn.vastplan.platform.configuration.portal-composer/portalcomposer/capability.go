@@ -13,8 +13,10 @@ import (
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	workflowv1 "cdsoft.com.cn/VastPlan/contracts/schemas/workflow/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactreference"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
+	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.configuration.portal-composer/portalapproval"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 	sharedstatesdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/sharedstate"
 )
@@ -365,18 +367,18 @@ func Contribution(service *Service) sdk.Contribution {
 				var handleErr error
 				requestContext := withCatalog(ctx, hostCatalog{host: host, callCtx: callCtx})
 				requestContext = withVersionControl(requestContext, versionControl)
-				if operationNeedsApprovalPolicy(op) {
-					policy, policyErr := newHostApprovalPolicy(host, callCtx, service.approvalBinding)
+				if portalapproval.OperationNeedsPolicy(op) {
+					policy, policyErr := portalapproval.NewHostPolicy(host, callCtx, service.approvalBinding)
 					if policyErr != nil {
 						return policyErr
 					}
-					requestContext = withApprovalPolicy(requestContext, policy)
+					requestContext = portalapproval.WithPolicy(requestContext, policy)
 				}
 				raw, handleErr = service.Handle(requestContext, principal, op, payload)
 				return handleErr
 			})
 			if err != nil {
-				if approval, ok := approvalError(err); ok {
+				if approval, ok := portalapproval.AsError(err); ok {
 					return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: "portal." + approval.Decision.Code, Message: approval.Error()}}, nil, nil
 				}
 				if errors.Is(err, ErrForbidden) {
@@ -388,7 +390,7 @@ func Contribution(service *Service) sdk.Contribution {
 				if errors.Is(err, ErrStateConflict) {
 					return composerStateError("portal.composer.conflict", err, true), nil, nil
 				}
-				if errors.Is(err, ErrApprovalProviderUnavailable) {
+				if errors.Is(err, portalapproval.ErrProviderUnavailable) {
 					return composerStateError("portal.approval.provider_unavailable", err, true), nil, nil
 				}
 				if errors.Is(err, ErrVersionControlUnavailable) {
@@ -436,6 +438,11 @@ func projectPrincipal(callCtx *contractv1.CallContext) (portalapi.Principal, err
 
 func projectPrincipalForOperation(callCtx *contractv1.CallContext, operation string) (portalapi.Principal, error) {
 	switch operation {
+	case portalapi.ExecutePublicationReleaseOperation:
+		if callCtx != nil && callCtx.GetTenantId() != "" && callCtx.GetCaller().GetKind() == contractv1.CallerKind_CALLER_KIND_PLUGIN && callCtx.GetCaller().GetId() == workflowv1.OrchestratorPluginID {
+			return portalapi.Principal{ID: workflowv1.OrchestratorPluginID, TenantID: callCtx.GetTenantId(), System: true}, nil
+		}
+		return portalapi.Principal{}, ErrForbidden
 	case portalapi.PreparePluginInstallationOperation, portalapi.CommitPluginInstallationOperation, portalapi.AbortPluginInstallationOperation, portalapi.RollbackPluginInstallationOperation:
 		if callCtx != nil && callCtx.GetTenantId() != "" && callCtx.GetCaller().GetKind() == contractv1.CallerKind_CALLER_KIND_PLUGIN && callCtx.GetCaller().GetId() == "cn.vastplan.platform.infrastructure.deployment-manager" {
 			return portalapi.Principal{ID: "system", TenantID: callCtx.GetTenantId(), System: true}, nil

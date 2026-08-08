@@ -2,7 +2,7 @@
   "id": "cn.vastplan.platform.configuration.portal-composer",
   "name": "VastPlan Portal Composer",
   "description": "以单一 Portal 聚合治理 WorkingCopy、Publication、Release 与用户级 PortalPreference",
-  "version": "6.3.0",
+  "version": "6.4.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -33,6 +33,7 @@
       { "extensionPoint": "tool.package", "capability": "platform.portal-composer", "operation": "savePortalWorkingCopy", "permissions": ["platform.portal.compose"], "access": "write", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.portal-composer", "operation": "restorePortalVersion", "permissions": ["platform.portal.compose"], "access": "write", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.portal-composer", "operation": "submitPortalPublication", "permissions": ["platform.portal.compose"], "access": "execute", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.portal-composer", "operation": "preparePortalPublication", "permissions": ["platform.portal.compose"], "access": "execute", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.portal-composer", "operation": "approvePortalPublication", "permissions": ["platform.portal.approve"], "access": "approve", "approval": "policy" },
       { "extensionPoint": "tool.package", "capability": "platform.portal-composer", "operation": "publishPortalPublication", "permissions": ["platform.portal.publish"], "access": "execute", "approval": "different-subject" },
       { "extensionPoint": "tool.package", "capability": "platform.portal-composer", "operation": "releasePortalPublication", "permissions": ["platform.portal.publish"], "access": "execute", "approval": "different-subject" },
@@ -58,6 +59,15 @@
     ]
   },
   "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
+  "composition": {
+    "features": [{
+      "id": "workflow-managed-publication",
+      "title": "流程管理 Portal 发布",
+      "description": "冻结 Portal Publication 后交给通用流程插件管理中间态并执行最终 Release",
+      "dependencies": { "cn.vastplan.platform.workflow.orchestrator": "^0.1.0" },
+      "runtimeRequires": [{ "capability": "platform.workflow.orchestrator", "contractRange": "^1.0.0", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "fail", "logicalService": "platform.workflow.orchestrator", "routingDomain": "platform" }]
+    }]
+  },
   "configuration": {
     "scope": "service",
     "applyMode": "restart",
@@ -125,9 +135,11 @@
           { "name": "createPortalWorkingCopy", "description": "为已发布 Portal 创建下一轮 WorkingCopy", "audience": "user" },
           { "name": "savePortalWorkingCopy", "description": "以 revision CAS 保存当前 WorkingCopy", "audience": "user" },
           { "name": "submitPortalPublication", "description": "冻结 WorkingCopy 并提交 Publication", "audience": "user" },
+          { "name": "preparePortalPublication", "description": "冻结 WorkingCopy 并返回标准受治理资源", "audience": "user" },
           { "name": "approvePortalPublication", "description": "按 ApprovalPolicy 审批 Publication", "audience": "user" },
           { "name": "publishPortalPublication", "description": "发布已审批的 Publication", "audience": "user" },
           { "name": "releasePortalPublication", "description": "将 Published Publication 上线", "audience": "user" },
+          { "name": "executePublicationRelease", "description": "由流程插件校验冻结摘要并执行最终 Portal Release", "audience": "workload" },
           { "name": "portalVersionHistory", "description": "读取 Portal 聚合已确认的版本历史", "audience": "user" },
           { "name": "readPortalVersion", "description": "冷读一个精确 Portal 历史版本", "audience": "user" },
           { "name": "comparePortalVersions", "description": "比较两个兼容环境修订的 Portal 版本", "audience": "user" },
@@ -148,6 +160,27 @@
           { "name": "get", "description": "读取当前主体的 Portal 偏好" },
           { "name": "put", "description": "以 CAS 保存当前主体的 Portal 偏好" }
         ]
+      }],
+      "workflowFeatures": [{
+        "id": "platform.portal.publication",
+        "contract": "1.0.0",
+        "resourceKind": "portal.publication",
+        "digestRequired": true,
+        "prepare": {
+          "capability": "platform.portal-composer",
+          "operation": "preparePortalPublication",
+          "permission": "platform.portal.compose"
+        },
+        "unboundPolicy": "direct",
+        "unboundActionId": "portal.release",
+        "actions": [{
+          "id": "portal.release",
+          "capability": "platform.portal-composer",
+          "operation": "executePublicationRelease",
+          "permission": "platform.portal.publish",
+          "terminal": true,
+          "compensatable": false
+        }]
       }]
     },
     "frontend": {

@@ -143,7 +143,7 @@ func TestPortalComposerPermissionCatalogUsesSignedOperations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(catalog.Permissions) != 4 || len(catalog.Operations) != 20 {
+	if len(catalog.Permissions) != 4 || len(catalog.Operations) != 21 {
 		t.Fatalf("Portal 权限目录必须覆盖全部签名用户操作: permissions=%d operations=%d", len(catalog.Permissions), len(catalog.Operations))
 	}
 	for _, operation := range catalog.Operations {

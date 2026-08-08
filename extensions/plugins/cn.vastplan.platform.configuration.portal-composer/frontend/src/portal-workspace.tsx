@@ -3,10 +3,11 @@ import { defineCollectionPage, message, type CollectionPageDefinition, type Coll
 import { portalForms, type PortalPermissionCatalogClient } from "./portal-workspace-forms";
 import { type PortalRow, statusLabels, toPortalRow, versionControlLabels } from "./portal-model";
 import { portalOverlays } from "./portal-overlays";
+import { directPublicationSubmitter, type PortalPublicationSubmitter } from "./publication-submitter";
 
 const namespace = "cn.vastplan.platform.configuration.portal-composer";
 
-export function createPortalPage(client: PortalControlClient, permissionCatalog: PortalPermissionCatalogClient): CollectionPageDefinition<PortalRow> {
+export function createPortalPage(client: PortalControlClient, permissionCatalog: PortalPermissionCatalogClient, publicationSubmitter: PortalPublicationSubmitter = directPublicationSubmitter(client)): CollectionPageDefinition<PortalRow> {
   return defineCollectionPage<PortalRow>({
     id: "platform.portal-composer",
     path: "/settings/portals",
@@ -49,7 +50,7 @@ export function createPortalPage(client: PortalControlClient, permissionCatalog:
     async runAction({ action, selected }) {
       const row = selected[0];
       if (row === undefined) return;
-      if (action.id === "portal.submit") await client.submitPortalPublication(row.id, row.workingRevision);
+      if (action.id === "portal.submit") await publicationSubmitter.submit(row.id, row.workingRevision);
       else if (action.id === "portal.approve") await client.approvePortalPublication(row.id, row.publicationId);
       else if (action.id === "portal.publish") await client.publishPortalPublication(row.id, row.publicationId);
       else if (action.id === "portal.release") {

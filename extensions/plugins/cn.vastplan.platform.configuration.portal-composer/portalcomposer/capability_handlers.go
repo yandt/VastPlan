@@ -4,11 +4,20 @@ import (
 	"context"
 	"fmt"
 
+	workflowv1 "cdsoft.com.cn/VastPlan/contracts/schemas/workflow/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
 func (s *Service) handlePortalOperation(ctx context.Context, principal portalapi.Principal, operation string, payload []byte) (any, error) {
 	switch operation {
+	case portalapi.PreparePortalPublicationOperation:
+		return s.PreparePortalPublication(ctx, principal, payload)
+	case portalapi.ExecutePublicationReleaseOperation:
+		var request workflowv1.ActionRequest
+		if err := decode(payload, &request); err != nil {
+			return nil, err
+		}
+		return s.ExecutePublicationRelease(ctx, principal, request)
 	case portalapi.PreparePluginInstallationOperation, portalapi.CommitPluginInstallationOperation, portalapi.AbortPluginInstallationOperation, portalapi.RollbackPluginInstallationOperation:
 		return s.handlePluginInstallationOperation(ctx, principal, operation, payload)
 	case portalapi.ReadNavigationConfigurationOperation, portalapi.PrepareNavigationConfigurationOperation, portalapi.CommitNavigationConfigurationOperation, portalapi.AbortNavigationConfigurationOperation, portalapi.RollbackNavigationConfigurationOperation:
