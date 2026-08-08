@@ -9,7 +9,7 @@
   "noticeFile": "NOTICE",
   "engines": { "backend": "^0.1" },
   "contextAccess": { "required": ["caller", "scene", "scope.tenant"], "optional": ["trace", "request.deadline", "propagation.callPath"] },
-  "runtime": { "instancePolicy": "active-active", "stateModel": "local-ephemeral", "visibility": "cluster", "routing": "queue", "routingDomain": "security", "provides": [
+  "runtime": { "instancePolicy": "active-active", "stateModel": "external-shared", "visibility": "cluster", "routing": "queue", "routingDomain": "security", "provides": [
     { "extensionPoint": "tool.package", "capability": "foundation.security.authorization-session", "contractVersion": "1.0.0", "visibility": "cluster", "routing": "queue", "routingDomain": "security" }
   ] },
   "authorization": {

@@ -22,7 +22,7 @@
     ]
   },
   "runtime": {
-    "instancePolicy": "active-active", "stateModel": "local-ephemeral", "visibility": "cluster", "routing": "queue", "routingDomain": "platform",
+    "instancePolicy": "active-active", "stateModel": "external-shared", "visibility": "cluster", "routing": "queue", "routingDomain": "platform",
     "provides": [{ "extensionPoint": "tool.package", "capability": "platform.artifacts.marketplace", "contractVersion": "1.0.0", "visibility": "cluster", "routing": "queue", "routingDomain": "platform" }],
     "requires": [{ "capability": "platform.artifacts.repository", "contractRange": "^1.0.0", "scope": "remote", "kind": "soft", "ready": "readiness", "failurePolicy": "degrade", "logicalService": "platform.artifacts.repository", "routingDomain": "platform" }]
   },
