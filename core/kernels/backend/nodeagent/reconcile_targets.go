@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
+	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent/runtimehost"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/servicemodel"
 )
 
@@ -33,7 +34,7 @@ func (r *Reconciler) reconcileTargets(ctx context.Context, revision uint64, targ
 func (r *Reconciler) reconcileTarget(ctx context.Context, revision uint64, unit deploymentv1.Unit, actual *ActualState) (bool, error) {
 	r.pulse()
 	id, fingerprint := unit.ID, unit.Fingerprint()
-	policy, err := unitPolicy(unit)
+	policy, err := runtimehost.UnitPolicy(unit)
 	if err != nil {
 		return false, err
 	}
@@ -96,7 +97,7 @@ func (r *Reconciler) reconcileTarget(ctx context.Context, revision uint64, unit 
 	if err != nil {
 		return false, r.recordCandidateFailure(actual, id, "migration_contract", err)
 	}
-	envelope, err := configEnvelope(unit.Config, unit.Plugins)
+	envelope, err := runtimehost.ConfigEnvelope(unit.Config, unit.Plugins)
 	if err != nil {
 		return false, r.recordCandidateFailure(actual, id, "configuration", err)
 	}

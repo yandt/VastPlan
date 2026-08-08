@@ -9,7 +9,7 @@ import (
 func TestPluginStateIdentityConversionPreservesSchemaIdentity(t *testing.T) {
 	contract := pluginv1.StateIdentity{Format: "com.example.state", FormatVersion: 2}
 	actualState := pluginStateIdentity(contract)
-	if got := actualState.contractIdentity(); got != contract {
+	if got := actualState.ContractIdentity(); got != contract {
 		t.Fatalf("状态身份转换漂移: got=%+v want=%+v", got, contract)
 	}
 }

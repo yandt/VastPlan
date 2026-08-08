@@ -6,11 +6,11 @@ package nodeagent
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"time"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent/model"
 	"cdsoft.com.cn/VastPlan/core/shared/go/bootstrapinventory"
 )
 
@@ -51,122 +51,20 @@ type StateStore interface {
 	Save(ActualState) error
 }
 
-// InstalledPlugin 是经安装器校验后可交给 backend 宿主启动的插件。
-type InstalledPlugin struct {
-	ID                   string                    `json:"id"`
-	Publisher            string                    `json:"publisher"`
-	Version              string                    `json:"version"`
-	InterfaceFingerprint string                    `json:"interface_fingerprint"`
-	Engines              map[string]string         `json:"engines,omitempty"`
-	Channel              string                    `json:"channel"`
-	SHA256               string                    `json:"sha256"`
-	Root                 string                    `json:"root"`
-	EntryPath            string                    `json:"entry_path"`
-	DynamicGoPath        string                    `json:"dynamic_go_path,omitempty"`
-	PythonPath           string                    `json:"python_path,omitempty"`
-	Execution            pluginv1.BackendExecution `json:"execution"`
-	State                *PluginStateContract      `json:"state,omitempty"`
-	Contract             PluginRuntimeContract     `json:"contract"`
-}
-
-// PluginRuntimeContract 是安装时从已验签清单冻结的运行授权，宿主不再相信进程自报。
-type PluginRuntimeContract struct {
-	Contributions     []pluginv1.RuntimeContribution `json:"contributions"`
-	Requires          []pluginv1.RuntimeRequirement  `json:"requires,omitempty"`
-	KernelServices    []string                       `json:"kernel_services,omitempty"`
-	ContextAccess     pluginv1.ContextAccess         `json:"context_access,omitempty"`
-	BackgroundService bool                           `json:"background_service,omitempty"`
-}
-
-// PluginStateIdentity 只标识插件私有状态格式，不暴露其存储结构。
-type PluginStateIdentity struct {
-	Format        string `json:"format"`
-	FormatVersion int32  `json:"format_version"`
-}
+type InstalledPlugin = model.InstalledPlugin
+type PluginRuntimeContract = model.PluginRuntimeContract
+type PluginStateIdentity = model.PluginStateIdentity
+type PluginStateContract = model.PluginStateContract
+type RuntimeUnit = model.RuntimeUnit
+type ReplacementCandidate = model.ReplacementCandidate
+type ReplacementReadinessBarrier = model.ReplacementReadinessBarrier
+type StateMigrationPlan = model.StateMigrationPlan
+type StateMigrationError = model.StateMigrationError
+type RuntimeStatus = model.RuntimeStatus
+type RuntimeEvent = model.RuntimeEvent
 
 func pluginStateIdentity(identity pluginv1.StateIdentity) PluginStateIdentity {
-	return PluginStateIdentity{Format: identity.Format, FormatVersion: identity.FormatVersion}
-}
-
-func (i PluginStateIdentity) contractIdentity() pluginv1.StateIdentity {
-	return pluginv1.StateIdentity{Format: i.Format, FormatVersion: i.FormatVersion}
-}
-
-// PluginStateContract 随已安装制品持久化，使下一次升级无需重新信任外部清单。
-type PluginStateContract struct {
-	PluginStateIdentity
-	MigrationProtocol string                `json:"migration_protocol,omitempty"`
-	MigrationFrom     []PluginStateIdentity `json:"migration_from,omitempty"`
-}
-
-// RuntimeUnit 是运行时需要的完整、不可变组合。
-type RuntimeUnit struct {
-	ID                     string
-	Fingerprint            string
-	ServiceRole            string
-	LogicalService         string
-	InstancePolicy         string
-	StateModel             string
-	Visibility             string
-	Routing                string
-	RoutingDomain          string
-	StartupTier            string
-	Generation             uint64
-	FencingToken           string
-	PartitionKeys          []string
-	PartitionGenerations   map[string]uint64
-	PartitionFencingTokens map[string]string
-	EnvironmentAllowlists  map[string][]string
-	KernelServiceGrants    map[string][]string
-	Config                 map[string]any
-	Plugins                []InstalledPlugin
-	Migrations             []StateMigrationPlan
-	RestartBase            uint64
-	ClusterMaxReplicas     int
-}
-
-// ReplacementCandidate is the host-only evidence emitted after candidate
-// registrations become routable but before the previous generation retires.
-// A barrier may wait for an external dependency to adopt these exact runtime
-// instances without teaching Node Agent what that dependency is.
-type ReplacementCandidate struct {
-	UnitID             string
-	StartupTier        string
-	Replacing          bool
-	RuntimeInstanceIDs []string
-}
-
-type ReplacementReadinessBarrier interface {
-	AwaitReady(context.Context, ReplacementCandidate) error
-}
-
-// StateMigrationPlan 由 Reconciler 从旧/新签名清单计算，Runtime 只负责按协议执行。
-// TransactionID 对同一次逻辑升级稳定，插件可据此实现幂等 prepare/commit/rollback。
-type StateMigrationPlan struct {
-	PluginID      string
-	TransactionID string
-	From          PluginStateIdentity
-	To            PluginStateIdentity
-}
-
-// RuntimeStatus 来自真实插件会话，不由持久化文件反推。
-type RuntimeStatus struct {
-	Healthy             bool
-	Readiness           string
-	DependencyIssues    []string
-	PIDs                []int
-	StartedAt           time.Time
-	RestartCount        uint64
-	KernelServiceGrants map[string][]string
-}
-
-// RuntimeEvent 通知 Agent 某 unit 的运行事实发生变化，使崩溃恢复无需等待配置轮询。
-type RuntimeEvent struct {
-	UnitID      string
-	Fingerprint string
-	Type        string
-	Message     string
-	OccurredAt  time.Time
+	return model.PluginStateIdentityFromContract(identity)
 }
 
 // ActualState 是最近一次 reconcile 后持久化的节点视图。
@@ -249,11 +147,13 @@ type BootstrapUpgradeCoordinator interface {
 
 // RawConfig 深拷贝 JSON 配置，避免运行时持有期望态调用方仍可修改的 map。
 func RawConfig(config map[string]any) map[string]any {
-	if config == nil {
-		return nil
-	}
-	raw, _ := json.Marshal(config)
-	var clone map[string]any
-	_ = json.Unmarshal(raw, &clone)
-	return clone
+	return model.RawConfig(config)
+}
+
+func cloneStringSlices(input map[string][]string) map[string][]string {
+	return model.CloneStringSlices(input)
+}
+
+func cloneStringMap(input map[string]string) map[string]string {
+	return model.CloneStringMap(input)
 }

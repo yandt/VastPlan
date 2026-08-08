@@ -8,19 +8,6 @@ import (
 
 const stateMigrationProtocolV1 = "lifecycle.v1"
 
-// StateMigrationError 让 Reconciler 把协议迁移失败与普通进程 launch 失败分开上报。
-type StateMigrationError struct {
-	PluginID string
-	Phase    string
-	Err      error
-}
-
-func (e *StateMigrationError) Error() string {
-	return fmt.Sprintf("插件 %s 状态迁移 %s 失败: %v", e.PluginID, e.Phase, e.Err)
-}
-
-func (e *StateMigrationError) Unwrap() error { return e.Err }
-
 // planStateMigrations 只根据已经验签并安装的旧/新清单生成迁移计划。插件首次引入
 // 状态无需迁移；已有状态被隐式改成 stateless，或新清单未声明旧格式时 fail-closed。
 func planStateMigrations(unitID, fingerprint string, current, candidate []InstalledPlugin) ([]StateMigrationPlan, error) {

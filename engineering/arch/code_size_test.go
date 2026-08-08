@@ -33,10 +33,6 @@ var productionFileSizeExceptions = map[string]sizeException{}
 // along real ownership boundaries. The key is the repository-relative package
 // directory, not the declared package name.
 var goPackageSizeExceptions = map[string]sizeException{
-	"core/kernels/backend/nodeagent": {
-		Maximum: 6404,
-		Reason:  "Node Agent model and Runtime Host still share one physical package",
-	},
 	"engineering/tools/platformdev": {
 		Maximum: 8602,
 		Reason:  "platform-dev orchestration and command adapters remain co-located",
