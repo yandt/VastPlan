@@ -7,6 +7,7 @@ import (
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
+	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
 	recordstorev1 "cdsoft.com.cn/VastPlan/contracts/schemas/recordstore/v1"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.foundation.data.relational.runtime/databaseruntime/recordstore"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
@@ -203,7 +204,7 @@ func (s *Service) endRecordTransaction(ctx context.Context, call *contractv1.Cal
 		if err != nil {
 			return recordResult(nil, err)
 		}
-		if ref.ResourceID != platformControlConnectionID {
+		if ref.ResourceID != platformcontrolv1.DatabaseConnectionResourceID {
 			if err := requireExecutor(call, ref); err != nil {
 				return recordResult(nil, NewRuntimeError(databasev1.ErrorInvalidRequest, false, err))
 			}

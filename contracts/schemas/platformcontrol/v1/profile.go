@@ -10,13 +10,14 @@ const (
 	BootstrapCapability = "foundation.state.shared.sql.bootstrap"
 	// 3.1.0 adds the additive close operation. A 3.0.0 replica stays valid; it
 	// simply cannot be told to release an abandoned candidate pool.
-	BootstrapContractVersion = "3.1.0"
-	RuntimeLogicalService    = "foundation.data.relational.runtime"
-	RuntimeRoutingDomain     = "platform"
-	OperationTest            = "test"
-	OperationProvision       = "provision"
-	OperationInitialize      = "initialize"
-	OperationOpen            = "open"
+	BootstrapContractVersion     = "3.1.0"
+	RuntimeLogicalService        = "foundation.data.relational.runtime"
+	RuntimeRoutingDomain         = "platform"
+	DatabaseConnectionResourceID = "platform.control"
+	OperationTest                = "test"
+	OperationProvision           = "provision"
+	OperationInitialize          = "initialize"
+	OperationOpen                = "open"
 	// OperationClose notifies a Runtime replica that the host is releasing a
 	// candidate pool it opened but will not commit. The payload carries the
 	// generation to avoid closing a newer pool that replaced the candidate.

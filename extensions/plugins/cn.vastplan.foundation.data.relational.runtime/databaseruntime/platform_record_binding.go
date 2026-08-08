@@ -6,10 +6,9 @@ import (
 	"sync"
 
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
+	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.foundation.data.relational.runtime/databaseruntime/recordstore"
 )
-
-const platformControlConnectionID = "platform.control"
 
 // PlatformRecordStore is the trusted, non-exportable data path from the
 // two-stage Platform Control bootstrap into Record Store. It deliberately
@@ -30,7 +29,7 @@ type platformRecordSnapshot struct {
 }
 
 func (s platformRecordSnapshot) connection() databasev1.ConnectionRef {
-	return databasev1.ConnectionRef{ResourceID: platformControlConnectionID, Revision: s.generation}
+	return databasev1.ConnectionRef{ResourceID: platformcontrolv1.DatabaseConnectionResourceID, Revision: s.generation}
 }
 
 type platformTransactionResource struct{ snapshot platformRecordSnapshot }

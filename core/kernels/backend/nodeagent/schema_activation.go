@@ -10,6 +10,7 @@ import (
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	datamodelv1 "cdsoft.com.cn/VastPlan/contracts/schemas/datamodel/v1"
+	platformcontrolv1 "cdsoft.com.cn/VastPlan/contracts/schemas/platformcontrol/v1"
 	recordstorev1 "cdsoft.com.cn/VastPlan/contracts/schemas/recordstore/v1"
 )
 
@@ -108,7 +109,7 @@ func decodeInventoryModel(signed recordstorev1.SignedModel) (datamodelv1.Model, 
 }
 
 func schemaEvidence(authorization recordstorev1.SchemaMigrationAuthorization) ([]string, error) {
-	resourceID := "platform.control"
+	resourceID := platformcontrolv1.DatabaseConnectionResourceID
 	if authorization.Storage.Connection != nil {
 		resourceID = authorization.Storage.Connection.ResourceID
 	}

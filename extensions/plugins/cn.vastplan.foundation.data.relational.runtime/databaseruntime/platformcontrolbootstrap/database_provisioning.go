@@ -86,7 +86,7 @@ func connectionSpec(profile platformcontrolv1.Profile, provisioning bool) (datab
 		pool.MaxOpen = 1
 	}
 	return databasev1.ConnectionSpec{
-		Ref:        databasev1.ConnectionRef{ResourceID: "platform.control", Revision: profile.Generation},
+		Ref:        databasev1.ConnectionRef{ResourceID: platformcontrolv1.DatabaseConnectionResourceID, Revision: profile.Generation},
 		ProviderID: profile.Connection.ProviderID,
 		Endpoint:   profile.Connection.Endpoint,
 		Database:   database,

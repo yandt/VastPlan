@@ -53,6 +53,7 @@ func TestArch_TrustedBoundaryLiteralsHaveSingleSource(t *testing.T) {
 		{credentiallease.Capability, "extensions/libraries/go/credentiallease/lease.go"},
 		{credentiallease.RuntimeKernelService, "extensions/libraries/go/credentiallease/lease.go"},
 		{platformcontrolv1.TrustedBootstrapScene, "contracts/schemas/platformcontrol/v1/profile.go"},
+		{platformcontrolv1.DatabaseConnectionResourceID, "contracts/schemas/platformcontrol/v1/profile.go"},
 		{recordstorev1.SchemaControllerEvidencePrefix, "contracts/schemas/recordstore/v1/contract.go"},
 	}
 	for _, file := range collectGoFiles(t) {
