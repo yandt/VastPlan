@@ -28,7 +28,10 @@ type Service struct {
 
 	mu      sync.Mutex
 	managed platformcontrol.ManagedStore
-	status  platformcontrolv1.Status
+	// managedGeneration identifies the pool in managed, so a release request can
+	// prove it targets that pool and not one a later activation installed.
+	managedGeneration uint64
+	status            platformcontrolv1.Status
 }
 
 func NewService(bootstrapper *Bootstrapper, binding *sharedstate.BindingStore, recordBinding *databaseruntime.PlatformRecordBinding,
@@ -44,12 +47,13 @@ func (s *Service) Contribution() sdk.Contribution {
 	return sdk.Contribution{
 		ExtensionPoint: extpoint.ToolPackage,
 		ID:             platformcontrolv1.BootstrapCapability,
-		Descriptor:     []byte(`{"title":"Platform Control SQL Bootstrap","subcommands":[{"name":"test","description":"测试 Platform Control SQL 候选"},{"name":"provision","description":"首次配置时创建 Platform Control 目标数据库"},{"name":"initialize","description":"初始化并绑定 Platform Control SQL 候选"},{"name":"open","description":"打开已提交的 Platform Control SQL Profile"}]}`),
+		Descriptor:     []byte(`{"title":"Platform Control SQL Bootstrap","subcommands":[{"name":"test","description":"测试 Platform Control SQL 候选"},{"name":"provision","description":"首次配置时创建 Platform Control 目标数据库"},{"name":"initialize","description":"初始化并绑定 Platform Control SQL 候选"},{"name":"open","description":"打开已提交的 Platform Control SQL Profile"},{"name":"close","description":"释放宿主不再提交的 Platform Control SQL 候选连接池"}]}`),
 		Handlers: map[string]sdk.Handler{
 			platformcontrolv1.OperationTest:       s.handler(platformcontrolv1.OperationTest),
 			platformcontrolv1.OperationProvision:  s.handler(platformcontrolv1.OperationProvision),
 			platformcontrolv1.OperationInitialize: s.handler(platformcontrolv1.OperationInitialize),
 			platformcontrolv1.OperationOpen:       s.handler(platformcontrolv1.OperationOpen),
+			platformcontrolv1.OperationClose:      s.closeHandler(),
 		},
 	}
 }
@@ -68,7 +72,35 @@ func (s *Service) Close() error {
 	}
 	err := s.managed.Close()
 	s.managed = nil
+	s.managedGeneration = 0
 	return err
+}
+
+// closeHandler is separate from handler because releasing a pool needs neither
+// a profile nor a secret: the replica already owns the pool, and the request
+// only has to name the generation it is releasing.
+func (s *Service) closeHandler() sdk.Handler {
+	return func(_ context.Context, _ sdk.Host, call *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+		if !trustedBootstrapCaller(call) {
+			return bootstrapResult(platformcontrolv1.Status{}, platformcontrolv1.ErrorInvalid, false)
+		}
+		var request platformcontrolv1.CloseRequest
+		if err := json.Unmarshal(payload, &request); err != nil || request.Generation == 0 {
+			return bootstrapResult(platformcontrolv1.Status{}, platformcontrolv1.ErrorInvalid, false)
+		}
+
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		// Idempotent, and deliberately a no-op once a later activation replaced
+		// the pool: the generation guard is what keeps a stale release from
+		// closing the pool that is currently serving Shared State.
+		if s.managed != nil && s.managedGeneration == request.Generation {
+			_ = s.managed.Close()
+			s.managed = nil
+			s.managedGeneration = 0
+		}
+		return bootstrapResult(s.status, "", false)
+	}
 }
 
 func (s *Service) handler(operation string) sdk.Handler {
@@ -168,6 +200,7 @@ func (s *Service) activate(ctx context.Context, call *contractv1.CallContext, op
 	}
 	previous := s.managed
 	s.managed = candidate
+	s.managedGeneration = profile.Generation
 	s.status = platformcontrolv1.Status{Phase: platformcontrolv1.PhaseReady, Generation: profile.Generation}
 	if previous != nil {
 		_ = previous.Close()

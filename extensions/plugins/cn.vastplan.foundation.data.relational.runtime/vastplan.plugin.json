@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.foundation.data.relational.runtime",
   "name": "VastPlan Database Runtime",
-  "version": "0.16.2",
+  "version": "0.17.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -36,7 +36,7 @@
       },
       {
         "extensionPoint": "tool.package",
-        "capability": "foundation.state.shared.sql.bootstrap", "contractVersion": "3.0.0",
+        "capability": "foundation.state.shared.sql.bootstrap", "contractVersion": "3.1.0",
         "visibility": "cluster",
         "routing": "queue",
         "routingDomain": "platform"

@@ -229,3 +229,4 @@
 - [ADR-0196 Desktop 内核规范 ID 改名（runner → desktop）](ADR-0196-Desktop内核规范ID改名.md)
 - [ADR-0197 平台控制 Profile 存在性作为 Provider 必需的真相源](ADR-0197-平台控制Profile存在性作为必需真相源.md)
 - [ADR-0198 激活门禁活跃性与引导重试](ADR-0198-激活门禁活跃性与引导重试.md)
+- [ADR-0199 跨进程候选连接池释放](ADR-0199-跨进程候选连接池释放.md)

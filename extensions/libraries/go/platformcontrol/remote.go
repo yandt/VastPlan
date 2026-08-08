@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"time"
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
@@ -73,12 +74,19 @@ func (b *RemoteBootstrapper) openReplicas(ctx context.Context, firstOperation st
 			operation = firstOperation
 		}
 		if _, err := b.callInstance(ctx, operation, instance.ID, profile, secret); err != nil {
+			// The replicas opened before this failure are never reachable through
+			// a returned Store, so nothing else would ever release them. They are
+			// not in b.replicas either, which is why this compensation cannot be
+			// left to RemoteStore.Close.
+			for _, openedID := range opened {
+				_ = releaseCandidate(ctx, b.invoke, openedID, profile.Generation)
+			}
 			return nil, err
 		}
 		opened = append(opened, instance.ID)
 	}
 	b.replicas.Replace(opened)
-	return &RemoteStore{invoke: b.invoke, replicas: b.replicas}, nil
+	return &RemoteStore{invoke: b.invoke, replicas: b.replicas, generation: profile.Generation}, nil
 }
 
 func (b *RemoteBootstrapper) callInstance(ctx context.Context, operation, instanceID string, profile platformcontrolv1.Profile, secret SecretSource) (platformcontrolv1.Status, error) {
@@ -112,14 +120,47 @@ func (b *RemoteBootstrapper) callInstance(ctx context.Context, operation, instan
 }
 
 // RemoteStore keeps the kernel Store SPI independent of the physical Database
-// Runtime process. Close is intentionally local: Runtime generation lifecycle
-// owns the physical pool.
+// Runtime process. Close releases the candidate pool each replica opened for
+// this generation: once the pool lives in another process, dropping the handle
+// locally is not enough, and the replica would hold it until some later
+// activation happened to replace it.
 type RemoteStore struct {
-	invoke   Invoker
-	replicas *runtimeReplicaSet
+	invoke     Invoker
+	replicas   *runtimeReplicaSet
+	generation uint64
 }
 
-func (s *RemoteStore) Close() error { return nil }
+// closeTimeout bounds the release sweep. Close runs on failure paths that
+// already have an error to report, so it must not block them.
+const closeTimeout = 5 * time.Second
+
+func (s *RemoteStore) Close() error {
+	if s == nil || s.generation == 0 || s.invoke == nil || s.replicas == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), closeTimeout)
+	defer cancel()
+	// Best effort: a replica that is already gone has released the pool with its
+	// process, and the caller is handling a failure it must still report.
+	for _, instanceID := range s.replicas.Preferred(s.invoke.Instances(platformcontrolv1.BootstrapCapability)) {
+		_ = releaseCandidate(ctx, s.invoke, instanceID, s.generation)
+	}
+	return nil
+}
+
+// releaseCandidate sends one close call. It carries no secret because the
+// replica is only being told to drop a pool it already owns.
+func releaseCandidate(ctx context.Context, invoke Invoker, instanceID string, generation uint64) error {
+	payload, err := json.Marshal(platformcontrolv1.CloseRequest{Generation: generation})
+	if err != nil {
+		return err
+	}
+	result, _, err := invoke.InvokeInstance(ctx, platformcontrolv1.BootstrapCapability, platformcontrolv1.OperationClose, instanceID, payload)
+	if err != nil {
+		return err
+	}
+	return resultError(result)
+}
 
 func (s *RemoteStore) Get(ctx context.Context, scope sharedstate.Scope, key string) (sharedstate.Entry, error) {
 	raw, err := s.call(ctx, sharedstatesqlv1.OperationGet, sharedstatesqlv1.KeyRequest{Scope: scopeToWire(scope), Key: key})
