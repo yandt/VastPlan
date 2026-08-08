@@ -16,7 +16,7 @@ Profile 文件必须使用规范绝对路径、普通文件和 owner-only 权限
 - 开发使用 `owner-file`，要求规范绝对路径、普通文件和无 group/world 权限；
 - Vault/KMS 后续通过同一 `SecretSource` 接口增加，不复制 Bootstrap 流程。
 
-首次配置还允许浏览器提交一次性的 `secretMaterial`。它属于 `ChangeRequest` 而不是 Profile：固定 BFF 完成会话、角色、CSRF、同源和请求体上限校验，共享 `platformcontrol/v1` 校验器在插件与可信宿主两级执行精确字段、互斥秘密输入和 64 KiB 材料上限校验；第一方 Connection Manager 只经固定 Kernel Service 转发。Go 可信宿主把材料写入自身受控 `managed-secrets` 目录中的随机命名 `0600` 普通文件，再把标准 `owner-file` 引用写入 Profile。测试请求只创建候选文件并在结束后删除；配置请求只有数据库 Test/Initialize 成功后才原子提交文件，Profile CAS 失败会回滚文件。启动时会按当前 Profile 清理未引用候选和孤儿文件。
+首次配置还允许浏览器提交一次性的 `secretMaterial`。它属于 `ChangeRequest` 而不是 Profile：固定 BFF 完成会话、角色、CSRF、同源和请求体上限校验，共享 `platformcontrol/v1` 校验器在插件与可信宿主两级执行精确字段、互斥秘密输入和 64 KiB 材料上限校验；第一方 Connection Manager 只经固定 Kernel Service 转发。Go 可信宿主把材料写入自身受控 `managed-secrets` 目录中的随机命名 `0600` 普通文件，再把标准 `owner-file` 引用写入 Profile。测试请求只创建候选文件并在结束后删除；配置请求只有数据库 Test/Initialize 成功后才原子提交文件，Profile CAS 失败会回滚文件。回滚的判据是**是否越过 rename 这个不可回退点**，而不是 `Commit` 是否返回 error：Profile 已 rename 到最终路径后，目录 fsync 失败不得触发秘密回滚或撤销 Provider 必需标记，否则会撕裂一次实际已成功的提交，留下「Profile 是 generation N+1、其引用的密码文件已被删除」且后续 Configure 因 CAS 冲突无法修复的状态。该情形以 `platform_control.profile_unsynced` 在 Ready 状态上保持可观测，见 [ADR-0197](../decisions/ADR-0197-平台控制Profile存在性作为必需真相源.md)。启动时会按当前 Profile 清理未引用候选和孤儿文件。
 
 候选密码跨独立 Database Runtime 进程传递时，Wire Profile 在 Test/Initialize 阶段必须引用当前真实存在的临时 `0600` 文件，不能提前引用尚未创建的最终文件名。Initialize 成功后可信宿主先原子重命名密码文件，再把 Profile 中的 `secretRef` 切换为最终路径并执行 Profile CAS；失败或仅测试时同时删除临时与最终候选。Runtime 始终只按受限引用重新读取密码，协议中不传递密码明文。
 
@@ -54,7 +54,7 @@ Configure
 
 ## 4. 不可回退 Shared State 绑定
 
-`sharedstate.BindingStore` 是 Kernel 暴露给插件的稳定 `state.shared.v1` 端口。它以单调协议状态区分 `unconfigured` 与 `unavailable`：只有从未提交 Platform Control Profile 时返回前者；读取到既有 Profile 或首次 Profile CAS 提交成功后，Provider 即被永久标记为必需，此后尚未绑定或发生故障一律返回后者。它只接受更高 generation 的 Provider，同 generation 只有相同 Profile identity 才幂等。Provider 故障不会切回本地 JSON，避免同一插件出现 SQL 与文件双真相源。候选 Store 在 Profile 提交或绑定失败时必须关闭自身连接池，不能留下不可达 generation 的数据库连接。
+`sharedstate.BindingStore` 是 Kernel 暴露给插件的稳定 `state.shared.v1` 端口。它以单调协议状态区分 `unconfigured` 与 `unavailable`：只有从未提交 Platform Control Profile 时返回前者；**Profile 路径上存在文件**或首次 Profile CAS 提交成功后，Provider 即被标记为必需，此后尚未绑定或发生故障一律返回后者。「必需」的真相源是磁盘上的存在性事实而非进程内存：`Start` 先独立探测存在性再读取内容，因此权限被放宽、内容损坏、版本回退导致 Schema 校验失败等**任何内容级失败都不会退回未配置态**；存在性探测本身失败（无法证明平台是全新的）同样按必需处理。该标记在进程生命周期内不可逆，进程重启后由同一磁盘事实重新确立，见 [ADR-0197](../decisions/ADR-0197-平台控制Profile存在性作为必需真相源.md)。它只接受更高 generation 的 Provider，同 generation 只有相同 Profile identity 才幂等。Provider 故障不会切回本地 JSON，避免同一插件出现 SQL 与文件双真相源。候选 Store 在 Profile 提交或绑定失败时必须关闭自身连接池，不能留下不可达 generation 的数据库连接。
 
 Authentication Broker 只把 `state.unconfigured` 解释为“尚未建立平台控制库”，此时可读取只读 Seed Catalog 完成首次登录；`state.unavailable`、超时、损坏和未知错误仍全部 fail-closed。该判断由 Shared State 协议和 Broker 存储适配器完成，前端、工作流和各层 Loader 不传递开发/生产开关。
 

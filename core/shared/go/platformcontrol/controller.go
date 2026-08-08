@@ -18,6 +18,7 @@ const (
 	CodeProvisioningFailed   = "platform_control.provisioning_failed"
 	CodeInitializationFailed = "platform_control.initialization_failed"
 	CodeCommitConflict       = "platform_control.commit_conflict"
+	CodeProfileUnsynced      = "platform_control.profile_unsynced"
 )
 
 type Bootstrapper = platformcontrolport.Bootstrapper
@@ -48,12 +49,35 @@ func (c *Controller) Start(ctx context.Context) error {
 	c.workflow.Lock()
 	defer c.workflow.Unlock()
 
+	// The durable fact that a profile was committed is observed before its
+	// content is read. A profile that exists but is unreadable, wrongly
+	// permissioned or unparsable must still make the provider requirement
+	// permanent: reporting the never-configured state would reopen the seed
+	// authentication fallback on a platform that already holds real data. An
+	// indeterminate probe is treated identically, because it cannot prove the
+	// platform is fresh.
+	committed, existsErr := c.profiles.Exists(ctx)
+	if committed || existsErr != nil {
+		c.binding.RequireProvider()
+	}
+	if existsErr != nil {
+		c.setStatus(platformcontrolv1.PhaseRecovery, 0, CodeProfileInvalid)
+		return existsErr
+	}
+
 	profile, err := c.profiles.Load(ctx)
 	if err != nil {
 		c.setStatus(platformcontrolv1.PhaseRecovery, 0, CodeProfileInvalid)
 		return err
 	}
 	if profile == nil {
+		if committed {
+			// The profile vanished between probe and read. The requirement is
+			// already permanent, so this is a trust-boundary fault, not a
+			// fresh platform.
+			c.setStatus(platformcontrolv1.PhaseRecovery, 0, CodeProfileInvalid)
+			return errors.New("Platform Control Profile 在探测后消失")
+		}
 		if err := c.materials.Reconcile(nil); err != nil {
 			c.setStatus(platformcontrolv1.PhaseRecovery, 0, CodeSecretUnavailable)
 			return err
@@ -61,8 +85,7 @@ func (c *Controller) Start(ctx context.Context) error {
 		c.setStatus(platformcontrolv1.PhaseUnconfigured, 0, "")
 		return nil
 	}
-	// A committed profile is the durable boundary after which bootstrap state
-	// must never become an authentication fallback, even if opening SQL fails.
+	// Idempotent, and it also covers a profile created between probe and read.
 	c.binding.RequireProvider()
 	c.setProfile(*profile)
 	if err := c.materials.Reconcile(&profile.SecretRef); err != nil {
@@ -157,11 +180,16 @@ func (c *Controller) Configure(ctx context.Context, request platformcontrolv1.Ch
 		candidate.SecretRef = prepared.Ref()
 	}
 	completeCommit := c.binding.BeginProviderCommit()
-	if err := c.profiles.Commit(ctx, candidate, expectedGeneration); err != nil {
+	commitErr := c.profiles.Commit(ctx, candidate, expectedGeneration)
+	// A profile that reached its final path is committed even when the
+	// directory fsync failed. Treating that as a failure would roll back the
+	// secret the persisted profile already references and restore the
+	// unconfigured state, leaving a generation no later Configure can repair.
+	if commitErr != nil && !errors.Is(commitErr, ErrCommittedButUnsynced) {
 		completeCommit(false)
 		_ = store.Close()
 		c.setCandidateFailure(expectedGeneration, CodeCommitConflict)
-		return err
+		return commitErr
 	}
 	completeCommit(true)
 	persistedSecret = true
@@ -171,7 +199,14 @@ func (c *Controller) Configure(ctx context.Context, request platformcontrolv1.Ch
 		c.setStatus(platformcontrolv1.PhaseRecovery, candidate.Generation, CodeCommitConflict)
 		return err
 	}
-	c.setStatus(platformcontrolv1.PhaseReady, candidate.Generation, "")
+	// Ready carries the unsynced code so an operator can still see that the
+	// directory entry was not fsynced, without the configuration being
+	// reported as failed.
+	readyCode := ""
+	if commitErr != nil {
+		readyCode = CodeProfileUnsynced
+	}
+	c.setStatus(platformcontrolv1.PhaseReady, candidate.Generation, readyCode)
 	return nil
 }
 

@@ -102,6 +102,10 @@ func (managedTestStore) Close() error { return nil }
 
 type rejectingProfileStore struct{}
 
+func (rejectingProfileStore) Exists(context.Context) (bool, error) {
+	return false, nil
+}
+
 func (rejectingProfileStore) Load(context.Context) (*platformcontrolv1.Profile, error) {
 	return nil, nil
 }

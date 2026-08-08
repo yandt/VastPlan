@@ -227,3 +227,4 @@
 - [ADR-0194 平台控制数据库与声明式数据分层](ADR-0194-平台控制数据库与声明式数据分层.md)
 - [ADR-0195 插件升级前 DataModel 迁移门禁](ADR-0195-插件升级前DataModel迁移门禁.md)
 - [ADR-0196 Desktop 内核规范 ID 改名（runner → desktop）](ADR-0196-Desktop内核规范ID改名.md)
+- [ADR-0197 平台控制 Profile 存在性作为 Provider 必需的真相源](ADR-0197-平台控制Profile存在性作为必需真相源.md)
