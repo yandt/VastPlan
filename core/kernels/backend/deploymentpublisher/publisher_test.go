@@ -27,6 +27,16 @@ func (r artifactReader) Read(ref pluginv1.ArtifactRef) (pluginv1.Artifact, []byt
 	return artifact, nil, nil
 }
 
+type countingArtifactReader struct {
+	delegate artifactReader
+	calls    map[pluginv1.ArtifactRef]int
+}
+
+func (r *countingArtifactReader) Read(ref pluginv1.ArtifactRef) (pluginv1.Artifact, []byte, error) {
+	r.calls[ref]++
+	return r.delegate.Read(ref)
+}
+
 type memoryApplier struct {
 	key string
 	raw []byte
@@ -85,7 +95,10 @@ func TestPublisherUsesCatalogProfileAndDigestLock(t *testing.T) {
 		Bindings: []backendcompositionv1.BackendPlatformBinding{{TenantID: "acme", DeploymentName: "agent-services", PlatformProfile: compositioncommonv1.Ref{ID: profile.ID, Revision: profile.Revision, Digest: profile.Digest()}}},
 	}
 	manifest := []byte(fmt.Sprintf(`{"id":%q,"name":"agent","description":"agent","version":"1.0.0","publisher":"example","engines":{"backend":"^1.0"},"configuration":{"scope":"service","applyMode":"restart","schema":{"type":"object","additionalProperties":false,"properties":{"region":{"type":"string"}}}},"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}}}`, applicationID))
-	reader := artifactReader{applicationID + "@1.0.0/stable": {PluginID: applicationID, Version: "1.0.0", Channel: "stable", SHA256: strings.Repeat("a", 64), Manifest: manifest}}
+	reader := &countingArtifactReader{
+		delegate: artifactReader{applicationID + "@1.0.0/stable": {PluginID: applicationID, Version: "1.0.0", Channel: "stable", SHA256: strings.Repeat("a", 64), Manifest: manifest}},
+		calls:    map[pluginv1.ArtifactRef]int{},
+	}
 	applier := &memoryApplier{}
 	catalogPublisher := &memoryCatalogPublisher{}
 	publisher, err := New(catalog, reader, applier, catalogPublisher, compositionresolver.Options{}, compositionresolver.Resolve)
@@ -105,6 +118,10 @@ func TestPublisherUsesCatalogProfileAndDigestLock(t *testing.T) {
 	if len(preview.ArtifactReferences) != 1 || preview.ArtifactReferences[0].Ref.PluginID != applicationID || preview.ArtifactReferences[0].SHA256 != strings.Repeat("a", 64) {
 		t.Fatalf("预览必须返回由可信多来源读取器解析的精确制品事实: %+v", preview.ArtifactReferences)
 	}
+	artifactRef := pluginv1.ArtifactRef{PluginID: applicationID, Version: "1.0.0", Channel: "stable"}
+	if reader.calls[artifactRef] != 1 {
+		t.Fatalf("解析、引用、配置与 DataModel 投影必须共用一份制品快照: calls=%d", reader.calls[artifactRef])
+	}
 	if len(preview.ConfigurationCatalog.Items) != 1 || preview.ConfigurationCatalog.Items[0].PluginID != applicationID || preview.ConfigurationCatalog.Items[0].Origin != deploymentv2.OriginApplication {
 		t.Fatalf("预览必须携带从已验证清单生成的配置目录: %+v", preview.ConfigurationCatalog)
 	}
@@ -123,6 +140,19 @@ func TestPublisherUsesCatalogProfileAndDigestLock(t *testing.T) {
 	}
 	if _, err := publisher.Preview(context.Background(), "other", application, 6); err == nil {
 		t.Fatal("认证 tenant 与 composition tenant 不一致必须拒绝")
+	}
+}
+
+func TestResolvedArtifactReferencesRejectSnapshotDigestDrift(t *testing.T) {
+	ref := pluginv1.ArtifactRef{PluginID: "com.example.agent", Version: "1.0.0", Channel: "stable"}
+	deployment := deploymentv2.Deployment{Units: []deploymentv2.ServiceUnit{{Plugins: []deploymentv1.PluginRef{{
+		ID: ref.PluginID, Version: ref.Version, Channel: ref.Channel, SHA256: strings.Repeat("a", 64),
+	}}}}}
+	artifacts := map[pluginv1.ArtifactRef]pluginv1.Artifact{ref: {
+		PluginID: ref.PluginID, Version: ref.Version, Channel: ref.Channel, SHA256: strings.Repeat("b", 64),
+	}}
+	if _, err := resolvedArtifactReferences(deployment, artifacts); err == nil {
+		t.Fatal("Artifact Reference 不得与 Deployment 解析锁使用不同摘要")
 	}
 }
 

@@ -89,17 +89,43 @@ type Publisher struct {
 	resolve   Resolver
 }
 
-type recordingArtifactReader struct {
+type snapshotArtifactReader struct {
 	delegate compositioncore.ArtifactReader
-	values   map[pluginv1.ArtifactRef]pluginv1.Artifact
+	entries  map[pluginv1.ArtifactRef]artifactSnapshot
 }
 
-func (r *recordingArtifactReader) Read(ref pluginv1.ArtifactRef) (pluginv1.Artifact, []byte, error) {
-	artifact, raw, err := r.delegate.Read(ref)
-	if err == nil {
-		r.values[ref] = artifact
+type artifactSnapshot struct {
+	artifact pluginv1.Artifact
+	raw      []byte
+	err      error
+}
+
+func newSnapshotArtifactReader(delegate compositioncore.ArtifactReader) *snapshotArtifactReader {
+	return &snapshotArtifactReader{delegate: delegate, entries: map[pluginv1.ArtifactRef]artifactSnapshot{}}
+}
+
+func (r *snapshotArtifactReader) Read(ref pluginv1.ArtifactRef) (pluginv1.Artifact, []byte, error) {
+	if snapshot, ok := r.entries[ref]; ok {
+		return cloneArtifact(snapshot.artifact), append([]byte(nil), snapshot.raw...), snapshot.err
 	}
-	return artifact, raw, err
+	artifact, raw, err := r.delegate.Read(ref)
+	r.entries[ref] = artifactSnapshot{artifact: cloneArtifact(artifact), raw: append([]byte(nil), raw...), err: err}
+	return cloneArtifact(artifact), append([]byte(nil), raw...), err
+}
+
+func (r *snapshotArtifactReader) artifacts() map[pluginv1.ArtifactRef]pluginv1.Artifact {
+	values := make(map[pluginv1.ArtifactRef]pluginv1.Artifact, len(r.entries))
+	for ref, snapshot := range r.entries {
+		if snapshot.err == nil {
+			values[ref] = cloneArtifact(snapshot.artifact)
+		}
+	}
+	return values
+}
+
+func cloneArtifact(artifact pluginv1.Artifact) pluginv1.Artifact {
+	artifact.Manifest = append([]byte(nil), artifact.Manifest...)
+	return artifact
 }
 
 func New(catalog backendcompositionv1.BackendPlatformCatalog, artifacts compositioncore.ArtifactReader, applier Applier, catalogs pluginconfiguration.Publisher, options compositioncore.Options, resolve Resolver) (*Publisher, error) {
@@ -240,20 +266,21 @@ func (p *Publisher) previewWithCatalog(tenantID string, application backendcompo
 	if err != nil {
 		return deploymentpublication.Result{}, err
 	}
-	recording := &recordingArtifactReader{delegate: p.artifacts, values: map[pluginv1.ArtifactRef]pluginv1.Artifact{}}
-	resolved, err := p.resolve(profile, application, deploymentRevision, recording, p.options)
+	snapshot := newSnapshotArtifactReader(p.artifacts)
+	resolved, err := p.resolve(profile, application, deploymentRevision, snapshot, p.options)
 	if err != nil {
 		return deploymentpublication.Result{}, err
 	}
-	references, err := resolvedArtifactReferences(resolved, recording.values)
+	artifacts := snapshot.artifacts()
+	references, err := resolvedArtifactReferences(resolved, artifacts)
 	if err != nil {
 		return deploymentpublication.Result{}, err
 	}
-	configurationCatalog, err := pluginconfiguration.Build(resolved, recording.values)
+	configurationCatalog, err := pluginconfiguration.Build(resolved, artifacts)
 	if err != nil {
 		return deploymentpublication.Result{}, fmt.Errorf("生成可信插件配置目录: %w", err)
 	}
-	dataModels, err := datamodelinventory.Project(resolved, p.artifacts)
+	dataModels, err := datamodelinventory.Project(resolved, snapshot)
 	if err != nil {
 		return deploymentpublication.Result{}, fmt.Errorf("生成可信 DataModel 目录: %w", err)
 	}
@@ -269,7 +296,7 @@ func resolvedArtifactReferences(deployment deploymentv2.Deployment, artifacts ma
 		for _, plugin := range unit.Plugins {
 			ref := pluginv1.ArtifactRef{PluginID: plugin.ID, Version: plugin.Version, Channel: compositioncore.NormalizeChannel(plugin.Channel)}
 			artifact, ok := artifacts[ref]
-			if !ok || artifact.PluginID != ref.PluginID || artifact.Version != ref.Version || compositioncore.NormalizeChannel(artifact.Channel) != ref.Channel || len(artifact.SHA256) != 64 {
+			if !ok || artifact.PluginID != ref.PluginID || artifact.Version != ref.Version || compositioncore.NormalizeChannel(artifact.Channel) != ref.Channel || len(artifact.SHA256) != 64 || artifact.SHA256 != plugin.SHA256 {
 				return nil, fmt.Errorf("可信部署预览缺少精确制品事实: %s@%s/%s", ref.PluginID, ref.Version, ref.Channel)
 			}
 			byRef[ref] = pluginv1.ArtifactReference{Ref: ref, SHA256: artifact.SHA256, Purpose: "resolved"}

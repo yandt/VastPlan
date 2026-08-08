@@ -45,12 +45,12 @@ func Resolve(profile backendcompositionv1.PlatformProfile, application backendco
 		}
 	}
 
-	platformRefs := map[string]compositioncore.Selection{}
+	platformRefs := map[string]compositioncore.ResolvedArtifact{}
 	baselinePluginIDs := map[string]struct{}{}
 	pluginBaselines := map[string]string{}
 	for _, baseline := range profile.ServiceBaselines {
 		for _, ref := range baseline.Plugins {
-			if err := compositioncore.VerifyRef(selection(ref), compositioncommonv1.OriginPlatformProfile, platformRefs, artifacts, options); err != nil {
+			if _, err := compositioncore.ResolveRef(selection(ref), compositioncommonv1.OriginPlatformProfile, platformRefs, artifacts, options); err != nil {
 				return deploymentv2.Deployment{}, fmt.Errorf("Platform Profile service baseline %s: %w", baseline.ID, err)
 			}
 			baselinePluginIDs[ref.ID] = struct{}{}
@@ -63,8 +63,12 @@ func Resolve(profile backendcompositionv1.PlatformProfile, application backendco
 			if _, baseline := baselinePluginIDs[ref.ID]; baseline {
 				return deploymentv2.Deployment{}, fmt.Errorf("平台插件 %q 不能同时属于公共 service baseline 和独立 seed service", ref.ID)
 			}
+			resolvedArtifact, err := compositioncore.ResolveRef(selection(ref), compositioncommonv1.OriginPlatformProfile, platformRefs, artifacts, options)
+			if err != nil {
+				return deploymentv2.Deployment{}, fmt.Errorf("Platform Profile service %s: %w", unit.ID, err)
+			}
 			if previousUnit := servicePluginUnits[ref.ID]; previousUnit != "" && previousUnit != unit.ID {
-				reusable, err := reusableHostLocalPlugin(ref, artifacts)
+				reusable, err := reusableHostLocalPlugin(resolvedArtifact.Manifest)
 				if err != nil {
 					return deploymentv2.Deployment{}, err
 				}
@@ -72,20 +76,17 @@ func Resolve(profile backendcompositionv1.PlatformProfile, application backendco
 					return deploymentv2.Deployment{}, fmt.Errorf("平台插件 %q 不能同时属于 service unit %q 和 %q", ref.ID, previousUnit, unit.ID)
 				}
 			}
-			if err := compositioncore.VerifyRef(selection(ref), compositioncommonv1.OriginPlatformProfile, platformRefs, artifacts, options); err != nil {
-				return deploymentv2.Deployment{}, fmt.Errorf("Platform Profile service %s: %w", unit.ID, err)
-			}
 			servicePluginUnits[ref.ID] = unit.ID
 		}
 	}
 
-	applicationRefs := map[string]compositioncore.Selection{}
+	applicationRefs := map[string]compositioncore.ResolvedArtifact{}
 	for _, unit := range application.Units {
 		for _, ref := range unit.Spec.Plugins {
 			if _, platformOwned := platformRefs[ref.ID]; platformOwned {
 				return deploymentv2.Deployment{}, fmt.Errorf("应用 unit %q 不能覆盖平台插件 %q", unit.Spec.ID, ref.ID)
 			}
-			if err := compositioncore.VerifyRef(selection(ref), compositioncommonv1.OriginApplication, applicationRefs, artifacts, options); err != nil {
+			if _, err := compositioncore.ResolveRef(selection(ref), compositioncommonv1.OriginApplication, applicationRefs, artifacts, options); err != nil {
 				return deploymentv2.Deployment{}, fmt.Errorf("Application Composition unit %s: %w", unit.Spec.ID, err)
 			}
 		}
@@ -170,22 +171,10 @@ func Resolve(profile backendcompositionv1.PlatformProfile, application backendco
 // instantiated in multiple service hosts. The rule is topology-based rather
 // than tied to a named permission plugin family; any shared/cluster
 // contribution remains single-owner.
-func reusableHostLocalPlugin(ref deploymentv1.PluginRef, artifacts ArtifactReader) (bool, error) {
-	channel := ref.Channel
-	if channel == "" {
-		channel = "stable"
-	}
-	artifact, _, err := artifacts.Read(pluginv1.ArtifactRef{PluginID: ref.ID, Version: ref.Version, Channel: channel})
-	if err != nil {
-		return false, fmt.Errorf("读取可复用 host-local 插件 %s@%s/%s: %w", ref.ID, ref.Version, channel, err)
-	}
-	manifest, err := pluginv1.ParseManifest(artifact.Manifest)
-	if err != nil {
-		return false, fmt.Errorf("解析可复用 host-local 插件 %s: %w", ref.ID, err)
-	}
+func reusableHostLocalPlugin(manifest pluginv1.Manifest) (bool, error) {
 	contributions, err := pluginv1.BackendRuntimeContributions(manifest)
 	if err != nil {
-		return false, fmt.Errorf("解析可复用 host-local 插件 %s runtime: %w", ref.ID, err)
+		return false, fmt.Errorf("解析可复用 host-local 插件 %s runtime: %w", manifest.ID, err)
 	}
 	if len(contributions) == 0 {
 		return false, nil
@@ -200,19 +189,19 @@ func reusableHostLocalPlugin(ref deploymentv1.PluginRef, artifacts ArtifactReade
 }
 
 func selection(ref deploymentv1.PluginRef) compositioncore.Selection {
-	return compositioncore.Selection{ID: ref.ID, Version: ref.Version, Channel: ref.Channel}
+	return compositioncore.Selection{ID: ref.ID, Version: ref.Version, Channel: ref.Channel, SHA256: ref.SHA256}
 }
 
-func resolvedPluginRefs(refs []deploymentv1.PluginRef, selections map[string]compositioncore.Selection) ([]deploymentv1.PluginRef, error) {
+func resolvedPluginRefs(refs []deploymentv1.PluginRef, selections map[string]compositioncore.ResolvedArtifact) ([]deploymentv1.PluginRef, error) {
 	resolved := make([]deploymentv1.PluginRef, len(refs))
 	copy(resolved, refs)
 	for index := range resolved {
-		selection, ok := selections[resolved[index].ID]
-		if !ok || selection.SHA256 == "" {
+		artifact, ok := selections[resolved[index].ID]
+		if !ok || artifact.Selection.SHA256 == "" {
 			return nil, fmt.Errorf("插件 %s 缺少 Resolver 精确 SHA-256", resolved[index].ID)
 		}
 		resolved[index].Channel = compositioncore.NormalizeChannel(resolved[index].Channel)
-		resolved[index].SHA256 = selection.SHA256
+		resolved[index].SHA256 = artifact.Selection.SHA256
 	}
 	return resolved, nil
 }

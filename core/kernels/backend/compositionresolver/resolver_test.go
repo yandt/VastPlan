@@ -26,6 +26,20 @@ func (r artifactReader) Read(ref pluginv1.ArtifactRef) (pluginv1.Artifact, []byt
 	return artifact, nil, nil
 }
 
+type changingArtifactReader struct {
+	artifacts []pluginv1.Artifact
+	calls     int
+}
+
+func (r *changingArtifactReader) Read(pluginv1.ArtifactRef) (pluginv1.Artifact, []byte, error) {
+	index := r.calls
+	r.calls++
+	if index >= len(r.artifacts) {
+		index = len(r.artifacts) - 1
+	}
+	return r.artifacts[index], nil, nil
+}
+
 func manifest(id, publisher string) []byte {
 	return []byte(fmt.Sprintf(`{
 		"id":%q,"name":"plugin","description":"plugin","version":"1.0.0","publisher":%q,
@@ -154,6 +168,69 @@ func TestResolveAllowsExactHostLocalPluginInMultiplePlatformServices(t *testing.
 	}
 	if len(resolved.Units) != 3 {
 		t.Fatalf("平台 unit 未完整保留: %+v", resolved.Units)
+	}
+}
+
+func TestResolveUsesOneArtifactViewForHostLocalTopology(t *testing.T) {
+	profile, application, _ := baseInputs()
+	profile.ServiceBaselines = []backendcompositionv1.ServiceBaseline{}
+	application.Units = []backendcompositionv1.ApplicationUnit{}
+	policyID := "cn.vastplan.foundation.security.host-local-changing-fixture"
+	hostLocalManifest := []byte(`{
+		"id":"cn.vastplan.foundation.security.host-local-changing-fixture","name":"policy","description":"policy",
+		"version":"1.0.0","publisher":"vastplan","engines":{"backend":"^1.0"},
+		"runtime":{"instancePolicy":"per-kernel","stateModel":"local-ephemeral","visibility":"local","routing":"direct","provides":[{"extensionPoint":"permission.checker","capability":"platform.admin","contractVersion":"1.0.0","visibility":"local","routing":"direct"}]},
+		"activation":["onStartup"],"entry":{"backend":"backend/main"},
+		"contributes":{"backend":{"permissionCheckers":[{"id":"platform.admin","service_role":"backend","title":"policy","priority":1000,"applies":{}}]}}
+	}`)
+	nonReusableManifest := []byte(strings.NewReplacer(
+		`"instancePolicy":"per-kernel"`, `"instancePolicy":"active-active"`,
+		`"stateModel":"local-ephemeral"`, `"stateModel":"external-shared"`,
+		`"visibility":"local"`, `"visibility":"cluster"`,
+		`"routing":"direct"`, `"routing":"queue"`,
+	).Replace(string(hostLocalManifest)))
+	nonReusable := pluginv1.Artifact{PluginID: policyID, Version: "1.0.0", Channel: "stable", SHA256: strings.Repeat("a", 64), Manifest: nonReusableManifest}
+	hostLocal := pluginv1.Artifact{PluginID: policyID, Version: "1.0.0", Channel: "stable", SHA256: strings.Repeat("b", 64), Manifest: hostLocalManifest}
+	reader := &changingArtifactReader{artifacts: []pluginv1.Artifact{nonReusable, hostLocal}}
+	profile.Services = []deploymentv2.ServiceUnit{
+		{ID: "settings", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1, Plugins: []deploymentv1.PluginRef{ref(policyID)}},
+		{ID: "credentials", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1, Plugins: []deploymentv1.PluginRef{ref(policyID)}},
+	}
+	if _, err := Resolve(profile, application, 1, reader, Options{}); err == nil || !strings.Contains(err.Error(), "不能同时属于 service unit") {
+		t.Fatalf("拓扑判断必须使用首次已验证制品视图: %v", err)
+	}
+	if reader.calls != 1 {
+		t.Fatalf("同一精确制品在解析事务中只能读取一次: calls=%d", reader.calls)
+	}
+}
+
+func TestResolveConsumesPlannerDigestLock(t *testing.T) {
+	profile, application, reader := baseInputs()
+	application.Units[0].Spec.Plugins[0].SHA256 = strings.Repeat("b", 64)
+	if _, err := Resolve(profile, application, 1, reader, Options{}); err == nil || !strings.Contains(err.Error(), "与解析锁") {
+		t.Fatalf("Planner 产生的 Application Composition 摘要必须被消费: %v", err)
+	}
+}
+
+func TestResolveRejectsConflictingDigestAcrossPlatformUnits(t *testing.T) {
+	profile, application, reader := baseInputs()
+	policyID := "cn.vastplan.foundation.security.host-local-digest-fixture"
+	policyManifest := []byte(`{
+		"id":"cn.vastplan.foundation.security.host-local-digest-fixture","name":"policy","description":"policy",
+		"version":"1.0.0","publisher":"vastplan","engines":{"backend":"^1.0"},
+		"runtime":{"instancePolicy":"per-kernel","stateModel":"local-ephemeral","visibility":"local","routing":"direct","provides":[{"extensionPoint":"permission.checker","capability":"platform.admin","contractVersion":"1.0.0","visibility":"local","routing":"direct"}]},
+		"activation":["onStartup"],"entry":{"backend":"backend/main"},
+		"contributes":{"backend":{"permissionCheckers":[{"id":"platform.admin","service_role":"backend","title":"policy","priority":1000,"applies":{}}]}}
+	}`)
+	reader[policyID+"@1.0.0/stable"] = pluginv1.Artifact{PluginID: policyID, Version: "1.0.0", Channel: "stable", SHA256: strings.Repeat("a", 64), Manifest: policyManifest}
+	first, second := ref(policyID), ref(policyID)
+	first.SHA256, second.SHA256 = strings.Repeat("a", 64), strings.Repeat("b", 64)
+	profile.Services = []deploymentv2.ServiceUnit{
+		{ID: "settings", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1, Plugins: []deploymentv1.PluginRef{first}},
+		{ID: "credentials", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1, Plugins: []deploymentv1.PluginRef{second}},
+	}
+	if _, err := Resolve(profile, application, 1, reader, Options{}); err == nil || !strings.Contains(err.Error(), "SHA-256 冲突") {
+		t.Fatalf("同一插件在两个平台 unit 中的摘要冲突必须拒绝: %v", err)
 	}
 }
 
