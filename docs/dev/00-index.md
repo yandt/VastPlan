@@ -278,6 +278,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [ADR-0195 插件升级前 DataModel 迁移门禁](decisions/ADR-0195-插件升级前DataModel迁移门禁.md)
 - [ADR-0196 Desktop 内核规范 ID 改名（runner → desktop）](decisions/ADR-0196-Desktop内核规范ID改名.md)
 - [ADR-0197 平台控制 Profile 存在性作为 Provider 必需的真相源](decisions/ADR-0197-平台控制Profile存在性作为必需真相源.md)
+- [ADR-0198 激活门禁活跃性与引导重试](decisions/ADR-0198-激活门禁活跃性与引导重试.md)
 
 ### 通用版本账本
 

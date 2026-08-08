@@ -18,7 +18,13 @@ type BindingStore struct {
 	generation uint64
 	identity   string
 	store      Store
-	changes    chan struct{}
+	// live tracks whether the bound provider is currently reachable. It is
+	// derived from call outcomes rather than probed separately: ErrUnavailable
+	// is the only error that means the provider could not be reached, while
+	// application errors prove it answered. This is deliberately distinct from
+	// store != nil, which only records that a binding once succeeded.
+	live    bool
+	changes chan struct{}
 }
 
 func NewBindingStore() *BindingStore { return &BindingStore{changes: make(chan struct{}, 1)} }
@@ -78,11 +84,41 @@ func (s *BindingStore) Bind(generation uint64, identity string, store Store) err
 	}
 	s.required = true
 	s.generation, s.identity, s.store = generation, identity, store
+	// The caller only binds a store it just opened successfully.
+	s.live = true
 	select {
 	case s.changes <- struct{}{}:
 	default:
 	}
 	return nil
+}
+
+// observe folds a call outcome into the liveness signal. Application errors
+// (not found, conflict, invalid) prove the provider answered, so only
+// ErrUnavailable clears it. A later successful call restores it, which is what
+// lets a gate reopen without waiting for a rebind.
+func (s *BindingStore) observe(err error) {
+	if s == nil {
+		return
+	}
+	reachable := !errors.Is(err, ErrUnavailable)
+	s.mu.Lock()
+	if s.store != nil {
+		s.live = reachable
+	}
+	s.mu.Unlock()
+}
+
+// Live reports whether the bound provider is currently usable. Callers that
+// gate work on the provider actually answering must use this instead of
+// Snapshot, whose readiness flag never falls back once a binding succeeded.
+func (s *BindingStore) Live() bool {
+	if s == nil {
+		return false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.store != nil && s.live
 }
 
 // Changes reports successful generation switches. It is an edge-triggered
@@ -125,7 +161,9 @@ func (s *BindingStore) Get(ctx context.Context, scope Scope, key string) (Entry,
 	if err != nil {
 		return Entry{}, err
 	}
-	return store.Get(ctx, scope, key)
+	entry, err := store.Get(ctx, scope, key)
+	s.observe(err)
+	return entry, err
 }
 
 func (s *BindingStore) Create(ctx context.Context, scope Scope, key string, value []byte) (Entry, error) {
@@ -133,7 +171,9 @@ func (s *BindingStore) Create(ctx context.Context, scope Scope, key string, valu
 	if err != nil {
 		return Entry{}, err
 	}
-	return store.Create(ctx, scope, key, value)
+	entry, err := store.Create(ctx, scope, key, value)
+	s.observe(err)
+	return entry, err
 }
 
 func (s *BindingStore) Update(ctx context.Context, scope Scope, key string, value []byte, expected uint64) (Entry, error) {
@@ -141,7 +181,9 @@ func (s *BindingStore) Update(ctx context.Context, scope Scope, key string, valu
 	if err != nil {
 		return Entry{}, err
 	}
-	return store.Update(ctx, scope, key, value, expected)
+	entry, err := store.Update(ctx, scope, key, value, expected)
+	s.observe(err)
+	return entry, err
 }
 
 func (s *BindingStore) Delete(ctx context.Context, scope Scope, key string, expected uint64) error {
@@ -149,7 +191,9 @@ func (s *BindingStore) Delete(ctx context.Context, scope Scope, key string, expe
 	if err != nil {
 		return err
 	}
-	return store.Delete(ctx, scope, key, expected)
+	err = store.Delete(ctx, scope, key, expected)
+	s.observe(err)
+	return err
 }
 
 func (s *BindingStore) List(ctx context.Context, scope Scope, prefix string, limit int, cursor string) (Page, error) {
@@ -157,7 +201,9 @@ func (s *BindingStore) List(ctx context.Context, scope Scope, prefix string, lim
 	if err != nil {
 		return Page{}, err
 	}
-	return store.List(ctx, scope, prefix, limit, cursor)
+	page, err := store.List(ctx, scope, prefix, limit, cursor)
+	s.observe(err)
+	return page, err
 }
 
 var _ Store = (*BindingStore)(nil)
