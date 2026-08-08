@@ -15,6 +15,7 @@ import (
 
 const (
 	maximumProductionFileLines = 600
+	maximumGoPackageLines      = 5000
 	maximumGoFunctionLines     = 160
 )
 
@@ -27,6 +28,28 @@ type sizeException struct {
 // Maximum freezes today's size: new responsibilities must be split out, and
 // once a file falls under the default limit this entry must be deleted.
 var productionFileSizeExceptions = map[string]sizeException{}
+
+// Package exceptions freeze existing oversized packages while they are split
+// along real ownership boundaries. The key is the repository-relative package
+// directory, not the declared package name.
+var goPackageSizeExceptions = map[string]sizeException{
+	"core/kernels/backend/nodeagent": {
+		Maximum: 6404,
+		Reason:  "Node Agent model and Runtime Host still share one physical package",
+	},
+	"engineering/tools/platformdev": {
+		Maximum: 8602,
+		Reason:  "platform-dev orchestration and command adapters remain co-located",
+	},
+	"extensions/plugins/cn.vastplan.platform.configuration.portal-composer/portalcomposer": {
+		Maximum: 5624,
+		Reason:  "Portal composition workflows remain in one implementation package",
+	},
+	"extensions/plugins/cn.vastplan.platform.infrastructure.deployment-manager/deploymentmanager": {
+		Maximum: 5625,
+		Reason:  "Deployment state, workflows, and protocol adapters remain co-located",
+	},
+}
 
 // Function exceptions use exact receiver/name identities and freeze the
 // current span. Keep this list intentionally small; workflow-sized functions
@@ -82,6 +105,47 @@ func TestArch_ProductionFilesDoNotAccumulateResponsibilities(t *testing.T) {
 	for path := range productionFileSizeExceptions {
 		if !seenExceptions[path] {
 			t.Errorf("代码规模例外指向不存在或已排除文件，请删除: %s", path)
+		}
+	}
+}
+
+func TestArch_GoPackagesDoNotAccumulateResponsibilities(t *testing.T) {
+	root := repoRoot(t)
+	packageLines := map[string]int{}
+	for _, file := range collectGoFiles(t) {
+		if file.generated || strings.HasSuffix(file.relPath, "_test.go") {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(file.relPath)))
+		if err != nil {
+			t.Errorf("读取 Go 包源码 %s: %v", file.relPath, err)
+			continue
+		}
+		packagePath := filepath.ToSlash(filepath.Dir(file.relPath))
+		packageLines[packagePath] += sourceLineCount(raw)
+	}
+
+	seenExceptions := map[string]bool{}
+	for packagePath, lines := range packageLines {
+		exception, excepted := goPackageSizeExceptions[packagePath]
+		if excepted {
+			seenExceptions[packagePath] = true
+			if strings.TrimSpace(exception.Reason) == "" || exception.Maximum <= maximumGoPackageLines {
+				t.Errorf("Go 包规模例外无有效理由或上限: %s", packagePath)
+			} else if lines > exception.Maximum {
+				t.Errorf("既有大包继续增长: %s 为 %d 行，冻结上限 %d；请拆出独立职责（%s）", packagePath, lines, exception.Maximum, exception.Reason)
+			} else if lines <= maximumGoPackageLines {
+				t.Errorf("Go 包已降至 %d 行，请删除过期例外: %s", lines, packagePath)
+			}
+			continue
+		}
+		if lines > maximumGoPackageLines {
+			t.Errorf("Go 包职责过度集中: %s 为 %d 行，默认上限 %d；请按领域边界物理拆包", packagePath, lines, maximumGoPackageLines)
+		}
+	}
+	for packagePath := range goPackageSizeExceptions {
+		if !seenExceptions[packagePath] {
+			t.Errorf("Go 包规模例外指向不存在、已排除或已迁移包，请删除: %s", packagePath)
 		}
 	}
 }
