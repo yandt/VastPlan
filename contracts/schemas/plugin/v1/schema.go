@@ -376,11 +376,11 @@ var backendContributionPoints = map[string]string{
 }
 
 var declarativeBackendContributionGroups = map[string]struct{}{
-	"apiContracts":      {},
-	"dataPlaneServices": {},
-	"dataModels":        {},
-	"dataMigrations":    {},
-	"workflowFeatures":  {},
+	"apiContracts":          {},
+	"dataPlaneServices":     {},
+	"dataModels":            {},
+	"dataMigrations":        {},
+	"workflowFeatures":      {},
 	"workflowNodeTemplates": {},
 	"workflowNodeProviders": {},
 }
