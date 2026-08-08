@@ -145,7 +145,7 @@ jobs:
       - name: 重跑 codegen 后不得有差异
         run: |
           ./engineering/tools/gen-proto.sh
-          if ! git diff --exit-code -- core/shared/go extensions/sdk/python/contract extensions/sdk/python/pluginhost/v1/pluginhost_pb2.py; then
+          if ! git diff --exit-code -- core/shared/go contracts/generated/go extensions/sdk/python/contract extensions/sdk/python/pluginhost/v1/pluginhost_pb2.py; then
             echo "::error::proto 改了但 codegen 生成物未同步提交。请本地跑 ./engineering/tools/gen-proto.sh 并提交产物（ADR-0016 §6）"
             exit 1
           fi
