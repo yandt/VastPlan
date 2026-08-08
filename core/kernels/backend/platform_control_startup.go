@@ -27,10 +27,15 @@ type platformControlAdministration interface {
 	Start(context.Context) error
 }
 
+type platformControlReplacementReadiness interface {
+	AwaitCandidateOpen(context.Context, []string) (bool, error)
+}
+
 type platformControlCoordinator struct {
-	controller platformControlAdministration
-	binding    *sharedstate.BindingStore
-	topology   interface {
+	controller  platformControlAdministration
+	replacement platformControlReplacementReadiness
+	binding     *sharedstate.BindingStore
+	topology    interface {
 		SubscribeTopologyChanges() (<-chan struct{}, func())
 	}
 	logf func(string, ...any)
@@ -55,6 +60,7 @@ func configurePlatformControlStartup(options reconcileOptions, plane *nodeContro
 	// root. Downstream host services continue to depend only on Store.
 	runtime.Dependencies.SharedState = binding
 	runtime.Dependencies.PlatformControl = coordinator.controller
+	runtime.ReplacementReadiness = coordinator
 	return coordinator, nil
 }
 
@@ -92,7 +98,7 @@ func newPlatformControlCoordinator(options reconcileOptions, plane *nodeControlP
 	if logf == nil {
 		logf = func(string, ...any) {}
 	}
-	return &platformControlCoordinator{controller: controller, binding: binding, topology: plane.router, logf: logf}, nil
+	return &platformControlCoordinator{controller: controller, replacement: remote, binding: binding, topology: plane.router, logf: logf}, nil
 }
 
 func (c *platformControlCoordinator) Allow(ctx context.Context, unit nodeagent.RuntimeUnit) error {
@@ -109,6 +115,21 @@ func (c *platformControlCoordinator) Allow(ctx context.Context, unit nodeagent.R
 	// accumulates restart backoff.
 	if !c.binding.Live() {
 		return errPlatformControlNotReady
+	}
+	return nil
+}
+
+const platformControlReplacementTimeout = 30 * time.Second
+
+func (c *platformControlCoordinator) AwaitReady(ctx context.Context, candidate nodeagent.ReplacementCandidate) error {
+	if !candidate.Replacing || candidate.StartupTier != "bootstrap" || c.replacement == nil {
+		return nil
+	}
+	waitCtx, cancel := context.WithTimeout(ctx, platformControlReplacementTimeout)
+	defer cancel()
+	_, err := c.replacement.AwaitCandidateOpen(waitCtx, candidate.RuntimeInstanceIDs)
+	if err != nil {
+		return fmt.Errorf("Platform Control 候选副本 Open 未完成: %w", err)
 	}
 	return nil
 }
@@ -211,3 +232,4 @@ func (c *platformControlCoordinator) reconcile(ctx context.Context) bool {
 }
 
 var _ nodeagent.ActivationGate = (*platformControlCoordinator)(nil)
+var _ nodeagent.ReplacementReadinessBarrier = (*platformControlCoordinator)(nil)

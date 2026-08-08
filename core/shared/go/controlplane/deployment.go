@@ -11,10 +11,17 @@ import (
 // ApplyDeployment 以 CAS 发布 Resolver 生成的全局 v2 部署规格；revision 必须单调递增，
 // 回滚通过用新的 revision 重新解析并发布旧组合内容完成。
 func ApplyDeployment(ctx context.Context, kv jetstream.KeyValue, key string, raw []byte) (uint64, deploymentv2.Deployment, error) {
+	return ApplyDeploymentValidated(ctx, kv, key, raw, nil)
+}
+
+// ApplyDeploymentValidated evaluates a publication boundary against the exact
+// value whose KV revision is used by the following Create or Update CAS.
+func ApplyDeploymentValidated(ctx context.Context, kv jetstream.KeyValue, key string, raw []byte, validate func(*deploymentv2.Deployment, deploymentv2.Deployment) error) (uint64, deploymentv2.Deployment, error) {
 	return applyVersioned(ctx, kv, key, raw, versionedCodec[deploymentv2.Deployment]{
 		parse: deploymentv2.Parse, noun: "集群部署",
 		revision:  func(value deploymentv2.Deployment) uint64 { return value.Revision },
 		digest:    func(value deploymentv2.Deployment) string { return value.Digest() },
+		validate:  validate,
 		monotonic: true,
 	})
 }

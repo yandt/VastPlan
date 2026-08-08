@@ -13,6 +13,7 @@ type versionedCodec[T any] struct {
 	parse     func([]byte) (T, error)
 	revision  func(T) uint64
 	digest    func(T) string
+	validate  func(*T, T) error
 	noun      string
 	monotonic bool
 }
@@ -31,6 +32,11 @@ func applyVersioned[T any](ctx context.Context, kv jetstream.KeyValue, key strin
 	}
 	current, err := kv.Get(ctx, key)
 	if errors.Is(err, jetstream.ErrKeyNotFound) {
+		if codec.validate != nil {
+			if err := codec.validate(nil, value); err != nil {
+				return 0, zero, err
+			}
+		}
 		revision, createErr := kv.Create(ctx, key, normalized)
 		if createErr != nil {
 			return 0, zero, fmt.Errorf("创建%s key %s: %w", codec.noun, key, createErr)
@@ -43,6 +49,11 @@ func applyVersioned[T any](ctx context.Context, kv jetstream.KeyValue, key strin
 	existing, err := codec.parse(current.Value())
 	if err != nil {
 		return 0, zero, fmt.Errorf("既有%s损坏，拒绝覆盖: %w", codec.noun, err)
+	}
+	if codec.validate != nil {
+		if err := codec.validate(&existing, value); err != nil {
+			return 0, zero, err
+		}
 	}
 	if codec.revision(existing) == codec.revision(value) {
 		if codec.digest(existing) != codec.digest(value) {

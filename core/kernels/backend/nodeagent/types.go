@@ -125,6 +125,21 @@ type RuntimeUnit struct {
 	ClusterMaxReplicas     int
 }
 
+// ReplacementCandidate is the host-only evidence emitted after candidate
+// registrations become routable but before the previous generation retires.
+// A barrier may wait for an external dependency to adopt these exact runtime
+// instances without teaching Node Agent what that dependency is.
+type ReplacementCandidate struct {
+	UnitID             string
+	StartupTier        string
+	Replacing          bool
+	RuntimeInstanceIDs []string
+}
+
+type ReplacementReadinessBarrier interface {
+	AwaitReady(context.Context, ReplacementCandidate) error
+}
+
 // StateMigrationPlan 由 Reconciler 从旧/新签名清单计算，Runtime 只负责按协议执行。
 // TransactionID 对同一次逻辑升级稳定，插件可据此实现幂等 prepare/commit/rollback。
 type StateMigrationPlan struct {

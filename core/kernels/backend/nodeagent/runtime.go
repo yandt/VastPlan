@@ -41,24 +41,25 @@ type ProtocolRuntime struct {
 	Identity          string
 	LeaderKV          jetstream.KeyValue
 
-	mu              sync.RWMutex
-	units           map[string]*runningUnit
-	closed          bool
-	events          chan RuntimeEvent
-	nextID          uint64
-	router          *addressing.Router
-	Dependencies    kernelspi.Dependencies
-	HostServices    map[string]protocolbus.HostService
-	Drivers         *ExecutionDriverRegistry
-	RuntimePools    *RuntimePoolManager
-	ExecutionPolicy ExecutionPolicy
-	HostingPolicy   RuntimeHostingPolicy
-	ContextPolicy   ContextPolicy
-	GrantPolicy     KernelServiceGrantPolicy
-	dynamicGoDriver PluginExecutionDriver
-	PlacementPolicy PlacementPolicy
-	lifecycleCtx    context.Context
-	lifecycleCancel context.CancelFunc
+	mu                   sync.RWMutex
+	units                map[string]*runningUnit
+	closed               bool
+	events               chan RuntimeEvent
+	nextID               uint64
+	router               *addressing.Router
+	Dependencies         kernelspi.Dependencies
+	HostServices         map[string]protocolbus.HostService
+	Drivers              *ExecutionDriverRegistry
+	RuntimePools         *RuntimePoolManager
+	ExecutionPolicy      ExecutionPolicy
+	HostingPolicy        RuntimeHostingPolicy
+	ContextPolicy        ContextPolicy
+	GrantPolicy          KernelServiceGrantPolicy
+	dynamicGoDriver      PluginExecutionDriver
+	PlacementPolicy      PlacementPolicy
+	ReplacementReadiness ReplacementReadinessBarrier
+	lifecycleCtx         context.Context
+	lifecycleCancel      context.CancelFunc
 }
 
 // AttachRouter 在首个 unit 启动前接入全局能力寻址。运行中切换 Router 会让已经发布的

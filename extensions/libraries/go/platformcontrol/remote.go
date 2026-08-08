@@ -62,6 +62,38 @@ func (b *RemoteBootstrapper) Open(ctx context.Context, profile platformcontrolv1
 	return b.openReplicas(ctx, platformcontrolv1.OperationOpen, profile, secret)
 }
 
+// AwaitCandidateOpen waits until every candidate runtime that contributes the
+// Bootstrap capability is part of the last all-success Open result. Candidates
+// without that capability are outside Platform Control's replacement boundary.
+func (b *RemoteBootstrapper) AwaitCandidateOpen(ctx context.Context, candidateInstanceIDs []string) (bool, error) {
+	candidates := make(map[string]struct{}, len(candidateInstanceIDs))
+	for _, instanceID := range candidateInstanceIDs {
+		if instanceID != "" {
+			candidates[instanceID] = struct{}{}
+		}
+	}
+	expected := make([]string, 0, len(candidates))
+	for _, instance := range b.invoke.Instances(platformcontrolv1.BootstrapCapability) {
+		if _, candidate := candidates[instance.ID]; candidate {
+			expected = append(expected, instance.ID)
+		}
+	}
+	if len(expected) == 0 {
+		return false, nil
+	}
+	for {
+		ready, changed := b.replicas.Ready(expected)
+		if ready {
+			return true, nil
+		}
+		select {
+		case <-ctx.Done():
+			return true, ctx.Err()
+		case <-changed:
+		}
+	}
+}
+
 func (b *RemoteBootstrapper) openReplicas(ctx context.Context, firstOperation string, profile platformcontrolv1.Profile, secret SecretSource) (ManagedStore, error) {
 	instances := b.invoke.Instances(platformcontrolv1.BootstrapCapability)
 	if len(instances) == 0 {

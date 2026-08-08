@@ -36,6 +36,12 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return errors.New("发布服务配置必须同时提供 -platform-profile 与 -application-composition")
 	}
 	publish := *options.platformProfilePath != ""
+	if *options.bootstrap && *options.bootstrapUnitRelease {
+		return errors.New("-bootstrap 与 -bootstrap-unit-release 不能同时使用")
+	}
+	if *options.bootstrapUnitRelease && !publish {
+		return errors.New("Bootstrap 单元换版必须同时提供 -platform-profile 与 -application-composition")
+	}
 	if !publish && !*options.controllerMode {
 		return errors.New("发布模式必须提供 -platform-profile 与 -application-composition")
 	}
@@ -135,7 +141,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		}
 	}
 	if publish {
-		if err := publishSeedDeployment(ctx, options, publicationCatalog, publicationApplication, controllerArtifacts, buckets, stdout); err != nil {
+		if err := publishDeployment(ctx, options, publicationCatalog, publicationApplication, controllerArtifacts, buckets, stdout); err != nil {
 			return err
 		}
 	}

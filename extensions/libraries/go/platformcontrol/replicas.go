@@ -15,10 +15,11 @@ type RuntimeInstance struct {
 type runtimeReplicaSet struct {
 	mu     sync.RWMutex
 	opened map[string]struct{}
+	change chan struct{}
 }
 
 func newRuntimeReplicaSet() *runtimeReplicaSet {
-	return &runtimeReplicaSet{opened: map[string]struct{}{}}
+	return &runtimeReplicaSet{opened: map[string]struct{}{}, change: make(chan struct{})}
 }
 
 func (s *runtimeReplicaSet) Replace(instanceIDs []string) {
@@ -30,7 +31,20 @@ func (s *runtimeReplicaSet) Replace(instanceIDs []string) {
 	}
 	s.mu.Lock()
 	s.opened = next
+	close(s.change)
+	s.change = make(chan struct{})
 	s.mu.Unlock()
+}
+
+func (s *runtimeReplicaSet) Ready(instanceIDs []string) (bool, <-chan struct{}) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, instanceID := range instanceIDs {
+		if _, opened := s.opened[instanceID]; !opened {
+			return false, s.change
+		}
+	}
+	return true, s.change
 }
 
 func (s *runtimeReplicaSet) Preferred(available []RuntimeInstance) []string {

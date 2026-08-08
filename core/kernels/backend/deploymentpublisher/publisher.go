@@ -28,7 +28,10 @@ type Applier interface {
 	Apply(context.Context, string, []byte) (uint64, deploymentv2.Deployment, error)
 }
 
-type KVApplier struct{ KV jetstream.KeyValue }
+type KVApplier struct {
+	KV   jetstream.KeyValue
+	Lane PublicationLane
+}
 
 // Resolver is injected by the Backend composition root. Keeping this narrow
 // function boundary prevents the publisher from reaching sideways into the
@@ -72,7 +75,9 @@ func (a KVApplier) Apply(ctx context.Context, key string, raw []byte) (uint64, d
 	if a.KV == nil {
 		return 0, deploymentv2.Deployment{}, errors.New("deployment KV 未配置")
 	}
-	return sharedcontrolplane.ApplyDeployment(ctx, a.KV, key, raw)
+	return sharedcontrolplane.ApplyDeploymentValidated(ctx, a.KV, key, raw, func(current *deploymentv2.Deployment, next deploymentv2.Deployment) error {
+		return ValidatePublicationLane(a.Lane, current, next)
+	})
 }
 
 type Publisher struct {

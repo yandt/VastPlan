@@ -160,7 +160,7 @@ func configureDeploymentServices(options reconcileOptions, artifacts artifactRes
 		return err
 	}
 	catalogStore := configurationcatalog.Store{KV: plane.buckets.Deployments}
-	publisher, err := deploymentpublisher.NewWithCatalogSource(catalogSource, artifacts, deploymentpublisher.KVApplier{KV: plane.buckets.Deployments}, catalogStore, compositionresolver.Options{AllowDevelopmentPlugins: options.allowDevelopmentPlugins}, compositionresolver.Resolve)
+	publisher, err := deploymentpublisher.NewWithCatalogSource(catalogSource, artifacts, deploymentpublisher.KVApplier{KV: plane.buckets.Deployments, Lane: deploymentpublisher.PublicationLaneApplication}, catalogStore, compositionresolver.Options{AllowDevelopmentPlugins: options.allowDevelopmentPlugins}, compositionresolver.Resolve)
 	if err != nil {
 		return err
 	}

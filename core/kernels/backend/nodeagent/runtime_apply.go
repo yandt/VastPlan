@@ -30,6 +30,7 @@ type applyTransaction struct {
 	registrations  []*addressing.Registration
 	handoffOld     *runningUnit
 	modelInventory *recordstorev1.SyncModelsRequest
+	expectedOld    *runningUnit
 	committed      bool
 }
 
@@ -60,7 +61,7 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 	if err := transaction.prepareRouting(ctx); err != nil {
 		return err
 	}
-	old, current, err := transaction.commit(ctx)
+	old, current, err := transaction.activateAndCommit(ctx)
 	if err != nil {
 		return err
 	}
@@ -240,17 +241,58 @@ func (transaction *applyTransaction) prepareRouting(ctx context.Context) error {
 	return nil
 }
 
-func (transaction *applyTransaction) commit(ctx context.Context) (*runningUnit, *runningUnit, error) {
+func (transaction *applyTransaction) activateAndCommit(ctx context.Context) (*runningUnit, *runningUnit, error) {
+	if err := transaction.activateRouting(ctx); err != nil {
+		return nil, nil, err
+	}
+	if err := transaction.awaitReplacementReady(ctx); err != nil {
+		return nil, nil, fmt.Errorf("等待 unit %s 候选接管外部依赖: %w", transaction.unit.ID, err)
+	}
+	return transaction.commit()
+}
+
+func (transaction *applyTransaction) activateRouting(ctx context.Context) error {
+	runtime := transaction.runtime
+	runtime.mu.Lock()
+	defer runtime.mu.Unlock()
+	if runtime.closed {
+		return errors.New("运行时已关闭")
+	}
+	if err := addressing.ActivateRegistrations(ctx, transaction.registrations); err != nil {
+		return fmt.Errorf("激活 unit %s 候选能力组: %w", transaction.unit.ID, err)
+	}
+	transaction.expectedOld = runtime.units[transaction.unit.ID]
+	return nil
+}
+
+func (transaction *applyTransaction) awaitReplacementReady(ctx context.Context) error {
+	barrier := transaction.runtime.ReplacementReadiness
+	if barrier == nil {
+		return nil
+	}
+	instanceIDs := make([]string, 0, len(transaction.instances))
+	for _, instance := range transaction.instances {
+		if instance != nil && instance.RuntimeAudience != "" {
+			instanceIDs = append(instanceIDs, instance.RuntimeAudience)
+		}
+	}
+	return barrier.AwaitReady(ctx, ReplacementCandidate{
+		UnitID: transaction.unit.ID, StartupTier: transaction.unit.StartupTier,
+		Replacing: transaction.expectedOld != nil, RuntimeInstanceIDs: instanceIDs,
+	})
+}
+
+func (transaction *applyTransaction) commit() (*runningUnit, *runningUnit, error) {
 	runtime := transaction.runtime
 	runtime.mu.Lock()
 	defer runtime.mu.Unlock()
 	if runtime.closed {
 		return nil, nil, errors.New("运行时已关闭")
 	}
-	if err := addressing.ActivateRegistrations(ctx, transaction.registrations); err != nil {
-		return nil, nil, fmt.Errorf("激活 unit %s 候选能力组: %w", transaction.unit.ID, err)
-	}
 	old, hadOld := runtime.units[transaction.unit.ID]
+	if old != transaction.expectedOld {
+		return nil, nil, errors.New("等待候选接管期间活动 unit generation 已变化")
+	}
 	restarts := transaction.unit.RestartBase
 	if hadOld && old.fingerprint == transaction.unit.Fingerprint {
 		if old.restarts > restarts {

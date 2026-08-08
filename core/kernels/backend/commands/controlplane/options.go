@@ -31,6 +31,7 @@ type controlPlaneFlagValues struct {
 	repositoryTokenFile        *string
 	repositoryCA               *string
 	bootstrap                  *bool
+	bootstrapUnitRelease       *bool
 	replicas                   *int
 	sharedStateMaxBytes        *int64
 	sharedStateWarningPercent  *int
@@ -69,6 +70,7 @@ func bindControlPlaneFlags(flags *flag.FlagSet) controlPlaneFlagValues {
 	options.repositoryTokenFile = flags.String("repository-token-file", "", "controller local-test owner-only 访问令牌文件")
 	options.repositoryCA = flags.String("repository-ca", "", "controller 远端制品仓库自定义 CA PEM")
 	options.bootstrap = flags.Bool("bootstrap", false, "创建/校准控制面 bucket")
+	options.bootstrapUnitRelease = flags.Bool("bootstrap-unit-release", false, "可信宿主受限通道：只允许现有 Bootstrap 单元的插件精确换版")
 	options.replicas = flags.Int("replicas", 1, "bootstrap 时的 JetStream 副本数；生产建议至少 3")
 	options.sharedStateMaxBytes = flags.Int64("shared-state-max-bytes", 0, "bootstrap 时 Shared State 硬上限；生产必须显式配置")
 	options.sharedStateWarningPercent = flags.Int("shared-state-warning-percent", sharedstate.DefaultWarningPercent, "Shared State 容量 warning 阈值百分比")

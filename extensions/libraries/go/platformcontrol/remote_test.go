@@ -204,3 +204,46 @@ func TestTopologyReopenUpdatesExistingRemoteStoreReplicaSet(t *testing.T) {
 		t.Fatalf("既有 Store 未切换到新打开副本: calls=%v err=%v", invoke.calls, err)
 	}
 }
+
+func TestAwaitCandidateOpenWaitsForAllSuccessReplicaReplacement(t *testing.T) {
+	invoke := &testInvoker{instances: map[string][]RuntimeInstance{
+		platformcontrolv1.BootstrapCapability: {{ID: "runtime-old"}, {ID: "runtime-candidate"}},
+	}}
+	bootstrapper, _ := NewRemoteBootstrapper(invoke)
+	bootstrapper.replicas.Replace([]string{"runtime-old"})
+
+	type result struct {
+		relevant bool
+		err      error
+	}
+	done := make(chan result, 1)
+	go func() {
+		relevant, err := bootstrapper.AwaitCandidateOpen(context.Background(), []string{"runtime-candidate"})
+		done <- result{relevant: relevant, err: err}
+	}()
+	select {
+	case got := <-done:
+		t.Fatalf("候选进入 all-success Open 前不得越过屏障: %+v", got)
+	case <-time.After(20 * time.Millisecond):
+	}
+	bootstrapper.replicas.Replace([]string{"runtime-old", "runtime-candidate"})
+	select {
+	case got := <-done:
+		if !got.relevant || got.err != nil {
+			t.Fatalf("候选 Open 后屏障结果错误: %+v", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("候选 Open 后屏障未释放")
+	}
+}
+
+func TestAwaitCandidateOpenIgnoresUnitWithoutBootstrapCapability(t *testing.T) {
+	invoke := &testInvoker{instances: map[string][]RuntimeInstance{
+		platformcontrolv1.BootstrapCapability: {{ID: "database-runtime"}},
+	}}
+	bootstrapper, _ := NewRemoteBootstrapper(invoke)
+	relevant, err := bootstrapper.AwaitCandidateOpen(context.Background(), []string{"unrelated-bootstrap-unit"})
+	if err != nil || relevant {
+		t.Fatalf("不贡献 Bootstrap capability 的单元不应进入 Platform Control 屏障: relevant=%v err=%v", relevant, err)
+	}
+}

@@ -24,3 +24,18 @@ func TestRunHelpAndPreflightDoNotConnect(t *testing.T) {
 		t.Fatalf("旧 raw deployment 发布入口必须直接移除: %v", err)
 	}
 }
+
+func TestBootstrapUnitReleasePreflightRejectsAmbiguousOrMissingInputs(t *testing.T) {
+	var output bytes.Buffer
+	if err := Run(context.Background(), []string{"-bootstrap-unit-release"}, &output, &output); err == nil || !strings.Contains(err.Error(), "必须同时提供") {
+		t.Fatalf("Bootstrap 换版缺少组合输入必须在连接 NATS 前失败: %v", err)
+	}
+	args := []string{
+		"-bootstrap", "-bootstrap-unit-release",
+		"-platform-profile", "profile.json", "-application-composition", "application.json",
+		"-deployment-revision", "2",
+	}
+	if err := Run(context.Background(), args, &output, &output); err == nil || !strings.Contains(err.Error(), "不能同时使用") {
+		t.Fatalf("Seed 与受限换版 lane 不得混用: %v", err)
+	}
+}

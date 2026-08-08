@@ -156,6 +156,26 @@ sudo mv -Tf "$VASTPLAN_HOME/current.next" "$VASTPLAN_HOME/current"
 
 canary 观察窗通过后再逐节点执行，不同时替换全部 Controller/Node Agent。控制器多副本升级期间保留至少一个健康 Leader；Node Agent 逐节点升级，等待前一节点重新 ready 后继续。
 
+### 4.1 Bootstrap 单元插件换版
+
+Deployment Manager 的普通在线发布不能修改 `startup_tier=bootstrap` 单元。Database Runtime 等 Bootstrap 插件必须由持有受控 controlplane 身份和 NATS 凭据的可信宿主单独发布：
+
+```bash
+go run ./core/kernels/backend controlplane \
+  -bootstrap-unit-release \
+  -nats-url tls://nats.example.com:4222 \
+  -nats-ca /etc/vastplan/pki/ca.crt \
+  -nats-cert /etc/vastplan/pki/controller.crt \
+  -nats-key /etc/vastplan/pki/controller.key \
+  -nats-seed /secure/controller.seed \
+  -repository /var/lib/vastplan/repository \
+  -platform-profile /etc/vastplan/platform-profile.json \
+  -application-composition /etc/vastplan/application-composition.json \
+  -deployment-revision 43
+```
+
+输入只能改变现有 Bootstrap 单元内既有插件的精确 version/channel/SHA-256 引用及对应 baseline/Profile 引用。配置、拓扑、副本数、资源、插件身份、Full 单元或应用组合有任何其他变化都会在 desired CAS 前被拒绝；这些变化必须拆到普通发布的另一 revision。Node Agent 会先让候选 Database Runtime 完成 Platform Control `Open`，再退役旧代；Open 超时或失败时旧代继续服务，desired 保持待收敛并由对账重试。
+
 ## 5. 配置回滚与二进制回滚
 
 配置回滚必须把已审核的旧内容作为一组新的 Platform Profile 与 Application Composition revision 发布，并分配新的单调递增 Deployment revision；不能回退 KV 中已经发布的 revision。集群模式可使用控制面发布工具：
@@ -172,6 +192,8 @@ go run ./core/kernels/backend controlplane \
   -application-composition /var/lib/vastplan/backups/application-composition.rollback.json \
   -deployment-revision 42
 ```
+
+若回滚内容包含 Bootstrap 单元插件版本，必须把它拆成单独的新 revision，并在同一命令增加 `-bootstrap-unit-release`；普通回滚发布会拒绝该变化。回滚仍是向前发布旧制品内容，不得降低 Deployment revision。
 
 本地文件模式用备份文件原子替换 DesiredState，Node Agent 会接受较小 revision 并按内容指纹决定是否重启。
 
