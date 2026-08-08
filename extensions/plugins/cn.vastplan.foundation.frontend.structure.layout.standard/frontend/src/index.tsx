@@ -4,6 +4,7 @@ import {
   accountNavigationNodeID,
   accountLogoutMenuItemID,
   accountMenuItems,
+  composedNavigationMenuItems,
   message,
   NavigationIcon,
   PortalNavigationMenu,
@@ -16,6 +17,7 @@ import {
   type NavigationZone,
   type PageSlotID,
   type PortalNavigationGroup,
+  type PortalNavigationCollection,
   type UIShellProps,
   type ShellSlotID,
 } from "@vastplan/ui-primitives";
@@ -49,21 +51,22 @@ export function StandardShell(props: UIShellProps) {
     "--vp-page-content-start": `${portalPageRhythm.contentStart}px`,
   } as CSSProperties;
   const shellPageContained = template.options.pageBodyWidth === "contained";
-  const allGroups = useMemo(() => groups(composition, ["primary", "secondary", "settings"]), [composition]);
-  const activeGroup = allGroups.find((group) => group.id === composition.activeNavigationPath?.rootGroupID);
-  const groupKey = allGroups.map((group) => group.id).join("\u0000");
-  const [selectedGroupID, setSelectedGroupID] = useState(activeGroup?.id ?? allGroups[0]?.id);
-  const [pendingGroupNavigationID, setPendingGroupNavigationID] = useState<string>();
+  const allCollections = useMemo(() => collections(composition, ["primary", "secondary", "settings"]), [composition]);
+  const activeCollection = allCollections.find((collection) => collection.id === composition.activeNavigationCollectionID);
+  const collectionKey = allCollections.map((collection) => collection.id).join("\u0000");
+  const [selectedCollectionID, setSelectedCollectionID] = useState(activeCollection?.id ?? allCollections[0]?.id);
+  const [pendingCollectionNavigationID, setPendingCollectionNavigationID] = useState<string>();
   useEffect(() => {
-    setSelectedGroupID((selected) => activeGroup?.id ?? (allGroups.some((group) => group.id === selected) ? selected : allGroups[0]?.id));
-  }, [activeGroup?.id, groupKey]);
-  const selectedGroup = allGroups.find((group) => group.id === selectedGroupID) ?? allGroups[0];
+    setSelectedCollectionID((selected) => activeCollection?.id ?? (allCollections.some((collection) => collection.id === selected) ? selected : allCollections[0]?.id));
+  }, [activeCollection?.id, collectionKey]);
+  const selectedCollection = allCollections.find((collection) => collection.id === selectedCollectionID) ?? allCollections[0];
   const shellHeaderVisible = hasRegionContent(composition, { shellSlots: shellHeaderSlots });
   const navigationVisible = hasRegionContent(composition, { intrinsic: branding.name !== "", navigation: true, shellSlots: shellNavigationSlots });
   const accountGroup = composition.navigation.secondary.find((group) => group.id === accountNavigationNodeID);
   // 系统管理仍保留 settings 语义区，便于权限裁剪与其他 Shell 使用同一组合模型；
   // 标准侧栏仅改变其视觉位置，使其成为图标主轨中最后一个一级入口。
-  const mainGroups = navigationRailGroups(composition);
+  const mainCollections = navigationRailCollections(composition);
+  const accountCollection = allCollections.find((collection) => collection.groups.some((group) => group.id === accountNavigationNodeID));
   const brand = <Brand name={branding.name} shortName={branding.shortName} logoURL={branding.logoURL} compact />;
 
   const header = shellHeaderVisible ? <header className="vp-shell-header">
@@ -78,17 +81,17 @@ export function StandardShell(props: UIShellProps) {
     onNavigate(page.id);
     setMobileOpen(false);
   };
-  const selectGroup = (id: string) => {
-    if (id === selectedGroup?.id) return;
-    setSelectedGroupID(id);
-    setPendingGroupNavigationID(id);
+  const selectCollection = (id: string) => {
+    if (id === selectedCollection?.id) return;
+    setSelectedCollectionID(id);
+    setPendingCollectionNavigationID(id);
   };
   useEffect(() => {
-    if (pendingGroupNavigationID === undefined || selectedGroup?.id !== pendingGroupNavigationID) return;
-    setPendingGroupNavigationID(undefined);
-    const firstPageID = firstNavigablePageID(selectedGroup);
+    if (pendingCollectionNavigationID === undefined || selectedCollection?.id !== pendingCollectionNavigationID) return;
+    setPendingCollectionNavigationID(undefined);
+    const firstPageID = firstNavigablePageID(selectedCollection);
     if (firstPageID !== undefined) navigate(firstPageID);
-  }, [pendingGroupNavigationID, selectedGroup]);
+  }, [pendingCollectionNavigationID, selectedCollection]);
 
   const page = composition.activePage;
   const pageWidth = resolvePageBodyMaxWidth(page?.bodyLayout, shellPageContained);
@@ -106,14 +109,13 @@ export function StandardShell(props: UIShellProps) {
     </>}
   </main></div>;
 
-  const mobileItems: MenuItem[] = allGroups.map((group) => ({
-    id: `group:${group.id}`,
-    label: navigationLabel(group, i18n),
-    icon: <NavigationIcon icon={group.icon} label={navigationLabel(group, i18n)} />,
-    children: group.id === accountNavigationNodeID ? accountMenuItems(group, composition, i18n, props.onLogout !== undefined) : [
-      ...group.pages.map((item) => ({ id: item.id, label: i18n.text(item.label), href: pagePath(composition, item.id) })),
-      ...group.children.map((child) => ({ id: `group:${child.id}`, label: i18n.text(child.label), children: child.pages.map((item) => ({ id: item.id, label: i18n.text(item.label), href: pagePath(composition, item.id) })) })),
-    ],
+  const mobileItems: MenuItem[] = allCollections.map((collection) => ({
+    id: collection.id,
+    label: navigationLabel(collection, i18n),
+    icon: <NavigationIcon icon={collection.icon} label={navigationLabel(collection, i18n)} />,
+    children: collection.groups.length === 1 && collection.groups[0]?.id === accountNavigationNodeID
+      ? accountMenuItems(collection.groups[0], composition, i18n, props.onLogout !== undefined)
+      : composedNavigationMenuItems(collection.groups, composition, i18n, false, collection.kind === "folder" ? "section" : "submenu"),
   }));
   const selectMobileMenu = (id: string) => {
     if (id === accountLogoutMenuItemID) {
@@ -130,10 +132,10 @@ export function StandardShell(props: UIShellProps) {
       {navigationVisible ? <DesktopNavigation
         branding={brand}
         composition={composition}
-        mainGroups={mainGroups}
-        selectedGroup={selectedGroup}
-        account={accountGroup === undefined ? null : <PortalAccountControl account={props.account} selected={selectedGroup?.id === accountGroup.id} onSelect={() => selectGroup(accountGroup.id)} tooltipPlacement="right" />}
-        onSelectGroup={selectGroup}
+        mainCollections={mainCollections}
+        selectedCollection={selectedCollection}
+        account={accountGroup === undefined || accountCollection === undefined ? null : <PortalAccountControl account={props.account} selected={selectedCollection?.id === accountCollection.id} onSelect={() => selectCollection(accountCollection.id)} tooltipPlacement="right" />}
+        onSelectCollection={selectCollection}
         onNavigate={navigate}
         onLogout={props.onLogout}
       /> : null}
@@ -150,47 +152,47 @@ export function StandardShell(props: UIShellProps) {
   </div>;
 }
 
-function DesktopNavigation({ branding, composition, mainGroups, selectedGroup, account, onSelectGroup, onNavigate, onLogout }: {
+function DesktopNavigation({ branding, composition, mainCollections, selectedCollection, account, onSelectCollection, onNavigate, onLogout }: {
   branding: ReactNode;
   composition: UIShellProps["composition"];
-  mainGroups: readonly PortalNavigationGroup[];
-  selectedGroup: PortalNavigationGroup | undefined;
+  mainCollections: readonly PortalNavigationCollection[];
+  selectedCollection: PortalNavigationCollection | undefined;
   account: ReactNode;
-  onSelectGroup(id: string): void;
+  onSelectCollection(id: string): void;
   onNavigate(id: string): void;
   onLogout?(): Promise<void>;
 }) {
   const i18n = usePortalI18n();
   const panelRef = useRef<HTMLElement>(null);
   const selectedButtonRef = useRef<HTMLButtonElement>(null);
-  const panelID = selectedGroup === undefined ? undefined : `vp-navigation-panel-${selectedGroup.id}`;
+  const panelID = selectedCollection === undefined ? undefined : `vp-navigation-panel-${selectedCollection.id}`;
   const focusPanel = () => panelRef.current?.querySelector<HTMLElement>("button, a, [tabindex]:not([tabindex='-1'])")?.focus();
-  const groupButton = (group: PortalNavigationGroup) => <RailButton
-    key={group.id}
-    group={group}
-    selected={group.id === selectedGroup?.id}
-    controls={group.id === selectedGroup?.id ? panelID : undefined}
-    buttonRef={group.id === selectedGroup?.id ? selectedButtonRef : undefined}
-    onSelect={() => onSelectGroup(group.id)}
+  const collectionButton = (collection: PortalNavigationCollection) => <RailButton
+    key={collection.id}
+    collection={collection}
+    selected={collection.id === selectedCollection?.id}
+    controls={collection.id === selectedCollection?.id ? panelID : undefined}
+    buttonRef={collection.id === selectedCollection?.id ? selectedButtonRef : undefined}
+    onSelect={() => onSelectCollection(collection.id)}
     onOpen={focusPanel}
   />;
   return <div className="vp-desktop-navigation">
     <aside className="vp-navigation-rail" aria-label={i18n.text(message(namespace, "navigation.groups", "主菜单分组"))} onKeyDown={moveRailFocus}>
       <div className="vp-navigation-start">{branding}{shellSlot(composition.shellSlots, "shell.navigation.start")}</div>
-      <div className="vp-navigation-center">{shellSlot(composition.shellSlots, "shell.navigation.center")}{mainGroups.map(groupButton)}</div>
+      <div className="vp-navigation-center">{shellSlot(composition.shellSlots, "shell.navigation.center")}{mainCollections.map(collectionButton)}</div>
       <div className="vp-navigation-end">{shellSlot(composition.shellSlots, "shell.navigation.end")}<div className="vp-navigation-account">{account}</div></div>
     </aside>
-    {selectedGroup === undefined ? null : <aside id={panelID} ref={panelRef} className="vp-navigation-panel" aria-label={i18n.text(message(namespace, "navigation.secondaryLabel", "{group}二级导航", { group: navigationLabel(selectedGroup, i18n) }))} onKeyDown={(event) => returnToRail(event, selectedButtonRef)}>
-      <header className="vp-navigation-panel-header"><span className="vp-navigation-panel-icon"><IconForGroup group={selectedGroup} /></span><strong>{navigationLabel(selectedGroup, i18n)}</strong></header>
-      <nav className="vp-navigation-panel-body" aria-label={navigationLabel(selectedGroup, i18n)}>
-        <SecondLevelMenu group={selectedGroup} composition={composition} onNavigate={onNavigate} onLogout={onLogout} />
+    {selectedCollection === undefined ? null : <aside id={panelID} ref={panelRef} className="vp-navigation-panel" aria-label={i18n.text(message(namespace, "navigation.secondaryLabel", "{group}二级导航", { group: navigationLabel(selectedCollection, i18n) }))} onKeyDown={(event) => returnToRail(event, selectedButtonRef)}>
+      <header className="vp-navigation-panel-header"><span className="vp-navigation-panel-icon"><NavigationIcon icon={selectedCollection.icon} /></span><strong>{navigationLabel(selectedCollection, i18n)}</strong></header>
+      <nav className="vp-navigation-panel-body" aria-label={navigationLabel(selectedCollection, i18n)}>
+        <SecondLevelMenu collection={selectedCollection} composition={composition} onNavigate={onNavigate} onLogout={onLogout} />
       </nav>
     </aside>}
   </div>;
 }
 
-function RailButton({ group, selected, controls, buttonRef, onSelect, onOpen }: {
-  group: PortalNavigationGroup;
+function RailButton({ collection, selected, controls, buttonRef, onSelect, onOpen }: {
+  collection: PortalNavigationCollection;
   selected: boolean;
   controls?: string;
   buttonRef?: React.RefObject<HTMLButtonElement>;
@@ -199,19 +201,15 @@ function RailButton({ group, selected, controls, buttonRef, onSelect, onOpen }: 
 }) {
   const i18n = usePortalI18n();
   const ui = usePortalUI();
-  const label = navigationLabel(group, i18n);
+  const label = navigationLabel(collection, i18n);
   return <ui.Tooltip title={label} placement="right"><button ref={buttonRef} type="button" className="vp-rail-button" data-selected={selected || undefined} aria-label={label} title={label} aria-pressed={selected} aria-controls={controls} onClick={onSelect} onKeyDown={(event) => {
     if (event.key === "ArrowRight" && selected) { event.preventDefault(); onOpen(); }
-  }}><NavigationIcon icon={group.icon} state={selected ? "active" : "normal"} size="lg" /></button></ui.Tooltip>;
+  }}><NavigationIcon icon={collection.icon} state={selected ? "active" : "normal"} size="lg" /></button></ui.Tooltip>;
 }
 
-function IconForGroup({ group }: { group: PortalNavigationGroup }) {
-  return <NavigationIcon icon={group.icon} />;
-}
-
-function SecondLevelMenu({ group, composition, onNavigate, onLogout }: { group: PortalNavigationGroup; composition: UIShellProps["composition"]; onNavigate(id: string): void; onLogout?(): Promise<void> }) {
+function SecondLevelMenu({ collection, composition, onNavigate, onLogout }: { collection: PortalNavigationCollection; composition: UIShellProps["composition"]; onNavigate(id: string): void; onLogout?(): Promise<void> }) {
   const i18n = usePortalI18n();
-  const activeChildID = composition.activeNavigationPath?.rootGroupID === group.id ? composition.activeNavigationPath.childGroupID : undefined;
+  const activeChildID = composition.activeNavigationCollectionID === collection.id ? composition.activeNavigationPath?.childGroupID : undefined;
   const storageKey = `${namespace}.open-child-groups`;
   const [openGroups, setOpenGroups] = useState<ReadonlySet<string>>(() => readOpenGroups(storageKey, activeChildID));
   useEffect(() => {
@@ -220,7 +218,7 @@ function SecondLevelMenu({ group, composition, onNavigate, onLogout }: { group: 
   }, [activeChildID]);
   const expandedIDs = [...openGroups].map((id) => `group:${id}`);
   const updateExpandedGroups = (ids: readonly string[]) => setOpenGroups(() => {
-    const childIDs = new Set(group.children.map((child) => child.id));
+    const childIDs = new Set(collection.groups.flatMap((group) => group.children.map((child) => child.id)));
     const next = new Set<string>();
     for (const id of ids) {
       if (!id.startsWith("group:")) continue;
@@ -231,7 +229,7 @@ function SecondLevelMenu({ group, composition, onNavigate, onLogout }: { group: 
     return next;
   });
   return <PortalNavigationMenu
-    groups={[group]}
+    groups={collection.groups}
     composition={composition}
     activeID={composition.activeNavigationPath?.pageID}
     presentation="inline"
@@ -239,6 +237,7 @@ function SecondLevelMenu({ group, composition, onNavigate, onLogout }: { group: 
     onExpandedChange={updateExpandedGroups}
     onNavigate={onNavigate}
     onLogout={onLogout}
+    rootPresentation={collection.kind === "folder" ? "section" : "submenu"}
     empty={<p className="vp-navigation-empty">{i18n.text(message(namespace, "navigation.accountUnavailable", "个人中心尚未装配"))}</p>}
   />;
 }
@@ -276,22 +275,22 @@ function moveRailFocus(event: KeyboardEvent<HTMLElement>) {
   buttons[next]?.focus();
 }
 
-export function groups(composition: UIShellProps["composition"], zones: readonly NavigationZone[]): readonly PortalNavigationGroup[] {
-  return zones.flatMap((zone) => composition.navigation[zone]);
+export function collections(composition: UIShellProps["composition"], zones: readonly NavigationZone[]): readonly PortalNavigationCollection[] {
+  return zones.flatMap((zone) => composition.navigationCollections[zone]);
 }
 
 /** Visual ordering for the standard side rail; the account remains the fixed bottom control. */
-export function navigationRailGroups(composition: UIShellProps["composition"]): readonly PortalNavigationGroup[] {
+export function navigationRailCollections(composition: UIShellProps["composition"]): readonly PortalNavigationCollection[] {
   return [
-    ...composition.navigation.primary,
-    ...composition.navigation.secondary.filter((group) => group.id !== accountNavigationNodeID),
-    ...composition.navigation.settings,
+    ...composition.navigationCollections.primary,
+    ...composition.navigationCollections.secondary.filter((collection) => !collection.groups.some((group) => group.id === accountNavigationNodeID)),
+    ...composition.navigationCollections.settings,
   ];
 }
 
 /** Returns the first routeable leaf in the same order as the second-level menu. */
-export function firstNavigablePageID(group: PortalNavigationGroup): string | undefined {
-  return group.pages[0]?.id ?? group.children.flatMap((child) => child.pages)[0]?.id;
+export function firstNavigablePageID(collection: PortalNavigationCollection): string | undefined {
+  return collection.groups.flatMap((group) => [...group.pages, ...group.children.flatMap((child) => child.pages)])[0]?.id;
 }
 
 function pagePath(composition: UIShellProps["composition"], navigationID: string): string | undefined {
@@ -327,8 +326,8 @@ export const standardShellCSS = `
 
 const namespace = "cn.vastplan.foundation.frontend.structure.layout.standard";
 
-function navigationLabel(group: PortalNavigationGroup, i18n: ReturnType<typeof usePortalI18n>): string {
-  return group.labels?.[i18n.locale] ?? i18n.text(group.label);
+function navigationLabel(collection: PortalNavigationCollection, i18n: ReturnType<typeof usePortalI18n>): string {
+  return collection.labels?.[i18n.locale] ?? i18n.text(collection.label);
 }
 export const shellLibrary = {
   id: "standard", shell: "ui.structure.shell", uiContract: uiContractVersion, Shell: StandardShell,

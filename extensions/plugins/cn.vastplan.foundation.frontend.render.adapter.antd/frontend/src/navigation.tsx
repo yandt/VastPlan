@@ -24,6 +24,7 @@ function menuItems(items: MenuItem[], recipe: Readonly<{ itemHeight: number; ite
   return items.map((item) => {
     const disabled = parentDisabled || item.disabled === true;
     const children = item.children?.length ? menuItems(item.children, recipe, variant, onSelect, disabled) : undefined;
+    if (item.kind === "section") return { key: item.id, type: "group", label: item.label, children };
     const label = item.href === undefined ? item.label : <a href={item.href} onClick={(event) => {
       event.preventDefault();
       event.stopPropagation();

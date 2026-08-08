@@ -513,6 +513,10 @@ func (s *Service) isHiddenVersionLocked(versionID uint64) bool {
 		return true
 	}
 	_, ok := s.state.InstallationVersionOwners[versionID]
+	if ok {
+		return true
+	}
+	_, ok = s.state.NavigationVersionOwners[versionID]
 	return ok
 }
 

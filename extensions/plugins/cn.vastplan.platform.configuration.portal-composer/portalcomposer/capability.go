@@ -382,6 +382,9 @@ func Contribution(service *Service) sdk.Contribution {
 				if errors.Is(err, ErrForbidden) {
 					return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: errorcode.PermissionDenied, Message: err.Error()}}, nil, nil
 				}
+				if result := navigationComposerOperationError(op, err); result != nil {
+					return result, nil, nil
+				}
 				if errors.Is(err, ErrStateConflict) {
 					return composerStateError("portal.composer.conflict", err, true), nil, nil
 				}
@@ -410,6 +413,16 @@ func composerStateError(code string, err error, retryable bool) *contractv1.Call
 	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: code, Message: err.Error(), Retryable: retryable}}
 }
 
+func navigationComposerOperationError(operation string, err error) *contractv1.CallResult {
+	switch operation {
+	case portalapi.ReadNavigationConfigurationOperation, portalapi.PrepareNavigationConfigurationOperation, portalapi.CommitNavigationConfigurationOperation, portalapi.AbortNavigationConfigurationOperation, portalapi.RollbackNavigationConfigurationOperation:
+		if errors.Is(err, ErrInvalidState) || errors.Is(err, ErrNotFound) {
+			return composerStateError("portal.composer.conflict", err, true)
+		}
+	}
+	return nil
+}
+
 func Descriptor() []byte {
 	return signedToolDescriptor(Capability)
 }
@@ -426,6 +439,11 @@ func projectPrincipalForOperation(callCtx *contractv1.CallContext, operation str
 	case portalapi.PreparePluginInstallationOperation, portalapi.CommitPluginInstallationOperation, portalapi.AbortPluginInstallationOperation, portalapi.RollbackPluginInstallationOperation:
 		if callCtx != nil && callCtx.GetTenantId() != "" && callCtx.GetCaller().GetKind() == contractv1.CallerKind_CALLER_KIND_PLUGIN && callCtx.GetCaller().GetId() == "cn.vastplan.platform.infrastructure.deployment-manager" {
 			return portalapi.Principal{ID: "system", TenantID: callCtx.GetTenantId(), System: true}, nil
+		}
+		return portalapi.Principal{}, ErrForbidden
+	case portalapi.ReadNavigationConfigurationOperation, portalapi.PrepareNavigationConfigurationOperation, portalapi.CommitNavigationConfigurationOperation, portalapi.AbortNavigationConfigurationOperation, portalapi.RollbackNavigationConfigurationOperation:
+		if callCtx != nil && callCtx.GetTenantId() != "" && callCtx.GetCaller().GetKind() == contractv1.CallerKind_CALLER_KIND_PLUGIN && callCtx.GetCaller().GetId() == portalapi.NavigationOrganizerPluginID && callCtx.GetPrincipal().GetUserId() != "" {
+			return portalapi.Principal{ID: callCtx.GetPrincipal().GetUserId(), TenantID: callCtx.GetTenantId(), Roles: append([]string(nil), callCtx.GetPrincipal().GetSystemRoles()...), System: true}, nil
 		}
 		return portalapi.Principal{}, ErrForbidden
 	default:

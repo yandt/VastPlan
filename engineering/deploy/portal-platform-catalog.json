@@ -32,7 +32,7 @@
       },
       "shell": {
         "id": "cn.vastplan.foundation.frontend.structure.shell",
-        "version": "9.0.4",
+        "version": "9.1.0",
         "channel": "stable",
         "uiContract": "^10.4.0",
         "config": {
@@ -48,7 +48,7 @@
       },
       "workbench": {
         "id": "cn.vastplan.foundation.frontend.workflow.workbench",
-        "version": "7.2.3",
+        "version": "7.3.0",
         "channel": "stable",
         "uiContract": "^10.4.0"
       },
@@ -60,13 +60,13 @@
       "plugins": [
         { "id": "cn.vastplan.foundation.frontend.runtime.engine.react", "version": "1.1.3", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.render.adapter", "version": "6.2.2", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.frontend.render.adapter.antd", "version": "6.2.4", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.frontend.structure.shell", "version": "9.0.4", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.frontend.structure.layout.standard", "version": "6.1.4", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.frontend.structure.layout.top-navigation", "version": "6.1.4", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.frontend.workflow.workbench", "version": "7.2.3", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.frontend.render.adapter.antd", "version": "6.3.0", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.frontend.structure.shell", "version": "9.1.0", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.frontend.structure.layout.standard", "version": "6.2.0", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.frontend.structure.layout.top-navigation", "version": "6.2.0", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.frontend.workflow.workbench", "version": "7.3.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.identity.account-center", "version": "0.7.1", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "6.2.1", "channel": "stable" },
+        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "6.3.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.10.2", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.plugin-settings", "version": "0.15.2", "channel": "stable" },
         { "id": "cn.vastplan.platform.security.credentials", "version": "0.14.3", "channel": "stable" },
@@ -87,7 +87,7 @@
       "platformProfile": {
         "id": "portal-default",
         "revision": 117,
-        "digest": "d389c3be26385b6f6fd543d53ae5e8a80ac0623466f7f0e2325095d7e9f29392"
+        "digest": "935ae68955eb68fe00505619636b407f9b3587c481b22d14505f07ec290d34f3"
       },
       "services": [
         {

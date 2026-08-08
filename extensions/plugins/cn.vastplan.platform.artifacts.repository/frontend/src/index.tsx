@@ -167,7 +167,7 @@ export function createArtifactRepositoryPages(client: PlatformAdminClient, servi
     migrationPage(client, `${idBase}.migration`, `${base}/migration`),
     publicationPage(client, `${idBase}.publications`, `${base}/publications`),
     assessmentPage(client, `${idBase}.assessment`, `${base}/assessment`),
-  ];
+  ].map((page) => ({ ...page, navigation: page.navigation === undefined ? undefined : { ...page.navigation, managementServiceID: serviceID } }));
 }
 
 export default {

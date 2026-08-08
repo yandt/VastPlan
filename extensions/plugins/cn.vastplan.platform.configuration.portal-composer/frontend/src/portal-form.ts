@@ -30,18 +30,6 @@ export const portalConfigurationSchema: FormSchema = {
       userSelectableRenderer: { type: "boolean", title: "允许用户切换 UI 框架" },
       defaultTemplate: { type: "string", title: "默认布局", oneOf: [{ const: "standard", title: "标准侧栏布局" }, { const: "top-navigation", title: "顶部导航布局" }] },
       pageBodyWidth: { type: "string", title: "页面正文宽度", oneOf: [{ const: "fluid", title: "自适应" }, { const: "contained", title: "最大 1280px" }] },
-      navigationOverrides: {
-        type: "array", title: "导航显示覆盖", items: {
-          type: "object", additionalProperties: false, required: ["target"],
-          properties: {
-            target: { type: "string", title: "插件菜单节点", pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,159}/[A-Za-z0-9][A-Za-z0-9._-]{0,159}$" },
-            hidden: { type: "boolean", title: "隐藏" },
-            order: { type: "integer", title: "排序" },
-            parent: { type: "string", title: "新父节点", pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,159}/[A-Za-z0-9][A-Za-z0-9._-]{0,159}$" },
-            labels: { type: "object", title: "多语言名称覆盖", additionalProperties: { type: "string", minLength: 1, maxLength: 80 } },
-          },
-        },
-      },
       applicationPlugins: { type: "array", title: "应用功能插件", items: pluginRefSchema() },
       branding: { type: "object", title: "品牌配置", additionalProperties: true, default: {} },
       config: { type: "object", title: "非敏感插件配置", additionalProperties: true, default: {} },
@@ -54,7 +42,6 @@ export const portalConfigurationSchema: FormSchema = {
     defaultRenderer: { "ui:widget": "select" },
     defaultTemplate: { "ui:widget": "select" },
     pageBodyWidth: { "ui:widget": "select" },
-    navigationOverrides: { "ui:help": "菜单由已安装插件自治声明；Portal 只能隐藏、排序、调整父级或覆盖受支持语言的名称。" },
     applicationPlugins: { "ui:help": "这里只选择应用插件；平台运行栈随同 Portal 工作副本和 Publication 保存。" },
     config: { "ui:help": "禁止写入密码、令牌或凭证明文。" },
   },
@@ -65,7 +52,6 @@ export const portalConfigurationSchema: FormSchema = {
     "/properties/audience/description": message(namespace, "form.audience.description", "限制可进入此 Portal 的权限代码；用户拥有任意一项即可访问，留空则不额外限制。"),
     "/properties/defaultRenderer/title": message(namespace, "form.renderer", "默认 UI 框架"),
     "/properties/defaultTemplate/title": message(namespace, "form.layout", "默认布局"),
-    "/properties/navigationOverrides/title": message(namespace, "form.navigationOverrides", "导航显示覆盖"),
     "/properties/applicationPlugins/title": message(namespace, "form.plugins", "应用功能插件"),
     "/properties/services/title": message(namespace, "form.services", "管理服务绑定"),
   },
@@ -112,7 +98,6 @@ export function configurationToForm(portalId: string, configuration: PortalConfi
     userSelectableRenderer: configuration.platform.renderAdapter.config.userSelectable,
     defaultTemplate: template === "top-navigation" ? "top-navigation" : "standard",
     pageBodyWidth: options?.pageBodyWidth === "contained" ? "contained" : "fluid",
-    navigationOverrides: Array.isArray(configuration.platform.shell.config.navigationOverrides) ? configuration.platform.shell.config.navigationOverrides : [],
     applicationPlugins: configuration.application.plugins.map((plugin) => ({ ...plugin })),
     branding: configuration.application.branding ?? {},
     config: configuration.application.config ?? {},
@@ -136,7 +121,7 @@ export function buildPortalConfiguration(base: PortalConfiguration, value: Reado
       accountCenter: { ...accountCenter },
       plugins: withAccountCenter(base.platform.plugins, accountCenter),
       renderAdapter: { ...base.platform.renderAdapter, config: { ...base.platform.renderAdapter.config, defaultRenderer, allowedRenderers, userSelectable: value.userSelectableRenderer === true } },
-      shell: { ...base.platform.shell, config: { ...base.platform.shell.config, defaultTemplate, navigationOverrides: jsonArray(value.navigationOverrides), templateOptions } },
+      shell: { ...base.platform.shell, config: { ...base.platform.shell.config, defaultTemplate, templateOptions } },
     },
     application: {
       ...base.application,
@@ -160,7 +145,6 @@ function pluginRefSchema(): Record<string, JSONValue> {
 }
 function isKnownRenderer(value: unknown): value is KnownRenderer { return value === "antd"; }
 function knownRenderer(value: unknown): KnownRenderer { return isKnownRenderer(value) ? value : "antd"; }
-function jsonArray(value: unknown): JSONValue[] { return Array.isArray(value) ? JSON.parse(JSON.stringify(value)) as JSONValue[] : []; }
 function jsonRecord(value: unknown): Record<string, JSONValue> { return typeof value === "object" && value !== null && !Array.isArray(value) ? JSON.parse(JSON.stringify(value)) as Record<string, JSONValue> : {}; }
 function pluginRefs(value: unknown): PortalConfiguration["application"]["plugins"] { return Array.isArray(value) ? value.flatMap((candidate) => { if (typeof candidate !== "object" || candidate === null) return []; const item = candidate as Record<string, unknown>; return typeof item.id === "string" && typeof item.version === "string" ? [{ id: item.id, version: item.version, ...(typeof item.channel === "string" ? { channel: item.channel } : {}) }] : []; }) : []; }
 function withAccountCenter(plugins: PortalPlatformProfile["plugins"], accountCenter: PortalPlatformProfile["accountCenter"]): PortalPlatformProfile["plugins"] {

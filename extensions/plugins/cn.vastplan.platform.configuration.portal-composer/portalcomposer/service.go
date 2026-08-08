@@ -46,23 +46,25 @@ type TestArtifactCatalog interface {
 }
 
 type state struct {
-	DataFormatVersion         int                                                `json:"dataFormatVersion"`
-	NextRevision              uint64                                             `json:"nextRevision"`
-	NextGovernance            uint64                                             `json:"nextGovernanceRevision"`
-	NextActivation            uint64                                             `json:"nextActivation"`
-	NextAudit                 uint64                                             `json:"nextAudit"`
-	Revisions                 []portalapi.Revision                               `json:"applications"`
-	Profiles                  []portalapi.PlatformProfileRevision                `json:"profiles"`
-	Bindings                  []portalapi.BindingRevision                        `json:"bindings"`
-	Activations               []portalapi.PortalActivation                       `json:"activations"`
-	TestBindings              map[string]portalapi.TestTargetBinding             `json:"testTargetBindings"`
-	NextTestRelease           uint64                                             `json:"nextTestRelease"`
-	TestReleases              []portalapi.TestRelease                            `json:"testReleases"`
-	TestVersionOwners         map[uint64]uint64                                  `json:"testVersionOwners"`
-	InstallationVersionOwners map[uint64]string                                  `json:"installationVersionOwners"`
-	InstallationPreparations  map[string]portalapi.PluginInstallationPreparation `json:"installationPreparations"`
-	Audit                     []portalapi.AuditEvent                             `json:"audit"`
-	VersionControls           map[string]portalVersionControlState               `json:"versionControls"`
+	DataFormatVersion         int                                                     `json:"dataFormatVersion"`
+	NextRevision              uint64                                                  `json:"nextRevision"`
+	NextGovernance            uint64                                                  `json:"nextGovernanceRevision"`
+	NextActivation            uint64                                                  `json:"nextActivation"`
+	NextAudit                 uint64                                                  `json:"nextAudit"`
+	Revisions                 []portalapi.Revision                                    `json:"applications"`
+	Profiles                  []portalapi.PlatformProfileRevision                     `json:"profiles"`
+	Bindings                  []portalapi.BindingRevision                             `json:"bindings"`
+	Activations               []portalapi.PortalActivation                            `json:"activations"`
+	TestBindings              map[string]portalapi.TestTargetBinding                  `json:"testTargetBindings"`
+	NextTestRelease           uint64                                                  `json:"nextTestRelease"`
+	TestReleases              []portalapi.TestRelease                                 `json:"testReleases"`
+	TestVersionOwners         map[uint64]uint64                                       `json:"testVersionOwners"`
+	InstallationVersionOwners map[uint64]string                                       `json:"installationVersionOwners"`
+	InstallationPreparations  map[string]portalapi.PluginInstallationPreparation      `json:"installationPreparations"`
+	NavigationVersionOwners   map[uint64]string                                       `json:"navigationVersionOwners"`
+	NavigationPreparations    map[string]portalapi.NavigationConfigurationPreparation `json:"navigationPreparations"`
+	Audit                     []portalapi.AuditEvent                                  `json:"audit"`
+	VersionControls           map[string]portalVersionControlState                    `json:"versionControls"`
 }
 
 type Service struct {
@@ -403,6 +405,7 @@ func cloneShellConfig(in frontendcompositionv1.ShellConfig) frontendcompositionv
 			}
 		}
 	}
+	out.NavigationFolders = cloneJSON(in.NavigationFolders)
 	out.AllowedTemplates = append([]string(nil), in.AllowedTemplates...)
 	out.TemplateOptions = make(map[string]map[string]any, len(in.TemplateOptions))
 	for template, options := range in.TemplateOptions {

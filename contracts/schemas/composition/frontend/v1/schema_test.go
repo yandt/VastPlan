@@ -76,6 +76,22 @@ func TestPlatformProfileValidatesNavigationOverrides(t *testing.T) {
 	}
 }
 
+func TestPlatformProfileValidatesNavigationFolders(t *testing.T) {
+	valid := validShellProfileJSON("navigation-folders", 1, `{"navigationFolders":[{"id":"operations","serviceId":"service-a","label":"Operations","members":["cn.example.first/root","cn.example.second/root"]}],"defaultTemplate":"standard","allowedTemplates":["standard"],"userSelectable":false}`, `{"defaultLocale":"zh-CN","supportedLocales":["zh-CN","en-US"]}`)
+	profile, err := ParsePlatformProfile([]byte(valid))
+	if err != nil || len(profile.Shell.Config.NavigationFolders) != 1 {
+		t.Fatalf("navigation folder should be valid: %+v err=%v", profile.Shell.Config.NavigationFolders, err)
+	}
+	duplicate := validShellProfileJSON("navigation-folders", 1, `{"navigationFolders":[{"id":"one","serviceId":"service-a","label":"One","members":["cn.example.first/root","cn.example.second/root"]},{"id":"two","serviceId":"service-a","label":"Two","members":["cn.example.first/root","cn.example.third/root"]}],"defaultTemplate":"standard","allowedTemplates":["standard"],"userSelectable":false}`)
+	if _, err := ParsePlatformProfile([]byte(duplicate)); err == nil {
+		t.Fatal("a service root must not belong to multiple folders")
+	}
+	unknownLocale := validShellProfileJSON("navigation-folders", 1, `{"navigationFolders":[{"id":"operations","serviceId":"service-a","label":"Operations","labels":{"fr-FR":"Operations"},"members":["cn.example.first/root","cn.example.second/root"]}],"defaultTemplate":"standard","allowedTemplates":["standard"],"userSelectable":false}`, `{"defaultLocale":"zh-CN","supportedLocales":["zh-CN","en-US"]}`)
+	if _, err := ParsePlatformProfile([]byte(unknownLocale)); err == nil {
+		t.Fatal("folder labels must use a supported locale")
+	}
+}
+
 func TestFrontendLocalizationPolicyRequiresGovernedDefault(t *testing.T) {
 	profile, err := ParsePlatformProfile([]byte(validShellProfileJSON("localized", 1, `{"defaultTemplate":"standard","allowedTemplates":["standard"],"userSelectable":false}`, `{"defaultLocale":"en-US","supportedLocales":["zh-CN","en-US"]}`)))
 	if err != nil || profile.Localization == nil || profile.Localization.DefaultLocale != "en-US" {

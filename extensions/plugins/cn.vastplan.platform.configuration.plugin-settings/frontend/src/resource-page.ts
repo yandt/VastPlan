@@ -61,7 +61,7 @@ export function createPluginConfigurationResourcePage(client: PlatformAdminClien
   return defineMasterDetailPage<ResourceRow>({
     id: `platform.plugin-configuration.resources.${serviceID}`, path, pattern: "master-detail",
     title: message(namespace, "resource.page", "插件 Profile"), description: message(namespace, "resource.description", "每个 Profile 独立版本、审批和托管秘密；根启动配置与动态资源互不混用。"),
-    requiredPermissions: ["platform.plugin-configuration.read"], navigation: { id: `platform.plugin-configuration.resources.${serviceID}`, label: message(namespace, "resource.page", "插件 Profile"), parentMenuRef: { pluginID: "cn.vastplan.platform.configuration.plugin-settings", nodeID: "plugin-settings" }, order: 26 },
+    requiredPermissions: ["platform.plugin-configuration.read"], navigation: { id: `platform.plugin-configuration.resources.${serviceID}`, label: message(namespace, "resource.page", "插件 Profile"), parentMenuRef: { pluginID: "cn.vastplan.platform.configuration.plugin-settings", nodeID: "plugin-settings" }, managementServiceID: serviceID, order: 26 },
     master: {
       id: `plugin-configuration-resources.${serviceID}`, title: message(namespace, "resource.list", "Profile 列表"), keyField: "id", titleField: "name", subtitleField: "pluginName",
       status: { labelField: "status", toneField: "tone" }, query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20, 50, 100] },

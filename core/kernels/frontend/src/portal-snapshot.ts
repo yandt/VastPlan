@@ -37,6 +37,9 @@ export function snapshotPortal(portal: PortalSpec): Readonly<PortalSpec> {
         navigationOverrides: portal.shell.config.navigationOverrides === undefined ? undefined : Object.freeze(
           portal.shell.config.navigationOverrides.map((override) => freezeJSONRecord(override)),
         ),
+        navigationFolders: portal.shell.config.navigationFolders === undefined ? undefined : Object.freeze(
+          portal.shell.config.navigationFolders.map((folder) => freezeJSONRecord(folder)),
+        ),
         allowedTemplates: Object.freeze([...portal.shell.config.allowedTemplates]),
         templateOptions: portal.shell.config.templateOptions === undefined ? undefined : Object.freeze(Object.fromEntries(
           Object.entries(portal.shell.config.templateOptions).map(([template, options]) => [template, freezeJSONRecord(options)]),

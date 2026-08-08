@@ -11,10 +11,12 @@ export default {
     if (services.length === 0) throw new Error("Portal 未绑定 platform.authorization 服务");
     for (const service of services) {
       const client = createBrowserPlatformAdminClient(context.portal.id, service.id);
-      context.addCollectionPage(permissionsPage(client));
-      context.addCollectionPage(rolesPage(client));
-      context.addCollectionPage(bindingsPage(client));
-      context.addCollectionPage(auditPage(client));
+      const suffix = services.length === 1 ? "" : `.${service.id}`;
+      const pathSuffix = services.length === 1 ? "" : `/${service.id}`;
+      context.addCollectionPage(permissionsPage(client, service.id, suffix, pathSuffix));
+      context.addCollectionPage(rolesPage(client, service.id, suffix, pathSuffix));
+      context.addCollectionPage(bindingsPage(client, service.id, suffix, pathSuffix));
+      context.addCollectionPage(auditPage(client, service.id, suffix, pathSuffix));
     }
   },
   localization: {

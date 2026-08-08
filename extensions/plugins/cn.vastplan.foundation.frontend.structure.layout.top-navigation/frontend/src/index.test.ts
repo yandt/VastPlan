@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { uiContractVersion } from "@vastplan/ui-contract";
-import { composedNavigationMenuItems, type PortalNavigationGroup, type UIShellProps } from "@vastplan/ui-primitives";
+import { composedNavigationMenuItems, type PortalNavigationCollection, type PortalNavigationGroup, type UIShellProps } from "@vastplan/ui-primitives";
 import adapter, { prioritizeRoots, topNavigationAvailableWidth, topNavigationCapacity, topNavigationShellCSS } from "./index";
 
 const root = (id: string): PortalNavigationGroup => ({ id, label: id, zone: "primary", icon: { kind: "semantic", name: "menu" }, pages: [], children: [] });
+const collection = (id: string): PortalNavigationCollection => { const group = root(id); return { kind: "group", id: `group:${id}`, label: id, zone: "primary", icon: group.icon, groups: [group] }; };
 
 describe("top navigation shell layout", () => {
   it("exports an independent signed Shell Library", () => {
@@ -11,9 +12,9 @@ describe("top navigation shell layout", () => {
   });
 
   it("keeps the active root visible when navigation overflows", () => {
-    const result = prioritizeRoots([root("one"), root("two"), root("three"), root("four")], 3, "four");
-    expect(result.visible.map((item) => item.id)).toEqual(["one", "four"]);
-    expect(result.overflow.map((item) => item.id)).toEqual(["two", "three"]);
+    const result = prioritizeRoots([collection("one"), collection("two"), collection("three"), collection("four")], 3, "group:four");
+    expect(result.visible.map((item) => item.id)).toEqual(["group:one", "group:four"]);
+    expect(result.overflow.map((item) => item.id)).toEqual(["group:two", "group:three"]);
   });
 
   it("sizes icon-only root navigation by the shared touch target instead of a text-menu estimate", () => {

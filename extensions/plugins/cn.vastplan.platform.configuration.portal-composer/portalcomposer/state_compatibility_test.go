@@ -38,8 +38,15 @@ func TestComposerStateDataFormatSeparatesMigrationFromCorruption(t *testing.T) {
 	if err != nil || legacy != 0 {
 		t.Fatalf("无格式标记的历史数据必须进入迁移: version=%d err=%v", legacy, err)
 	}
-	current, err := composerStateDataFormat([]byte(`{"dataFormatVersion":5}`))
-	if err != nil || current != composerDataFormatV5 {
-		t.Fatalf("v5 数据不得重复执行兼容清理: version=%d err=%v", current, err)
+	current, err := composerStateDataFormat([]byte(`{"dataFormatVersion":6}`))
+	if err != nil || current != composerDataFormatV6 {
+		t.Fatalf("v6 数据不得重复执行兼容清理: version=%d err=%v", current, err)
+	}
+}
+
+func TestComposerStateV5AddsNavigationCandidateMaps(t *testing.T) {
+	value, migrated, err := decodeComposerState([]byte(`{"dataFormatVersion":5}`))
+	if err != nil || !migrated || value.DataFormatVersion != composerDataFormatV6 || value.NavigationVersionOwners == nil || value.NavigationPreparations == nil {
+		t.Fatalf("v5 state should migrate to initialized v6 navigation maps: %+v migrated=%v err=%v", value, migrated, err)
 	}
 }

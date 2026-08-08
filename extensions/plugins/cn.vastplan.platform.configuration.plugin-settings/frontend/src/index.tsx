@@ -56,7 +56,7 @@ export function createPluginConfigurationPage(client: PlatformAdminClient, servi
       ? message(namespace, "page.baselineDescription", "独立管理由 Platform Profile 注入在线服务的公共基线配置；发布会生成新的 Profile 与 Deployment revision。")
       : message(namespace, "page.description", "管理在线服务自身配置；不会显示或修改本地 Seed Service 配置。"),
     requiredPermissions: ["platform.plugin-configuration.read"],
-    navigation: { id: `platform.plugin-configuration.${layer}.${serviceID}`, label: title, parentMenuRef: { pluginID: "cn.vastplan.platform.configuration.plugin-settings", nodeID: "plugin-settings" }, order: layer === "baseline" ? 24 : 25 },
+    navigation: { id: `platform.plugin-configuration.${layer}.${serviceID}`, label: title, parentMenuRef: { pluginID: "cn.vastplan.platform.configuration.plugin-settings", nodeID: "plugin-settings" }, managementServiceID: serviceID, order: layer === "baseline" ? 24 : 25 },
     collection: {
       id: `platform.plugin-configuration.${layer}.${serviceID}`,
       title,

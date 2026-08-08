@@ -85,6 +85,7 @@ export function createPlatformControlPage(client: PlatformAdminClient, serviceID
       id: `platform.control-database.${serviceID}`,
       label: message(namespace, "platformControl.page.title", "平台控制数据库"),
       parentMenuRef: { pluginID: namespace, nodeID: "databases" },
+      managementServiceID: serviceID,
       order: 10,
     },
     form: {

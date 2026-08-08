@@ -26,6 +26,10 @@ export type PortalNavigationIconSpec =
   | { kind: "semantic"; name: SemanticIconName }
   | { kind: "custom"; pluginID: string; name: string; states: Readonly<Partial<Record<PortalNavigationIconState, IconGlyphDefinition>>> & { normal: IconGlyphDefinition }; motion: PortalNavigationIconMotion };
 
+export type PortalNavigationPresentationIcon =
+  | PortalNavigationIconSpec
+  | { kind: "composite"; items: readonly PortalNavigationIconSpec[] };
+
 export interface PortalNavigationParentRef extends PortalNavigationNodeRef {
   mode: "required" | "optional";
   fallback?: PortalNavigationNodeRef;
@@ -80,6 +84,8 @@ export interface PortalPageNavigation {
   label: LocalizedText;
   /** Owner-bound reference to a plugin menu node or a trusted host anchor. */
   parentMenuRef: PortalNavigationNodeRef;
+  /** Host-bound management service scope used only for service-owned presentation policies. */
+  managementServiceID?: string;
   order?: number;
 }
 
@@ -97,6 +103,18 @@ export interface PortalNavigationGroup extends PortalNavigationGroupDescriptor {
   parentID?: undefined;
   pages: readonly PortalResolvedPageNavigation[];
   children: readonly PortalNavigationChildGroup[];
+}
+
+/** A layout entry. Folders collect root slices without becoming navigation parents. */
+export interface PortalNavigationCollection {
+  kind: "group" | "folder";
+  id: string;
+  label: LocalizedText;
+  labels?: Readonly<Record<string, string>>;
+  zone: NavigationZone;
+  icon: PortalNavigationPresentationIcon;
+  order?: number;
+  groups: readonly PortalNavigationGroup[];
 }
 
 export interface ActiveNavigationPath {
@@ -267,7 +285,9 @@ export interface ShellCompositionModel {
   pages: readonly PortalRegisteredPage[];
   activePage?: PortalRegisteredPage;
   activeNavigationPath?: ActiveNavigationPath;
+  activeNavigationCollectionID?: string;
   navigation: Readonly<Record<NavigationZone, readonly PortalNavigationGroup[]>>;
+  navigationCollections: Readonly<Record<NavigationZone, readonly PortalNavigationCollection[]>>;
   shellSlots: Readonly<Partial<Record<ShellSlotID, readonly PortalRegisteredShellContribution[]>>>;
   pageSlots: Readonly<Partial<Record<PageSlotID, readonly PortalPageSlotContribution[]>>>;
 }

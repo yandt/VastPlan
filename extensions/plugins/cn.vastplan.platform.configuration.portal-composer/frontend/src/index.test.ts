@@ -21,18 +21,19 @@ describe("Portal aggregate workspace", () => {
 
   it("edits platform, application and services as one data-driven configuration", () => {
     const properties = portalConfigurationSchema.schema.properties as Record<string, unknown>;
-    expect(Object.keys(properties)).toEqual(expect.arrayContaining(["defaultRenderer", "defaultTemplate", "navigationOverrides", "applicationPlugins", "services"]));
+    expect(Object.keys(properties)).toEqual(expect.arrayContaining(["defaultRenderer", "defaultTemplate", "applicationPlugins", "services"]));
+    expect(properties).not.toHaveProperty("navigationOverrides");
     expect(properties.audience).toMatchObject({ title: "访问权限", description: expect.stringContaining("权限代码") });
     expect(portalConfigurationSchema.uiSchema).toMatchObject({ domains: { items: { "ui:title": "" } }, audience: { items: { "ui:title": "" } } });
-    const updated = buildPortalConfiguration(configuration(), {
+    const base = configuration();
+    const updated = buildPortalConfiguration(base, {
       route: "/new", defaultRenderer: "antd", allowedRenderers: ["antd"], defaultTemplate: "top-navigation",
-      navigationOverrides: [{ target: "cn.example.dashboard/main", order: 10, labels: { "zh-CN": "仪表盘" } }],
       applicationPlugins: [{ id: "cn.example.dashboard", version: "1.2.3" }], services: [{ id: "backend" }],
     });
     expect(updated.application.route).toBe("/new");
     expect(updated.platform.renderAdapter.config.defaultRenderer).toBe("antd");
     expect(updated.platform.shell.config.defaultTemplate).toBe("top-navigation");
-    expect(updated.platform.shell.config.navigationOverrides).toEqual([{ target: "cn.example.dashboard/main", order: 10, labels: { "zh-CN": "仪表盘" } }]);
+    expect(updated.platform.shell.config.navigationOverrides).toEqual(base.platform.shell.config.navigationOverrides);
     expect(updated.platform.plugins).toContainEqual(updated.platform.accountCenter);
     expect(updated.services).toEqual([{ id: "backend" }]);
   });

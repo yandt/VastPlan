@@ -25,20 +25,21 @@ const lifecycleLabels = {
   Retired: message(namespace, "status.retired", "已退役"),
 };
 
-export function rolesPage(client: PlatformAdminClient): CollectionPageDefinition<RoleRow> {
+export function rolesPage(client: PlatformAdminClient, serviceID?: string, suffix = "", pathSuffix = ""): CollectionPageDefinition<RoleRow> {
   const create = roleForm(client, "create");
   const edit = roleForm(client, "edit");
   return defineCollectionPage<RoleRow>({
-    id: "platform.authorization.roles",
-    path: "/settings/authorization/roles",
+    id: `platform.authorization.roles${suffix}`,
+    path: `/settings/authorization/roles${pathSuffix}`,
     title: message(namespace, "roles.title", "角色管理"),
     description: message(namespace, "roles.description", "角色按 revision 审批和发布；权限选择器在保存时绑定当前目录并展开为精确权限。"),
     requiredPermissions: ["platform.authorization.catalog"],
     requiredAnyPermissions: ["platform.authorization.role", "platform.authorization.approve", "platform.authorization.publish"],
     navigation: {
-      id: "platform.authorization.roles",
+      id: `platform.authorization.roles${suffix}`,
       label: message(namespace, "roles.navigation", "角色"),
       parentMenuRef: { pluginID: "cn.vastplan.platform.security.authorization-policy", nodeID: "security" },
+      ...(serviceID === undefined ? {} : { managementServiceID: serviceID }),
       order: 20,
     },
     collection: {

@@ -13,6 +13,7 @@ import type {
   ShellSlotID,
 } from "@vastplan/ui-primitives";
 import { compileNavigationPolicy } from "./navigation-policy";
+import { collectionForPage, compileNavigationCollections } from "./navigation-presentation";
 
 const shellSlots = new Set<ShellSlotID>(shellSlotIDs);
 const pageSlots = new Set<PageSlotID>(pageSlotIDs);
@@ -76,15 +77,19 @@ export function compose(input: ShellCompositionInput): ShellCompositionModel {
   for (const [slot, contributions] of Object.entries(pageGrouped)) pageNormalized[slot as PageSlotID] = Object.freeze(ordered(contributions));
 
   const activeNavigationPath = activePage?.navigation === undefined ? undefined : policy.path(activePage.navigation);
+  const navigationCollections = compileNavigationCollections(navigation, input.config);
+  const activeNavigationCollection = collectionForPage(navigationCollections, activeNavigationPath?.pageID);
   return Object.freeze({
     pages,
     activePage,
     activeNavigationPath,
+    ...(activeNavigationCollection === undefined ? {} : { activeNavigationCollectionID: activeNavigationCollection.id }),
     navigation: Object.freeze({
       primary: Object.freeze(navigation.primary),
       settings: Object.freeze(navigation.settings),
       secondary: Object.freeze(navigation.secondary),
     }),
+    navigationCollections,
     shellSlots: Object.freeze(shellNormalized),
     pageSlots: Object.freeze(pageNormalized),
   });

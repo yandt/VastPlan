@@ -4,14 +4,14 @@ import { namespace, page } from "../model.js";
 
 type AuditRow = AuthorizationAuditEvent & Record<string, unknown>;
 
-export function auditPage(client: PlatformAdminClient): CollectionPageDefinition<AuditRow> {
+export function auditPage(client: PlatformAdminClient, serviceID?: string, suffix = "", pathSuffix = ""): CollectionPageDefinition<AuditRow> {
   return defineCollectionPage<AuditRow>({
-    id: "platform.authorization.audit",
-    path: "/settings/authorization/audit",
+    id: `platform.authorization.audit${suffix}`,
+    path: `/settings/authorization/audit${pathSuffix}`,
     title: message(namespace, "audit.title", "授权审计"),
     description: message(namespace, "audit.description", "查看角色、主体绑定、撤权和策略快照的不可变操作记录。"),
     requiredPermissions: ["platform.authorization.audit"],
-    navigation: { id: "platform.authorization.audit", label: message(namespace, "audit.navigation", "授权审计"), parentMenuRef: { pluginID: "cn.vastplan.platform.security.authorization-policy", nodeID: "security" }, order: 40 },
+    navigation: { id: `platform.authorization.audit${suffix}`, label: message(namespace, "audit.navigation", "授权审计"), parentMenuRef: { pluginID: "cn.vastplan.platform.security.authorization-policy", nodeID: "security" }, ...(serviceID === undefined ? {} : { managementServiceID: serviceID }), order: 40 },
     collection: {
       id: "authorization-audit",
       title: message(namespace, "audit.title", "授权审计"),

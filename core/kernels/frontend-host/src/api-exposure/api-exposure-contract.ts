@@ -110,4 +110,11 @@ export interface GatewayInvocation {
   readonly pathParams: Readonly<Record<string, string>>;
   readonly query: Readonly<Record<string, readonly string[]>>;
   readonly body: unknown;
+  /** Present only when the trusted Portal management BFF resolved the target. */
+  readonly managementTarget?: {
+    readonly portalId: string;
+    readonly serviceId: string;
+    readonly activationId: number;
+    readonly generation: number;
+  };
 }

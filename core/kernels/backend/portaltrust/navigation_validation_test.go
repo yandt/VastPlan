@@ -31,10 +31,33 @@ func TestNavigationCandidateAllowsTrustedPluginAccountMenu(t *testing.T) {
 	}
 }
 
+func TestNavigationCandidateValidatesServiceScopedFolders(t *testing.T) {
+	index := navigationIndexFixture(t)
+	spec := portalapi.PortalSpec{
+		Management: frontendcompositionv1.PortalBinding{Services: []frontendcompositionv1.ManagedService{{ID: "service-a"}}},
+		Shell: portalapi.Shell{Config: frontendcompositionv1.ShellConfig{NavigationConfig: frontendcompositionv1.NavigationConfig{NavigationFolders: []frontendcompositionv1.NavigationFolder{{
+			ID: "operations", ServiceID: "service-a", Label: "Operations", Members: []string{"cn.vastplan.test.navigation/root", "cn.vastplan.test.navigation/second"},
+		}}}}},
+	}
+	if err := validateNavigationCandidates(spec, index); err != nil {
+		t.Fatalf("same-zone roots in a bound service should be accepted: %v", err)
+	}
+	spec.Shell.Config.NavigationFolders[0].Members[1] = "cn.vastplan.test.navigation/child"
+	if err := validateNavigationCandidates(spec, index); err == nil || !strings.Contains(err.Error(), "root") {
+		t.Fatalf("child members must be rejected: %v", err)
+	}
+	spec.Shell.Config.NavigationFolders[0].Members[1] = "cn.vastplan.test.navigation/settings"
+	if err := validateNavigationCandidates(spec, index); err == nil || !strings.Contains(err.Error(), "跨 zone") {
+		t.Fatalf("cross-zone folders must be rejected: %v", err)
+	}
+}
+
 func navigationIndexFixture(t *testing.T) pluginv1.ContributionIndexSnapshot {
 	t.Helper()
 	descriptor, err := json.Marshal(pluginv1.FrontendNavigationCatalog{ID: "main", Contract: pluginv1.FrontendNavigationContract, Nodes: []pluginv1.FrontendNavigationNode{
 		{ID: "root", Zone: "primary"},
+		{ID: "second", Zone: "primary"},
+		{ID: "settings", Zone: "settings"},
 		{ID: "child", Zone: "primary", Parent: &pluginv1.FrontendNavigationParent{NodeID: "root", Mode: "required"}},
 	}})
 	if err != nil {

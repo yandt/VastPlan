@@ -19,7 +19,7 @@ import (
 const (
 	composerStateNamespace  = "portal.composition.v4"
 	composerStateKey        = "tenant"
-	composerDataFormatV5    = 5
+	composerDataFormatV6    = 6
 	composerBlobPrefix      = "blob/"
 	composerRootFormat      = "portal-composer-root.v3"
 	composerChunkBytes      = 512 << 10
@@ -151,12 +151,13 @@ func decodeComposerState(raw []byte) (state, bool, error) {
 	if err != nil {
 		return state{}, false, fmt.Errorf("读取 Portal Composer 数据格式: %w", err)
 	}
-	if formatVersion != 0 && formatVersion != composerDataFormatV5 {
+	if formatVersion != 0 && formatVersion != 5 && formatVersion != composerDataFormatV6 {
 		return state{}, false, fmt.Errorf("不支持 Portal Composer 数据格式版本 %d", formatVersion)
 	}
 	normalized := raw
-	migrated := formatVersion == 0
-	if migrated {
+	legacy := formatVersion == 0
+	migrated := legacy || formatVersion == 5
+	if legacy {
 		normalized, _, err = normalizeLegacyComposerNavigation(raw)
 		if err != nil {
 			return state{}, false, fmt.Errorf("迁移 Portal Composer Shared State: %w", err)
@@ -167,7 +168,9 @@ func decodeComposerState(raw []byte) (state, bool, error) {
 		return state{}, false, fmt.Errorf("解析 Portal Composer Shared State: %w", err)
 	}
 	if migrated {
-		value.DataFormatVersion = composerDataFormatV5
+		value.DataFormatVersion = composerDataFormatV6
+	}
+	if legacy {
 		if err := migrateComposerConfigurationDigests(&value); err != nil {
 			return state{}, false, fmt.Errorf("迁移 Portal Composer 冻结摘要: %w", err)
 		}
@@ -231,17 +234,19 @@ func composerDigest(raw []byte) string { return fmt.Sprintf("%x", sha256.Sum256(
 
 func emptyState() state {
 	return state{
-		DataFormatVersion:         composerDataFormatV5,
+		DataFormatVersion:         composerDataFormatV6,
 		TestBindings:              map[string]portalapi.TestTargetBinding{},
 		TestVersionOwners:         map[uint64]uint64{},
 		InstallationVersionOwners: map[uint64]string{},
 		InstallationPreparations:  map[string]portalapi.PluginInstallationPreparation{},
+		NavigationVersionOwners:   map[uint64]string{},
+		NavigationPreparations:    map[string]portalapi.NavigationConfigurationPreparation{},
 		VersionControls:           map[string]portalVersionControlState{},
 	}
 }
 
 func validateComposerTenantState(value state, tenant string) error {
-	if tenant == "" || value.DataFormatVersion != composerDataFormatV5 || value.TestBindings == nil || value.TestVersionOwners == nil || value.InstallationVersionOwners == nil || value.InstallationPreparations == nil || value.VersionControls == nil {
+	if tenant == "" || value.DataFormatVersion != composerDataFormatV6 || value.TestBindings == nil || value.TestVersionOwners == nil || value.InstallationVersionOwners == nil || value.InstallationPreparations == nil || value.NavigationVersionOwners == nil || value.NavigationPreparations == nil || value.VersionControls == nil {
 		return errors.New("Portal Composer tenant 状态无效")
 	}
 	openPublications := map[string]int{}
@@ -253,6 +258,9 @@ func validateComposerTenantState(value state, tenant string) error {
 			continue
 		}
 		if _, installationRevision := value.InstallationVersionOwners[revision.ID]; installationRevision {
+			continue
+		}
+		if _, navigationRevision := value.NavigationVersionOwners[revision.ID]; navigationRevision {
 			continue
 		}
 		if revision.WorkingRevision == 0 {
@@ -339,6 +347,31 @@ func validateComposerTenantState(value state, tenant string) error {
 			return errors.New("Portal Composer Plugin Installation 候选归属无效")
 		}
 	}
+	for versionID, key := range value.NavigationVersionOwners {
+		preparation, preparationFound := value.NavigationPreparations[key]
+		_, versionFound := versionIDs[versionID]
+		if !versionFound || !preparationFound || preparation.VersionID != versionID || !validNavigationPreparationStatus(preparation.Status) {
+			return errors.New("Portal Composer Navigation Version 归属引用无效")
+		}
+	}
+	for key, preparation := range value.NavigationPreparations {
+		if key != navigationPreparationKey(preparation.CandidateID, preparation.PortalID, preparation.ServiceID) || preparation.CandidateID == "" || preparation.PortalID == "" || preparation.ServiceID == "" || preparation.VersionID == 0 || preparation.PreviousActivationID == 0 || len(preparation.RequestDigest) != 64 || len(preparation.ConfigurationDigest) != 64 || !validNavigationPreparationStatus(preparation.Status) {
+			return errors.New("Portal Composer Navigation 准备状态无效")
+		}
+		if _, err := hex.DecodeString(preparation.RequestDigest); err != nil {
+			return errors.New("Portal Composer Navigation 请求摘要无效")
+		}
+		if _, err := hex.DecodeString(preparation.ConfigurationDigest); err != nil {
+			return errors.New("Portal Composer Navigation 配置摘要无效")
+		}
+		if preparation.Status == portalapi.NavigationConfigurationCommitted || preparation.Status == portalapi.NavigationConfigurationRolledBack {
+			if preparation.ActivationID == 0 {
+				return errors.New("Portal Composer Navigation 提交状态无效")
+			}
+		} else if owner, ok := value.NavigationVersionOwners[preparation.VersionID]; !ok || owner != key {
+			return errors.New("Portal Composer Navigation 候选归属无效")
+		}
+	}
 	for _, event := range value.Audit {
 		if event.TenantID != tenant {
 			return errors.New("Portal Composer Audit 跨 tenant")
@@ -366,10 +399,15 @@ func portalExistsInState(value state, tenant, portalID string) bool {
 		if revision.TenantID == tenant && revision.PortalID == portalID {
 			_, test := value.TestVersionOwners[revision.ID]
 			_, installation := value.InstallationVersionOwners[revision.ID]
-			if !test && !installation {
+			_, navigation := value.NavigationVersionOwners[revision.ID]
+			if !test && !installation && !navigation {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+func validNavigationPreparationStatus(status portalapi.NavigationConfigurationStatus) bool {
+	return status == portalapi.NavigationConfigurationPreparing || status == portalapi.NavigationConfigurationPrepared || status == portalapi.NavigationConfigurationCommitted || status == portalapi.NavigationConfigurationAborted || status == portalapi.NavigationConfigurationRolledBack
 }

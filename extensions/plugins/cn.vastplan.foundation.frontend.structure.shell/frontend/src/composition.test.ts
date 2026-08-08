@@ -20,13 +20,13 @@ function node(id: string, zone: "primary" | "settings" | "secondary", parentID?:
   };
 }
 
-function page(id: string, nodeID: string): PortalRegisteredPage {
+function page(id: string, nodeID: string, managementServiceID?: string): PortalRegisteredPage {
   return {
     id,
     pluginID,
     path: `/${id}`,
     title: id,
-    navigation: { id, label: id, parentMenuRef: { pluginID, nodeID } },
+    navigation: { id, label: id, parentMenuRef: { pluginID, nodeID }, ...(managementServiceID === undefined ? {} : { managementServiceID }) },
     slots: [{ id: "body", slot: "page.body.main", component: () => null }],
   };
 }
@@ -61,6 +61,34 @@ describe("shell composition core", () => {
     expect(model.navigation.primary[0].pages.map((item) => item.id)).toEqual(["overview"]);
     expect(model.navigation.primary[0].children[0].pages.map((item) => item.id)).toEqual(["workers"]);
     expect(model.activeNavigationPath).toEqual({ zone: "primary", rootGroupID: `${pluginID}/operations`, childGroupID: `${pluginID}/compute`, pageID: "workers" });
+  });
+
+  it("collects service-scoped roots without adding a semantic navigation level", () => {
+    const model = compose({
+      activePageID: "workers",
+      navigationCatalogs: [catalog([node("operations", "primary"), node("resources", "primary"), node("compute", "primary", "resources")])],
+      shellContributions: [],
+      pages: [page("overview", "operations", "service-a"), page("workers", "compute", "service-a"), page("other", "operations", "service-b")],
+      config: { navigationFolders: [{ id: "daily", serviceId: "service-a", label: "日常工作", members: [`${pluginID}/operations`, `${pluginID}/resources`] }] },
+    });
+    const folder = model.navigationCollections.primary.find((collection) => collection.kind === "folder");
+    expect(folder?.groups[0].pages.map((item) => item.id)).toEqual(["overview"]);
+    expect(folder?.groups[1].children[0].pages.map((item) => item.id)).toEqual(["workers"]);
+    expect(folder?.icon).toMatchObject({ kind: "composite", items: [{ kind: "semantic" }, { kind: "semantic" }] });
+    expect(model.activeNavigationPath).toEqual({ zone: "primary", rootGroupID: `${pluginID}/resources`, childGroupID: `${pluginID}/compute`, pageID: "workers" });
+    expect(model.activeNavigationCollectionID).toBe("folder:service-a/daily");
+    expect(model.navigationCollections.primary.find((collection) => collection.kind === "group")?.groups[0].pages.map((item) => item.id)).toEqual(["other"]);
+  });
+
+  it("rejects child, cross-zone and duplicate service folder membership", () => {
+    const pages = [page("one", "one", "service-a"), page("two", "two", "service-a")];
+    const catalogs = [catalog([node("one", "primary"), node("two", "settings")])];
+    expect(() => compose({ navigationCatalogs: catalogs, pages, shellContributions: [], config: { navigationFolders: [{ id: "mixed", serviceId: "service-a", label: "Mixed", members: [`${pluginID}/one`, `${pluginID}/two`] }] } })).toThrow("跨 zone");
+    expect(() => compose({ navigationCatalogs: [catalog([node("root", "primary"), node("child", "primary", "root"), node("other", "primary")])], pages: [page("child-page", "child", "service-a"), page("other-page", "other", "service-a")], shellContributions: [], config: { navigationFolders: [{ id: "child", serviceId: "service-a", label: "Child", members: [`${pluginID}/child`, `${pluginID}/other`] }] } })).toThrow("未知或受保护 root");
+    expect(() => compose({ navigationCatalogs: [catalog([node("one", "primary"), node("two", "primary"), node("three", "primary")])], pages: [page("one-page", "one", "service-a"), page("two-page", "two", "service-a"), page("three-page", "three", "service-a")], shellContributions: [], config: { navigationFolders: [
+      { id: "first", serviceId: "service-a", label: "First", members: [`${pluginID}/one`, `${pluginID}/two`] },
+      { id: "second", serviceId: "service-a", label: "Second", members: [`${pluginID}/one`, `${pluginID}/three`] },
+    ] } })).toThrow("重复收纳");
   });
 
   it("applies Portal overrides without creating navigation nodes", () => {

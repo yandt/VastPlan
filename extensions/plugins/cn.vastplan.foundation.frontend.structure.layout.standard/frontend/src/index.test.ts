@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { uiContractVersion } from "@vastplan/ui-contract";
-import type { PortalNavigationGroup, PortalResolvedPageNavigation, PortalSlotContribution, ShellCompositionModel } from "@vastplan/ui-primitives";
-import adapter, { firstNavigablePageID, groups, navigationRailGroups, standardShellCSS } from "./index";
+import type { PortalNavigationCollection, PortalNavigationGroup, PortalResolvedPageNavigation, PortalSlotContribution, ShellCompositionModel } from "@vastplan/ui-primitives";
+import adapter, { collections, firstNavigablePageID, navigationRailCollections, standardShellCSS } from "./index";
 import { hasRegionContent } from "./region-visibility";
 
 function composition(overrides: Partial<ShellCompositionModel> = {}): ShellCompositionModel {
   return {
     pages: [],
     navigation: { primary: [], settings: [], secondary: [] },
+    navigationCollections: { primary: [], settings: [], secondary: [] },
     shellSlots: {},
     pageSlots: {},
     ...overrides,
@@ -18,6 +19,7 @@ const contribution: PortalSlotContribution<"shell.header.start"> & { pluginID: s
 const icon = { kind: "semantic" as const, name: "menu" as const };
 const navigationPage = (id: string, zone: "primary" | "secondary" | "settings" = "primary"): PortalResolvedPageNavigation => ({ id, label: id, zone, groupID: "test/main", parentMenuRef: { pluginID: "test", nodeID: "main" } });
 const navigationGroup = (id: string, zone: "primary" | "secondary" | "settings" = "primary"): PortalNavigationGroup => ({ id, label: id, zone, icon, pages: [], children: [] });
+const navigationCollection = (group: PortalNavigationGroup): PortalNavigationCollection => ({ kind: "group", id: `group:${group.id}`, label: group.label, zone: group.zone, icon: group.icon, groups: [group] });
 
 describe("standard shell layout", () => {
   it("exports only the visual layout adapter contract", () => {
@@ -69,30 +71,26 @@ describe("standard shell layout", () => {
     expect(standardShellCSS).not.toContain(".vp-navigation-child[data-active]");
   });
 
-  it("keeps semantic zone order while returning normalized groups", () => {
-    const model = composition({ navigation: {
-      primary: [navigationGroup("operations")],
-      secondary: [navigationGroup("reports", "secondary")],
-      settings: [navigationGroup("settings", "settings")],
-    } });
-    expect(groups(model, ["primary", "secondary", "settings"]).map((group) => group.id)).toEqual(["operations", "reports", "settings"]);
+  it("keeps semantic zone order while returning presentation collections", () => {
+    const operations = navigationCollection(navigationGroup("operations"));
+    const reports = navigationCollection(navigationGroup("reports", "secondary"));
+    const settings = navigationCollection(navigationGroup("settings", "settings"));
+    const model = composition({ navigationCollections: { primary: [operations], secondary: [reports], settings: [settings] } });
+    expect(collections(model, ["primary", "secondary", "settings"]).map((collection) => collection.id)).toEqual(["group:operations", "group:reports", "group:settings"]);
   });
 
   it("places system settings in the main rail while keeping the account control fixed at the bottom", () => {
-    const model = composition({ navigation: {
-      primary: [navigationGroup("operations")],
-      secondary: [
-        navigationGroup("reports", "secondary"),
-        navigationGroup("vastplan.host/account", "secondary"),
-      ],
-      settings: [navigationGroup("settings", "settings")],
-    } });
-    expect(navigationRailGroups(model).map((group) => group.id)).toEqual(["operations", "reports", "settings"]);
+    const operations = navigationCollection(navigationGroup("operations"));
+    const reports = navigationCollection(navigationGroup("reports", "secondary"));
+    const account = navigationCollection(navigationGroup("vastplan.host/account", "secondary"));
+    const settings = navigationCollection(navigationGroup("settings", "settings"));
+    const model = composition({ navigationCollections: { primary: [operations], secondary: [reports, account], settings: [settings] } });
+    expect(navigationRailCollections(model).map((collection) => collection.id)).toEqual(["group:operations", "group:reports", "group:settings"]);
   });
 
   it("enters the first direct page, then the first nested page, after a main-menu switch", () => {
-    expect(firstNavigablePageID({ ...navigationGroup("direct"), pages: [navigationPage("first")], children: [{ ...navigationGroup("nested"), parentID: "direct", pages: [navigationPage("later")] }] })).toBe("first");
-    expect(firstNavigablePageID({ ...navigationGroup("nested"), children: [{ ...navigationGroup("child"), parentID: "nested", pages: [navigationPage("first-child")] }] })).toBe("first-child");
-    expect(firstNavigablePageID(navigationGroup("empty"))).toBeUndefined();
+    expect(firstNavigablePageID(navigationCollection({ ...navigationGroup("direct"), pages: [navigationPage("first")], children: [{ ...navigationGroup("nested"), parentID: "direct", pages: [navigationPage("later")] }] }))).toBe("first");
+    expect(firstNavigablePageID(navigationCollection({ ...navigationGroup("nested"), children: [{ ...navigationGroup("child"), parentID: "nested", pages: [navigationPage("first-child")] }] }))).toBe("first-child");
+    expect(firstNavigablePageID(navigationCollection(navigationGroup("empty")))).toBeUndefined();
   });
 });

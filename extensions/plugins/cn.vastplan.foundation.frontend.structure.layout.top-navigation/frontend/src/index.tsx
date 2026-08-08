@@ -4,6 +4,7 @@ import {
   accountNavigationNodeID,
   accountLogoutMenuItemID,
   accountMenuItems,
+  composedNavigationMenuItems,
   message,
   NavigationIcon,
   PortalNavigationMenu,
@@ -17,6 +18,7 @@ import {
   type PageSlotID,
   type PortalI18n,
   type PortalNavigationGroup,
+  type PortalNavigationCollection,
   type UIShellProps,
   type ShellSlotID,
 } from "@vastplan/ui-primitives";
@@ -36,9 +38,10 @@ export function TopNavigationShell(props: UIShellProps) {
   const endRef = useRef<HTMLDivElement>(null);
   const centerSlotRef = useRef<HTMLDivElement>(null);
   const accountRoot = composition.navigation.secondary.find((group) => group.id === accountNavigationNodeID);
-  const mainRoots = useMemo(() => [...composition.navigation.primary, ...composition.navigation.secondary.filter((group) => group.id !== accountNavigationNodeID)], [composition]);
-  const settingsRoots = composition.navigation.settings;
-  const activeRootID = composition.activeNavigationPath?.rootGroupID;
+  const accountCollection = composition.navigationCollections.secondary.find((collection) => collection.groups.some((group) => group.id === accountNavigationNodeID));
+  const mainRoots = useMemo(() => [...composition.navigationCollections.primary, ...composition.navigationCollections.secondary.filter((collection) => !collection.groups.some((group) => group.id === accountNavigationNodeID))], [composition]);
+  const settingsRoots = composition.navigationCollections.settings;
+  const activeRootID = composition.activeNavigationCollectionID;
   const page = composition.activePage;
   const centerSlotCount = composition.shellSlots["shell.navigation.center"]?.length ?? 0;
   const navigationWidth = useTopNavigationWidth(barRef, startRef, endRef, centerSlotRef, page !== undefined, centerSlotCount, 1200);
@@ -69,14 +72,13 @@ export function TopNavigationShell(props: UIShellProps) {
     setMobileOpen(false);
   };
 
-  const mobileItems: MenuItem[] = groups(composition, ["primary", "secondary", "settings"]).map((group) => ({
-    id: `group:${group.id}`,
-    label: navigationLabel(group, i18n),
-    icon: <NavigationIcon icon={group.icon} label={navigationLabel(group, i18n)} />,
-    children: group.id === accountNavigationNodeID ? accountMenuItems(group, composition, i18n, props.onLogout !== undefined) : [
-      ...group.pages.map((item) => ({ id: item.id, label: i18n.text(item.label), href: pagePath(composition, item.id) })),
-      ...group.children.map((child) => ({ id: `group:${child.id}`, label: i18n.text(child.label), children: child.pages.map((item) => ({ id: item.id, label: i18n.text(item.label), href: pagePath(composition, item.id) })) })),
-    ],
+  const mobileItems: MenuItem[] = collections(composition, ["primary", "secondary", "settings"]).map((collection) => ({
+    id: collection.id,
+    label: navigationLabel(collection, i18n),
+    icon: <NavigationIcon icon={collection.icon} label={navigationLabel(collection, i18n)} />,
+    children: collection.groups.length === 1 && collection.groups[0]?.id === accountNavigationNodeID
+      ? accountMenuItems(collection.groups[0], composition, i18n, props.onLogout !== undefined)
+      : composedNavigationMenuItems(collection.groups, composition, i18n, false, collection.kind === "folder" ? "section" : "submenu"),
   }));
   const selectMobileMenu = (id: string) => {
     if (id === accountLogoutMenuItemID) {
@@ -100,14 +102,14 @@ export function TopNavigationShell(props: UIShellProps) {
       {page === undefined ? null : <PageHeader className="vp-top-inline-page-header" page={page} composition={composition} />}
       {page === undefined ? null : <span className="vp-top-page-navigation-divider" aria-hidden="true" />}
       <nav className="vp-top-center" aria-label={i18n.text(message(namespace, "navigation.main", "主导航"))}>
-        {visible.map((group) => <RootPopover key={group.id} group={group} composition={composition} open={openRootID === group.id} active={activeRootID === group.id} onOpenChange={(open) => setOpenRootID(open ? group.id : undefined)} onNavigate={navigate} />)}
-        {overflow.length === 0 ? null : <OverflowPopover groups={overflow} composition={composition} open={openRootID === "__more"} active={overflow.some((group) => group.id === activeRootID)} onOpenChange={(open) => setOpenRootID(open ? "__more" : undefined)} onNavigate={navigate} />}
+        {visible.map((collection) => <RootPopover key={collection.id} collection={collection} composition={composition} open={openRootID === collection.id} active={activeRootID === collection.id} onOpenChange={(open) => setOpenRootID(open ? collection.id : undefined)} onNavigate={navigate} />)}
+        {overflow.length === 0 ? null : <OverflowPopover collections={overflow} composition={composition} open={openRootID === "__more"} active={overflow.some((collection) => collection.id === activeRootID)} onOpenChange={(open) => setOpenRootID(open ? "__more" : undefined)} onNavigate={navigate} />}
         {centerSlotCount === 0 ? null : <div ref={centerSlotRef} className="vp-top-center-slot">{shellSlot(composition.shellSlots, "shell.navigation.center")}</div>}
       </nav>
       <div ref={endRef} className="vp-top-end">
-        {settingsRoots.map((group) => <RootPopover key={group.id} group={group} composition={composition} open={openRootID === group.id} active={activeRootID === group.id} onOpenChange={(open) => setOpenRootID(open ? group.id : undefined)} onNavigate={navigate} />)}
+        {settingsRoots.map((collection) => <RootPopover key={collection.id} collection={collection} composition={composition} open={openRootID === collection.id} active={activeRootID === collection.id} onOpenChange={(open) => setOpenRootID(open ? collection.id : undefined)} onNavigate={navigate} />)}
         {shellSlot(composition.shellSlots, "shell.navigation.end")}
-        {accountRoot === undefined ? null : <div className="vp-top-account"><AccountPopover group={accountRoot} account={props.account} composition={composition} open={openRootID === accountRoot.id} active={activeRootID === accountRoot.id} onOpenChange={(open) => setOpenRootID(open ? accountRoot.id : undefined)} onNavigate={navigate} onLogout={props.onLogout} /></div>}
+        {accountRoot === undefined || accountCollection === undefined ? null : <div className="vp-top-account"><AccountPopover group={accountRoot} account={props.account} composition={composition} open={openRootID === accountCollection.id} active={activeRootID === accountCollection.id} onOpenChange={(open) => setOpenRootID(open ? accountCollection.id : undefined)} onNavigate={navigate} onLogout={props.onLogout} /></div>}
       </div>
       <div className="vp-top-mobile-controls"><PortalAccountControl account={props.account} onSelect={() => setMobileOpen(true)} /><ui.Tooltip title={i18n.text(message(namespace, "navigation.open", "打开主菜单"))}><button type="button" className="vp-top-mobile-trigger" aria-label={i18n.text(message(namespace, "navigation.open", "打开主菜单"))} title={i18n.text(message(namespace, "navigation.open", "打开主菜单"))} onClick={() => setMobileOpen(true)}><ui.Icon name="menu" /></button></ui.Tooltip></div>
     </header>
@@ -137,12 +139,12 @@ function PageHeader({ className, page, composition }: { className: string; page:
   </header>;
 }
 
-function RootPopover({ group, composition, open, active, onOpenChange, onNavigate }: { group: PortalNavigationGroup; composition: UIShellProps["composition"]; open: boolean; active: boolean; onOpenChange(open: boolean): void; onNavigate(id: string): void }) {
+function RootPopover({ collection, composition, open, active, onOpenChange, onNavigate }: { collection: PortalNavigationCollection; composition: UIShellProps["composition"]; open: boolean; active: boolean; onOpenChange(open: boolean): void; onNavigate(id: string): void }) {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
-  const label = navigationLabel(group, i18n);
-  return <ui.Popover open={open} placement="bottom-start" surface="compact" ariaLabel={label} initialFocus="current" onOpenChange={(next) => onOpenChange(next)} trigger={(props) => <ui.Tooltip title={label}><button ref={(node) => props.ref(node)} type="button" className="vp-top-root-trigger" data-zone={group.zone} data-active={active || undefined} aria-label={label} title={label} aria-current={active ? "location" : undefined} aria-expanded={props["aria-expanded"]} aria-controls={props["aria-controls"]} onClick={props.onClick} onKeyDown={props.onKeyDown}><NavigationIcon icon={group.icon} state={active ? "active" : "normal"} size="md" /></button></ui.Tooltip>}>
-    <NavigationPopoverMenu groups={[group]} composition={composition} onNavigate={onNavigate} />
+  const label = navigationLabel(collection, i18n);
+  return <ui.Popover open={open} placement="bottom-start" surface="compact" ariaLabel={label} initialFocus="current" onOpenChange={(next) => onOpenChange(next)} trigger={(props) => <ui.Tooltip title={label}><button ref={(node) => props.ref(node)} type="button" className="vp-top-root-trigger" data-zone={collection.zone} data-active={active || undefined} aria-label={label} title={label} aria-current={active ? "location" : undefined} aria-expanded={props["aria-expanded"]} aria-controls={props["aria-controls"]} onClick={props.onClick} onKeyDown={props.onKeyDown}><NavigationIcon icon={collection.icon} state={active ? "active" : "normal"} size="md" /></button></ui.Tooltip>}>
+    <NavigationPopoverMenu groups={collection.groups} rootPresentation={collection.kind === "folder" ? "section" : "submenu"} composition={composition} onNavigate={onNavigate} />
   </ui.Popover>;
 }
 
@@ -164,17 +166,23 @@ function AccountPopover({ group, account, composition, open, active, onOpenChang
   </ui.Popover>;
 }
 
-function OverflowPopover({ groups: overflow, composition, open, active, onOpenChange, onNavigate }: { groups: readonly PortalNavigationGroup[]; composition: UIShellProps["composition"]; open: boolean; active: boolean; onOpenChange(open: boolean): void; onNavigate(id: string): void }) {
+function OverflowPopover({ collections: overflow, composition, open, active, onOpenChange, onNavigate }: { collections: readonly PortalNavigationCollection[]; composition: UIShellProps["composition"]; open: boolean; active: boolean; onOpenChange(open: boolean): void; onNavigate(id: string): void }) {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
   const label = i18n.text(message(namespace, "navigation.more", "更多导航"));
+  const items: MenuItem[] = overflow.map((collection) => ({
+    id: `overflow.collection.${collection.id}`,
+    label: navigationLabel(collection, i18n),
+    icon: <NavigationIcon icon={collection.icon} label={navigationLabel(collection, i18n)} />,
+    children: composedNavigationMenuItems(collection.groups, composition, i18n, false, collection.kind === "folder" ? "section" : "submenu"),
+  }));
   return <ui.Popover open={open} placement="bottom-end" surface="compact" ariaLabel={label} initialFocus="current" onOpenChange={(next) => onOpenChange(next)} trigger={(props) => <ui.Tooltip title={label}><button ref={(node) => props.ref(node)} type="button" className="vp-top-root-trigger" data-active={active || undefined} aria-label={label} title={label} aria-expanded={props["aria-expanded"]} aria-controls={props["aria-controls"]} onClick={props.onClick} onKeyDown={props.onKeyDown}><ui.Icon name="menu" size="md" /></button></ui.Tooltip>}>
-    <NavigationPopoverMenu groups={overflow} composition={composition} onNavigate={onNavigate} />
+    <ui.Menu items={items} activeID={composition.activeNavigationPath?.pageID} onSelect={onNavigate} />
   </ui.Popover>;
 }
 
 /** One compact menu surface is shared by primary, account and overflow navigation. */
-function NavigationPopoverMenu({ groups: menuGroups, composition, onNavigate, onLogout }: { groups: readonly PortalNavigationGroup[]; composition: UIShellProps["composition"]; onNavigate(id: string): void; onLogout?(): Promise<void> }) {
+function NavigationPopoverMenu({ groups: menuGroups, rootPresentation = "submenu", composition, onNavigate, onLogout }: { groups: readonly PortalNavigationGroup[]; rootPresentation?: "submenu" | "section"; composition: UIShellProps["composition"]; onNavigate(id: string): void; onLogout?(): Promise<void> }) {
   const i18n = usePortalI18n();
   return <PortalNavigationMenu
     groups={menuGroups}
@@ -182,6 +190,7 @@ function NavigationPopoverMenu({ groups: menuGroups, composition, onNavigate, on
     activeID={composition.activeNavigationPath?.pageID}
     onNavigate={onNavigate}
     onLogout={onLogout}
+    rootPresentation={rootPresentation}
     empty={<div className="vp-top-navigation-menu-empty">{i18n.text(message(namespace, "navigation.accountUnavailable", "个人中心尚未装配"))}</div>}
   />;
 }
@@ -211,7 +220,7 @@ function moveTopRootFocus(event: React.KeyboardEvent<HTMLElement>) {
   buttons[next]?.focus();
 }
 
-export function prioritizeRoots(groups: readonly PortalNavigationGroup[], capacity: number, activeID?: string): { visible: readonly PortalNavigationGroup[]; overflow: readonly PortalNavigationGroup[] } {
+export function prioritizeRoots(groups: readonly PortalNavigationCollection[], capacity: number, activeID?: string): { visible: readonly PortalNavigationCollection[]; overflow: readonly PortalNavigationCollection[] } {
   if (groups.length <= capacity) return { visible: groups, overflow: [] };
   const slots = Math.max(1, capacity - 1);
   const visible = groups.slice(0, slots);
@@ -232,8 +241,7 @@ export function topNavigationAvailableWidth(barWidth: number, startWidth: number
   return Math.max(0, barWidth - startWidth - endWidth - centerSlotWidth - pageHeaderWidth);
 }
 
-function groups(composition: UIShellProps["composition"], zones: readonly NavigationZone[]): readonly PortalNavigationGroup[] { return zones.flatMap((zone) => composition.navigation[zone]); }
-function pagePath(composition: UIShellProps["composition"], navigationID: string): string | undefined { return composition.pages.find((candidate) => candidate.navigation?.id === navigationID)?.path; }
+function collections(composition: UIShellProps["composition"], zones: readonly NavigationZone[]): readonly PortalNavigationCollection[] { return zones.flatMap((zone) => composition.navigationCollections[zone]); }
 function Brand({ name, shortName, logoURL }: { name: string; shortName?: string; logoURL?: string }) { const label = shortName ?? name; return <div className="vp-top-brand" title={name}>{logoURL === undefined ? <span className="vp-top-brand-mark">{label.slice(0, 1).toUpperCase()}</span> : <img src={logoURL} alt="" className="vp-top-brand-logo" />}<strong>{label}</strong></div>; }
 function shellSlot(values: UIShellProps["composition"]["shellSlots"], id: ShellSlotID): ReactNode { return values[id]?.map((item) => createElement(item.component, { key: `${item.pluginID}/${item.id}` })); }
 function pageSlot(values: UIShellProps["composition"]["pageSlots"], id: PageSlotID): ReactNode { return values[id]?.map((item) => createElement(item.component, { key: item.id })); }
@@ -253,7 +261,7 @@ export const topNavigationShellCSS = `
 
 const namespace = "cn.vastplan.foundation.frontend.structure.layout.top-navigation";
 
-function navigationLabel(group: PortalNavigationGroup, i18n: Pick<PortalI18n, "text" | "locale">): string {
+function navigationLabel(group: Pick<PortalNavigationGroup | PortalNavigationCollection, "labels" | "label">, i18n: Pick<PortalI18n, "text" | "locale">): string {
   return group.labels?.[i18n.locale] ?? i18n.text(group.label);
 }
 export const shellLibrary = {

@@ -90,6 +90,8 @@ export interface WorkbenchPageNavigation {
   id: string;
   label: LocalizedText;
   parentMenuRef: { pluginID: string; nodeID: string };
+  /** Trusted host validates this browser-visible managed service selector. */
+  managementServiceID?: string;
   order?: number;
 }
 

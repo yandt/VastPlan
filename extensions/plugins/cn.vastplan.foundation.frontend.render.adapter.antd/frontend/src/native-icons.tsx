@@ -38,6 +38,7 @@ import SafetyOutlined from "@ant-design/icons/SafetyOutlined";
 import KeyOutlined from "@ant-design/icons/KeyOutlined";
 import TableOutlined from "@ant-design/icons/TableOutlined";
 import ExperimentOutlined from "@ant-design/icons/ExperimentOutlined";
+import FolderOutlined from "@ant-design/icons/FolderOutlined";
 import { useComponentSize, type SemanticIconName, type VastPlanIconProps } from "@vastplan/ui-primitives";
 
 const icons: Record<SemanticIconName, typeof PlusOutlined> = {
@@ -48,7 +49,7 @@ const icons: Record<SemanticIconName, typeof PlusOutlined> = {
   copy: CopyOutlined, download: DownloadOutlined, upload: UploadOutlined, more: MoreOutlined, help: QuestionCircleOutlined, logout: LogoutOutlined,
   user: UserOutlined, sliders: SlidersOutlined, authentication: SafetyCertificateOutlined, marketplace: ShopOutlined, repository: InboxOutlined,
   resources: AppstoreOutlined, plugins: DeploymentUnitOutlined, portal: LayoutOutlined, database: DatabaseOutlined, deployment: ClusterOutlined,
-  api: ApiOutlined, security: SafetyOutlined, credential: KeyOutlined, workbench: TableOutlined, extension: ExperimentOutlined,
+  api: ApiOutlined, security: SafetyOutlined, credential: KeyOutlined, workbench: TableOutlined, extension: ExperimentOutlined, folder: FolderOutlined,
 };
 
 const pixels = { xs: 14, sm: 16, md: 20, lg: 24 } as const;

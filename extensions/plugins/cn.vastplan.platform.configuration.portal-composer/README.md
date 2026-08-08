@@ -6,6 +6,8 @@
 
 WorkingCopy 保存使用独立 revision CAS，不产生业务版本；提交时冻结规范配置和 SHA-256 digest，形成 `PendingApproval → Approved → Published` Publication。审批期间没有可编辑 WorkingCopy。`PortalRelease` 引用精确 Published Publication，重新执行可信 Catalog 校验、制品物化、引用保护、路由冲突检查和 CAS 后才改变线上 Portal。
 
+服务范围导航编排走独立的隐藏候选：从当前 Activation 克隆完整配置，只替换目标 `managedServiceId` 的展示文件夹，然后执行 `prepare/materialize/commit/abort/rollback`。该路径不会读写用户 WorkingCopy，并以旧 Activation ID 做切换 CAS。
+
 审批资格和业务审批完全分开：内核只用 `platform.portal.approve` 判断当前主体是否具备操作资格，Composer 再通过 `approval.policy.v2` 调用部署所选 Provider。Composer 不识别 Seed、企业环境、Provider 类型或自审规则，只投影 Provider 返回的 `allowed/review-required/denied`、精确 ProfileRef 与数据驱动证据要求；写操作会重新求值并复核冻结摘要和状态。
 
 ```json

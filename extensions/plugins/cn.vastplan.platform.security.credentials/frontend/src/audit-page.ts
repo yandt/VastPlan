@@ -12,7 +12,7 @@ export function createCredentialAuditPage(client: PlatformAdminClient, serviceID
     title: message(namespace, "audit.title", "托管凭证审计"),
     description: message(namespace, "audit.description", "查看不含 handle、stage ID、authority、密文或明文的托管凭证生命周期事件"),
     requiredPermissions: ["platform.credentials.audit"],
-    navigation: { id: `platform.credentials.audit.${serviceID}`, label: message(namespace, "audit.title", "托管凭证审计"), parentMenuRef: { pluginID: "cn.vastplan.platform.security.credentials", nodeID: "credentials" }, order: 31 },
+    navigation: { id: `platform.credentials.audit.${serviceID}`, label: message(namespace, "audit.title", "托管凭证审计"), parentMenuRef: { pluginID: "cn.vastplan.platform.security.credentials", nodeID: "credentials" }, managementServiceID: serviceID, order: 31 },
     collection: {
       id: `platform.credentials.audit.${serviceID}`,
       title: message(namespace, "audit.title", "托管凭证审计"),

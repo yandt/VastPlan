@@ -5,6 +5,8 @@
   "$defs": {
     "governedId": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 160 },
     "stableId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,255}$" },
+    "compositionId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$" },
+    "managedServiceId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,159}$" },
     "localId": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
     "serviceRole": { "enum": ["backend", "workspace", "rs"] },
     "semver": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$", "maxLength": 64 },
@@ -228,7 +230,17 @@
         "method": { "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"] },
         "pathParams": { "type": "object", "maxProperties": 32, "propertyNames": { "pattern": "^[a-z][A-Za-z0-9]*$" }, "additionalProperties": { "type": "string", "maxLength": 2048 } },
         "query": { "type": "object", "maxProperties": 64, "propertyNames": { "pattern": "^[a-z][A-Za-z0-9._-]*$" }, "additionalProperties": { "type": "array", "maxItems": 32, "items": { "type": "string", "maxLength": 4096 } } },
-        "body": {}
+        "body": {},
+        "managementTarget": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "portalId": { "$ref": "#/$defs/compositionId" },
+            "serviceId": { "$ref": "#/$defs/managedServiceId" },
+            "activationId": { "type": "integer", "minimum": 1 },
+            "generation": { "type": "integer", "minimum": 1 }
+          },
+          "required": ["portalId", "serviceId", "activationId", "generation"]
+        }
       },
       "required": ["schemaVersion", "routeId", "method", "pathParams", "query", "body"]
     }

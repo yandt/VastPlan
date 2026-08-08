@@ -11,12 +11,46 @@ func (s *Service) handlePortalOperation(ctx context.Context, principal portalapi
 	switch operation {
 	case portalapi.PreparePluginInstallationOperation, portalapi.CommitPluginInstallationOperation, portalapi.AbortPluginInstallationOperation, portalapi.RollbackPluginInstallationOperation:
 		return s.handlePluginInstallationOperation(ctx, principal, operation, payload)
+	case portalapi.ReadNavigationConfigurationOperation, portalapi.PrepareNavigationConfigurationOperation, portalapi.CommitNavigationConfigurationOperation, portalapi.AbortNavigationConfigurationOperation, portalapi.RollbackNavigationConfigurationOperation:
+		return s.handleNavigationConfigurationOperation(ctx, principal, operation, payload)
 	case "createPortal", "createPortalWorkingCopy", "savePortalWorkingCopy", "submitPortalPublication", "approvePortalPublication", "publishPortalPublication", "releasePortalPublication", "portalVersionHistory", "readPortalVersion", "comparePortalVersions", "restorePortalVersion", "rollbackPortalRelease", "portalGovernance", "listPortalReleases", "audit":
 		return s.handlePortalAggregateOperation(ctx, principal, operation, payload)
 	case "listTestTargetBindings", "putTestTargetBinding", "listTestReleases", "createTestRelease", "rollbackTestRelease":
 		return s.handleTestReleaseOperation(ctx, principal, operation, payload)
 	default:
 		return nil, fmt.Errorf("不支持 Portal Composer 操作 %q", operation)
+	}
+}
+
+func (s *Service) handleNavigationConfigurationOperation(ctx context.Context, principal portalapi.Principal, operation string, payload []byte) (any, error) {
+	switch operation {
+	case portalapi.ReadNavigationConfigurationOperation:
+		var request portalapi.NavigationConfigurationLookup
+		if err := decode(payload, &request); err != nil {
+			return nil, err
+		}
+		return s.ReadNavigationConfiguration(ctx, principal, request.PortalID, request.ServiceID)
+	case portalapi.PrepareNavigationConfigurationOperation:
+		var request portalapi.NavigationConfigurationRequest
+		if err := decode(payload, &request); err != nil {
+			return nil, err
+		}
+		return s.PrepareNavigationConfiguration(ctx, principal, request)
+	case portalapi.CommitNavigationConfigurationOperation, portalapi.AbortNavigationConfigurationOperation, portalapi.RollbackNavigationConfigurationOperation:
+		var request portalapi.NavigationConfigurationLookup
+		if err := decode(payload, &request); err != nil {
+			return nil, err
+		}
+		switch operation {
+		case portalapi.CommitNavigationConfigurationOperation:
+			return s.CommitNavigationConfiguration(ctx, principal, request)
+		case portalapi.AbortNavigationConfigurationOperation:
+			return s.AbortNavigationConfiguration(ctx, principal, request)
+		default:
+			return s.RollbackNavigationConfiguration(ctx, principal, request)
+		}
+	default:
+		return nil, fmt.Errorf("不支持 Portal 导航编排操作 %q", operation)
 	}
 }
 

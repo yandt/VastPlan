@@ -38,6 +38,23 @@ export interface PluginExtensionAccess {
   list(pointId: string): readonly PortalExtensionContribution[];
 }
 
+export type DefaultUIProviderSelection =
+  | { readonly kind: "default" }
+  | { readonly kind: "replacement"; readonly contribution: PortalExtensionContribution };
+
+/**
+ * Resolves the common owner-supplied default plus one optional signed replacement.
+ * The trusted graph already rejects multiple contributions for a `single` point;
+ * this repeat check keeps plugin registration fail-closed if the graph is damaged.
+ */
+export function selectDefaultUIProvider(access: PluginExtensionAccess, pointId: string): DefaultUIProviderSelection {
+  if (!access.owns(pointId)) throw new PluginExtensionContractError(`插件不拥有 UI Provider 扩展点: ${pointId}`);
+  const contributions = access.list(pointId);
+  if (contributions.length === 0) return Object.freeze({ kind: "default" });
+  if (contributions.length !== 1) throw new PluginExtensionContractError(`UI Provider 扩展点必须至多有一个替换贡献: ${pointId}`);
+  return Object.freeze({ kind: "replacement", contribution: contributions[0]! });
+}
+
 export class PluginExtensionContractError extends Error {
   public constructor(message: string) { super(message); this.name = "PluginExtensionContractError"; }
 }

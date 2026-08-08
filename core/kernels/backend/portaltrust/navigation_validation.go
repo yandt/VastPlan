@@ -69,6 +69,36 @@ func validateNavigationCandidates(spec portalapi.PortalSpec, index pluginv1.Cont
 			nodes[override.Target] = node
 		}
 	}
+	serviceIDs := make(map[string]struct{}, len(spec.Management.Services))
+	for _, service := range spec.Management.Services {
+		serviceIDs[service.ID] = struct{}{}
+	}
+	assigned := map[string]struct{}{}
+	for _, folder := range spec.Shell.Config.NavigationFolders {
+		if _, exists := serviceIDs[folder.ServiceID]; !exists {
+			return fmt.Errorf("Portal 导航文件夹引用未绑定服务: %s/%s", folder.ServiceID, folder.ID)
+		}
+		zone := ""
+		for _, member := range folder.Members {
+			node, exists := nodes[member]
+			if !exists || member == "vastplan.host/account" {
+				return fmt.Errorf("Portal 导航文件夹引用未知或受保护 root: %s", member)
+			}
+			if _, hasParent, err := resolvedNavigationParent(node, nodes); err != nil || hasParent {
+				return fmt.Errorf("Portal 导航文件夹只能收纳 root: %s", member)
+			}
+			if zone == "" {
+				zone = node.zone
+			} else if zone != node.zone {
+				return fmt.Errorf("Portal 导航文件夹不能跨 zone: %s", folder.ID)
+			}
+			key := folder.ServiceID + "\x00" + member
+			if _, duplicate := assigned[key]; duplicate {
+				return fmt.Errorf("Portal 导航 root 在同一服务被重复收纳: %s/%s", folder.ServiceID, member)
+			}
+			assigned[key] = struct{}{}
+		}
+	}
 	for _, node := range nodes {
 		parent, hasParent, err := resolvedNavigationParent(node, nodes)
 		if err != nil {

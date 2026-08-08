@@ -41,6 +41,7 @@ import icon36 from "@ant-design/icons-svg/es/asn/SafetyOutlined.js";
 import icon37 from "@ant-design/icons-svg/es/asn/KeyOutlined.js";
 import icon38 from "@ant-design/icons-svg/es/asn/TableOutlined.js";
 import icon39 from "@ant-design/icons-svg/es/asn/ExperimentOutlined.js";
+import icon40 from "@ant-design/icons-svg/es/asn/FolderOutlined.js";
 
 const glyphs: Readonly<Record<SemanticIconName, IconGlyphDefinition>> = Object.freeze({
   "add": normalizeAntIcon(icon0),
@@ -83,6 +84,7 @@ const glyphs: Readonly<Record<SemanticIconName, IconGlyphDefinition>> = Object.f
   "credential": normalizeAntIcon(icon37),
   "workbench": normalizeAntIcon(icon38),
   "extension": normalizeAntIcon(icon39),
+  "folder": normalizeAntIcon(icon40),
 });
 
 export function semanticIconGlyph(name: SemanticIconName): IconGlyphDefinition { return glyphs[name]; }

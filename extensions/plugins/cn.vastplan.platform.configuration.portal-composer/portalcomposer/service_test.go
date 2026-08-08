@@ -67,10 +67,9 @@ func TestComposerCapabilityContractClassifiesAndGuardsEveryUserOperation(t *test
 			t.Fatalf("生成操作与签名契约数量不一致: signed=%d generated=%d", len(contract.Operations), len(signedToolOperationNames(portalapi.ComposerCapability)))
 		}
 		for _, operation := range contract.Operations {
-			internal := operation.Name == portalapi.PreparePluginInstallationOperation || operation.Name == portalapi.CommitPluginInstallationOperation || operation.Name == portalapi.AbortPluginInstallationOperation || operation.Name == portalapi.RollbackPluginInstallationOperation
-			if internal {
+			if operation.Audience == "workload" {
 				if operation.Audience != "workload" || operation.Guard != nil {
-					t.Fatalf("插件安装内部操作必须仅面向 workload 且不投影用户权限: %+v", operation)
+					t.Fatalf("内部操作必须仅面向 workload 且不投影用户权限: %+v", operation)
 				}
 			} else if operation.Audience != "user" || operation.Guard == nil {
 				t.Fatalf("用户操作必须完成受众和权限闭包: %+v", operation)

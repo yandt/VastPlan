@@ -4,14 +4,14 @@ import { installationApprovalForm } from "./approval-form.js";
 
 export interface TaskRow extends Record<string, unknown> { id: string; pluginId: string; action: string; status: string; updatedAt: string; candidate: PluginInstallationCandidate; }
 
-export function createTaskPage(deployment: PlatformAdminClient, path: string, message: Message) {
+export function createTaskPage(deployment: PlatformAdminClient, path: string, message: Message, serviceID?: string) {
   const actions = {
     submit: (id: string) => deployment.submitSelfServicePluginInstallationCandidate(id),
     activate: (id: string) => deployment.activateSelfServicePluginInstallationCandidate(id), cancel: (id: string) => deployment.cancelSelfServicePluginInstallationCandidate(id), rollback: (id: string) => deployment.rollbackSelfServicePluginInstallationCandidate(id),
   };
   return defineCollectionPage<TaskRow>({
     id: "platform.service-plugin-tasks", path, title: message("tasks.title", "安装任务"), description: message("tasks.description", "查看当前服务的插件候选、审批与 Generation 滚动状态"), requiredPermissions: ["platform.deployment.plugin.preview"],
-    navigation: { id: "platform.service-plugin-tasks", label: message("tasks.title", "安装任务"), parentMenuRef: { pluginID: "cn.vastplan.platform.artifacts.marketplace", nodeID: "marketplace" }, order: 12 },
+    navigation: { id: "platform.service-plugin-tasks", label: message("tasks.title", "安装任务"), parentMenuRef: { pluginID: "cn.vastplan.platform.artifacts.marketplace", nodeID: "marketplace" }, ...(serviceID === undefined ? {} : { managementServiceID: serviceID }), order: 12 },
     collection: { id: "platform.service-plugin-tasks", title: message("tasks.title", "安装任务"), view: "table", selection: "single", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20, 50] },
       columns: [{ key: "pluginId", label: "插件 ID", defaultVisible: true, minWidth: 240 }, { key: "action", label: "变更", defaultVisible: true, minWidth: 90 }, { key: "status", label: message("tasks.status", "状态"), format: "status", defaultVisible: true, minWidth: 120 }, { key: "updatedAt", label: message("tasks.updated", "更新时间"), format: "datetime", defaultVisible: true, minWidth: 180 }],
       actions: [

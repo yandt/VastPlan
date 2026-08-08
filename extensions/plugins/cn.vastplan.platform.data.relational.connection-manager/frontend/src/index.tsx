@@ -162,7 +162,7 @@ export function createDatabaseConnectionsPage(client: PlatformAdminClient, servi
   return defineCollectionPage<DatabaseRow>({
     id: `platform.database-connections.${serviceID}`, path, title,
     description: message(namespace, "page.description", "在数据库插件内配置连接、数据库类型、连接池与密码"),
-    navigation: { id: `platform.database-connections.${serviceID}`, label: title, parentMenuRef: { pluginID: "cn.vastplan.platform.data.relational.connection-manager", nodeID: "databases" }, order: 40 },
+    navigation: { id: `platform.database-connections.${serviceID}`, label: title, parentMenuRef: { pluginID: "cn.vastplan.platform.data.relational.connection-manager", nodeID: "databases" }, managementServiceID: serviceID, order: 40 },
     pageActions: [{ id: "create", label: message(namespace,"action.create","新增连接"), icon: "add", tone: "primary", form: "create" }],
     collection: {
       id: `platform.database-connections.${serviceID}`, title, view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20, 50, 100] },

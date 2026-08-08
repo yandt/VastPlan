@@ -53,6 +53,7 @@ export class PlatformManagementAPIRoutes {
     const invocation: GatewayInvocation = {
       schemaVersion: "v1", routeId: matched.route.id, method: matched.route.method,
       pathParams: matched.pathParams, query, body,
+      managementTarget: { portalId: target.portalId, serviceId: target.service.id, activationId: target.activationId, generation: target.generation },
     };
     const boundedSignal = AbortSignal.any([signal, AbortSignal.timeout(timeoutMilliseconds)]);
     try {

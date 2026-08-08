@@ -1,0 +1,129 @@
+{
+  "id": "cn.vastplan.application.portal.navigation-organizer",
+  "name": "VastPlan Portal Navigation Organizer",
+  "description": "为单个受管服务编排 Portal 展示文件夹，并通过 Portal Generation 原子发布",
+  "version": "0.1.0",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "engines": { "backend": "^0.1", "frontend": "^1.0" },
+  "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
+  "contextAccess": { "required": ["scope.tenant", "caller", "subject.id"], "optional": ["authorization.roles", "scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
+  "authorization": {
+    "browserExposed": true,
+    "namespace": "portal.navigation",
+    "permissions": [
+      { "code": "portal.navigation.read", "title": "查看服务导航编排", "scope": "platform", "risk": "low", "assignable": true, "offlineAllowed": false },
+      { "code": "portal.navigation.publish", "title": "发布服务导航编排", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false }
+    ],
+    "operationGuards": [
+      { "extensionPoint": "tool.package", "capability": "portal.navigation", "operation": "apiRead", "permissions": ["portal.navigation.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "portal.navigation", "operation": "apiPublish", "permissions": ["portal.navigation.publish"], "access": "write", "approval": "none" }
+    ]
+  },
+  "runtime": {
+    "instancePolicy": "active-active",
+    "stateModel": "external-shared",
+    "visibility": "service",
+    "routing": "queue",
+    "routingDomain": "service",
+    "requires": [
+      { "capability": "platform.portal-composer", "contractRange": "^1.0.0", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "fail", "logicalService": "platform.portal-composer", "routingDomain": "platform" }
+    ],
+    "provides": [
+      { "extensionPoint": "tool.package", "capability": "portal.navigation", "contractVersion": "1.0.0", "visibility": "service", "routing": "queue", "routingDomain": "service" }
+    ]
+  },
+  "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
+  "configuration": { "scope": "service", "applyMode": "restart", "schema": { "type": "object", "additionalProperties": false, "maxProperties": 0 } },
+  "activation": ["onStartup", "onPortalStartup"],
+  "entry": { "backend": "backend/navigation-organizer", "frontend": "frontend/dist/index.js" },
+  "extensionPoints": [{
+    "id": "cn.vastplan.application.portal.navigation-organizer.ui-provider",
+    "surface": "frontend",
+    "contract": "1.0.0",
+    "kind": "frontend.page",
+    "dispatch": "single",
+    "targets": ["navigation"],
+    "descriptorSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pageId", "groupId"],
+      "properties": {
+        "pageId": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$", "maxLength": 160 },
+        "groupId": { "const": "navigation" }
+      }
+    }
+  }],
+  "contributes": {
+    "backend": {
+      "tools": [{
+        "id": "portal.navigation",
+        "service_role": "backend",
+        "title": "Portal 导航编排",
+        "subcommands": [
+          { "name": "apiRead", "description": "读取当前服务的导航文件夹" },
+          { "name": "apiPublish", "description": "发布当前服务的导航文件夹" }
+        ]
+      }],
+      "apiContracts": [{
+        "id": "management-api",
+        "service_role": "backend",
+        "title": "Portal 导航编排管理 API",
+        "contractId": "portal.navigation-organizer.management-api",
+        "contractVersion": "1.0.0",
+        "protocol": "http-json",
+        "routes": [
+          {
+            "id": "portal.navigation.read", "method": "GET", "path": "/folders",
+            "target": { "capability": "portal.navigation", "operation": "apiRead" },
+            "requestSchema": { "type": "object", "maxProperties": 0 },
+            "responseSchema": { "type": "object", "required": ["portalId", "serviceId", "activationId", "folders"] },
+            "successStatus": 200
+          },
+          {
+            "id": "portal.navigation.publish", "method": "PUT", "path": "/folders",
+            "target": { "capability": "portal.navigation", "operation": "apiPublish" },
+            "requestSchema": {
+              "type": "object", "additionalProperties": false,
+              "required": ["candidateId", "expectedActivationId", "folders"],
+              "properties": {
+                "candidateId": { "type": "string", "minLength": 8, "maxLength": 160 },
+                "expectedActivationId": { "type": "integer", "minimum": 1 },
+                "folders": {
+                  "type": "array", "maxItems": 64,
+                  "items": {
+                    "type": "object", "additionalProperties": false,
+                    "required": ["id", "label", "members"],
+                    "properties": {
+                      "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$", "maxLength": 160 },
+                      "label": { "type": "string", "minLength": 1, "maxLength": 80 },
+                      "labels": { "type": "object", "maxProperties": 32, "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 80 } },
+                      "icon": { "type": "object", "additionalProperties": false, "required": ["kind", "name"], "properties": { "kind": { "const": "semantic" }, "name": { "type": "string", "minLength": 1, "maxLength": 80 } } },
+                      "members": { "type": "array", "minItems": 2, "maxItems": 64, "uniqueItems": true, "items": { "type": "string", "minLength": 3, "maxLength": 321 } },
+                      "order": { "type": "integer", "minimum": -1000000, "maximum": 1000000 }
+                    }
+                  }
+                }
+              }
+            },
+            "responseSchema": { "type": "object", "required": ["candidateId", "portalId", "serviceId", "status", "versionId", "previousActivationId", "activationId", "updatedAt"] },
+            "successStatus": 200,
+            "errors": [
+              { "code": "portal.navigation.invalid", "status": 422 },
+              { "code": "portal.navigation.conflict", "status": 409 },
+              { "code": "portal.navigation.unavailable", "status": 503 }
+            ]
+          }
+        ]
+      }]
+    },
+    "frontend": {
+      "views": [{ "id": "portal.navigation-organizer", "title": "导航编排" }],
+      "navigations": [{ "id": "main", "contract": "1.0.0", "nodes": [
+        { "id": "navigation", "zone": "settings", "label": { "key": "navigation.title", "fallback": "导航编排" }, "icon": { "kind": "semantic", "name": "folder" }, "order": 70 }
+      ], "icons": [] }]
+    }
+  }
+}

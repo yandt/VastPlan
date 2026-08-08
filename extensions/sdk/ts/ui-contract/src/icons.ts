@@ -43,6 +43,7 @@ export const semanticIconNames = Object.freeze([
   "credential",
   "workbench",
   "extension",
+  "folder",
 ] as const);
 
 export type SemanticIconName = (typeof semanticIconNames)[number];

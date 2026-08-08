@@ -215,10 +215,18 @@ type DataPlaneTicketInstallation struct {
 // GatewayInvocation is the bounded language-neutral request passed to a route
 // target. Authentication, tenant and trace remain in trusted CallContext.
 type GatewayInvocation struct {
-	SchemaVersion string              `json:"schemaVersion"`
-	RouteID       string              `json:"routeId"`
-	Method        string              `json:"method"`
-	PathParams    map[string]string   `json:"pathParams"`
-	Query         map[string][]string `json:"query"`
-	Body          json.RawMessage     `json:"body"`
+	SchemaVersion    string                      `json:"schemaVersion"`
+	RouteID          string                      `json:"routeId"`
+	Method           string                      `json:"method"`
+	PathParams       map[string]string           `json:"pathParams"`
+	Query            map[string][]string         `json:"query"`
+	Body             json.RawMessage             `json:"body"`
+	ManagementTarget *ManagementInvocationTarget `json:"managementTarget,omitempty"`
+}
+
+type ManagementInvocationTarget struct {
+	PortalID     string `json:"portalId"`
+	ServiceID    string `json:"serviceId"`
+	ActivationID uint64 `json:"activationId"`
+	Generation   uint64 `json:"generation"`
 }

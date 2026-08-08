@@ -40,6 +40,7 @@ export interface ShellSelection extends PluginRef {
   uiContract: string;
   config: {
     navigationOverrides?: readonly Record<string, unknown>[];
+    navigationFolders?: readonly Record<string, unknown>[];
     defaultTemplate: string;
     allowedTemplates: readonly string[];
     userSelectable: boolean;

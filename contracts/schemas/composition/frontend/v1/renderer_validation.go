@@ -47,6 +47,9 @@ func ParsePlatformProfile(raw []byte) (PlatformProfile, error) {
 	if err := ValidateNavigationLocales(value.Shell.Config.NavigationOverrides, value.Localization); err != nil {
 		return PlatformProfile{}, err
 	}
+	if err := ValidateNavigationFolderLocales(value.Shell.Config.NavigationFolders, value.Localization); err != nil {
+		return PlatformProfile{}, err
+	}
 	if value.Updates != nil && value.Updates.Mode != "refresh" && value.Updates.Mode != "notify" && value.Updates.Mode != "automatic" {
 		return PlatformProfile{}, fmt.Errorf("Frontend Platform Profile updates.mode 无效: %s", value.Updates.Mode)
 	}
@@ -145,6 +148,40 @@ func ValidateNavigationConfig(config NavigationConfig) error {
 			}
 		}
 	}
+	folderIDs, members := map[string]struct{}{}, map[string]struct{}{}
+	for _, folder := range config.NavigationFolders {
+		key := folder.ServiceID + "/" + folder.ID
+		if !managementName.MatchString(folder.ID) || !managementName.MatchString(folder.ServiceID) || strings.TrimSpace(folder.Label) == "" || len([]rune(folder.Label)) > 80 || len(folder.Members) < 2 || len(folder.Members) > 64 {
+			return fmt.Errorf("导航文件夹无效: %s", key)
+		}
+		if _, duplicate := folderIDs[key]; duplicate {
+			return fmt.Errorf("导航文件夹重复: %s", key)
+		}
+		folderIDs[key] = struct{}{}
+		seenMembers := map[string]struct{}{}
+		for _, member := range folder.Members {
+			if !navigationGlobalID(member) {
+				return fmt.Errorf("导航文件夹成员无效: %s/%s", key, member)
+			}
+			if _, duplicate := seenMembers[member]; duplicate {
+				return fmt.Errorf("导航文件夹成员重复: %s/%s", key, member)
+			}
+			seenMembers[member] = struct{}{}
+			scoped := folder.ServiceID + "\x00" + member
+			if _, duplicate := members[scoped]; duplicate {
+				return fmt.Errorf("导航 root 在同一服务被重复收纳: %s/%s", folder.ServiceID, member)
+			}
+			members[scoped] = struct{}{}
+		}
+		for locale, label := range folder.Labels {
+			if !localeName(locale) || strings.TrimSpace(label) == "" || len([]rune(label)) > 80 {
+				return fmt.Errorf("导航文件夹语言或名称无效: %s/%s", key, locale)
+			}
+		}
+		if folder.Icon != nil && (folder.Icon.Kind != "semantic" || !managementName.MatchString(folder.Icon.Name)) {
+			return fmt.Errorf("导航文件夹图标无效: %s", key)
+		}
+	}
 	return nil
 }
 
@@ -153,6 +190,17 @@ func ValidateNavigationLocales(overrides []NavigationOverride, policy *Localizat
 		for locale := range override.Labels {
 			if policy == nil || !containsFold(policy.SupportedLocales, locale) {
 				return fmt.Errorf("导航覆盖语言不属于 Portal supportedLocales: %s/%s", override.Target, locale)
+			}
+		}
+	}
+	return nil
+}
+
+func ValidateNavigationFolderLocales(folders []NavigationFolder, policy *LocalizationPolicy) error {
+	for _, folder := range folders {
+		for locale := range folder.Labels {
+			if policy == nil || !containsFold(policy.SupportedLocales, locale) {
+				return fmt.Errorf("导航文件夹语言不属于 Portal supportedLocales: %s/%s", folder.ID, locale)
 			}
 		}
 	}

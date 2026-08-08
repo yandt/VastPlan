@@ -22,17 +22,20 @@ export interface PortalNavigationMenuProps {
   onNavigate(id: string): void;
   onLogout?(): Promise<void>;
   empty?: ReactNode;
+  /** Render multiple roots as non-interactive sections instead of nested submenus. */
+  rootPresentation?: "submenu" | "section";
 }
 
 /**
  * Converts the one composed navigation model into renderer-neutral Menu data.
  * A trusted logout action belongs to the account root only; pages remain ordinary leaves.
  */
-export function composedNavigationMenuItems(groups: readonly PortalNavigationGroup[], composition: ShellCompositionModel, i18n: Pick<PortalI18n, "text" | "locale">, includeLogout: boolean): MenuItem[] {
+export function composedNavigationMenuItems(groups: readonly PortalNavigationGroup[], composition: ShellCompositionModel, i18n: Pick<PortalI18n, "text" | "locale">, includeLogout: boolean, rootPresentation: "submenu" | "section" = "submenu"): MenuItem[] {
   if (groups.length === 1) return menuItemsForGroup(groups[0], composition, i18n, includeLogout);
   return groups.map((group) => ({
     id: `group:${group.id}`,
     label: navigationLabel(group, i18n),
+    ...(rootPresentation === "section" ? { kind: "section" as const } : {}),
     children: menuItemsForGroup(group, composition, i18n, includeLogout),
   }));
 }
@@ -48,10 +51,10 @@ export function accountMenuItems(group: PortalNavigationGroup, composition: Shel
  * The only shared visual bridge from the composed navigation model to the current Renderer.
  * Shell Libraries select inline versus popup placement but never recreate navigation rows themselves.
  */
-export function PortalNavigationMenu({ groups, composition, activeID, presentation = "popup", expandedIDs, onExpandedChange, onNavigate, onLogout, empty }: PortalNavigationMenuProps) {
+export function PortalNavigationMenu({ groups, composition, activeID, presentation = "popup", expandedIDs, onExpandedChange, onNavigate, onLogout, empty, rootPresentation = "submenu" }: PortalNavigationMenuProps) {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
-  const items = composedNavigationMenuItems(groups, composition, i18n, onLogout !== undefined);
+  const items = composedNavigationMenuItems(groups, composition, i18n, onLogout !== undefined, rootPresentation);
   if (items.length === 0) return <>{empty ?? null}</>;
   return <ui.Menu
     variant="navigation"

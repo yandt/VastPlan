@@ -85,6 +85,24 @@ type Shell struct {
 
 type NavigationConfig struct {
 	NavigationOverrides []NavigationOverride `json:"navigationOverrides,omitempty"`
+	NavigationFolders   []NavigationFolder   `json:"navigationFolders,omitempty"`
+}
+
+// NavigationFolder is a service-scoped presentation collection. Members are
+// signed root node IDs; the folder never becomes a navigation parent.
+type NavigationFolder struct {
+	ID        string                `json:"id"`
+	ServiceID string                `json:"serviceId"`
+	Label     string                `json:"label"`
+	Labels    map[string]string     `json:"labels,omitempty"`
+	Icon      *NavigationFolderIcon `json:"icon,omitempty"`
+	Members   []string              `json:"members"`
+	Order     *int                  `json:"order,omitempty"`
+}
+
+type NavigationFolderIcon struct {
+	Kind string `json:"kind"`
+	Name string `json:"name"`
 }
 
 // NavigationOverride can only adjust a signed plugin-owned navigation node.

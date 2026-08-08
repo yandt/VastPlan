@@ -6,6 +6,8 @@ import type { FormRendererProps } from "./form-renderer.js";
 export interface MenuItem {
   id: string;
   label: ReactNode;
+  /** Non-interactive visual grouping; it does not add a navigation level. */
+  kind?: "item" | "section";
   icon?: ReactNode;
   href?: string;
   disabled?: boolean;

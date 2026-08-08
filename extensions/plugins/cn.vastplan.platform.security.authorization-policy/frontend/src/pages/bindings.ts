@@ -22,18 +22,19 @@ const lifecycleLabels = {
   Retired: message(namespace, "status.retired", "已退役"),
 };
 
-export function bindingsPage(client: PlatformAdminClient): CollectionPageDefinition<BindingRow> {
+export function bindingsPage(client: PlatformAdminClient, serviceID?: string, suffix = "", pathSuffix = ""): CollectionPageDefinition<BindingRow> {
   return defineCollectionPage<BindingRow>({
-    id: "platform.authorization.bindings",
-    path: "/settings/authorization/bindings",
+    id: `platform.authorization.bindings${suffix}`,
+    path: `/settings/authorization/bindings${pathSuffix}`,
     title: message(namespace, "bindings.title", "主体绑定"),
     description: message(namespace, "bindings.description", "把用户或外部目录组绑定到精确 Role revision，并设置有效期。"),
     requiredPermissions: ["platform.authorization.catalog"],
     requiredAnyPermissions: ["platform.authorization.binding", "platform.authorization.approve", "platform.authorization.publish", "platform.authorization.revoke"],
     navigation: {
-      id: "platform.authorization.bindings",
+      id: `platform.authorization.bindings${suffix}`,
       label: message(namespace, "bindings.navigation", "主体绑定"),
       parentMenuRef: { pluginID: "cn.vastplan.platform.security.authorization-policy", nodeID: "security" },
+      ...(serviceID === undefined ? {} : { managementServiceID: serviceID }),
       order: 30,
     },
     pageActions: [{ id: "create", label: message(namespace, "action.createBinding", "新建绑定"), icon: "add", tone: "primary", form: "create", requiredPermissions: ["platform.authorization.binding"] }],
