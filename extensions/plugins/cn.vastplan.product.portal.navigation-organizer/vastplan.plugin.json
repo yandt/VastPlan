@@ -1,5 +1,5 @@
 {
-  "id": "cn.vastplan.application.portal.navigation-organizer",
+  "id": "cn.vastplan.product.portal.navigation-organizer",
   "name": "VastPlan Portal Navigation Organizer",
   "description": "为单个受管服务编排 Portal 展示文件夹，并通过 Portal Generation 原子发布",
   "version": "0.1.0",
@@ -40,7 +40,7 @@
   "activation": ["onStartup", "onPortalStartup"],
   "entry": { "backend": "backend/navigation-organizer", "frontend": "frontend/dist/index.js" },
   "extensionPoints": [{
-    "id": "cn.vastplan.application.portal.navigation-organizer.ui-provider",
+      "id": "cn.vastplan.product.portal.navigation-organizer.ui-provider",
     "surface": "frontend",
     "contract": "1.0.0",
     "kind": "frontend.page",

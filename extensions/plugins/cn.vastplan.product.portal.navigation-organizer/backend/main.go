@@ -4,7 +4,7 @@ package main
 import (
 	"log"
 
-	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.application.portal.navigation-organizer/navigationorganizer"
+	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.product.portal.navigation-organizer/navigationorganizer"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 

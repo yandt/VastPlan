@@ -1,3 +1,4 @@
+// Package navigationorganizer exposes the service-scoped Portal navigation management adapter.
 package navigationorganizer
 
 import (
@@ -8,6 +9,7 @@ import (
 	"io"
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/errorcode"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	apiv1 "cdsoft.com.cn/VastPlan/contracts/schemas/api/v1"
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
@@ -191,8 +193,8 @@ func mapComposerError(err error) *contractv1.CallResult {
 			return organizerError("portal.navigation.conflict", callError.message, true)
 		case "portal.catalog.rejected":
 			return organizerError("portal.navigation.invalid", callError.message, false)
-		case "permission.denied":
-			return organizerError("permission.denied", callError.message, false)
+		case errorcode.PermissionDenied:
+			return organizerError(errorcode.PermissionDenied, callError.message, false)
 		default:
 			return organizerError("portal.navigation.unavailable", callError.message, callError.retryable)
 		}

@@ -3,7 +3,7 @@ import { managementServicesFor, message, type WorkbenchFrontendPluginContext } f
 import { createNavigationOrganizerClient } from "./management-client.js";
 import { createNavigationFolderPage } from "./page.js";
 
-const namespace = "cn.vastplan.application.portal.navigation-organizer";
+const namespace = "cn.vastplan.product.portal.navigation-organizer";
 const providerPoint = `${namespace}.ui-provider`;
 
 export default {

@@ -3,7 +3,7 @@ package portalapi
 import frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 
 const (
-	NavigationOrganizerPluginID              = "cn.vastplan.application.portal.navigation-organizer"
+	NavigationOrganizerPluginID              = "cn.vastplan.product.portal.navigation-organizer"
 	ReadNavigationConfigurationOperation     = "readNavigationConfiguration"
 	PrepareNavigationConfigurationOperation  = "prepareNavigationConfiguration"
 	CommitNavigationConfigurationOperation   = "commitNavigationConfiguration"

@@ -53,7 +53,8 @@
     "cn.vastplan.platform.security.authentication.delivery.webhook",
     "cn.vastplan.platform.security.authentication.method.otp",
     "cn.vastplan.platform.security.authorization-policy",
-    "cn.vastplan.platform.security.credentials"
+    "cn.vastplan.platform.security.credentials",
+    "cn.vastplan.product.portal.navigation-organizer"
   ],
   "stateOwnership": [
     { "id": "cn.vastplan.foundation.data.relational.runtime", "runtimeStateModel": "external-shared", "durableTruth": ["platform-control-sql"], "transientState": ["process-memory"], "localBoundaries": [] },
@@ -94,7 +95,8 @@
     { "id": "cn.vastplan.platform.security.authentication.delivery.webhook", "runtimeStateModel": "external-shared", "durableTruth": ["shared-state"], "transientState": ["process-memory"], "localBoundaries": [] },
     { "id": "cn.vastplan.platform.security.authentication.method.otp", "runtimeStateModel": "external-shared", "durableTruth": ["shared-state"], "transientState": ["process-memory"], "localBoundaries": [] },
     { "id": "cn.vastplan.platform.security.authorization-policy", "runtimeStateModel": "external-shared", "durableTruth": ["shared-state"], "transientState": ["process-memory"], "localBoundaries": ["bootstrap-root", "derived-projection"] },
-    { "id": "cn.vastplan.platform.security.credentials", "runtimeStateModel": "external-shared", "durableTruth": ["shared-state"], "transientState": ["process-memory"], "localBoundaries": [] }
+    { "id": "cn.vastplan.platform.security.credentials", "runtimeStateModel": "external-shared", "durableTruth": ["shared-state"], "transientState": ["process-memory"], "localBoundaries": [] },
+    { "id": "cn.vastplan.product.portal.navigation-organizer", "runtimeStateModel": "external-shared", "durableTruth": [], "transientState": ["browser-memory", "process-memory"], "localBoundaries": [] }
   ],
   "retiredDevelopmentStateFiles": [
     { "path": "state/api-exposure.json", "replacement": "kernel.state.shared/api-exposure.control" },

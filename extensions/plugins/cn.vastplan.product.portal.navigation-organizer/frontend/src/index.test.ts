@@ -13,7 +13,7 @@ describe("Portal navigation organizer UI", () => {
         experience: { permissions: ["portal.navigation.read", "portal.navigation.publish"] },
         management: { services: [{ id: "service-a", logicalService: "service-a", routingDomain: "service", capabilities: [{ capability: "portal.navigation", read: ["apiRead"], write: ["apiPublish"] }] }] },
       },
-      lifecycle: { pluginID: "cn.vastplan.application.portal.navigation-organizer", generation: "7", signal: new AbortController().signal, reason: "bootstrap" },
+      lifecycle: { pluginID: "cn.vastplan.product.portal.navigation-organizer", generation: "7", signal: new AbortController().signal, reason: "bootstrap" },
       i18n: { message: (_key: string, fallback: string) => fallback },
       extensions: { owns: () => true, contributes: () => false, list: () => [] },
       addWorkspacePage: (page: unknown) => pages.push(page),
@@ -22,7 +22,7 @@ describe("Portal navigation organizer UI", () => {
     expect(pages).toHaveLength(1);
 
     pages.length = 0;
-    plugin.register({ ...context, extensions: { ...context.extensions, list: () => [{ point: "cn.vastplan.application.portal.navigation-organizer.ui-provider", id: "cn.example.replacement.page", pluginId: "cn.example.replacement", contract: "^1.0.0", descriptor: { pageId: "replacement", groupId: "navigation" } }] } } as never);
+    plugin.register({ ...context, extensions: { ...context.extensions, list: () => [{ point: "cn.vastplan.product.portal.navigation-organizer.ui-provider", id: "cn.example.replacement.page", pluginId: "cn.example.replacement", contract: "^1.0.0", descriptor: { pageId: "replacement", groupId: "navigation" } }] } } as never);
     expect(pages).toHaveLength(0);
   });
 

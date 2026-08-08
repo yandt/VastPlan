@@ -1,7 +1,7 @@
 import { defineCollectionPage, jsonSchemaDialect, message, type CollectionPageDefinition, type CollectionQuery, type WorkbenchFormDefinition, type WorkbenchFormFieldErrors, type WorkbenchFormSubmitResult } from "@vastplan/workbench-sdk";
 import type { NavigationFolder, NavigationOrganizerClient } from "./management-client.js";
 
-const namespace = "cn.vastplan.application.portal.navigation-organizer";
+const namespace = "cn.vastplan.product.portal.navigation-organizer";
 const iconNames = ["folder", "menu", "settings", "portal", "plugins", "resources", "extension", "workbench"] as const;
 
 interface FolderRow extends Record<string, unknown> {
